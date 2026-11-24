@@ -1,0 +1,33 @@
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Agency data must never be committed
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.prj
+*.kml
+*.kmz
+*.tif
+*.tiff
+*.pmtiles
+*.mbtiles
+!seed/**
+
+# Build output
+dist/
+build/
+node_modules/
+__pycache__/
+*.pyc
+bin/
