@@ -34,12 +34,14 @@ type alertFilters struct {
 	beforeID             int64
 }
 
+var stepSlug = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
 var unitPrefix = regexp.MustCompile(`^[[:alnum:]_-]{1,1000}(\.[[:alnum:]_-]{1,1000})*$`)
 
 func readAlertFilters(q url.Values) (alertFilters, error) {
 	f := alertFilters{queue: q.Get("queue"), status: q.Get("status"), class: q.Get("class"), hours: 168, limit: 100}
 	if !slices.Contains([]string{"", "unit", "edge_review", "triage"}, f.queue) ||
-		(f.status != "" && f.status != "new") ||
+		(f.status != "" && !stepSlug.MatchString(f.status)) ||
 		!slices.Contains([]string{"", "inside", "near_edge", "outside", "fixed_heat_source"}, f.class) {
 		return f, errors.New("Unknown queue, status or forest class.")
 	}
@@ -103,10 +105,10 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 	caller := r.Context().Value(identityKey{}).(identity)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	var allowed bool
+	var allowed, knownStatus bool
 	var page alertPage
 	err = a.reader.QueryRow(ctx, alertsSQL, caller.Subject, chi.URLParam(r, "slug"), id, f.hours,
-		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID).Scan(&allowed, &page.CanReview, &page.Counts, &page.Items)
+		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read alerts", "error", err)
 		writeError(w, 500, "Could not load alerts.")
@@ -114,6 +116,10 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 	}
 	if !allowed {
 		writeError(w, 403, "A role in this workspace is required.")
+		return
+	}
+	if !knownStatus {
+		writeError(w, 400, "Unknown workflow step.")
 		return
 	}
 	if id != nil {

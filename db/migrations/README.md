@@ -15,6 +15,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00010_alerts` | Alerts, the workspace setting for near-edge review, and routing of existing matches |
 | `00011_backfill_runs_and_links` | Run kinds (poll, backfill, import), fetch and observation times on runs, the run that stored each detection, and links between records of the same observation |
 | `00012_feed_health_alerts` | Feed-health alerts, at most one open per workspace feed |
+| `00014_workflow` | Workflow templates, alert instances, append-only step history and response times |
 
 ## Commands
 

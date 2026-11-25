@@ -81,7 +81,7 @@ jobs:
           cache-dependency-path: services/api/go.sum
       - run: make dev
       - run: make db-migrate
-      - name: Test sign-in, reference alerts, replay, access to queues and tiles, backfill and feed health
+      - name: Test sign-in, ingestion, alert workflow, queues, tiles, backfill and feed health
         run: make api-test-integration
       - name: Backfill the demo fixtures twice; the second run must fetch nothing
         run: |

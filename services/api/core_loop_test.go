@@ -258,8 +258,8 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 	handler := api{reader: tx, logger: slog.Default()}.handler(auth, devOrigins)
 	const origin = "http://localhost:4200"
 	path := "/api/v1/workspaces/" + slug + "/tiles/detections/8/189/116.mvt"
-	request := func(method, path, subject string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(method, path, nil)
+	requestBody := func(method, path, subject, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Origin", origin)
 		if method == http.MethodOptions {
 			r.Header.Set("Access-Control-Request-Method", "GET")
@@ -275,9 +275,14 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 		return w
 	}
 
+	request := func(method, path, subject string) *httptest.ResponseRecorder {
+		return requestBody(method, path, subject, "")
+	}
 	t.Run("alert permissions, counts, filters and pagination", func(t *testing.T) {
 		checkAlertAccess(t, ctx, tx, slug, prefix, request)
 	})
+
+	t.Run("default workflow", func(t *testing.T) { checkWorkflow(t, ctx, tx, slug, prefix, requestBody) })
 
 	if w := request(http.MethodOptions, path, ""); w.Code != http.StatusNoContent ||
 		w.Header().Get("Access-Control-Allow-Origin") != origin ||

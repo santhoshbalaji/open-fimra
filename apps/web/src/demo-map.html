@@ -68,6 +68,14 @@
     <div class="detail-heading"><h2 id="detail-title" #detailTitle tabindex="-1">Detection details</h2>
       <button brnButton (click)="closeDetails()" aria-label="Close detection details">Close</button></div>
     <p>{{ localTime.format(point.observed_at * 1000) }} · {{ relativeAge(point.observed_at, now()) }}</p>
+    @if (queue.pinned(); as alert) {
+      <p><strong>Current step · {{ alert.step_label }}</strong>
+        <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
+        @if (alert.overdue) { <span class="overdue">⚠ Overdue</span> }
+      </p>
+      <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
+        (changed)="queue.refresh()" />
+    }
     <dl>
       <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
       <dt>Beat</dt><dd>{{ point.beat_name || point.beat_code || 'Unknown' }} @if (point.beat_name && point.beat_code) { ({{ point.beat_code }}) }</dd>
@@ -107,6 +115,7 @@
               </button>
               <small>{{ localTime.format(row.observed_at * 1000) }}</small>
               <small>{{ relativeAge(row.observed_at, now()) }}</small>
+              <small>{{ row.step_label }} · <time [attr.datetime]="row.step_time">{{ localTime.format(stepDate(row.step_time)) }}</time> @if (row.overdue) { <span class="overdue">⚠ Overdue</span> }</small>
               @if (row.triage) { <p>{{ reasons[row.triage] }}</p> }</td>
               <td>{{ row.beat_name || 'Unknown beat' }}
                 <small>{{ row.range_name || 'Unknown range' }}</small>
