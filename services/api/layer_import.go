@@ -40,28 +40,38 @@ type importProblem struct {
 	BlocksPublish bool    `json:"blocksPublish"`
 }
 
-type draftResponse struct {
-	VersionID    pgtype.UUID     `json:"versionId"`
-	Status       string          `json:"status"`
-	Role         string          `json:"role"`
-	SourceCRS    *string         `json:"sourceCrs"`
-	FeatureCount int64           `json:"featureCount"`
-	UnitCount    int64           `json:"unitCount"`
-	Problems     []importProblem `json:"problems"`
+type rematchProgress struct {
+	Status         string `json:"status"`
+	Processed      int64  `json:"processed"`
+	MatchesWritten int64  `json:"matchesWritten"`
+	AlertsCreated  int64  `json:"alertsCreated"`
 }
 
-func (a api) layerAdmin(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
-	w.Header().Set("Cache-Control", "private, no-store")
-	caller := r.Context().Value(identityKey{}).(identity)
-	var workspaceID pgtype.UUID
-	err := a.pool.QueryRow(r.Context(), `
+type draftResponse struct {
+	Rematch      *rematchProgress `json:"rematch,omitempty"`
+	VersionID    pgtype.UUID      `json:"versionId"`
+	Status       string           `json:"status"`
+	Role         string           `json:"role"`
+	SourceCRS    *string          `json:"sourceCrs"`
+	FeatureCount int64            `json:"featureCount"`
+	UnitCount    int64            `json:"unitCount"`
+	Problems     []importProblem  `json:"problems"`
+}
+
+const layerAdminSQL = `
 		SELECT w.id FROM workspaces w WHERE w.slug = $1 AND EXISTS (
 			SELECT 1 FROM role_assignments a
 			JOIN users u ON u.id = a.user_id
 			JOIN units root ON root.hierarchy_id = a.hierarchy_id AND root.current_path = a.unit_path
 			WHERE a.workspace_id = w.id AND a.role_slug = 'state_admin'
 			  AND root.depth = 0 AND u.oidc_subject = $2
-		)`, chi.URLParam(r, "slug"), caller.Subject).Scan(&workspaceID)
+		)`
+
+func (a api) layerAdmin(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	caller := r.Context().Value(identityKey{}).(identity)
+	var workspaceID pgtype.UUID
+	err := a.pool.QueryRow(r.Context(), layerAdminSQL, chi.URLParam(r, "slug"), caller.Subject).Scan(&workspaceID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		writeError(w, http.StatusForbidden, "A state administrator role at the workspace root is required.")
@@ -286,26 +296,33 @@ func (a api) layerDraft(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var versionID pgtype.UUID
-	if err := versionID.Scan(chi.URLParam(r, "version")); err != nil {
-		writeError(w, http.StatusNotFound, "The draft was not found.")
+	versionID, ok := layerVersion(w, r)
+	if !ok {
 		return
 	}
 
 	response := draftResponse{VersionID: versionID}
 	err := a.pool.QueryRow(r.Context(), `
-		SELECT j.status, l.role, j.source_crs,
+		SELECT CASE WHEN v.status = 'draft' THEN j.status ELSE v.status END, l.role, j.source_crs,
 			(SELECT count(*) FROM layer_features f WHERE f.layer_version_id = v.id),
 			(SELECT count(*) FROM draft_units u WHERE u.layer_version_id = v.id),
 			COALESCE((SELECT jsonb_agg(jsonb_build_object(
 				'kind', p.kind, 'featureRef', p.feature_ref, 'message', p.message,
 				'blocksPublish', p.blocks_publish) ORDER BY p.id)
-				FROM layer_import_problems p WHERE p.layer_version_id = v.id), '[]'::jsonb)
+				FROM layer_import_problems p WHERE p.layer_version_id = v.id), '[]'::jsonb),
+			CASE WHEN rm.layer_version_id IS NOT NULL THEN jsonb_build_object(
+				'status', CASE WHEN rm.finished_at IS NOT NULL THEN 'completed'
+					WHEN rj.state IN ('discarded', 'cancelled') OR rj.id IS NULL THEN 'failed'
+					WHEN rj.state = 'running' THEN 'running' ELSE 'pending' END,
+				'processed', rm.processed, 'matchesWritten', rm.matches_written, 'alertsCreated', rm.alerts_created
+			) END
 		FROM layer_versions v JOIN layers l ON l.id = v.layer_id
 		JOIN geo_jobs j ON j.layer_version_id = v.id
-		WHERE v.id = $1 AND l.workspace_id = $2 AND v.status = 'draft'
+		LEFT JOIN layer_rematches rm ON rm.layer_version_id = v.id
+		LEFT JOIN river_job rj ON rj.id = rm.river_job_id
+		WHERE v.id = $1 AND l.workspace_id = $2
 	`, versionID, workspaceID).Scan(&response.Status, &response.Role, &response.SourceCRS,
-		&response.FeatureCount, &response.UnitCount, &response.Problems)
+		&response.FeatureCount, &response.UnitCount, &response.Problems, &response.Rematch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "The draft was not found.")
 		return

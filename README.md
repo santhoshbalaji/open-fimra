@@ -9,7 +9,7 @@
 
 Open FIMRA is an open-source platform for forest fire monitoring, field reporting and geospatial analysis in India. National forest agencies and State Forest Departments can run it on their own servers.
 
-> **Status: early development. Not ready for real use.** A working skeleton runs end to end on synthetic data: sign-in, a map of a made-up demo state, NASA FIRMS ingestion, matching of each detection to forest and beat, and a fire map with alert queues filtered by each user's grants. State administrators can also import draft layers and review geometry and hierarchy problems. Field reporting and workflow are planned. See [CONTRIBUTING.md](CONTRIBUTING.md) to run it.
+> **Status: early development. Not ready for real use.** A working skeleton runs end to end on synthetic data: sign-in, a map of a made-up demo state, NASA FIRMS ingestion, matching of each detection to forest and beat, and a fire map with alert queues filtered by each user's grants. State administrators can import, review and publish layers. Publishing re-matches recent detections while keeping past alert routing and workflow history. See [CONTRIBUTING.md](CONTRIBUTING.md) to run it.
 
 ## What it will do
 

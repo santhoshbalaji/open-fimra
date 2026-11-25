@@ -146,7 +146,7 @@ func insertAndMatch(ctx context.Context, tx pgx.Tx, runID int64, run ingestRun, 
 
 	// Partition creation locks the parent table. Take the same lock order in
 	// every ingest, including concurrent fixture imports and River jobs.
-	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('open-fimra:detection-ingest'))"); err != nil {
+	if _, err := tx.Exec(ctx, detectionWriteLock); err != nil {
 		return fmt.Errorf("lock detection ingest: %w", err)
 	}
 	for month := range months {

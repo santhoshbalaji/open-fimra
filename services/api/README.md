@@ -116,6 +116,47 @@ must be resolved before publishing. Each item has a `kind`, `message`,
 `blocksPublish` flag and, where available, a `featureRef`. A reference like
 `feature:3` means the third feature read from the selected source layer.
 
+### Preview and publish
+
+All layer routes require a state administrator grant at a workspace root.
+
+- `GET /api/v1/workspaces/{slug}/layer-imports` lists existing layers,
+  hierarchy levels and the 100 most recent uploads.
+- `GET /api/v1/workspaces/{slug}/layer-imports/{versionId}/preview?days=30`
+  checks detections against the published layers and against the same set with
+  the ready draft swapped in. Included and excluded counts show changes in
+  alert eligibility. The preview includes up to 20 examples per group. A detection can appear in more than one group. It also lists grants
+  on disappearing paths and returns a `grantConfirmation` for that exact list.
+- `POST /api/v1/workspaces/{slug}/layer-imports/{versionId}/publish` accepts a
+  JSON body such as `{"days":30}`. To remove disappearing grants, include the
+  `grantConfirmation` from the preview after the administrator approves the
+  list. A blocked draft or stale confirmation returns HTTP 409. The window is
+  1–90 days and defaults to 30.
+- After HTTP 202, poll the same version's detail route. A published or retired
+  upload includes `rematch` with a status and counts of detections checked,
+  matches written and alerts created.
+
+Publishing retires the previous layer version and records an audit entry in
+the same transaction that saves the new version and queues the River replay.
+For a hierarchy, the old rows at the selected level close when the new rows
+open. Grants on surviving paths keep their existing records. Publish a
+referenced parent draft before its children. A draft cannot leave current
+child paths without parents. If a legacy layer supplied multiple levels,
+the other levels keep their original source version.
+
+Ingest, preview and replay call `classify_detection()` for area, forest and
+hierarchy matching. Previews and replay skip linked copies of the same
+observation, as ingest does. River checks the fixed window ending at
+publication in batches and records progress with each commit. Each batch uses
+the current published layers, so overlapping jobs never restore an older
+match. A match stores the versions actually used and retains its first
+processing time.
+
+A newly eligible detection gets an alert and opens a workflow if it has no
+alert yet. Existing alerts retain their original routing, forest class,
+paths, layer versions and workflow history, even when a detection becomes
+ineligible. The queue and workflow permissions use those saved alert paths.
+
 ## FIRMS backfill
 
 Backfill fetches FIRMS standard-processing products, such as `VIIRS_SNPP_SP` and `MODIS_SP`, for one workspace and a range of UTC days. FIRMS publishes these weeks after the near-real-time products, with better calibration and geolocation, and keeps them for many years.

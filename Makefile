@@ -177,5 +177,5 @@ geo-test: ## Run the geo worker unit tests in the GDAL container
 geo-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 geo-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 geo-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
-geo-test-integration: ## Compare demo uploads with the seed on the running, migrated stack
-	cd services/api && FIMRA_GEO_INTEGRATION=1 go test -run '^TestLayerImportIntegration$$' -count=1 -v .
+geo-test-integration: ## Test layer imports and publication on the running, migrated stack
+	cd services/api && FIMRA_GEO_INTEGRATION=1 go test -run '^(TestLayerImportIntegration|TestLayerPublishIntegration)$$' -count=1 -v .

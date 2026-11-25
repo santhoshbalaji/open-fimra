@@ -15,8 +15,11 @@ make geo-test geo-test-integration
 ```
 
 The first test suite runs in the GDAL container. The second signs in to the API,
-uploads the synthetic demo files and compares the stored drafts with the seed
-SQL. See the [API guide](../api/README.md#layer-imports) for the upload form.
+uploads the synthetic demo files and compares the stored drafts with the seed.
+It also publishes a changed beat layer and checks detection matches, grants
+and alert history. The worker handles the upload and review. The API publishes
+the version and re-matches detections through the Go job queue. See the
+[API guide](../api/README.md#layer-imports) for the upload form.
 
 ## How imports work
 

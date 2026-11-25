@@ -106,7 +106,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	}
 
 	server := &http.Server{
-		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins, cfg.uploadDir),
+		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins, cfg.uploadDir, jobs),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,
