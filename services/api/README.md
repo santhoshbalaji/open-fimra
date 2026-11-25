@@ -373,7 +373,8 @@ All endpoints require a bearer token.
 
 - `GET /api/v1/notifications` returns `items`, `unreadCount` and `hasMore`.
   The result starts with unread items and includes up to 50 per page. Use
-  `offset=50` for the next page.
+  `offset=50` for the next page. Alert items include `forestClass`, `beatName`
+  and `divisionName` from their routing snapshot. Missing values are null.
 - `POST /api/v1/notifications/{id}/read` marks one of the caller's
   notifications read and returns `204`. It is safe to repeat.
 - Use `GET /api/v1/notifications/preferences` to read preferences. Use

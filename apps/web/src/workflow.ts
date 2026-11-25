@@ -1,6 +1,14 @@
+import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
+import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { StatusBadge } from './ui/status-badge';
 import { DatePipe } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, effect, inject, input, output, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, input, output, signal } from '@angular/core';
+import { toast } from '@spartan-ng/brain/sonner';
 import { firstValueFrom } from 'rxjs';
 
 interface Move { step: string; label: string; location_required: boolean; can_override: boolean; terminal: boolean }
@@ -12,7 +20,7 @@ interface History { entries: Entry[]; moves: Move[] }
 
 @Component({
   selector: 'fimra-workflow',
-  imports: [DatePipe],
+  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, HlmSkeletonImports, StatusBadge, DatePipe],
   templateUrl: './workflow.html'
 })
 export class Workflow {
@@ -20,6 +28,8 @@ export class Workflow {
   readonly stepTime = input.required<string>();
   readonly changed = output<void>();
   readonly history = signal<History | null>(null);
+  readonly steps = computed(() => this.history()?.moves.filter(move => !move.terminal) ?? []);
+  readonly outcomes = computed(() => this.history()?.moves.filter(move => move.terminal) ?? []);
   readonly chosen = signal<Move | null>(null);
   readonly busy = signal(false);
   readonly message = signal('');
@@ -66,7 +76,7 @@ export class Workflow {
         reason: this.exception() ? reason.trim() : '', clientId: crypto.randomUUID() }));
       if (this.lifetime.destroyed || this.url() !== url) return;
       this.choose(null);
-      this.message.set(move.label + ' recorded.');
+      toast.success(move.label + ' recorded.');
       this.reload.update(n => n + 1);
       this.changed.emit();
     } catch (error) {

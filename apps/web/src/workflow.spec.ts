@@ -37,17 +37,20 @@ describe('Workflow panel', () => {
     expect(Array.from(el.querySelectorAll('button'), b => b.textContent.trim())).toEqual(['Reached site']);
     el.querySelector('button')!.click();
     fixture.detectChanges();
-    expect(el.querySelector('input[type=checkbox]')).toBeNull();
+    expect(el.querySelector('[role=checkbox]')).toBeNull();
     expect(el.textContent).toContain('share your location');
   });
   it('lets an officer give a reason and requires confirmation to close', () => {
     const {el, fixture, http} = render([{...fieldMove, can_override:true}, close]);
     el.querySelector('button')!.click();
     fixture.detectChanges();
-    expect(el.querySelector('input[type=checkbox]')).toBeTruthy();
-    el.querySelector<HTMLButtonElement>('button[type=button]')!.click();
+    expect(el.querySelector('[role=checkbox]')).toBeTruthy();
+    Array.from(el.querySelectorAll('button')).find(b => b.textContent.trim() === 'Cancel')!.click();
     fixture.detectChanges();
-    Array.from(el.querySelectorAll('button')).find(b => b.textContent.trim() === 'Closed')!.click();
+    expect(el.textContent).not.toContain('Confirm Closed');
+    Array.from(el.querySelectorAll('button')).find(b => b.textContent.includes('Close alert'))!.click();
+    fixture.detectChanges();
+    document.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
     fixture.detectChanges();
     expect(el.querySelector('button[type=submit]')?.textContent).toContain('Confirm Closed');
     http.expectNone(url+'/steps');

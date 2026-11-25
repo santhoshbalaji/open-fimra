@@ -8,7 +8,7 @@ import { Notifications } from './notifications';
 
 const endpoint = 'https://api.test/api/v1/notifications';
 const item = {
-  id: '51', alertId: '42', workspace: 'demo', event: 'alert_new',
+  id: '51', alertId: '42', workspace: 'demo', forestClass: 'inside', beatName: 'Beat 05', divisionName: 'Hill Division', event: 'alert_new',
   createdAt: '2026-11-25T00:00:00Z', readAt: null
 };
 const page = { unreadCount: 1, items: [item], hasMore: false };
@@ -58,7 +58,7 @@ describe('Notifications', () => {
     flush(page);
     fixture.detectChanges();
     const link = list().querySelector('a')!;
-    expect(link.textContent).toContain('New fire alert #42');
+    expect(link.textContent).toContain('Inside forest · Beat 05, Hill Division');
     expect(new URL(link.href).search).toBe('?workspace=demo&alert=42');
     link.click();
     expect(open).toHaveBeenCalledWith({ workspace: 'demo', alert: '42' });
@@ -67,6 +67,15 @@ describe('Notifications', () => {
     fixture.detectChanges();
     expect(bell().getAttribute('aria-label')).toBe('Notifications, 0 unread');
     expect(list().hidden).toBe(true);
+  });
+
+  it('shows a relative time and keeps a readable title for an unmapped alert', () => {
+    fixture.componentInstance.now.set(Date.parse(item.createdAt) + 7200000);
+    bell().click();
+    flush({ ...page, items: [{ ...item, beatName: null, divisionName: null }] });
+    fixture.detectChanges();
+    expect(list().querySelector('a')?.textContent).toContain('Inside forest · Unknown unit');
+    expect(list().querySelector('time')?.textContent).toBe('2 hours ago');
   });
 
   it('links feed notifications to feed health', () => {

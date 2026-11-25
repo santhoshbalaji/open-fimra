@@ -15,11 +15,13 @@ describe('Export dialog', () => {
   let http: HttpTestingController;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(),
       { provide: AuthService, useValue: { sessionEnded } }] });
     http = TestBed.inject(HttpTestingController);
   });
-  afterEach(() => { vi.useRealTimers(); http.verify(); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView'); http.verify(); });
 
   function render(forestClass = '', unitPath = '') {
     const fixture = TestBed.createComponent(ExportDialog);
@@ -35,17 +37,15 @@ describe('Export dialog', () => {
     return { fixture, el, submit };
   }
 
-  it('is a labelled dialog that sends the current queue and time window', async () => {
+  it('sends the current queue and time window', async () => {
     const { el, fixture, submit } = render();
-    const dialog = el.querySelector('[role=dialog]')!;
-    expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(el.querySelector('#' + dialog.getAttribute('aria-labelledby'))!.textContent).toBe('Export');
     expect(el.querySelector('#export-summary')!.textContent).toContain('observed in the past 3 days · all forest classes · Edge review queue');
-    const select = el.querySelector('select')!;
-    expect(Array.from(select.options, o => o.value)).toEqual(
-      ['gpkg', 'shapefile', 'kml', 'geojson', 'flatgeobuf', 'csv_wkt', 'csv_lonlat', 'xlsx']);
-    select.value = 'shapefile';
-    select.dispatchEvent(new Event('change'));
+    el.querySelector<HTMLButtonElement>('#export-format')!.click();
+    fixture.detectChanges();
+    const options = Array.from(document.querySelectorAll<HTMLElement>('[role=option]'));
+    expect(options).toHaveLength(8);
+    options.find(option => option.textContent.includes('Shapefile'))!.click();
+    fixture.detectChanges();
     submit();
     const post = http.expectOne(endpoint + '/exports');
     expect(post.request.method).toBe('POST');
@@ -58,7 +58,7 @@ describe('Export dialog', () => {
 
   it('shows progress, then downloads the finished file with the bearer request', async () => {
     const { el, fixture, submit } = render('inside', 'ds.c1.d1');
-    el.querySelector<HTMLInputElement>('input[value=detections]')!.click();
+    el.querySelector<HTMLInputElement>('hlm-radio[value=detections] input')!.click();
     fixture.detectChanges();
     expect(el.querySelector('#export-summary')!.textContent)
       .toContain('observed in the past 3 days · Inside forest · units under ds.c1.d1.');
@@ -99,12 +99,11 @@ describe('Export dialog', () => {
     await vi.waitFor(() => expect(sessionEnded).toHaveBeenCalled());
   });
 
-  it('closes with Escape or the Close button', () => {
+  it('requests dismissal with the Close button', () => {
     const { el, fixture } = render();
     const closed = vi.fn();
     fixture.componentInstance.closed.subscribe(closed);
-    el.querySelector('[role=dialog]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     el.querySelector<HTMLButtonElement>('button.secondary')!.click();
-    expect(closed).toHaveBeenCalledTimes(2);
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 });

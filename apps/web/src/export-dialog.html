@@ -1,40 +1,36 @@
-<div class="dialog-backdrop" aria-hidden="true"></div>
-<section class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title"
-         aria-describedby="export-summary" cdkTrapFocus [cdkTrapFocusAutoCapture]="true" (keydown.escape)="close()">
-  <h2 id="export-title">Export</h2>
-  <form (submit)="$event.preventDefault(); prepare()">
-    <fieldset>
-      <legend>What to export</legend>
-      <label><input type="radio" name="export-kind" value="alerts" [checked]="kind() === 'alerts'" (change)="choose('alerts')"> Alerts</label>
-      <label><input type="radio" name="export-kind" value="detections" [checked]="kind() === 'detections'" (change)="choose('detections')"> Detections on the map</label>
-    </fieldset>
-    @if (kind() === 'alerts') {
-      <fieldset>
-        <legend>Queues</legend>
-        <label><input type="radio" name="export-queue" [checked]="onlyQueue()" (change)="scope(true)"> {{ queueLabel() }} queue only</label>
-        <label><input type="radio" name="export-queue" [checked]="!onlyQueue()" (change)="scope(false)"> All queues you can see</label>
-      </fieldset>
-    }
-    <label class="export-format">File format
-      <select #formatSelect (change)="pick(formatSelect.value)">
-        @for (item of formats; track item[0]) {
-          <option [value]="item[0]" [selected]="item[0] === format()">{{ item[1] }}</option>
-        }
-      </select>
-    </label>
-    <p id="export-summary" class="export-summary">Uses the current filters: {{ summary() }}.</p>
-    <p class="export-hint">The file holds only what your role can see, with a note of its source, filters and
-      coordinate system. Only you can download it, until it expires.</p>
-    <div class="export-actions">
-      <button type="button" class="secondary" (click)="close()">Close</button>
-      <button type="submit" class="primary" [disabled]="busy()">{{ status()?.status === 'ready' ? 'Prepare again' : 'Prepare export' }}</button>
-    </div>
-  </form>
-  <p class="export-progress" role="status">{{ progress() }}</p>
-  @if (status(); as ready) {
-    @if (ready.status === 'ready' && ready.fileName) {
-      <button type="button" class="primary download" (click)="download()">Download {{ ready.fileName }}</button>
-    }
+<form (submit)="$event.preventDefault(); prepare()">
+  <fieldset><legend>What to export</legend>
+    <hlm-radio-group name="export-kind" aria-label="What to export" [value]="kind()" (valueChange)="choose($event)">
+    <label hlmLabel><hlm-radio value="alerts" aria-label="Alerts"><hlm-radio-indicator /></hlm-radio> Alerts</label>
+    <label hlmLabel><hlm-radio value="detections" aria-label="Detections on the map"><hlm-radio-indicator /></hlm-radio> Detections on the map</label>
+  </hlm-radio-group></fieldset>
+  @if (kind() === 'alerts') {
+    <fieldset><legend>Queues</legend>
+      <hlm-radio-group name="export-queue" aria-label="Queues" [value]="onlyQueue()" (valueChange)="scope($event)">
+      <label hlmLabel><hlm-radio [value]="true" aria-label="{{ queueLabel() }} queue only"><hlm-radio-indicator /></hlm-radio> {{ queueLabel() }} queue only</label>
+      <label hlmLabel><hlm-radio [value]="false" aria-label="All queues you can see"><hlm-radio-indicator /></hlm-radio> All queues you can see</label>
+    </hlm-radio-group></fieldset>
   }
-  @if (error()) { <p class="export-error" role="alert">{{ error() }}</p> }
-</section>
+  <hlm-field><label hlmFieldLabel for="export-format">File format</label>
+    <hlm-select [value]="format()" (valueChange)="$event && pick($event)">
+      <hlm-select-trigger buttonId="export-format" class="w-full"><span class="truncate">{{ formatLabels[format()] }}</span></hlm-select-trigger>
+      <hlm-select-content *hlmSelectPortal>
+        @for (item of formats; track item[0]) { <hlm-select-item [value]="item[0]">{{ item[1] }}</hlm-select-item> }
+      </hlm-select-content>
+    </hlm-select>
+  </hlm-field>
+  <p id="export-summary" class="export-summary">Uses the current filters: {{ summary() }}.</p>
+  <p class="export-hint">The file holds only what your role can see, with a note of its source, filters and
+    coordinate system. Only you can download it, until it expires.</p>
+  <div class="export-actions">
+    <button hlmBtn variant="outline" type="button" class="secondary" (click)="close()">Close</button>
+    <button hlmBtn type="submit" [disabled]="busy()">{{ status()?.status === 'ready' ? 'Prepare again' : 'Prepare export' }}</button>
+  </div>
+</form>
+<p class="export-progress" role="status">{{ progress() }}</p>
+@if (status(); as ready) {
+  @if (ready.status === 'ready' && ready.fileName) {
+    <button hlmBtn type="button" class="download" (click)="download()">Download {{ ready.fileName }}</button>
+  }
+}
+@if (error()) { <p class="export-error" role="alert">{{ error() }}</p> }

@@ -18,6 +18,8 @@ export interface Detection {
   id: string | number;
   forest_class: ForestClass;
   observed_at: number;
+  longitude?: number;
+  latitude?: number;
   beat_code?: string;
   beat_name?: string;
   range_name?: string;
@@ -29,8 +31,10 @@ export interface Detection {
   triage?: string;
 }
 
-export function readDetection(feature: Pick<MapGeoJSONFeature, 'id' | 'properties'>): Detection {
-  return { ...feature.properties, id: feature.properties['id'] ?? feature.id } as Detection;
+export function readDetection(feature: Pick<MapGeoJSONFeature, 'id' | 'properties'> & Partial<Pick<MapGeoJSONFeature, 'geometry'>>): Detection {
+  const coordinates = feature.geometry?.type === 'Point' ? feature.geometry.coordinates : null;
+  return { ...feature.properties, ...(coordinates && { longitude: coordinates[0], latitude: coordinates[1] }),
+    id: feature.properties['id'] ?? feature.id } as Detection;
 }
 
 export function tileErrorStatus(error: { message: string; status?: number }): number | undefined {

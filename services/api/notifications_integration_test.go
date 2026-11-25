@@ -160,14 +160,18 @@ func checkNotificationEndpoints(t *testing.T, ctx context.Context, tx pgx.Tx, sl
 	var page struct {
 		UnreadCount int
 		Items       []struct {
-			ID, AlertID, Event string
-			ReadAt             *time.Time
+			ID, AlertID, Event, ForestClass, BeatName, DivisionName string
+			ReadAt                                                  *time.Time
 		}
 	}
 	res := request("a3", "GET", inbox, "")
 	if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &page) != nil ||
 		page.UnreadCount != 1 || len(page.Items) != 1 || page.Items[0].ReadAt != nil || page.Items[0].AlertID == "" {
 		t.Fatalf("beat.guard inbox: %d %s", res.Code, res.Body)
+	}
+	item := page.Items[0]
+	if item.ForestClass == "" || item.BeatName == "" || item.DivisionName == "" {
+		t.Fatalf("missing routing context: %+v", item)
 	}
 	read := inbox + "/" + page.Items[0].ID + "/read"
 	if res := request("a2", "POST", read, ""); res.Code != 404 {

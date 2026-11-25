@@ -1,7 +1,14 @@
+import { HlmTableImports } from '@spartan-ng/helm/table';
+import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
 import tokens from '../../../docs/design-system/tokens.json';
 import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BrnButton } from '@spartan-ng/brain/button';
+import { EmptyState } from './ui/empty-state';
+import { StatusBadge } from './ui/status-badge';
 import { LucideDownload, LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
 import { DashboardFilters } from './dashboard-filters';
@@ -18,7 +25,7 @@ import { unavailable, WorkspaceService } from './workspace';
 
 @Component({
   selector: 'fimra-demo-map',
-  imports: [Workflow, BrnButton, LucideLayers, LucideMaximize, LucideMinus, LucidePlus, ExportDialog, LucideDownload],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, LucideLayers, LucideMaximize, LucideMinus, LucidePlus, ExportDialog, LucideDownload],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -34,14 +41,12 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly error = signal('');
   readonly tileError = signal('');
   readonly ready = signal(false);
-  readonly legend = signal(true);
+  readonly legend = signal(false);
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
   readonly hours = this.queue.hours;
   readonly mobileQueue = signal(false);
-  readonly exporting = signal(false);
-  private readonly exportButton = viewChild<ElementRef<HTMLButtonElement>>('exportButton');
-  private rowButton?: HTMLButtonElement;
+  private fromQueue = false;
   readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
   readonly selected = this.queue.selected;
@@ -50,7 +55,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly stepDate = Date.parse;
   readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'long' });
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
-  private readonly picker = viewChild<ElementRef<HTMLSelectElement>>('picker');
+  private selectionTrigger?: HTMLElement;
+  private resize?: ResizeObserver;
   private readonly detailTitle = viewChild<ElementRef<HTMLHeadingElement>>('detailTitle');
   private readonly http = inject(HttpClient);
   private readonly appearance = inject(ThemeService);
@@ -81,9 +87,10 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const id = String(this.selected()?.id ?? '');
       if (this.ready() && this.map?.getLayer('selected-detection')) {
         this.map.setFilter('selected-detection', ['==', ['to-string', ['get', 'id']], id]);
+        this.centerSelection();
       }
     });
-    effect(() => this.detailTitle()?.nativeElement.focus());
+    effect(() => this.detailTitle()?.nativeElement.focus({ preventScroll: true }));
     effect(onCleanup => {
       const link = this.linkedAlert();
       const endpoint = this.queue.endpoint();
@@ -94,7 +101,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }
       const request = this.http.get<AlertRow>(endpoint + '/' + link.alert).subscribe({
         next: row => {
-          this.rowButton = undefined;
+          this.fromQueue = false;
+          this.selectionTrigger = this.map?.getCanvas();
           this.mobileQueue.set(false);
           this.queue.selectLinked(row);
         },
@@ -117,7 +125,6 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           geometry: { type: 'Point', coordinates: [row.longitude, row.latitude] }
         }] : []
       });
-      if (row) this.map.jumpTo({ center: [row.longitude, row.latitude] });
     });
   }
 
@@ -209,6 +216,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         canvasContextAttributes: { antialias: true }
       });
       this.map = map;
+      this.resize = new ResizeObserver(() => {
+        map.resize();
+        this.centerSelection();
+      });
+      this.resize.observe(this.container().nativeElement);
       map.getCanvas().setAttribute('aria-label', 'Workspace map. Use arrow keys to pan and plus or minus to zoom.');
       map.on('error', event => {
         if ('sourceId' in event && event.sourceId === 'detections') {
@@ -221,7 +233,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       map.on('click', event => {
         if (!map.getLayer('detections')) return;
         const [feature] = map.queryRenderedFeatures(event.point, { layers: ['detections'] });
-        if (feature) { this.rowButton = undefined; this.queue.select(readDetection(feature)); }
+        if (feature) {
+          this.fromQueue = false;
+          this.selectionTrigger = map.getCanvas();
+          this.queue.select(readDetection(feature));
+        }
       });
       map.on('idle', () => {
         if (!map.getLayer('detections')) return;
@@ -261,32 +277,36 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     }
   }
 
+  private centerSelection(): void {
+    const point = this.selected();
+    if (point?.longitude != null && point.latitude != null) {
+      this.map?.jumpTo({ center: [point.longitude, point.latitude] });
+    }
+  }
+
   choose(id: string): void {
-    this.rowButton = undefined;
+    this.fromQueue = false;
+    this.selectionTrigger = document.getElementById('detection-picker') ?? undefined;
     this.queue.select(this.visible().find(point => String(point.id) === id) ?? null);
-    if (id) this.detailTitle()?.nativeElement.focus();
   }
 
   openRow(row: AlertRow, button: HTMLButtonElement): void {
-    this.rowButton = button;
+    this.fromQueue = true;
+    this.selectionTrigger = button;
     this.mobileQueue.set(false);
     this.queue.selectRow(row);
-    this.map?.jumpTo({ center: [row.longitude, row.latitude] });
-    this.detailTitle()?.nativeElement.focus();
-  }
 
-  closeExport(): void {
-    this.exporting.set(false);
-    requestAnimationFrame(() => this.exportButton()?.nativeElement.focus());
+    this.detailTitle()?.nativeElement.focus();
   }
 
   closeDetails(): void {
     this.queue.select(null);
-    if (this.rowButton?.isConnected) {
-      this.mobileQueue.set(true);
-      const button = this.rowButton;
-      requestAnimationFrame(() => button.focus());
-    } else this.picker()?.nativeElement.focus();
+    const trigger = this.selectionTrigger;
+    if (this.fromQueue && trigger?.isConnected) this.mobileQueue.set(true);
+    requestAnimationFrame(() => {
+      const target = trigger?.isConnected ? trigger : this.map?.getCanvas();
+      target?.focus();
+    });
   }
 
   fit(): void {
@@ -299,6 +319,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.resize?.disconnect();
     clearInterval(this.timer);
     this.map?.remove();
     this.map = undefined;

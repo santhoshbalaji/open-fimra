@@ -1,7 +1,10 @@
+import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, inject, output, signal, viewChild, ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { BrnButton } from '@spartan-ng/brain/button';
+import { classes, ForestClass, relativeAge } from './detections';
+import { EmptyState } from './ui/empty-state';
 import { LucideBell } from '@lucide/angular';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
@@ -23,12 +26,15 @@ interface Notice {
   readAt: string | null;
   workspace: string;
   alertId: string | null;
+  forestClass: ForestClass | null;
+  beatName: string | null;
+  divisionName: string | null;
 }
 interface Inbox { unreadCount: number; items: Notice[]; hasMore: boolean }
 
 @Component({
   selector: 'fimra-notifications',
-  imports: [BrnButton, LucideBell],
+  imports: [HlmButtonImports, HlmSkeletonImports, EmptyState, LucideBell],
   templateUrl: './notifications.html',
   styleUrl: './notifications.css'
 })
@@ -48,11 +54,23 @@ export class Notifications {
   readonly loading = signal(false);
   readonly labels = { alert_new: 'New fire alert', alert_overdue: 'Fire alert overdue', feed_open: 'Feed needs attention' };
   readonly date = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  readonly now = signal(Date.now());
+  readonly relativeAge = relativeAge;
   readonly timestamp = Date.parse;
+
+  title(item: Notice): string {
+    if (!item.alertId) return this.labels[item.event];
+    const place = [item.beatName, item.divisionName].filter(Boolean).join(', ');
+    const title = item.forestClass ? classes[item.forestClass] : 'Fire alert';
+    return title + ' · ' + (place || 'Unknown unit');
+  }
 
   constructor() {
     this.load();
-    const timer = setInterval(() => { if (!this.open()) this.load(); }, 60_000);
+    const timer = setInterval(() => {
+      this.now.set(Date.now());
+      if (!this.open()) this.load();
+    }, 60_000);
     this.destroy.onDestroy(() => clearInterval(timer));
   }
 

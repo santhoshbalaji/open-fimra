@@ -1,8 +1,8 @@
 @if (workspace.current()) {
   <div class="queue-toolbar">
     <div class="view-switch" role="group" aria-label="Workspace view">
-      <button [attr.aria-pressed]="!mobileQueue()" (click)="mobileQueue.set(false)">Map</button>
-      <button [attr.aria-pressed]="mobileQueue()" (click)="mobileQueue.set(true)">Alert queue</button>
+      <button hlmBtn variant="ghost" [attr.aria-pressed]="!mobileQueue()" (click)="mobileQueue.set(false)">Map</button>
+      <button hlmBtn variant="ghost" [attr.aria-pressed]="mobileQueue()" (click)="mobileQueue.set(true); queue.select(null)">Alert queue</button>
     </div>
   </div>
 }
@@ -10,29 +10,32 @@
 <section class="map-pane" aria-label="Detection map">
 <div #canvas class="map-canvas"></div>
 <div class="map-actions" role="group" aria-label="Map controls">
-  <button brnButton [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg lucidePlus></svg></button>
-  <button brnButton [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg lucideMinus></svg></button>
-  <button brnButton [disabled]="!ready()" (click)="fit()" title="Fit state to map" aria-label="Fit state to map"><svg lucideMaximize></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg lucidePlus></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg lucideMinus></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="fit()" title="Fit state to map" aria-label="Fit state to map"><svg lucideMaximize></svg></button>
 </div>
 <div class="fire-controls">
   @if (workspace.current()) {
-    <div class="filter-card">
-      <label>Detections in view
-        <select #picker [disabled]="!visible().length" (change)="choose(picker.value)">
-          <option value="" [selected]="!selected()">{{ visible().length ? 'Select a detection' : 'None in view' }}</option>
+    <hlm-field class="filter-card">
+      <label hlmFieldLabel for="detection-picker">Detections in view</label>
+      <hlm-select [value]="selected()?.id?.toString()" [disabled]="!visible().length && !selected()"
+        (valueChange)="choose($event || '')">
+        <hlm-select-trigger buttonId="detection-picker" size="sm">{{ selected() ? 'Detection #' + selected()!.id : visible().length ? 'Select a detection' : 'None in view' }}</hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal>
+          @if (selected()) { <hlm-select-item value="">Clear selection</hlm-select-item> }
           @for (point of visible(); track point.id) {
-            <option [value]="point.id" [selected]="point.id.toString() === selected()?.id?.toString()">{{ classes[point.forest_class] }} · {{ point.beat_name || 'Unknown beat' }} · {{ relativeAge(point.observed_at, now()) }} · #{{ point.id }}</option>
+            <hlm-select-item [value]="point.id.toString()">{{ classes[point.forest_class] }} · {{ point.beat_name || 'Unknown beat' }} · {{ relativeAge(point.observed_at, now()) }} · #{{ point.id }}</hlm-select-item>
           }
-        </select>
-      </label>
-    </div>
+        </hlm-select-content>
+      </hlm-select>
+    </hlm-field>
   }
   @if (workspace.message() || linkedMessage() || tileError() || error()) {
     <p class="map-message" role="status">{{ workspace.message() || linkedMessage() || tileError() || error() }}</p>
   }
 </div>
 <section class="map-key" aria-label="Map key">
-  <button brnButton (click)="legend.set(!legend())" [attr.aria-expanded]="legend()" aria-controls="map-key-items">
+  <button hlmBtn variant="ghost" (click)="legend.set(!legend())" [attr.aria-expanded]="legend()" aria-controls="map-key-items">
     <svg lucideLayers></svg> Map key
   </button>
   <div id="map-key-items" class="key-groups" [hidden]="!legend()">
@@ -57,16 +60,18 @@
     </ul></div> }
   </div>
 </section>
+</section>
 @if (selected(); as point) {
   <section tabindex="-1" class="detail-card" aria-labelledby="detail-title" (keydown.escape)="closeDetails()">
     <div class="detail-heading"><h2 id="detail-title" #detailTitle tabindex="-1">Detection details</h2>
-      <button brnButton (click)="closeDetails()" aria-label="Close detection details">Close</button></div>
+      <button hlmBtn variant="ghost" (click)="closeDetails()" aria-label="Close detection details">Close</button></div>
     <p>{{ localTime.format(point.observed_at * 1000) }} · {{ relativeAge(point.observed_at, now()) }}</p>
     @if (queue.pinned(); as alert) {
-      <p><strong>Current step · {{ alert.step_label }}</strong> ·
+      <div class="step-meta" aria-label="Current step">
+        <fimra-status-badge icon="step" [label]="alert.step_label" />
         <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
-        @if (alert.overdue) { <span class="overdue">⚠ Overdue</span> }
-      </p>
+        @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+      </div>
       <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
         (changed)="queue.refresh()" />
     }
@@ -83,58 +88,63 @@
     @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
   </section>
 }
-</section>
 @if (workspace.current()) {
   <aside class="alert-panel" aria-labelledby="queue-title">
     <div class="queue-heading">
       <h2 id="queue-title">Alert queue</h2>
-      <button #exportButton brnButton class="export-button" (click)="exporting.set(true)" aria-haspopup="dialog">
-        <svg lucideDownload></svg> Export
-      </button>
+      @if (exportEndpoint(); as endpoint) {
+        <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
+          <button hlmBtn variant="outline" hlmDialogTrigger><svg lucideDownload></svg> Export</button>
+          <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
+            <h2 hlmDialogTitle>Export</h2>
+            <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
+              [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
+              (closed)="dialog.close()" />
+          </hlm-dialog-content>
+        </hlm-dialog>
+      }
     </div>
-    @if (exporting() && exportEndpoint(); as endpoint) {
-      <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
-        [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
-        (closed)="closeExport()" />
-    }
     <div class="queue-tabs" role="group" aria-label="Alert queues">
       @for (tab of queue.tabs(); track tab) {
-        <button [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
           @if (queue.page(); as page) { <span>{{ page.counts[tab] || 0 }}</span> }
         </button>
       }
     </div>
     @if (queue.message()) { <p role="status">{{ queue.message() }}</p> }
     @if (queue.rows().length) {
-      <table class="alert-table">
+      <table hlmTable class="alert-table">
         <caption class="sr-only">{{ queueLabels[queue.active()] }} alerts</caption>
-        <thead><tr><th scope="col">Detection</th><th scope="col">Location</th></tr></thead>
-        <tbody>
+        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Detection and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
+        <tbody hlmTBody>
           @for (row of queue.rows(); track row.id) {
-            <tr [class.is-selected]="row.detection_id === selected()?.id?.toString()">
-              <td><button #rowButton class="row-open" (click)="openRow(row, rowButton)"
+            @let active = row.detection_id === selected()?.id?.toString();
+            <tr hlmTr [attr.data-state]="active ? 'selected' : null">
+              <td hlmTd><button #rowButton class="row-open" (click)="openRow(row, rowButton)"
                     [attr.aria-label]="classes[row.forest_class] + ', ' + (row.beat_name || 'unknown beat') + ', ' + localTime.format(row.observed_at * 1000)"
-                    [attr.aria-current]="row.detection_id === selected()?.id?.toString() ? 'true' : null">
-                {{ classes[row.forest_class] }}
-              </button>
-              <small>{{ localTime.format(row.observed_at * 1000) }}</small>
-              <small>{{ relativeAge(row.observed_at, now()) }}</small>
-              <small>{{ row.step_label }} · <time [attr.datetime]="row.step_time">{{ localTime.format(stepDate(row.step_time)) }}</time> @if (row.overdue) { <span class="overdue">⚠ Overdue</span> }</small>
-              @if (row.triage) { <p>{{ reasons[row.triage] }}</p> }</td>
-              <td>{{ row.beat_name || 'Unknown beat' }}
-                <small>{{ row.range_name || 'Unknown range' }}</small>
-                <small>{{ row.division_name || 'Unknown division' }}</small>
+                    [attr.aria-current]="active ? 'true' : null">{{ classes[row.forest_class] }}</button>
+                <p>{{ row.beat_name || 'Unknown beat' }}</p>
+                <small>{{ row.range_name || 'Unknown range' }} · {{ row.division_name || 'Unknown division' }}</small>
+                <small><time [title]="localTime.format(row.observed_at * 1000)">{{ relativeAge(row.observed_at, now()) }}</time></small>
+                @if (row.triage) { <small>{{ reasons[row.triage] }}</small> }
               </td>
+              <td hlmTd><div class="step-meta">
+                <fimra-status-badge icon="step" [label]="row.step_label" />
+                <time [attr.datetime]="row.step_time">{{ localTime.format(stepDate(row.step_time)) }}</time>
+                @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+              </div></td>
             </tr>
           }
         </tbody>
       </table>
+    } @else if (!queue.message() && queue.page()) {
+      <fimra-empty-state heading="No alerts on this page" detail="Check another queue or change the filters." />
     } @else if (!queue.message()) {
-      <p role="status">{{ queue.page() ? 'No alerts on this page.' : 'Loading alerts…' }}</p>
+      <div role="status" aria-label="Loading alerts" class="grid gap-2"><hlm-skeleton class="h-12" /><hlm-skeleton class="h-12" /></div>
     }
-    @if (queue.cursor()) { <button class="page-button" (click)="queue.changePage('')">Newest alerts</button> }
+    @if (queue.cursor()) { <button hlmBtn variant="outline" (click)="queue.changePage('')">Newest alerts</button> }
     @if (queue.page()?.nextCursor; as cursor) {
-      <button class="page-button" (click)="queue.changePage(cursor)">Older alerts</button>
+      <button hlmBtn variant="outline" (click)="queue.changePage(cursor)">Older alerts</button>
     }
   </aside>
 }

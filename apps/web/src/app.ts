@@ -1,8 +1,13 @@
+import { HlmToasterImports } from '@spartan-ng/helm/sonner';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmInputImports } from '@spartan-ng/helm/input';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
+import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
-import { BrnButton } from '@spartan-ng/brain/button';
-import { LucideChevronDown, LucideCircleUserRound, LucideLogOut, LucideMoon, LucideSettings, LucideSun } from '@lucide/angular';
+import { LucideChevronDown, LucideLogOut, LucideMoon, LucideSettings, LucideSun } from '@lucide/angular';
 import { AuthService } from './auth';
 import { ThemeService } from './theme';
 import { WorkspaceService } from './workspace';
@@ -18,8 +23,8 @@ import { WEB_CONFIG } from './config';
 
 @Component({
   selector: 'fimra-root',
-  imports: [CdkMenu, CdkMenuItem, CdkMenuTrigger, BrnButton, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard,
-    LucideChevronDown, LucideCircleUserRound, LucideLogOut, LucideMoon, LucideSettings, LucideSun],
+  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmSelectImports, HlmToasterImports, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard,
+    LucideChevronDown, LucideLogOut, LucideMoon, LucideSettings, LucideSun],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }
 })
@@ -36,8 +41,13 @@ export class App implements OnInit {
     (this.setupChoice() ?? this.workspace.setupPending()));
   readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
 
+  readonly filtersOpen = signal(false);
   readonly dashboard = signal(false);
   readonly filters = inject(DashboardFilters);
+  readonly forestLabel = computed(() => {
+    const key = this.filters.forestClass();
+    return key ? classes[key] : 'All classes';
+  });
   readonly classes = classes;
   readonly classKeys = Object.keys(classes) as ForestClass[];
   readonly linkedAlert = signal<NotificationLink | null>(null);
@@ -80,6 +90,10 @@ export class App implements OnInit {
   toggleLayers(): void {
     this.setupChoice.set(false);
     this.showLayers.set(!this.showLayers());
+  }
+
+  selectForest(value: string | null | undefined): void {
+    this.filters.forestClass.set(this.classKeys.find(key => key === value) ?? '');
   }
 
   openSetup(): void {
