@@ -415,9 +415,9 @@ A fresh install gives a login and a map with a synthetic forest, and fills that 
 | 5 | Web shell | Angular app with Tailwind, Spartan UI, the design tokens, the logo, sign-in and a MapLibre map of the demo layers | A fresh install gives a login and a map (Phase 0 complete) |
 | 6 | Core loop | FIRMS area connector, de-duplication, classification (inside, near the edge, outside, and the beat), permission-filtered vector tiles, and the alert map styled by fire age | Replaying a feed creates no duplicates, and every reference point lands in its expected beat |
 
-### Rest of Phase 1
+### Rest of Phase 1 (built)
 
-These slices finish roadmap phase 1 (section 10). They run in three waves. Slices in the same wave are independent of each other.
+These slices finish building roadmap phase 1 (section 10). All nine are built. They ran in three waves. Slices in the same wave were independent of each other. Phase 1 itself ends only when its condition in section 10 is met: a pilot state runs the platform beside its current system and the two agree on which beat each fire belongs to.
 
 | # | Wave | Slice | Delivers | Done when |
 |---|---|---|---|---|
@@ -431,7 +431,7 @@ These slices finish roadmap phase 1 (section 10). They run in three waves. Slice
 | 14 | A | FIRMS backfill and feed health | Multi-year backfill from FIRMS standard-processing data, feed-health checks, and an alert to administrators when a source goes quiet in fire season | A backfill of the demo fixtures is safe to repeat, and a silent source raises a feed-health alert |
 | 15 | C | First-run wizard | Encrypted settings (including the FIRMS key), and the wizard from section 7: mode, hierarchy preset, layer upload, FIRMS connection, starter forms switched off for now, and inviting officers | A fresh install reaches a working alert map using only the wizard |
 
-Wave A starts together. Wave B needs slice 7 for slices 8 and 13, and slice 9 for slices 10, 12 and 13. Wave C needs wave B. Each slice adds its own migrations, numbered in the order the slices are merged.
+Wave A started together. Wave B needed slice 7 for slices 8 and 13, and slice 9 for slices 10, 12 and 13. Wave C needed wave B. Migrations are numbered in the order the slices were merged, and a new migration always takes the next number after the highest on `main`.
 
 Alongside the build:
 
