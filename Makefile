@@ -31,6 +31,8 @@ FIMRA_ATTACHMENT_DIR ?= .form-attachments
 export FIMRA_ATTACHMENT_DIR := $(abspath $(FIMRA_ATTACHMENT_DIR))
 # Downloads from the export integration test, read back with OGR.
 EXPORT_CHECK_DIR := $(CURDIR)/.geo-exports-check
+# Situation report PDFs from their integration test, read back with pypdf.
+REPORT_CHECK_DIR := $(CURDIR)/.situation-reports-check
 
 GOOSE_VERSION := v3.30.1
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(DATABASE_URL)"
@@ -271,18 +273,20 @@ web-test: ## Run the web unit tests
 web-lint: ## Lint the web app and its templates
 	cd apps/web && $(PNPM) run lint
 
-.PHONY: geo-worker-up geo-test geo-test-integration export-test-integration
+.PHONY: geo-worker-up geo-test geo-test-integration export-test-integration situation-report-test-integration
 # The XLSForm tests round-trip the example forms from packages/form-schema.
 FORM_EXAMPLES_MOUNT = -v "$(CURDIR)/packages/form-schema/examples:/form-examples:ro"
+# The situation report test checks the PDF colours against the design tokens.
+DESIGN_TOKENS_MOUNT = -v "$(CURDIR)/docs/design-system/tokens.json:/design-tokens.json:ro"
 
-geo-worker-up: ## Build and start the geo worker for layer imports and exports
+geo-worker-up: ## Build and start the geo worker for layer imports, exports and situation report PDFs
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
 	$(COMPOSE) up -d --build geo-worker
 
 geo-test: ## Run the geo worker unit tests in the GDAL container
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
 	$(COMPOSE) build geo-worker
-	$(COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) geo-worker python -m unittest discover -v
+	$(COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) $(DESIGN_TOKENS_MOUNT) geo-worker python -m unittest discover -v
 
 geo-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 geo-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
@@ -298,6 +302,15 @@ export-test-integration: ## Export as each demo user on the running stack, then 
 	cd services/api && FIMRA_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
 		go test -run '^TestExportIntegration$$' -count=1 -v .
 	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
+
+situation-report-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+situation-report-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
+situation-report-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
+situation-report-test-integration: ## Make a situation report PDF as each demo user on the running stack, then read each back with pypdf
+	install -d -m 700 "$(REPORT_CHECK_DIR)"
+	cd services/api && FIMRA_REPORT_INTEGRATION=1 FIMRA_REPORT_CHECK_DIR="$(REPORT_CHECK_DIR)" \
+		go test -run '^TestSituationReportIntegration$$' -count=1 -v .
+	$(COMPOSE) run --rm --no-deps -v "$(REPORT_CHECK_DIR):/check:ro" geo-worker python report_check.py /check
 
 # XLSForm conversion (PLAN.md section 5.4). Output goes to the ignored .xlsforms/ folder unless OUT is given.
 .PHONY: xlsform-import xlsform-export xlsform-test-integration xlsform-odk-check

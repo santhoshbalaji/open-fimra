@@ -285,6 +285,7 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 
 	t.Run("default workflow", func(t *testing.T) { checkWorkflow(t, ctx, tx, slug, prefix, requestBody) })
 	t.Run("dashboard SQL parity", func(t *testing.T) { checkSummary(t, ctx, tx, slug, prefix, requestBody) })
+	t.Run("situation reports", func(t *testing.T) { checkSituationReport(t, ctx, tx, slug, prefix, requestBody) })
 
 	if w := request(http.MethodOptions, path, ""); w.Code != http.StatusNoContent ||
 		w.Header().Get("Access-Control-Allow-Origin") != origin ||

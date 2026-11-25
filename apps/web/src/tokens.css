@@ -94,3 +94,33 @@
   --color-chart-7: #9085e9;
   --color-chart-8: #e66767;
 }
+/* Paper is light, so printed pages always use the light colours. */
+@media print {
+  :root[data-theme=dark] {
+    --color-background: #f5f6f4;
+    --color-card: #ffffff;
+    --color-text: #141816;
+    --color-text-secondary: #56615b;
+    --color-border: #dde2de;
+    --color-brand: #1f5a70;
+    --color-brand-foreground: #ffffff;
+    --color-brand-soft: #e2ebee;
+    --color-danger: #9d2626;
+    --color-scrim: rgb(0 0 0 / 35%);
+    --color-map-background: #e9ece8;
+    --color-map-line: #cfd5d0;
+    --color-neutral-mark: #7a857f;
+    --color-fire-age-1: #8f1d14;
+    --color-fire-age-2: #c8401f;
+    --color-fire-age-3: #cb602d;
+    --color-fire-age-4: #cb8154;
+    --color-chart-1: #2a78d6;
+    --color-chart-2: #eb6834;
+    --color-chart-3: #1aa373;
+    --color-chart-4: #bb8500;
+    --color-chart-5: #d96995;
+    --color-chart-6: #008300;
+    --color-chart-7: #6250d6;
+    --color-chart-8: #e34948;
+  }
+}

@@ -17,10 +17,11 @@ import { Icon } from './ui/icon';
 import { FilterFields } from './filter-fields';
 import { AccessKeys } from './access-keys';
 import { FormsScreen } from './forms/forms-screen';
+import { SituationReportView } from './situation-report';
 
 @Component({
   selector: 'fimra-root',
-  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, FormsScreen, Icon],
+  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, FormsScreen, SituationReportView, Icon],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }
 })
@@ -41,6 +42,8 @@ export class App implements OnInit {
 
   readonly filtersOpen = signal(false);
   readonly dashboard = signal(false);
+  /** The printable situation report, loaded only when it is opened. */
+  readonly report = signal(false);
   readonly linkedAlert = signal<NotificationLink | null>(null);
   readonly linkMessage = signal('');
   readonly focusFeedHealth = signal(false);
@@ -63,6 +66,7 @@ export class App implements OnInit {
       this.showForms.set(false);
       this.setupChoice.set(false);
       this.dashboard.set(target.alert === null);
+      this.report.set(false);
       if (target.alert) this.linkedAlert.set(target);
       else this.focusFeedHealth.set(true);
     });
@@ -125,6 +129,7 @@ export class App implements OnInit {
     this.setupChoice.set(null);
     this.showLayers.set(false);
     this.dashboard.set(false);
+    this.report.set(false);
     this.workspace.reload();
   }
 

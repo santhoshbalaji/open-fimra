@@ -1,9 +1,13 @@
 # The base image supplies GDAL and its Python bindings at version 3.11.5.
+charset-normalizer==3.5.2
 defusedxml==0.7.1
 et-xmlfile==2.0.0
 numpy==1.26.4
 openpyxl==3.1.5
+pillow==13.0.0
 psycopg==3.2.12
 psycopg-binary==3.2.12
+pypdf==6.21.4
+reportlab==5.1.0
 shapely==2.1.2
 typing-extensions==4.15.0

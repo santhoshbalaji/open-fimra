@@ -415,7 +415,7 @@ func expireExports(ctx context.Context, pool *pgxpool.Pool, dir string) (int, er
 	return len(keys), errors.Join(problems...)
 }
 
-// runExportCleanup removes expired export files until ctx ends.
+// runExportCleanup removes expired export files and situation reports until ctx ends.
 func runExportCleanup(ctx context.Context, pool *pgxpool.Pool, dir string, logger *slog.Logger) {
 	ticker := time.NewTicker(exportCleanupInterval)
 	defer ticker.Stop()
@@ -425,6 +425,11 @@ func runExportCleanup(ctx context.Context, pool *pgxpool.Pool, dir string, logge
 			logger.Error("Could not clean up expired exports", "error", err)
 		} else if count > 0 {
 			logger.Info("Expired exports removed", "count", count)
+		}
+		if reports, err := expireSituationReports(ctx, pool); err != nil {
+			logger.Error("Could not clean up expired situation reports", "error", err)
+		} else if reports > 0 {
+			logger.Info("Expired situation reports removed", "count", reports)
 		}
 		select {
 		case <-ctx.Done():

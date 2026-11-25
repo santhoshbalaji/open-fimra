@@ -32,6 +32,12 @@ The designer and its validator load only when you open **Forms**, so they add no
 
 Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit path, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.
 
+## Situation reports
+
+Choose **Situation report** to make a printable summary of one unit. Choose the unit, which starts at your highest unit, and one day, a range of days or the past hours, then **Show report**. The report has the key numbers, a map of the unit with the period's alerts and incidents, detections and alerts, response times, incidents, field reports, alerts past their time limit and a table for each unit one level down. The numbers are the dashboard's numbers for the same period and unit, and the report shows only what your role can see. Times are in India Standard Time, so a printed report reads the same everywhere.
+
+**Print** prints the report alone, in light colours, without the menus and buttons. **Prepare PDF** asks the server to draw the same report as a PDF, then shows a download button. Only you can download it, until it expires. The map is drawn from the workspace's own boundaries and forest, so it needs no outside map service. The report screen loads only when you open it, so it adds nothing to the first download.
+
 ## Layers
 
 Sign in as a state administrator at the workspace root and open **Layers**.

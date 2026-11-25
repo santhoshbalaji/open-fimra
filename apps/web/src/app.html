@@ -40,11 +40,14 @@
   @if (workspace.current() && !showSetup() && !showKeys() && !showForms() && !(showLayers() && workspace.canManageLayers())) {
     <div class="workspace-controls" [class.filters-open]="filtersOpen()">
       <nav aria-label="Control room views">
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="!dashboard()" (click)="dashboard.set(false); focusFeedHealth.set(false)">Map and queue</button>
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="dashboard()" (click)="dashboard.set(true)">Dashboard</button>
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="!dashboard() && !report()" (click)="dashboard.set(false); report.set(false); focusFeedHealth.set(false)">Map and queue</button>
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="dashboard()" (click)="dashboard.set(true); report.set(false)">Dashboard</button>
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="report()" (click)="report.set(true); dashboard.set(false)">Situation report</button>
       </nav>
-      <button hlmBtn variant="outline" size="sm" class="filter-toggle" [attr.aria-expanded]="filtersOpen()" aria-controls="map-filters" (click)="filtersOpen.set(!filtersOpen())">Filters</button>
-      @defer (on immediate) { <fimra-filter-fields /> } @placeholder { <div class="filter-fields" id="map-filters"></div> }
+      @if (!report()) {
+        <button hlmBtn variant="outline" size="sm" class="filter-toggle" [attr.aria-expanded]="filtersOpen()" aria-controls="map-filters" (click)="filtersOpen.set(!filtersOpen())">Filters</button>
+        @defer (on immediate) { <fimra-filter-fields /> } @placeholder { <div class="filter-fields" id="map-filters"></div> }
+      }
     </div>
   }
   <main>
@@ -59,6 +62,8 @@
       @defer (on immediate) { <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" /> }
     } @else if (showLayers() && workspace.canManageLayers()) {
       @defer (on immediate) { <fimra-layers /> }
+    } @else if (report() && workspace.current()) {
+      @defer (on immediate) { <fimra-situation-report /> }
     } @else if (dashboard() && workspace.current()) {
       @defer (on immediate) { <fimra-dashboard [focusFeedHealth]="focusFeedHealth()" /> }
     } @else {

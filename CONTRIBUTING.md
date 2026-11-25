@@ -129,6 +129,18 @@ Export files are kept in the ignored `.geo-exports/` directory until they
 expire. If you set `FIMRA_EXPORT_DIR` in `.env`, use a separate directory for
 each stack. See the [export endpoints](services/api/README.md#file-exports).
 
+## Running situation reports
+
+The core API works out situation reports and the geo worker draws their PDF
+files. With the stack and worker running (`make dev db-migrate geo-worker-up`),
+run `make api-test-integration` and `make situation-report-test-integration`
+before pushing changes to reports or the dashboard. The first compares each
+demo user's report with the dashboard and with direct database counts, and
+checks who may report on which unit. The second makes a PDF as each demo user
+and reads it back with pypdf. `make geo-test` draws synthetic reports. PDF
+files are written by the worker and tests only, so `.gitignore` keeps them out
+of the repository. See the [report endpoints](services/api/README.md#situation-reports).
+
 ## Running more than one stack
 
 Two checkouts that use the same development stack share one database, and their migrations can clash. Give each checkout its own stack with a project name and free ports, for example in its `.env`:
