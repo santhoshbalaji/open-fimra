@@ -1,0 +1,6 @@
+# The base image supplies GDAL and its Python bindings at version 3.11.5.
+numpy==1.26.4
+psycopg==3.2.12
+psycopg-binary==3.2.12
+shapely==2.1.2
+typing-extensions==4.15.0

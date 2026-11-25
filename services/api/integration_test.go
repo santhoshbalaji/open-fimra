@@ -55,7 +55,7 @@ func TestIntegration(t *testing.T) {
 		}
 	}()
 
-	server := httptest.NewServer(newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, devOrigins))
+	server := httptest.NewServer(newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, devOrigins, t.TempDir()))
 	defer server.Close()
 	client := &http.Client{Timeout: 5 * time.Second}
 

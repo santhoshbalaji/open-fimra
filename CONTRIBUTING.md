@@ -50,6 +50,19 @@ With Go 1.26 or later, run `make dev`, `make db-migrate` and `make api-test-inte
 
 Run `make api-lint api-test` for formatting, Go vet and unit tests. The integration tests check the reference matches, replay a synthetic feed and check which tile features each demo grant can see. To replay a file yourself, run `make ingest-fixture FILE=packages/connectors/firms/fixtures/viirs.csv`. See the [core API guide](services/api/README.md) for settings and endpoints.
 
+## Running layer imports
+
+Run `make dev db-migrate geo-worker-up` to start the layer import worker with
+the development stack. The worker has no published ports and all its geospatial
+libraries are inside the container. Run `make geo-test geo-test-integration`
+before pushing changes to imports. The integration test uses only the synthetic
+demo uploads and checks their drafts against the demo seed.
+
+Uploads are kept in the ignored `.geo-uploads/` directory in each checkout.
+If you set `FIMRA_UPLOAD_DIR` in `.env`, use a separate directory for each stack.
+See the [worker guide](services/geo-worker/README.md) and the
+[upload endpoints](services/api/README.md#layer-imports).
+
 ## Running more than one stack
 
 Two checkouts that use the same development stack share one database, and their migrations can clash. Give each checkout its own stack with a project name and free ports, for example in its `.env`:
@@ -61,7 +74,7 @@ FIMRA_KEYCLOAK_PORT=18181
 FIMRA_HTTP_ADDR=127.0.0.1:18091
 ```
 
-Each stack uses about 2.5 GB of memory.
+Each stack has about 2.5 GB of memory available. The optional geo worker has a separate 1 GB limit.
 
 ## Making a change
 

@@ -98,15 +98,23 @@ func allowOrigins(origins string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 			if allowed[origin] {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
+				if r.Method == http.MethodPost {
+					w.Header().Set("Access-Control-Expose-Headers", "Location")
+				}
 			}
 			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
 				w.Header().Add("Vary", "Access-Control-Request-Method")
-				if !allowed[origin] || r.Header.Get("Access-Control-Request-Method") != http.MethodGet {
+				method := r.Header.Get("Access-Control-Request-Method")
+				if !allowed[origin] || (method != http.MethodGet && method != http.MethodPost) {
 					w.WriteHeader(http.StatusForbidden)
 					return
 				}
-				w.Header().Set("Access-Control-Allow-Methods", "GET")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization")
+				w.Header().Set("Access-Control-Allow-Methods", method)
+				headers := "Authorization"
+				if method == http.MethodPost {
+					headers += ", Content-Type"
+				}
+				w.Header().Set("Access-Control-Allow-Headers", headers)
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
