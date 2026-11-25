@@ -69,7 +69,7 @@
       <button brnButton (click)="closeDetails()" aria-label="Close detection details">Close</button></div>
     <p>{{ localTime.format(point.observed_at * 1000) }} · {{ relativeAge(point.observed_at, now()) }}</p>
     @if (queue.pinned(); as alert) {
-      <p><strong>Current step · {{ alert.step_label }}</strong>
+      <p><strong>Current step · {{ alert.step_label }}</strong> ·
         <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
         @if (alert.overdue) { <span class="overdue">⚠ Overdue</span> }
       </p>
