@@ -22,13 +22,14 @@ points AS (
            COALESCE(line.levels #>> '{beat,name}', '') AS beat_name,
            COALESCE(line.levels #>> '{range,name}', '') AS range_name,
            COALESCE(line.levels #>> '{division,name}', '') AS division_name,
+           COALESCE(line.hierarchy, '') AS place_hierarchy, COALESCE(line.levels::text, '') AS places,
            d.source, d.product, d.frp_mw, d.confidence,
            ST_AsMVTGeom(ST_Transform(d.geom, 3857), b.tile, 4096, 64) AS geom
     FROM bounds b
     JOIN detections d ON d.geom && b.search
     JOIN detection_matches m ON (m.detection_id, m.observed_at) = (d.id, d.observed_at)
     LEFT JOIN LATERAL (
-        SELECT value AS levels FROM jsonb_each(m.hierarchy) ORDER BY key LIMIT 1
+        SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy) ORDER BY key LIMIT 1
     ) line ON true
     WHERE d.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $6) AND now()

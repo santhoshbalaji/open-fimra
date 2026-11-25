@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -348,6 +349,14 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 				noUnit = noUnit || f["triage"] == "no_unit"
 				if tc.subject == "a2" && f["division_name"] != "Hill Division" {
 					t.Fatalf("division officer can see a detection in %v", f["division_name"])
+				}
+				if f["beat_code"] != "" {
+					var places map[string]struct{ Code, Name string }
+					text, _ := f["places"].(string)
+					if f["place_hierarchy"] != "territorial" || json.Unmarshal([]byte(text), &places) != nil ||
+						places["beat"].Code != f["beat_code"] || places["division"].Name != f["division_name"] {
+						t.Fatalf("tile places do not match the levels: %v", f)
+					}
 				}
 				if tc.subject == "a3" && f["beat_code"] != "B01" {
 					t.Fatalf("beat guard can see a detection in %v", f["beat_code"])

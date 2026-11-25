@@ -31,14 +31,15 @@ details AS (
            a.forest_class, CASE WHEN p.queue = 'triage' THEN COALESCE(a.triage_reason, 'no_unit') END AS triage,
            d.source, d.product, d.confidence, d.frp_mw,
            line.levels #>> '{beat,name}' AS beat_name, line.levels #>> '{beat,code}' AS beat_code,
-           line.levels #>> '{range,name}' AS range_name, line.levels #>> '{division,name}' AS division_name
+           line.levels #>> '{range,name}' AS range_name, line.levels #>> '{division,name}' AS division_name,
+           line.hierarchy AS place_hierarchy, line.levels AS places
     FROM page p JOIN alerts a ON a.id = p.id
     JOIN workflow_instances i ON i.alert_id=a.id
     JOIN workflow_steps s ON (s.template_id,s.slug)=(i.template_id,i.current_step)
     JOIN detections d ON (d.id, d.observed_at) = (p.detection_id, p.observed_at)
     LEFT JOIN hierarchies h ON h.id = a.hierarchy_id
     LEFT JOIN LATERAL (
-        SELECT value AS levels FROM jsonb_each(a.hierarchy)
+        SELECT key AS hierarchy, value AS levels FROM jsonb_each(a.hierarchy)
         ORDER BY (key = h.slug) DESC, key LIMIT 1
     ) line ON true
 )

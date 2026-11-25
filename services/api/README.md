@@ -74,6 +74,7 @@ A grant covers matched paths at or below the granted unit in that hierarchy. A g
 | `age` | 0 for under 6 hours, 1 for 6 to under 24 hours, 2 for 1 to under 3 days, and 3 for 3 days or more |
 | `forest_class`, `triage` | Forest class and triage reason. The reason is empty when no triage is needed. |
 | `beat_code`, `beat_name`, `range_name`, `division_name` | Names and beat code from the first hierarchy by slug at the time of matching. Missing values are empty. |
+| `place_hierarchy`, `places` | The slug of that same hierarchy, and JSON text with the code and name at every level, keyed by level slug, for example `{"beat":{"code":"B05","name":"Beat 05"}}`. Clients label each level with the workspace's own level names. Both are empty when the detection matched no unit. |
 | `source`, `product`, `frp_mw`, `confidence` | Feed, product, fire radiative power in megawatts, and the feed's confidence text. The tile omits missing power or confidence values. |
 
 After `make demo-detections`, a tile that covers the demo workspace can be requested with a demo user's signed-in token.
@@ -256,7 +257,7 @@ The role query starts from the signed-in user's ID. The tile query checks grants
 
 A workspace gets one new alert per matched detection inside forest or near its edge. The alert links to the match and keeps a copy of its hierarchy snapshot. Inside forest goes to the covering beat. Near-edge detections go to edge review by default. To route future near-edge detections straight to the beat, set the workspace column `review_near_edge` to false. A shared boundary, overlapping beats or a missing beat sends the alert to triage. Replaying a feed keeps the original assignment.
 
-Use a bearer token with `GET /api/v1/workspaces/{slug}/alerts`. Results are newest first by observation time, then by alert ID. A page contains `items`, `canReview`, per-queue `counts` and, when another page exists, `nextCursor`. Counts include all visible rows matching the time, class, status and path filters. Queue and cursor apply only to the rows. Missing counts mean zero.
+Use a bearer token with `GET /api/v1/workspaces/{slug}/alerts`. Results are newest first by observation time, then by alert ID. A page contains `items`, `canReview`, per-queue `counts` and, when another page exists, `nextCursor`. Counts include all visible rows matching the time, class, status and path filters. Queue and cursor apply only to the rows. Missing counts mean zero. Each row has the same place fields as a map tile, except that `places` is a JSON object rather than text.
 
 | Parameter | Accepted values |
 |---|---|

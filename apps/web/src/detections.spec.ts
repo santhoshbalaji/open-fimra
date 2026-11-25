@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import tokens from '../../../docs/design-system/tokens.json';
-import { detectionLayer, mapRequest, readDetection, symbolStyle, tileErrorStatus, tileUrl } from './detections';
+import { confidenceLabel, detectionLayer, mapRequest, placesOf, readDetection, symbolStyle, tileErrorStatus, tileUrl } from './detections';
 
 describe('Detection symbols', () => {
   it.each(['light', 'dark'] as const)('uses the %s palette and distinct class shapes', theme => {
@@ -48,5 +48,36 @@ describe('Tile requests', () => {
     token.mockReturnValue('renewed');
     expect(mapRequest(url, base, page, token).headers).toEqual({ Authorization: 'Bearer renewed' });
     expect(mapRequest(url, base, page, () => undefined).headers).toBeUndefined();
+  });
+});
+
+describe('Places and confidence', () => {
+  const levels = [
+    { hierarchy: 'territorial', depth: 0, slug: 'state', labels: { en: 'State' } },
+    { hierarchy: 'territorial', depth: 1, slug: 'division', labels: { en: 'District' } },
+    { hierarchy: 'territorial', depth: 2, slug: 'beat', labels: { en: 'Sub-district' } },
+    { hierarchy: 'other', depth: 1, slug: 'zone', labels: { en: 'Zone' } }
+  ];
+
+  it('labels places with the workspace levels, smallest first and without the workspace itself', () => {
+    const places = { state: { code: 'S', name: 'Demo' }, division: { code: 'D1', name: 'Hill' }, beat: { code: 'B5', name: 'Beat 05' } };
+    expect(placesOf({ place_hierarchy: 'territorial', places }, levels)).toEqual([
+      { label: 'Sub-district', name: 'Beat 05', code: 'B5' },
+      { label: 'District', name: 'Hill', code: 'D1' }
+    ]);
+    expect(placesOf({ place_hierarchy: 'territorial', places: JSON.stringify(places) }, levels)[1].name).toBe('Hill');
+  });
+
+  it('keeps a level with no matched unit and falls back when the levels are not loaded', () => {
+    expect(placesOf({ place_hierarchy: 'territorial', places: { division: { name: 'Hill' } } }, levels)[0])
+      .toEqual({ label: 'Sub-district', name: '', code: '' });
+    expect(placesOf({ place_hierarchy: 'territorial', places: '{"beat":{"name":"B"},"range":{"name":"R"}}' }, []).map(p => p.label))
+      .toEqual(['Beat', 'Range']);
+    expect(placesOf({ places: 'not json' }, levels)).toEqual([]);
+  });
+
+  it('names satellite confidence in words', () => {
+    expect(['l', 'n', 'h', 'N', 62, '80', '', null, undefined, 'odd'].map(confidenceLabel))
+      .toEqual(['Low', 'Nominal', 'High', 'Nominal', '62%', '80%', 'Unknown', 'Unknown', 'Unknown', 'odd']);
   });
 });
