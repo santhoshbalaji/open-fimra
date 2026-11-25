@@ -91,6 +91,18 @@ func (c *smtpChannel) deliver(ctx context.Context, m notificationMessage) (strin
 	if notificationAddress(*m.address) == "" {
 		return "failed", errors.New("email address is invalid")
 	}
+	return c.send(ctx, *m.address, c.email(m))
+}
+
+func (c *smtpChannel) sendInvitation(ctx context.Context, m invitationMessage) (string, error) {
+	if notificationAddress(m.address) == "" {
+		return "failed", errors.New("email address is invalid")
+	}
+	return c.send(ctx, m.address, c.invitationEmail(m))
+}
+
+// send delivers one message. Its status says whether a retry is safe.
+func (c *smtpChannel) send(ctx context.Context, to, message string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	deadline, _ := ctx.Deadline()
@@ -128,14 +140,14 @@ func (c *smtpChannel) deliver(ctx context.Context, m notificationMessage) (strin
 	if err := client.Mail(c.from); err != nil {
 		return smtpFailure("set sender", err, false)
 	}
-	if err := client.Rcpt(*m.address); err != nil {
+	if err := client.Rcpt(to); err != nil {
 		return smtpFailure("set recipient", err, false)
 	}
 	writer, err := client.Data()
 	if err != nil {
 		return smtpFailure("start message", err, false)
 	}
-	if _, err := writer.Write([]byte(c.email(m))); err != nil {
+	if _, err := writer.Write([]byte(message)); err != nil {
 		return smtpFailure("write message", err, false)
 	}
 	if err := writer.Close(); err != nil {
@@ -159,6 +171,21 @@ func (c *smtpChannel) email(m notificationMessage) string {
 	return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\n"+
 		"Message-ID: <fimra-%s-%d@%s>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s.\r\n\r\nOpen FIMRA: %s\r\n",
 		c.from, *m.address, title, time.Now().UTC().Format(time.RFC1123Z), m.workspaceID, m.id, domain, title, link.String())
+}
+
+// invitationEmail asks an officer to sign in. It holds no secret: the grant is
+// claimed only by a sign-in whose verified email matches the invitation.
+func (c *smtpChannel) invitationEmail(m invitationMessage) string {
+	domain := c.from[strings.LastIndex(c.from, "@")+1:]
+	header := strings.NewReplacer("\r", " ", "\n", " ")
+	body := fmt.Sprintf("You are invited to the %s workspace in Open FIMRA as %s for %s.\r\n\r\n"+
+		"Sign in at %s with this email address before %s. Your account must show this address as verified.\r\n\r\n"+
+		"If you did not expect this invitation, you can ignore this email.\r\n",
+		header.Replace(m.workspace), strings.ToLower(m.roleLabel), header.Replace(m.unitName), c.webURL.String(),
+		m.expiresAt.UTC().Format("2 January 2006 15:04 MST"))
+	return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: You are invited to Open FIMRA\r\nDate: %s\r\n"+
+		"Message-ID: <fimra-invitation-%d@%s>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
+		c.from, m.address, time.Now().UTC().Format(time.RFC1123Z), m.id, domain, body)
 }
 
 // SMTP replies can echo addresses or credentials. Keep the step and reply

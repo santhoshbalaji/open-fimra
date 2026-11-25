@@ -250,6 +250,8 @@ type firmsBackfillWorker struct {
 	db        backfillDB
 	fetch     fetchRange
 	available availableDays
+	// keys, when set, chooses the fetchers by the job's workspace instead.
+	keys *firmsKeys
 }
 
 func (*firmsBackfillWorker) Timeout(*river.Job[firmsBackfillArgs]) time.Duration {
@@ -262,6 +264,13 @@ func (w *firmsBackfillWorker) Work(ctx context.Context, job *river.Job[firmsBack
 	if err != nil {
 		return river.JobCancel(err)
 	}
-	_, err = backfillFIRMS(ctx, w.db, req, w.fetch, w.available, nil)
+	fetch, available := w.fetch, w.available
+	if w.keys != nil {
+		fetch, available, err = w.keys.backfillClient(ctx, req.WorkspaceID)
+		if err != nil {
+			return fmt.Errorf("choose the FIRMS key: %w", err)
+		}
+	}
+	_, err = backfillFIRMS(ctx, w.db, req, fetch, available, nil)
 	return err
 }

@@ -60,7 +60,7 @@ func TestLayerPublishIntegration(t *testing.T) {
 	offset := seedPublishingWorkspace(t, ctx, pool, prefix, slug, cfg.uploadDir)
 
 	logger := slog.Default()
-	jobs, err := newJobClient(pool, logger, "", nil)
+	jobs, err := newJobClient(pool, logger, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
