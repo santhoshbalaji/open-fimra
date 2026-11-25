@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -91,9 +92,9 @@ func TestIntegration(t *testing.T) {
 		unit      unit
 		beatCount int64
 	}{
-		{"state.admin", "a1", "state_admin", unit{"DS", "Demo State", "state", "ds"}, 24},
-		{"division.officer", "a2", "division_officer", unit{"D1", "Hill Division", "division", "ds.c1.d1"}, 6},
-		{"beat.guard", "a3", "field_staff", unit{"B01", "Beat 01", "beat", "ds.c1.d1.r1.b01"}, 1},
+		{"state.admin", "a1", "state_admin", unit{Code: "DS", Name: "Demo State", LevelSlug: "state", Path: "ds"}, 24},
+		{"division.officer", "a2", "division_officer", unit{Code: "D1", Name: "Hill Division", LevelSlug: "division", Path: "ds.c1.d1"}, 6},
+		{"beat.guard", "a3", "field_staff", unit{Code: "B01", Name: "Beat 01", LevelSlug: "beat", Path: "ds.c1.d1.r1.b01"}, 1},
 		{username: "no.role", subSuffix: "a4"},
 	} {
 		t.Run(tc.username, func(t *testing.T) {
@@ -131,11 +132,16 @@ func TestIntegration(t *testing.T) {
 				}
 				return
 			}
+			// The field app fits its map to the granted unit's extent.
+			if err := pool.QueryRow(ctx, `SELECT ARRAY[ST_XMin(geom), ST_YMin(geom), ST_XMax(geom), ST_YMax(geom)]
+				FROM units WHERE path = $1::ltree AND valid_to IS NULL`, tc.unit.Path).Scan(&tc.unit.Bounds); err != nil {
+				t.Fatal(err)
+			}
 			want := roleAssignment{
 				Workspace: workspace{Slug: "demo", Name: "Demo State"},
 				Hierarchy: "territorial", Role: tc.role, Unit: tc.unit, BeatCount: tc.beatCount,
 			}
-			if len(me.RoleAssignments) != 1 || me.RoleAssignments[0] != want {
+			if len(me.RoleAssignments) != 1 || !reflect.DeepEqual(me.RoleAssignments[0], want) || len(want.Unit.Bounds) != 4 {
 				t.Fatalf("got %+v, want [%+v]", me.RoleAssignments, want)
 			}
 			t.Logf("%s beat count = %d", want.Unit.Code, want.BeatCount)

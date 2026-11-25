@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: allow plain HTTP so a phone can reach a development
+     stack on 127.0.0.1 (through adb reverse), the emulator's 10.0.2.2 or a
+     private tunnel. Release builds use the platform default, HTTPS only. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

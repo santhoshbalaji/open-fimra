@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Fire in section mark from docs/design-system/logo, inside the adaptive icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="25.2"
+        android:translateY="24.6"
+        android:scaleX="0.9"
+        android:scaleY="0.9">
+        <path android:fillColor="#D46838" android:pathData="M6 40 C5.8 26.6 22.4 18.8 36.8 3 C37.5 11.9 34.3 19.6 29.6 25.1 C36.2 24.3 44 18.9 49.2 12.7 C49.1 25.5 42.8 36.9 28.5 37 H26.9 Q25.5 37 24.6 35.9 L19.9 30.1 Q19.1 29.1 18.3 30.1 L13 36.7 Q12.1 37.8 10.8 38.1 Q8.1 38.7 6 40 Z" />
+        <path android:fillColor="#97B5C1" android:pathData="M6 48 Q8.2 46.7 10.9 46 Q12.1 45.7 13 44.6 L18.3 38 Q19.1 37 19.9 38 L24.7 43.9 Q25.6 45 27 45 H29.6 C42.2 45 52.1 38.2 58 28.8 V39.2 Q58 40 57.4 40.7 C49.7 50.3 34.7 50 26.1 54.2 C35 54.3 45.6 53.2 53.4 50.7 L46.7 58.4 Q44.5 61 40.6 61 H18.7 Q15.4 61 13.5 58.4 Z" />
+    </group>
+</vector>

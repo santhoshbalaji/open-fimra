@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- The browser build is for automated tests of the field app. The phone app is the Android build. -->
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Open FIMRA field app, browser test build">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <title>Open FIMRA field app</title>
+  <link rel="manifest" href="manifest.json">
+  <!-- A self-hosted copy of MapLibre GL JS. `make mobile-web` downloads it into web/vendor. -->
+  <link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css">
+  <script type="module">
+    import * as maplibregl from './vendor/maplibre-gl/maplibre-gl.mjs';
+    // Tile addresses start with fimra://. This handler fetches them with the
+    // signed-in user's token, which the app keeps in window.fimraTileToken.
+    maplibregl.addProtocol('fimra', async (params, abort) => {
+      const url = params.url.slice('fimra://'.length);
+      const token = window.fimraTileToken;
+      const response = await fetch(url, {
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+        signal: abort.signal
+      });
+      if (response.status === 204) return { data: new ArrayBuffer(0) };
+      if (!response.ok) throw new Error('Tile request failed (' + response.status + ')');
+      return { data: await response.arrayBuffer() };
+    });
+    window.maplibregl = maplibregl;
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

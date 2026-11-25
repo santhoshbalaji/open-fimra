@@ -314,3 +314,68 @@ xlsform-odk-check: ## Export every example form and convert it with pyxform, the
 	docker run --rm -v "$(CURDIR)/.xlsforms/odk-check:/xls:ro" $(PYTHON_IMAGE) sh -c \
 		'pip install --quiet --disable-pip-version-check --root-user-action=ignore pyxform==$(PYXFORM_VERSION) && \
 		for f in /xls/*.xlsx; do echo "$$f"; xls2xform --skip_validate "$$f" /tmp/form.xml || exit 1; done'
+
+# Field app (Flutter). Everything runs in a pinned Flutter image through
+# Docker, so no Flutter or Android SDK install is needed. Packages, Gradle
+# files and the Android parts the build downloads (NDK, CMake, platform 35)
+# are cached in the ignored .mobile-cache folder.
+FLUTTER_IMAGE ?= ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
+MOBILE_MEMORY ?= 4g
+MOBILE_CPUS ?= 2
+# Extra docker run flags, for example a network setting your machine needs.
+MOBILE_DOCKER_FLAGS ?=
+# Addresses built into the Android test build. The app can change them under Server settings.
+MOBILE_API_URL ?= http://127.0.0.1:18090
+MOBILE_OIDC_ISSUER ?= http://127.0.0.1:18180/realms/open-fimra
+MOBILE_TEST_API_ADDR ?= 127.0.0.1:18099
+MOBILE_WEB_PORT ?= 4300
+MOBILE_SHOTS ?= $(HOME)/open-fimra-screenshots/field-app
+MAPLIBRE_JS_VERSION := 6.16.0
+MAPLIBRE_JS_SHA512 := gApO66EMtoDZuio680RUBvskR7ahFd/NNhLN4tBAs+Y7FeT4gQV8zVFgYVMRmFxQznOEzecW19w6xOd9XjZjiA==
+MOBILE_RUN = docker run --rm --init --memory $(MOBILE_MEMORY) --cpus $(MOBILE_CPUS) \
+	-v "$(CURDIR):/repo" -w /repo/apps/mobile \
+	-e PUB_CACHE=/repo/.mobile-cache/pub -e GRADLE_USER_HOME=/repo/.mobile-cache/gradle \
+	-v "$(CURDIR)/.mobile-cache/android-ndk:/opt/android-sdk-linux/ndk" \
+	-v "$(CURDIR)/.mobile-cache/android-cmake:/opt/android-sdk-linux/cmake" \
+	-v "$(CURDIR)/.mobile-cache/android-35:/opt/android-sdk-linux/platforms/android-35" \
+	-e GRADLE_OPTS=-Dorg.gradle.daemon=false \
+	$(MOBILE_DOCKER_FLAGS) $(FLUTTER_IMAGE)
+MOBILE_DEFINES = --dart-define=FIMRA_API_URL=$(MOBILE_API_URL) --dart-define=FIMRA_OIDC_ISSUER=$(MOBILE_OIDC_ISSUER)
+
+.PHONY: mobile-deps mobile-tokens mobile-lint mobile-test mobile-build mobile-web mobile-test-integration mobile-walkthrough
+
+mobile-deps: ## Fetch the field app's locked Flutter packages in the container
+	install -d .mobile-cache/pub .mobile-cache/gradle .mobile-cache/android-ndk .mobile-cache/android-cmake .mobile-cache/android-35
+	$(MOBILE_RUN) flutter --suppress-analytics pub get --enforce-lockfile
+
+mobile-tokens: mobile-deps ## Regenerate the field app's theme from docs/design-system/tokens.json
+	$(MOBILE_RUN) dart --suppress-analytics run tool/generate_tokens.dart
+
+mobile-lint: mobile-deps ## Check the field app's formatting, analysis and generated theme
+	$(MOBILE_RUN) bash -c 'dart --suppress-analytics format --output=none --set-exit-if-changed lib test test_integration tool && \
+		flutter --suppress-analytics analyze --fatal-infos && dart --suppress-analytics run tool/generate_tokens.dart --check'
+
+mobile-test: mobile-deps ## Run the field app's unit and widget tests in the container
+	$(MOBILE_RUN) flutter --suppress-analytics test
+
+mobile-build: mobile-deps ## Build the field app's Android test build (debug APK) in the container
+	$(MOBILE_RUN) flutter --suppress-analytics build apk --debug $(MOBILE_DEFINES)
+	@echo "Built apps/mobile/build/app/outputs/flutter-apk/app-debug.apk"
+
+mobile-web: mobile-deps ## Build the field app for a browser, for automated tests only
+	scripts/fetch-maplibre-js.sh $(MAPLIBRE_JS_VERSION) $(MAPLIBRE_JS_SHA512) apps/mobile/web/vendor/maplibre-gl
+	$(MOBILE_RUN) flutter --suppress-analytics build web --release --no-web-resources-cdn
+
+MOBILE_SCRIPT_ENV = MOBILE_DB=fimra_mobile_test \
+	MOBILE_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/fimra_mobile_test?sslmode=disable" \
+	MOBILE_API_ADDR=$(MOBILE_TEST_API_ADDR) MOBILE_WEB_PORT=$(MOBILE_WEB_PORT) \
+	FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
+	GOOSE_VERSION=$(GOOSE_VERSION) COMPOSE_CMD="$(COMPOSE)" SHOTS="$(MOBILE_SHOTS)" \
+	PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble FLUTTER_IMAGE=$(FLUTTER_IMAGE) \
+	MOBILE_MEMORY=$(MOBILE_MEMORY) MOBILE_CPUS=$(MOBILE_CPUS) MOBILE_DOCKER_FLAGS="$(MOBILE_DOCKER_FLAGS)"
+
+mobile-test-integration: mobile-deps ## Test the field app's API client as each demo user against a fresh copy of the demo data
+	MODE=test $(MOBILE_SCRIPT_ENV) scripts/mobile-integration.sh
+
+mobile-walkthrough: mobile-web ## Sign in to the browser build as the beat guard in headless Chromium, acknowledge an alert and save screenshots outside the repository
+	MODE=walkthrough $(MOBILE_SCRIPT_ENV) scripts/mobile-integration.sh

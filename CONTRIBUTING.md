@@ -26,11 +26,12 @@ The development stack binds to 127.0.0.1 only:
 | PostgreSQL with PostGIS | `127.0.0.1:15432`, database `fimra` | `fimra` / `fimra-dev` |
 | Keycloak admin console | <http://127.0.0.1:18180> | `admin` / `admin-dev` |
 
-On first start Keycloak imports the development realm `open-fimra` from [deploy/compose/keycloak](deploy/compose/keycloak/open-fimra-realm.json). It has three clients:
+On first start Keycloak imports the development realm `open-fimra` from [deploy/compose/keycloak](deploy/compose/keycloak/open-fimra-realm.json). It has four clients:
 
 | Client | Use |
 |---|---|
 | `open-fimra-web` | The web app: public client, authorisation code with PKCE, accepts sign-in and sign-out on ports 4200 through 4203 on both loopback names |
+| `open-fimra-mobile` | The field app: public client, authorisation code with a required S256 proof key and no password sign-in. It returns to `org.openfimra.field:/callback`, and to `/auth.html` on ports 4300 through 4303 on both loopback names for the browser test build only. |
 | `open-fimra-api` | The core API, as the token audience |
 | `open-fimra-dev-cli` | Password sign-in for local tests only. A real installation never has this client. |
 
@@ -80,6 +81,12 @@ exported examples with pyxform. With `make db-up db-migrate`, run
 `make xlsform-import FILE=form.xlsx` or `make xlsform-export FILE=form.json`.
 Test workbooks are written by the tests, so no spreadsheet is committed. See
 the [worker guide](services/geo-worker/README.md#how-xlsform-conversion-works).
+
+## Running the field app
+
+The Flutter field app builds and tests in a container, so you need only Docker. Run `make mobile-lint mobile-test mobile-build` for the checks and an Android test build. With the development stack running, `make mobile-test-integration` signs the demo users in with PKCE and checks what each one sees, and `make mobile-walkthrough` drives the browser build in headless Chromium and saves screenshots outside the repository. Both use their own database beside the development one. See the [field app guide](apps/mobile/README.md), which also covers running the app on a phone.
+
+A Keycloak stack that was imported before the field app client existed does not have it. Run `make dev-reset dev` to import the realm again, or add the client in the admin console.
 
 ## Running layer imports and publishing
 

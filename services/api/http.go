@@ -143,6 +143,9 @@ type unit struct {
 	Name      string `json:"name"`
 	LevelSlug string `json:"levelSlug"`
 	Path      string `json:"path"`
+	// Bounds is the unit's extent as [west, south, east, north] in degrees,
+	// or null when the unit has no geometry. The field app fits its map to it.
+	Bounds []float64 `json:"bounds"`
 }
 
 type roleAssignment struct {
@@ -222,7 +225,8 @@ func (a api) me(w http.ResponseWriter, r *http.Request) {
 			Workspace: workspace{Slug: row.WorkspaceSlug, Name: row.WorkspaceName},
 			Hierarchy: row.HierarchySlug,
 			Role:      row.RoleSlug,
-			Unit:      unit{Code: row.UnitCode, Name: row.UnitName, LevelSlug: row.LevelSlug, Path: row.UnitPath},
+			Unit: unit{Code: row.UnitCode, Name: row.UnitName, LevelSlug: row.LevelSlug, Path: row.UnitPath,
+				Bounds: row.Bounds},
 			BeatCount: row.BeatCount,
 		})
 	}

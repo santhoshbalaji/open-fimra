@@ -11,6 +11,8 @@ RETURNING id;
 SELECT w.slug AS workspace_slug, w.name AS workspace_name, h.slug AS hierarchy_slug,
        a.role_slug, u.code AS unit_code, u.name AS unit_name,
        level.slug AS level_slug, u.path::text AS unit_path,
+       (CASE WHEN u.geom IS NOT NULL THEN
+           ARRAY[ST_XMin(u.geom), ST_YMin(u.geom), ST_XMax(u.geom), ST_YMax(u.geom)] END)::float8[] AS bounds,
        (SELECT count(*)
         FROM units beat
         JOIN hierarchy_levels beat_level
