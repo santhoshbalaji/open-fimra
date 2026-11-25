@@ -26,12 +26,16 @@ GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/m
 PSQL := $(COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
-.PHONY: api-run api-test api-test-integration api-lint
+.PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections
 
-api-run api-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+api-run api-test-integration ingest-fixture demo-detections: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
+api-run: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
+api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
+ingest-fixture: export FIMRA_FIXTURE_FILE := $(if $(FILE),$(if $(filter /%,$(FILE)),$(FILE),$(CURDIR)/$(FILE)))
+ingest-fixture: export FIMRA_FIXTURE_PRODUCT := $(or $(PRODUCT),VIIRS_SNPP_NRT)
 
 help: ## Show this list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-22s %s\n", $$1, $$2}'
@@ -98,7 +102,14 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestIntegration$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration)$$' -count=1 -v .
+
+ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
+	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
+	cd services/api && go run . ingest-firms -file "$$FIMRA_FIXTURE_FILE" -product "$$FIMRA_FIXTURE_PRODUCT"
+
+demo-detections: ## Load the synthetic workspace and detections at four ages
+	cd services/api && go run . ingest-firms -demo -file ../../packages/connectors/firms/fixtures/demo.csv
 
 api-lint: ## Check core API formatting and run Go vet
 	cd services/api && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi

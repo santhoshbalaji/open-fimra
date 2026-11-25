@@ -9,11 +9,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 )
@@ -31,14 +29,16 @@ func TestIntegration(t *testing.T) {
 		t.Fatal("could not configure the test database connection")
 	}
 	defer pool.Close()
-	loadDemo(t, ctx, pool)
+	if err := ensureDemoSeed(ctx, pool); err != nil {
+		t.Fatalf("load the demo seed: %v", err)
+	}
 
 	provider, err := discoverProvider(ctx, cfg.issuer)
 	if err != nil {
 		t.Fatal("could not discover the development sign-in server")
 	}
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	jobs, err := newJobClient(pool, logger)
+	jobs, err := newJobClient(pool, logger, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestIntegration(t *testing.T) {
 		}
 	}()
 
-	server := httptest.NewServer(newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger))
+	server := httptest.NewServer(newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, devOrigins))
 	defer server.Close()
 	client := &http.Client{Timeout: 5 * time.Second}
 
@@ -152,37 +152,6 @@ func TestIntegration(t *testing.T) {
 			t.Fatal("timed out waiting for the queue to complete a heartbeat")
 		}
 	})
-}
-
-func loadDemo(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
-	t.Helper()
-	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('open-fimra:demo-seed'))"); err != nil {
-			return err
-		}
-		var exists bool
-		if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM workspaces WHERE slug = 'demo')").Scan(&exists); err != nil {
-			return err
-		}
-		if !exists {
-			if err := execSeed(ctx, tx, "load.sql"); err != nil {
-				return err
-			}
-		}
-		return execSeed(ctx, tx, "roles.sql")
-	})
-	if err != nil {
-		t.Fatalf("load the demo seed: %v", err)
-	}
-}
-
-func execSeed(ctx context.Context, tx pgx.Tx, file string) error {
-	body, err := os.ReadFile(filepath.Join("..", "..", "seed", "demo-state", file))
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, string(body))
-	return err
 }
 
 func demoToken(t *testing.T, client *http.Client, tokenURL, username string) string {

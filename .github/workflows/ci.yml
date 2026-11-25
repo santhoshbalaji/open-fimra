@@ -81,5 +81,5 @@ jobs:
           cache-dependency-path: services/api/go.sum
       - run: make dev
       - run: make db-migrate
-      - name: Load the demo seed and test the API
+      - name: Test sign-in, reference matching, feed replay and tile permissions
         run: make api-test-integration

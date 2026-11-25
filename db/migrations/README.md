@@ -11,6 +11,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00005_job_queue` | River's job queue tables, exported from River's own migrations |
 | `00006_audit_log` | The append-only audit log |
 | `00007_users_and_roles` | User records, roles and grants at current unit paths |
+| `00008_ingest_runs` | Feed run history and matched paths grouped by hierarchy |
 
 ## Commands
 
