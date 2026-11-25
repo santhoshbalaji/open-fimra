@@ -24,6 +24,10 @@ Open FIMRA is an open-source platform for forest fire monitoring, field reportin
 
 The full plan is in [PLAN.md](PLAN.md): modules, tech stack, deployment, roadmap and risks.
 
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how to start the development stack and the rules for changes, including the rule that all demo data is synthetic.
+
 ## Tech stack
 
 | Layer | Choice |
