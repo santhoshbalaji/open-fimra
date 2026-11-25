@@ -23,6 +23,8 @@ type config struct {
 	firmsMapKey string
 	corsOrigins string
 	uploadDir   string
+	exportDir   string
+	exportTTL   time.Duration
 }
 
 func loadConfig() config {
@@ -34,6 +36,8 @@ func loadConfig() config {
 		firmsMapKey: strings.TrimSpace(os.Getenv("FIMRA_FIRMS_MAP_KEY")),
 		corsOrigins: envOr("FIMRA_CORS_ORIGINS", devOrigins),
 		uploadDir:   envOr("FIMRA_UPLOAD_DIR", ".geo-uploads"),
+		exportDir:   envOr("FIMRA_EXPORT_DIR", ".geo-exports"),
+		exportTTL:   defaultExportTTL,
 	}
 }
 
@@ -51,6 +55,13 @@ func main() {
 
 	cfg := loadConfig()
 	var err error
+	if raw := os.Getenv("FIMRA_EXPORT_TTL"); raw != "" {
+		cfg.exportTTL, err = time.ParseDuration(raw)
+		if err != nil || cfg.exportTTL < time.Minute {
+			logger.Error("FIMRA_EXPORT_TTL must be a duration of at least one minute, such as 24h", "value", raw, "error", err)
+			os.Exit(1)
+		}
+	}
 	if len(os.Args) > 1 {
 		err = runCommand(ctx, cfg, os.Args[1:])
 	} else {
@@ -101,12 +112,15 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		}
 	}()
 
+	go runExportCleanup(ctx, pool, cfg.exportDir, logger)
+
 	if cfg.firmsMapKey == "" {
 		logger.Info("FIRMS polling is disabled because FIMRA_FIRMS_MAP_KEY is empty")
 	}
 
 	server := &http.Server{
-		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins, cfg.uploadDir, jobs),
+		Handler: newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins, cfg.uploadDir, jobs,
+			withExports(cfg.exportDir, cfg.exportTTL)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,

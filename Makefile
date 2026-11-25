@@ -22,6 +22,10 @@ FIMRA_OIDC_AUDIENCE ?= open-fimra-api
 FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
 FIMRA_UPLOAD_DIR ?= .geo-uploads
 export FIMRA_UPLOAD_DIR := $(abspath $(FIMRA_UPLOAD_DIR))
+FIMRA_EXPORT_DIR ?= .geo-exports
+export FIMRA_EXPORT_DIR := $(abspath $(FIMRA_EXPORT_DIR))
+# Downloads from the export integration test, read back with OGR.
+EXPORT_CHECK_DIR := $(CURDIR)/.geo-exports-check
 
 GOOSE_VERSION := v3.30.1
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(DATABASE_URL)"
@@ -35,6 +39,7 @@ api-run api-test-integration ingest-fixture demo-detections backfill-firms backf
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
+api-run: export FIMRA_EXPORT_TTL := $(FIMRA_EXPORT_TTL)
 api-run backfill-firms: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
 api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
 ingest-fixture: export FIMRA_FIXTURE_FILE := $(if $(FILE),$(if $(filter /%,$(FILE)),$(FILE),$(CURDIR)/$(FILE)))
@@ -163,14 +168,14 @@ web-test: ## Run the web unit tests
 web-lint: ## Lint the web app and its templates
 	cd apps/web && $(PNPM) run lint
 
-.PHONY: geo-worker-up geo-test geo-test-integration
+.PHONY: geo-worker-up geo-test geo-test-integration export-test-integration
 
-geo-worker-up: ## Build and start the layer import worker
-	install -d -m 700 "$(FIMRA_UPLOAD_DIR)"
+geo-worker-up: ## Build and start the geo worker for layer imports and exports
+	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
 	$(COMPOSE) up -d --build geo-worker
 
 geo-test: ## Run the geo worker unit tests in the GDAL container
-	install -d -m 700 "$(FIMRA_UPLOAD_DIR)"
+	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
 	$(COMPOSE) build geo-worker
 	$(COMPOSE) run --rm --no-deps geo-worker python -m unittest discover -v
 
@@ -179,3 +184,12 @@ geo-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 geo-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 geo-test-integration: ## Test layer imports and publication on the running, migrated stack
 	cd services/api && FIMRA_GEO_INTEGRATION=1 go test -run '^(TestLayerImportIntegration|TestLayerPublishIntegration)$$' -count=1 -v .
+
+export-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+export-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
+export-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
+export-test-integration: ## Export as each demo user on the running stack, then read every format back with OGR
+	install -d -m 700 "$(EXPORT_CHECK_DIR)"
+	cd services/api && FIMRA_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
+		go test -run '^TestExportIntegration$$' -count=1 -v .
+	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'

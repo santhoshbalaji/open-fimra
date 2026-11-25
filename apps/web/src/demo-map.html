@@ -86,7 +86,17 @@
 </section>
 @if (workspace.current()) {
   <aside class="alert-panel" aria-labelledby="queue-title">
-    <h2 id="queue-title">Alert queue</h2>
+    <div class="queue-heading">
+      <h2 id="queue-title">Alert queue</h2>
+      <button #exportButton brnButton class="export-button" (click)="exporting.set(true)" aria-haspopup="dialog">
+        <svg lucideDownload></svg> Export
+      </button>
+    </div>
+    @if (exporting() && exportEndpoint(); as endpoint) {
+      <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
+        [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
+        (closed)="closeExport()" />
+    }
     <div class="queue-tabs" role="group" aria-label="Alert queues">
       @for (tab of queue.tabs(); track tab) {
         <button [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}

@@ -20,14 +20,19 @@ type api struct {
 	logger    *slog.Logger
 	reader    ingestDB
 	uploadDir string
+	exports   exportSettings
 	feedDB    feedDB
 	jobs      *river.Client[pgx.Tx]
 	// now is the clock for feed health. It is nil outside tests.
 	now func() time.Time
 }
 
-func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger, origins, uploadDir string, jobs *river.Client[pgx.Tx]) http.Handler {
-	return api{pool: pool, queries: db.New(pool), logger: logger, reader: pool, uploadDir: uploadDir, feedDB: pool, jobs: jobs}.handler(auth, origins)
+func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger, origins, uploadDir string, jobs *river.Client[pgx.Tx], options ...func(*api)) http.Handler {
+	a := api{pool: pool, queries: db.New(pool), logger: logger, reader: pool, uploadDir: uploadDir, feedDB: pool, jobs: jobs}
+	for _, option := range options {
+		option(&a)
+	}
+	return a.handler(auth, origins)
 }
 
 func (a api) handler(auth authenticator, origins string) http.Handler {
@@ -50,6 +55,9 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/feeds", a.feeds)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports/{version}/preview", a.layerPreview)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/layer-imports/{version}/publish", a.layerPublish)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/exports", a.createExport)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/exports/{id}", a.exportStatus)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/exports/{id}/file", a.exportFile)
 	return router
 }
 

@@ -65,6 +65,18 @@ If you set `FIMRA_UPLOAD_DIR` in `.env`, use a separate directory for each stack
 See the [worker guide](services/geo-worker/README.md) and the
 [upload endpoints](services/api/README.md#layer-imports).
 
+## Running file exports
+
+The same geo worker writes export files. With the stack and worker running, run
+`make geo-test export-test-integration` before pushing changes to exports. The
+first writes every format from synthetic rows and reads it back with OGR. The
+second exports as each demo user, compares the rows with the alert queue and
+detection tiles, and reads every downloaded format back with OGR.
+
+Export files are kept in the ignored `.geo-exports/` directory until they
+expire. If you set `FIMRA_EXPORT_DIR` in `.env`, use a separate directory for
+each stack. See the [export endpoints](services/api/README.md#file-exports).
+
 ## Running more than one stack
 
 Two checkouts that use the same development stack share one database, and their migrations can clash. Give each checkout its own stack with a project name and free ports, for example in its `.env`:

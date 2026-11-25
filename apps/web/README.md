@@ -11,6 +11,10 @@ Choose **Dashboard** to see detections by forest class, routed alerts by queue a
 
 The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. It skips the chart and hides reference layers. The browser remembers your choice when storage is available.
 
+## Exports
+
+Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit path, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.
+
 ## Layers
 
 Sign in as a state administrator at the workspace root and open **Layers**.

@@ -1,0 +1,40 @@
+<div class="dialog-backdrop" aria-hidden="true"></div>
+<section class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title"
+         aria-describedby="export-summary" cdkTrapFocus [cdkTrapFocusAutoCapture]="true" (keydown.escape)="close()">
+  <h2 id="export-title">Export</h2>
+  <form (submit)="$event.preventDefault(); prepare()">
+    <fieldset>
+      <legend>What to export</legend>
+      <label><input type="radio" name="export-kind" value="alerts" [checked]="kind() === 'alerts'" (change)="choose('alerts')"> Alerts</label>
+      <label><input type="radio" name="export-kind" value="detections" [checked]="kind() === 'detections'" (change)="choose('detections')"> Detections on the map</label>
+    </fieldset>
+    @if (kind() === 'alerts') {
+      <fieldset>
+        <legend>Queues</legend>
+        <label><input type="radio" name="export-queue" [checked]="onlyQueue()" (change)="scope(true)"> {{ queueLabel() }} queue only</label>
+        <label><input type="radio" name="export-queue" [checked]="!onlyQueue()" (change)="scope(false)"> All queues you can see</label>
+      </fieldset>
+    }
+    <label class="export-format">File format
+      <select #formatSelect (change)="pick(formatSelect.value)">
+        @for (item of formats; track item[0]) {
+          <option [value]="item[0]" [selected]="item[0] === format()">{{ item[1] }}</option>
+        }
+      </select>
+    </label>
+    <p id="export-summary" class="export-summary">Uses the current filters: {{ summary() }}.</p>
+    <p class="export-hint">The file holds only what your role can see, with a note of its source, filters and
+      coordinate system. Only you can download it, until it expires.</p>
+    <div class="export-actions">
+      <button type="button" class="secondary" (click)="close()">Close</button>
+      <button type="submit" class="primary" [disabled]="busy()">{{ status()?.status === 'ready' ? 'Prepare again' : 'Prepare export' }}</button>
+    </div>
+  </form>
+  <p class="export-progress" role="status">{{ progress() }}</p>
+  @if (status(); as ready) {
+    @if (ready.status === 'ready' && ready.fileName) {
+      <button type="button" class="primary download" (click)="download()">Download {{ ready.fileName }}</button>
+    }
+  }
+  @if (error()) { <p class="export-error" role="alert">{{ error() }}</p> }
+</section>
