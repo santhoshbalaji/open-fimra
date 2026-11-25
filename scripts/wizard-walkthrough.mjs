@@ -102,7 +102,11 @@ try {
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await step('Starter forms');
+  await page.locator('.pack-forms > li').first().waitFor();
   await save(page, 'starter-forms');
+  await page.getByRole('switch', { name: 'Switch on the starter forms' }).click();
+  await page.getByText('The starter forms are on.').waitFor();
+  await save(page, 'starter-forms-on');
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await step('Invite officers');

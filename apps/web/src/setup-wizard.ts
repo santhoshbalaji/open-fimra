@@ -44,6 +44,15 @@ interface Draft { versionId: string; status: Upload['status']; unitCount: number
 interface Preview { days: number; blocked: string; grantConfirmation: string; brokenGrants: unknown[] }
 interface Invitation { id: string; email: string; role: string; unitPath: string; unitName: string; expiresAt: string; emailStatus: string }
 interface Unit { depth: number; code: string; name: string; path: string }
+export interface PackForm {
+  form: string; title: string; version: number; steps: string[]; status: 'added' | 'present' | 'missing';
+  assigned: string[]; skipped?: { step: string; reason: string }[];
+}
+export interface StarterPack { enabled: boolean; forms: PackForm[] }
+
+const workflowStepLabels: Record<string, string> = {
+  team_sent: 'Team sent', reached_site: 'Reached site', first_report: 'First report', final_report: 'Final report'
+};
 
 export const steps: { key: StepKey; label: string }[] = [
   { key: 'mode', label: 'Mode' },
@@ -104,6 +113,8 @@ export class SetupWizard implements OnInit {
 
   readonly firmsResult = signal<{ ok: boolean; message: string } | null>(null);
   readonly skippingFirms = signal(false);
+
+  readonly pack = signal<StarterPack | null>(null);
 
   readonly invitations = signal<Invitation[]>([]);
   readonly units = signal<Unit[]>([]);
@@ -167,6 +178,7 @@ export class SetupWizard implements OnInit {
     this.error.set('');
     this.notice.set('');
     if (key === 'invitations') this.loadInvitations();
+    if (key === 'forms') this.loadPack();
     setTimeout(() => {
       // On a phone the steps scroll sideways, so keep the current one in view.
       this.host.nativeElement.querySelector('.setup-steps [aria-current=step]')
@@ -303,6 +315,32 @@ export class SetupWizard implements OnInit {
   testKey(): void {
     this.run(this.http.post<{ ok: boolean; message: string }>(this.base + '/settings/firms/test', {}),
       result => this.firmsResult.set(result));
+  }
+
+  // Starter forms
+
+  loadPack(): void {
+    this.http.get<StarterPack>(this.base + '/starter-pack').pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({ next: pack => this.pack.set(pack), error: error => this.failed(error) });
+  }
+
+  enablePack(): void {
+    this.run(this.http.post<StarterPack>(this.base + '/starter-pack', {}), pack => {
+      this.pack.set(pack);
+      const kept = pack.forms.filter(form => form.status === 'present').length;
+      this.notice.set('The starter forms are on.' +
+        (kept ? ' Forms this workspace already had are left as they are.' : ''));
+    });
+  }
+
+  packUse(form: PackForm): string {
+    if (form.steps.length) return 'Filled in at ' + form.steps.map(step => workflowStepLabels[step] ?? step).join(' and ');
+    if (form.form === 'manual-fire-report') return 'Records a fire reported by another source and makes an alert';
+    return 'Kept on its own, not on a workflow step';
+  }
+
+  packStatus(form: PackForm): string {
+    return { added: 'Added', present: 'In this workspace', missing: 'Not added' }[form.status];
   }
 
   // Invitations

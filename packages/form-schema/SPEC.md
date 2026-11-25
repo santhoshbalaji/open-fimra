@@ -412,7 +412,7 @@ Both validators run the shared test cases in [examples](examples):
 - Every file directly in `examples/` is a valid form. Both validators must find no problems, and their columns must match the file of the same name in `examples/columns/`.
 - Every file in `examples/invalid/` holds `expected`, a message, and `form`, a form broken in exactly one way. Both validators must report exactly that one message.
 
-The examples include a draft of each starter-pack form: control-room dispatch, first report, final report, patrol log and manual fire report. They are made up for the fictional Demo State.
+The examples include a draft of each starter-pack form: control-room dispatch, first report, final report, patrol log and manual fire report. They are made up for the fictional Demo State. The finished forms that a workspace switches on are in [packages/starter-pack](../starter-pack/README.md).
 
 ## 15. Changing the format
 

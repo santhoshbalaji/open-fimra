@@ -26,6 +26,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00021_incidents` | Incidents and their members, grouping of new alerts in the alert transaction, workflows and step history shared by alerts and incidents, and one new-alert notification per incident and recipient |
 | `00022_forms` | Forms, frozen published versions, assignments to workflow steps, write-once attachments, append-only submissions and approvals, the `form_views` schema for flat views, and the forms an alert needs at each step |
 | `00023_form_conversions` | XLSForm import and export jobs, with the draft form, workbook and review report each one produces |
+| `00024_manual_fire_reports` | The workspace of a detection recorded by hand with the manual fire report, so re-matching keeps it to that workspace |
 
 ## Commands
 

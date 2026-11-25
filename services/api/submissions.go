@@ -178,26 +178,13 @@ func compactJSON(data []byte) []byte {
 // recordSubmission checks and stores a submission. A retry of the same
 // request by the same user finds the first one and returns created=false.
 func (a api) recordSubmission(ctx context.Context, tx pgx.Tx, user string, alert int64, in submissionRequest, hash string) (bool, error) {
-	// Serialize requests with the same ID, including concurrent retries.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('open-fimra:submission:' || $1, 0))`, in.ID); err != nil {
-		return false, err
-	}
-	var sameRequest bool
-	err := tx.QueryRow(ctx, `SELECT request_hash = $2 AND user_id = $3 AND alert_id = $4 FROM submissions WHERE id = $1`,
-		in.ID, hash, user, alert).Scan(&sameRequest)
-	if err == nil {
-		if !sameRequest {
-			return false, problem(http.StatusConflict, "This submission ID already belongs to another submission.")
-		}
-		return false, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if found, err := earlierSubmission(ctx, tx, in.ID, hash, user, &alert); found || err != nil {
 		return false, err
 	}
 
 	var workspaceID, source string
 	var versionID, formID, templateID int64
-	err = tx.QueryRow(ctx, `SELECT a.workspace_id::text, v.id, f.id, v.source, i.template_id
+	err := tx.QueryRow(ctx, `SELECT a.workspace_id::text, v.id, f.id, v.source, i.template_id
 FROM alerts a JOIN workflow_instances i ON i.alert_id = a.id
 JOIN forms f ON f.workspace_id = a.workspace_id AND f.form_key = $2
 JOIN form_versions v ON v.form_id = f.id AND v.version = $3 AND v.published_at IS NOT NULL
@@ -237,59 +224,105 @@ WHERE a.id = $1`, alert, in.Form, in.Version).Scan(&workspaceID, &versionID, &fo
 	}
 
 	var reached bool
-	var facts alertFacts
-	var now time.Time
-	err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM step_log l WHERE l.alert_id = a.id AND l.to_step = $2),
-    a.id, a.observed_at, a.created_at, ST_X(d.geom), ST_Y(d.geom),
-    COALESCE((SELECT u.name FROM units u WHERE u.hierarchy_id = a.hierarchy_id AND u.path = a.unit_path
-              ORDER BY u.valid_to DESC NULLS FIRST LIMIT 1), ''),
-    a.forest_class, d.source, d.confidence, d.frp_mw::float8, clock_timestamp()
-FROM alerts a JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at) WHERE a.id = $1`, alert, step).Scan(
-		&reached, &facts.ID, &facts.ObservedAt, &facts.RaisedAt, &facts.Longitude, &facts.Latitude,
-		&facts.Unit, &facts.ForestClass, &facts.Source, &facts.Confidence, &facts.FirePower, &now)
-	if err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM step_log WHERE alert_id = $1 AND to_step = $2)`, alert, step).Scan(&reached); err != nil {
 		return false, err
 	}
 	if !reached {
 		return false, problem(http.StatusConflict, "This alert has not reached the step "+step+" yet. Record the step first.")
 	}
-	if in.DeviceTime != nil && in.DeviceTime.After(now.Add(clockSkew)) {
-		return false, problem(http.StatusUnprocessableEntity, "The device time cannot be in the future.")
-	}
-
-	attachments := map[string]storedAttachment{}
-	rows, err := tx.Query(ctx, `SELECT id::text, content_type, file_name, size_bytes FROM attachments WHERE alert_id = $1`, alert)
+	check, err := newAnswerCheck(ctx, tx, tree, stage, alert)
 	if err != nil {
 		return false, err
 	}
-	for rows.Next() {
-		var id string
-		var file storedAttachment
-		if err := rows.Scan(&id, &file.ContentType, &file.FileName, &file.SizeBytes); err != nil {
-			rows.Close()
-			return false, err
-		}
-		attachments[id] = file
+	if in.DeviceTime != nil && in.DeviceTime.After(check.now.Add(clockSkew)) {
+		return false, problem(http.StatusUnprocessableEntity, "The device time cannot be in the future.")
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	answers, problems := checkAnswers(check, in.Values)
+	if len(problems) > 0 {
+		return false, problem(http.StatusUnprocessableEntity, "The answers do not fit the form.", problems...)
+	}
+	return true, storeSubmission(ctx, tx, in, storedSubmission{workspaceID: workspaceID, versionID: versionID, alert: alert,
+		templateID: templateID, step: step, user: user, hash: hash, answers: answers, used: check.used})
+}
+
+// earlierSubmission takes the lock for a submission ID and looks for a
+// submission with it. It reports found for a retry of the same request by
+// the same user, and an error for another request with that ID. A nil alert
+// matches a retry on any alert, and is set to the alert found.
+func earlierSubmission(ctx context.Context, tx pgx.Tx, id, hash, user string, alert *int64) (bool, error) {
+	// Serialize requests with the same ID, including concurrent retries.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('open-fimra:submission:' || $1, 0))`, id); err != nil {
 		return false, err
 	}
+	var same bool
+	var found int64
+	err := tx.QueryRow(ctx, `SELECT request_hash = $2 AND user_id = $3, alert_id FROM submissions WHERE id = $1`,
+		id, hash, user).Scan(&same, &found)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !same || (*alert != 0 && *alert != found) {
+		return false, problem(http.StatusConflict, "This submission ID already belongs to another submission.")
+	}
+	*alert = found
+	return true, nil
+}
 
-	check := &answerCheck{tree: tree, stage: stage, alert: facts, now: now, attachments: attachments,
+// newAnswerCheck reads what the checks need from an alert: its facts for
+// alert values, the files uploaded for it and the server's clock.
+func newAnswerCheck(ctx context.Context, tx pgx.Tx, tree *formTree, stage int, alert int64) (*answerCheck, error) {
+	check := &answerCheck{tree: tree, stage: stage, attachments: map[string]storedAttachment{},
 		measure: func(geometry json.RawMessage) (float64, error) {
 			var size float64
 			err := tx.QueryRow(ctx, `SELECT CASE WHEN GeometryType(g) = 'POLYGON' THEN ST_Area(g::geography) / 10000
     ELSE ST_Length(g::geography) / 1000 END FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1::text), 4326) AS g) x`, string(geometry)).Scan(&size)
 			return size, err
 		}}
-	answers, problems := checkAnswers(check, in.Values)
-	if len(problems) > 0 {
-		return false, problem(http.StatusUnprocessableEntity, "The answers do not fit the form.", problems...)
-	}
-	answerJSON, err := json.Marshal(answers)
+	facts := &check.alert
+	err := tx.QueryRow(ctx, `SELECT a.id, a.observed_at, a.created_at, ST_X(d.geom), ST_Y(d.geom),
+    COALESCE((SELECT u.name FROM units u WHERE u.hierarchy_id = a.hierarchy_id AND u.path = a.unit_path
+              ORDER BY u.valid_to DESC NULLS FIRST LIMIT 1), ''),
+    a.forest_class, d.source, d.confidence, d.frp_mw::float8, clock_timestamp()
+FROM alerts a JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at) WHERE a.id = $1`, alert).Scan(
+		&facts.ID, &facts.ObservedAt, &facts.RaisedAt, &facts.Longitude, &facts.Latitude,
+		&facts.Unit, &facts.ForestClass, &facts.Source, &facts.Confidence, &facts.FirePower, &check.now)
 	if err != nil {
-		return false, err
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id::text, content_type, file_name, size_bytes FROM attachments WHERE alert_id = $1`, alert)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var file storedAttachment
+		if err := rows.Scan(&id, &file.ContentType, &file.FileName, &file.SizeBytes); err != nil {
+			return nil, err
+		}
+		check.attachments[id] = file
+	}
+	return check, rows.Err()
+}
+
+// storedSubmission is a checked submission, ready to save.
+type storedSubmission struct {
+	workspaceID           string
+	versionID, templateID int64
+	alert                 int64
+	step, user, hash      string
+	answers               map[string]any
+	used                  map[string][]string
+}
+
+// storeSubmission saves a checked submission and the attachments it uses.
+func storeSubmission(ctx context.Context, tx pgx.Tx, in submissionRequest, s storedSubmission) error {
+	answerJSON, err := json.Marshal(s.answers)
+	if err != nil {
+		return err
 	}
 	var lon, lat *float64
 	if in.Location != nil {
@@ -300,16 +333,16 @@ INSERT INTO submissions (id, workspace_id, form_version_id, alert_id, incident_i
     device_time, location, answers, request_hash)
 SELECT $1, $2, $3, $4, (SELECT incident_id FROM incident_members WHERE alert_id = $4), $5, $6, $7,
     $8, CASE WHEN $9::float8 IS NOT NULL THEN ST_SetSRID(ST_Point($9, $10), 4326) END, $11, $12`,
-		in.ID, workspaceID, versionID, alert, templateID, step, user, in.DeviceTime, lon, lat, answerJSON, hash); err != nil {
-		return false, err
+		in.ID, s.workspaceID, s.versionID, s.alert, s.templateID, s.step, s.user, in.DeviceTime, lon, lat, answerJSON, s.hash); err != nil {
+		return err
 	}
-	for field, ids := range check.used {
+	for field, ids := range s.used {
 		if _, err := tx.Exec(ctx, `INSERT INTO submission_attachments (submission_id, attachment_id, field)
 SELECT $1, unnest($2::uuid[]), $3 ON CONFLICT DO NOTHING`, in.ID, ids, field); err != nil {
-			return false, err
+			return err
 		}
 	}
-	return true, nil
+	return nil
 }
 
 // submissionAccess finds a submission the caller can see through its alert,

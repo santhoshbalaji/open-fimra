@@ -8,6 +8,7 @@ WITH batch AS MATERIALIZED (
     WHERE r.layer_version_id = $1 AND r.finished_at IS NULL
       AND (r.cursor_time IS NULL OR (d.observed_at, d.id) > (r.cursor_time, r.cursor_id))
       AND detection_in_workspace(w, d.geom)
+      AND (d.workspace_id IS NULL OR d.workspace_id = w.id)
     ORDER BY d.observed_at, d.id
     LIMIT 250
 ),

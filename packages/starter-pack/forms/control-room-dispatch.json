@@ -1,0 +1,118 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "control-room-dispatch",
+  "version": 1,
+  "title": { "en": "Control-room dispatch", "hi": "नियंत्रण कक्ष से टीम रवाना" },
+  "description": {
+    "en": "The control room fills in the first stage when it sends a team. The team fills in the second stage when it reaches the site."
+  },
+  "stages": [
+    { "key": "dispatch", "title": { "en": "Team sent" }, "workflowStep": "team_sent" },
+    { "key": "arrival", "title": { "en": "Reached site" }, "workflowStep": "reached_site" }
+  ],
+  "sections": [
+    {
+      "key": "alert",
+      "title": { "en": "Alert" },
+      "stage": "dispatch",
+      "items": [
+        { "key": "alert_id", "type": "alert-value", "label": { "en": "Alert number" }, "source": "alert-id" },
+        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at" }, "source": "observed-at" },
+        { "key": "alert_location", "type": "alert-value", "label": { "en": "Alert location" }, "source": "location" },
+        { "key": "responsible_unit", "type": "alert-value", "label": { "en": "Responsible beat" }, "source": "unit" },
+        { "key": "forest_class", "type": "alert-value", "label": { "en": "Inside or near the forest" }, "source": "forest-class" },
+        { "key": "fire_power", "type": "alert-value", "label": { "en": "Fire strength" }, "source": "fire-power" }
+      ]
+    },
+    {
+      "key": "dispatch",
+      "title": { "en": "Team sent" },
+      "stage": "dispatch",
+      "items": [
+        { "key": "team_name", "type": "text", "label": { "en": "Team name" }, "required": true, "maxLength": 80 },
+        { "key": "team_leader", "type": "text", "label": { "en": "Team leader" }, "required": true, "maxLength": 80 },
+        {
+          "key": "team_size",
+          "type": "number",
+          "label": { "en": "People in the team" },
+          "required": true,
+          "unit": "people",
+          "decimals": 0,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "key": "vehicle",
+          "type": "single-choice",
+          "label": { "en": "Travelling by" },
+          "required": true,
+          "choices": [
+            { "key": "jeep", "label": { "en": "Jeep" } },
+            { "key": "motorcycle", "label": { "en": "Motorcycle" } },
+            { "key": "on-foot", "label": { "en": "On foot" } },
+            { "key": "other", "label": { "en": "Other" } }
+          ]
+        },
+        {
+          "key": "vehicle_other",
+          "type": "text",
+          "label": { "en": "Other way of travelling" },
+          "required": true,
+          "showWhen": { "op": "equals", "field": "vehicle", "value": "other" }
+        },
+        { "key": "dispatched_at", "type": "date-time", "label": { "en": "Sent at" }, "required": true, "notInFuture": true },
+        { "key": "instructions", "type": "text", "label": { "en": "Instructions for the team" }, "maxLength": 1000 }
+      ]
+    },
+    {
+      "key": "arrival",
+      "title": { "en": "Reached site" },
+      "stage": "arrival",
+      "items": [
+        { "key": "reached_at", "type": "date-time", "label": { "en": "Reached the site at" }, "required": true, "notInFuture": true },
+        {
+          "key": "site_location",
+          "type": "point",
+          "label": { "en": "Where the team is standing" },
+          "required": true,
+          "maxAccuracyMetres": 50
+        },
+        {
+          "key": "fire_found",
+          "type": "single-choice",
+          "label": { "en": "Was there a fire?" },
+          "required": true,
+          "choices": [
+            { "key": "yes", "label": { "en": "Yes, at the alert location" } },
+            { "key": "elsewhere", "label": { "en": "Yes, but somewhere else nearby" } },
+            { "key": "no", "label": { "en": "No fire found" } }
+          ]
+        },
+        {
+          "key": "travel_hours",
+          "type": "calculated",
+          "label": { "en": "Hours to reach the site" },
+          "unit": "h",
+          "decimals": 1,
+          "calculate": { "op": "hours-between", "start": "dispatched_at", "end": "reached_at" }
+        }
+      ]
+    }
+  ],
+  "layout": {
+    "pages": [
+      { "key": "send", "title": { "en": "Send a team" }, "sections": ["alert", "dispatch"] },
+      { "key": "arrive", "title": { "en": "On site" }, "sections": ["arrival"] }
+    ],
+    "items": [
+      { "item": "alert", "collapsed": true },
+      { "item": "vehicle", "widget": "buttons" },
+      { "item": "team_name", "width": "half" },
+      { "item": "team_leader", "width": "half" },
+      { "item": "team_size", "widget": "stepper" },
+      { "item": "instructions", "widget": "paragraph" },
+      { "item": "fire_found", "widget": "radio" }
+    ]
+  }
+}

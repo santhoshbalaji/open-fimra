@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth';
 import { stubLayoutApis } from './overlay-testing';
 import { WEB_CONFIG } from './config';
-import { SetupLayer, SetupState, SetupWizard } from './setup-wizard';
+import { PackForm, SetupLayer, SetupState, SetupWizard, StarterPack } from './setup-wizard';
 import { WorkspaceService } from './workspace';
 
 const base = 'https://api.test/api/v1/workspaces/demo-state';
@@ -191,16 +191,66 @@ describe('SetupWizard', () => {
     const skip = http.expectOne(base + '/setup/steps/firms');
     expect(skip.request.body).toEqual({ status: 'skipped' });
     skip.flush(setupState());
+    // The next step lists the starter forms.
+    http.expectOne(base + '/starter-pack');
   });
 
-  it('shows starter forms as coming later and skips them', () => {
+  const pack = (status: PackForm['status'], enabled = status !== 'missing'): StarterPack => ({ enabled, forms: [
+    { form: 'control-room-dispatch', title: 'Control-room dispatch', version: 1, steps: ['team_sent', 'reached_site'], status,
+      assigned: status === 'missing' ? [] : ['reached_site', 'team_sent'] },
+    // A workspace that had its own first report keeps it.
+    { form: 'first-report', title: 'First report', version: 1, steps: ['first_report'], status: status === 'added' ? 'present' : status,
+      assigned: [] },
+    { form: 'manual-fire-report', title: 'Manual fire report', version: 1, steps: [], status, assigned: [] },
+    { form: 'patrol-log', title: 'Patrol log', version: 1, steps: [], status, assigned: [] }
+  ] });
+
+  it('switches on the starter forms and continues', () => {
     const done = { status: 'done' as const, updatedAt: '' };
     open(setupState({ steps: { ...setupState().steps, hierarchy: done, layers: done, firms: done } }));
     expect(heading()).toBe('Starter forms');
-    expect(text()).toContain('Coming later');
+    http.expectOne(base + '/starter-pack').flush(pack('missing'));
+    fixture.detectChanges();
+    const items = [...fixture.nativeElement.querySelectorAll('.pack-forms > li')].map(item => (item as HTMLElement).textContent.replace(/\s+/g, ' ').trim());
+    expect(items).toEqual([
+      'Control-room dispatch Not added Filled in at Team sent and Reached site',
+      'First report Not added Filled in at First report',
+      'Manual fire report Not added Records a fire reported by another source and makes an alert',
+      'Patrol log Not added Kept on its own, not on a workflow step']);
+    expect(button('Continue')?.disabled).toBe(true);
+    const toggle = fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement;
+    expect(toggle.disabled).toBe(false);
+    toggle.click();
+    fixture.detectChanges();
+    const enable = http.expectOne(base + '/starter-pack');
+    expect(enable.request.method).toBe('POST');
+    enable.flush(pack('added'));
+    fixture.detectChanges();
+    expect(text()).toContain('The starter forms are on. Forms this workspace already had are left as they are.');
+    expect(text()).toContain('Added');
     expect((fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement).disabled).toBe(true);
     button('Continue')?.click();
+    expect(http.expectOne(base + '/setup/steps/forms').request.body).toEqual({ status: 'done' });
+  });
+
+  it('can skip the starter forms for now', () => {
+    const done = { status: 'done' as const, updatedAt: '' };
+    open(setupState({ steps: { ...setupState().steps, hierarchy: done, layers: done, firms: done } }));
+    http.expectOne(base + '/starter-pack').flush(pack('missing'));
+    fixture.detectChanges();
+    button('Skip for now')?.click();
     expect(http.expectOne(base + '/setup/steps/forms').request.body).toEqual({ status: 'skipped' });
+  });
+
+  it('shows starter forms that are on already', () => {
+    const done = { status: 'done' as const, updatedAt: '' };
+    open(setupState({ steps: { ...setupState().steps, hierarchy: done, layers: done, firms: done } }));
+    http.expectOne(base + '/starter-pack').flush(pack('present'));
+    fixture.detectChanges();
+    expect(text()).toContain('In this workspace');
+    expect((fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement).getAttribute('aria-checked')).toBe('true');
+    expect(button('Skip for now')).toBeUndefined();
+    expect(button('Continue')?.disabled).toBe(false);
   });
 
   it('invites an officer to a unit and lists masked addresses', () => {

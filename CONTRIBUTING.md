@@ -70,6 +70,10 @@ S3-compatible attachment storage against a small server that runs for the test
 only. Attachments are kept in the ignored `.form-attachments/` directory. If
 you set `FIMRA_ATTACHMENT_DIR` in `.env`, use a separate directory for each
 stack. See the [forms endpoints](services/api/README.md#forms-and-field-reports).
+Run `make starter-pack-test` after changing the starter forms in
+[packages/starter-pack](packages/starter-pack/README.md), and
+`make wizard-test-integration` to take an alert through the default workflow
+with them.
 
 ## Converting forms to and from XLSForm
 
@@ -147,7 +151,7 @@ Run these before pushing changes to setup:
 
 ```bash
 make dev                      # the tests build the geo worker image and start their own copy
-make wizard-test-integration  # an empty database to a working alert map, through the wizard's endpoints
+make wizard-test-integration  # an empty database to a working alert map and starter forms, through the wizard's endpoints
 make wizard-walkthrough       # the same in headless Chromium, with screenshots outside the repository
 ```
 

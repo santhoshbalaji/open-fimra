@@ -8,7 +8,7 @@ The published form format and its validators, shared by the web form designer, t
 | [form.schema.json](form.schema.json) | The JSON Schema for a form definition. This is the one copy. |
 | `*.go` | The Go validator, for the core API. |
 | [ts/form-schema.ts](ts/form-schema.ts) | The TypeScript validator, for the web app. |
-| [examples/](examples) | Valid example forms, including drafts of the five starter-pack forms for the fictional Demo State. |
+| [examples/](examples) | Valid example forms, including drafts of the five starter-pack forms for the fictional Demo State. The finished forms are in [packages/starter-pack](../starter-pack/README.md). |
 | [examples/columns/](examples/columns) | The columns each valid example produces. |
 | [examples/invalid/](examples/invalid) | Forms broken in one way each, with the message both validators must give. |
 | [cmd/formcheck](cmd/formcheck/main.go) | A small command that runs the Go validator, for programs in other languages. |

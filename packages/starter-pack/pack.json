@@ -1,0 +1,9 @@
+{
+  "forms": [
+    { "form": "control-room-dispatch", "steps": ["team_sent", "reached_site"] },
+    { "form": "first-report", "steps": ["first_report"] },
+    { "form": "final-report", "steps": ["final_report"] },
+    { "form": "manual-fire-report", "steps": [] },
+    { "form": "patrol-log", "steps": [] }
+  ]
+}

@@ -446,6 +446,61 @@ Publishing a version creates views in the `form_views` schema whose columns are 
 
 Columns from the form use the field keys and suitable types: numbers, dates, times, times with zones, text arrays for multiple choice, UUIDs for attachments and geometries in WGS 84 for shapes, with `<key>_area_ha` and `<key>_length_km` worked out from the shape. Columns added by the server start with an underscore, which no field key can: `_submission_id`, `_alert_id`, `_incident_id`, `_workspace_id`, `_submitted_by`, `_step`, `_device_time`, `_received_at` and `_location`. The validator allows only small letters, digits and underscores in keys, and the API checks names again and quotes them before it writes the view, so a form cannot inject SQL. The views are not filtered by permissions: anything that shows their rows to a user must join `_alert_id` to the user's alert access, as the API does.
 
+### Starter pack
+
+The [starter pack](../../packages/starter-pack/README.md) is a ready set of forms for the default workflow. The forms are built into the API.
+
+| Form | Workflow steps |
+|---|---|
+| Control-room dispatch | Team sent (the control room sends a team) and Reached site (the team arrives), as the form's two stages |
+| First report | First report |
+| Final report | Final report |
+| Manual fire report | None: saving it makes an alert. See [manual fire reports](#manual-fire-reports). |
+| Patrol log | None: a patrol is not tied to an alert |
+
+A workspace administrator at the root of the hierarchy uses these requests:
+
+- `GET /api/v1/workspaces/{slug}/starter-pack` lists the starter forms. Each has `form`, `title`, `version`, its `steps` in the pack, its `status` (`present` when the workspace has a form with that key, otherwise `missing`) and the steps it is `assigned` to now. `enabled` is true when every starter form is present.
+- `POST /api/v1/workspaces/{slug}/starter-pack` turns the pack on, in one transaction. Each starter form that the workspace does not have yet is added, published and assigned to its steps, and gets the status `added`. A form the workspace already has with the same key is left exactly as it is, with its versions, drafts and assignments, whoever made it. A step that already has another form is left alone too, and listed in that form's `skipped` with the reason, so a department's choice for a step is never changed.
+
+Turning the pack on again is safe: it adds only starter forms that are still missing. It never brings back a step assignment that a department removed. The wizard's starter forms step and the forms screens use the same requests. The request is audited as `starter_pack.enable`, and each publication and assignment has its own audit entry.
+
+With the pack on, the default workflow asks for each report before an alert moves on: the dispatch stage before leaving Team sent, the arrival stage before leaving Reached site, and the first and final reports before leaving their steps. The arrival stage repeats the dispatch answers, which the phone fills in from the first stage. An officer can approve each submission before verifying the alert. Approval does not hold up the workflow.
+
+### Manual fire reports
+
+The manual fire report records a fire reported by another source: a phone call from the public, forest staff, another agency or another satellite service. Until the FSI and Bhuvan connectors exist (PLAN.md section 15), this is also how staff record a fire from those services.
+
+Post the answers to `/api/v1/workspaces/{slug}/manual-fire-reports`, like a submission without an alert or step:
+
+```json
+{
+  "id": "5ca1ab1e-0000-4000-8000-00000000e001",
+  "version": 1,
+  "values": {
+    "report_source": "public-call",
+    "reporter_phone": "9000000000",
+    "reported_at": "2026-03-15T14:30:00+05:30",
+    "fire_location": {"type": "Point", "coordinates": [86.2975, 16.4187]},
+    "visible_signs": "smoke"
+  },
+  "deviceTime": "2026-03-15T14:32:00+05:30",
+  "location": {"longitude": 86.2975, "latitude": 16.4187}
+}
+```
+
+Anyone with a role in the workspace can send one. The server checks the answers against the published `manual-fire-report` version, then makes a detection with the source `manual` at `fire_location`, observed at `reported_at`. The detection is matched in this workspace only, with the same forest classes, units and routing as a satellite detection, and its alert gets a workflow at New, joins or starts an incident, and notifies the responsible officers in the same transaction. The report is kept as a submission at the alert's New step. The answer is that submission, with the new alert in `alertId` and its address in the `Location` header.
+
+The `id` makes a retry safe, as for submissions: the same request returns the first answer with 200, and another request with that ID gets 409. Nothing is saved, and the answer is 422 with a plain reason, when:
+
+- the place is outside the workspace, outside the forest and its edge, or on the list of known heat sources, so a satellite detection there would make no alert either;
+- the new alert would be outside the units the caller can see, so the caller could not follow it;
+- the answers do not fit the form, or that version is not published.
+
+A department can change the form, but it must keep a date and time called `reported_at` and a point called `fire_location`, outside any repeating group, and have no stages. The form takes no photos or files, because attachments are uploaded for an alert and this report is what makes the alert. Photos from the site go in the dispatch and first reports.
+
+Manual detections appear in the detection tiles, counts and exports with the source `manual`. They have no ingest run, so feed health ignores them. A re-match after publishing a layer keeps each one to the workspace it was recorded in.
+
 ## File exports
 
 Any user with a role in a workspace can export what they can see on the map or in the alert queue. The geo worker writes the file. Run it with `make geo-worker-up`.
@@ -727,7 +782,7 @@ All except the first two need a state administrator grant at the workspace root.
 - `POST /api/v1/setup/bootstrap` takes `setupCode`, `mode`, `workspaceName`, `workspaceSlug` and `stateCode`. Only `state` mode is available in phase 1; `national` gets HTTP 400 with that reason.
 - `GET /api/v1/workspaces/{slug}/setup` returns the wizard state: mode, preset, levels with labels, the layer checklist, each step's status, the FIRMS key status, whether email is on, the finish time and the hierarchy presets. A workspace made before the wizard gets a setup record on first use.
 - `POST .../setup/hierarchy` takes a `preset` and the full list of `levels`, each with a `slug` and `labels` such as `{"en": "Beat", "hi": "बीट"}`. Levels that already have units keep their identifier; only their labels can change.
-- `POST .../setup/steps/{step}` marks `layers`, `firms`, `forms` or `invitations` as `done` or `skipped`. Layers cannot be skipped and need every level and the forest layer published. FIRMS can be done only with a key. Starter forms can only be skipped for now.
+- `POST .../setup/steps/{step}` marks `layers`, `firms`, `forms` or `invitations` as `done` or `skipped`. Layers cannot be skipped and need every level and the forest layer published. FIRMS can be done only with a key. Starter forms can be done only once every starter form is in the workspace: turn them on with the [starter pack](#starter-pack) first.
 - `POST .../setup/finish` closes the wizard once every step is done or skipped. `POST .../setup/reopen` opens it again.
 - `GET .../setup/units` lists current units for the invitation form.
 

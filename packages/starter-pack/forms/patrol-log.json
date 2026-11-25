@@ -1,0 +1,121 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "patrol-log",
+  "version": 1,
+  "title": { "en": "Patrol log", "hi": "गश्त रजिस्टर" },
+  "description": {
+    "en": "A record of one fire-season patrol, whether or not it found a fire. Record a fire the patrol finds with the manual fire report."
+  },
+  "sections": [
+    {
+      "key": "patrol",
+      "title": { "en": "Patrol" },
+      "items": [
+        { "key": "patrol_date", "type": "date", "label": { "en": "Date" }, "required": true, "notInFuture": true },
+        { "key": "start_time", "type": "time", "label": { "en": "Started at" }, "required": true },
+        { "key": "end_time", "type": "time", "label": { "en": "Finished at" }, "required": true },
+        {
+          "key": "patrol_type",
+          "type": "single-choice",
+          "label": { "en": "Kind of patrol" },
+          "required": true,
+          "choices": [
+            { "key": "routine", "label": { "en": "Routine" } },
+            { "key": "fire-watch", "label": { "en": "Fire watch" } },
+            { "key": "night", "label": { "en": "Night patrol" } }
+          ]
+        },
+        { "key": "staff_count", "type": "number", "label": { "en": "People on patrol" }, "unit": "people", "decimals": 0, "min": 1, "max": 50 },
+        {
+          "key": "route",
+          "type": "track",
+          "label": { "en": "Route walked" },
+          "hint": { "en": "Start recording when the patrol sets off." },
+          "required": true,
+          "maxAccuracyMetres": 30
+        }
+      ]
+    },
+    {
+      "key": "observations_section",
+      "title": { "en": "What the patrol saw" },
+      "items": [
+        {
+          "key": "observations",
+          "type": "repeat",
+          "title": { "en": "Observations" },
+          "itemLabel": { "en": "Observation" },
+          "maxRepeats": 50,
+          "items": [
+            {
+              "key": "observation_type",
+              "type": "single-choice",
+              "label": { "en": "What was seen" },
+              "required": true,
+              "choices": [
+                { "key": "smoke", "label": { "en": "Smoke" } },
+                { "key": "fire", "label": { "en": "Fire" } },
+                { "key": "burnt-patch", "label": { "en": "Recently burnt patch" } },
+                { "key": "fire-line-damage", "label": { "en": "Damaged fire line" } },
+                { "key": "other", "label": { "en": "Something else" } }
+              ]
+            },
+            { "key": "observed_location", "type": "point", "label": { "en": "Where" }, "required": true, "maxAccuracyMetres": 50 },
+            {
+              "key": "observation_photos",
+              "type": "photo",
+              "label": { "en": "Photos" },
+              "maxCount": 3,
+              "requireWhen": { "op": "equals", "field": "observation_type", "value": "fire" }
+            },
+            { "key": "observation_notes", "type": "text", "label": { "en": "Notes" }, "maxLength": 500 }
+          ]
+        },
+        { "key": "observation_count", "type": "calculated", "label": { "en": "Things seen" }, "decimals": 0, "calculate": { "op": "count", "group": "observations" } }
+      ]
+    },
+    {
+      "key": "fire_lines",
+      "title": { "en": "Fire lines" },
+      "items": [
+        {
+          "key": "fire_line_checked",
+          "type": "single-choice",
+          "label": { "en": "Did the patrol check a fire line?" },
+          "required": true,
+          "choices": [
+            { "key": "yes", "label": { "en": "Yes" } },
+            { "key": "no", "label": { "en": "No" } }
+          ]
+        },
+        {
+          "key": "fire_line_condition",
+          "type": "single-choice",
+          "label": { "en": "Condition of the fire line" },
+          "required": true,
+          "showWhen": { "op": "equals", "field": "fire_line_checked", "value": "yes" },
+          "choices": [
+            { "key": "clear", "label": { "en": "Clear" } },
+            { "key": "partly-blocked", "label": { "en": "Partly overgrown" } },
+            { "key": "blocked", "label": { "en": "Overgrown" } }
+          ]
+        }
+      ]
+    }
+  ],
+  "layout": {
+    "pages": [
+      { "key": "start", "sections": ["patrol"] },
+      { "key": "finish", "sections": ["observations_section", "fire_lines"] }
+    ],
+    "items": [
+      { "item": "patrol_type", "widget": "radio" },
+      { "item": "start_time", "width": "half" },
+      { "item": "end_time", "width": "half" },
+      { "item": "observation_type", "widget": "dropdown" },
+      { "item": "fire_line_checked", "widget": "buttons" },
+      { "item": "observation_notes", "widget": "paragraph" }
+    ]
+  }
+}

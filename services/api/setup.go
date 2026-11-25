@@ -649,8 +649,15 @@ func (a api) setupStepUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "Save a FIRMS map key first, or skip this step.")
 		return
 	case step == "forms" && req.Status == "done":
-		writeError(w, http.StatusBadRequest, "Starter forms are coming later. Skip this step for now.")
-		return
+		enabled, err := starterPackEnabled(ctx, a.pool, s.workspaceID.String())
+		if err != nil {
+			a.setupError(w, err)
+			return
+		}
+		if !enabled {
+			writeError(w, http.StatusConflict, "Switch on the starter forms first, or skip this step.")
+			return
+		}
 	}
 	caller := ctx.Value(identityKey{}).(identity)
 	if _, err := a.pool.Exec(ctx, `

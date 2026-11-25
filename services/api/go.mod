@@ -19,6 +19,7 @@ require (
 	github.com/riverqueue/river/rivershared v0.51.2 // indirect
 	github.com/riverqueue/river/rivertype v0.51.2 // indirect
 	github.com/santhoshbalaji/open-fimra/packages/form-schema v0.0.0
+	github.com/santhoshbalaji/open-fimra/packages/starter-pack v0.0.0
 	github.com/tidwall/gjson v1.20.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
@@ -29,3 +30,5 @@ require (
 )
 
 replace github.com/santhoshbalaji/open-fimra/packages/form-schema => ../../packages/form-schema
+
+replace github.com/santhoshbalaji/open-fimra/packages/starter-pack => ../../packages/starter-pack
