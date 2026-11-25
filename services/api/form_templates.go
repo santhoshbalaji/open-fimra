@@ -11,7 +11,7 @@ import (
 // National, state and division forms extend each other (PLAN.md section
 // 5.4). A version's template rules say whether forms one level down may
 // extend it, and which of its parts they must keep as they are. The web
-// designer runs the same checks in apps/web/src/form-locks.ts, with the same
+// designer runs the same checks in apps/web/src/forms/form-locks.ts, with the same
 // messages, so people see a problem before they save.
 
 // maxLockedKeys is the most keys a template can lock.
