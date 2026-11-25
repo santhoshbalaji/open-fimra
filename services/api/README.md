@@ -38,6 +38,7 @@ When run through Make, the database URL defaults to `DATABASE_URL` and the issue
 - `GET /healthz` returns 200 while the service is running.
 - `GET /readyz` returns 200 when PostgreSQL responds and 503 when it cannot be reached.
 - `GET /api/v1/workspaces/{slug}/feeds` returns feed health for workspace administrators. See [Feed health](#feed-health).
+- `/ogc/workspaces/{slug}` is the read-only GIS link, and `/api/v1/access-keys` manages the personal access keys it accepts. See [GIS link](#gis-link).
 - `GET /api/v1/me` takes an access token in the `Authorization: Bearer` header. It returns the caller's `subject`, `username` and `roleAssignments`. Each assignment includes the workspace slug and name, hierarchy slug, role, unit code and name, level slug, path and beat count. A grant to one beat counts that beat. A signed-in user without grants gets an empty list. A missing or rejected token gets a JSON error and a bearer challenge with HTTP 401.
 
 The service finds the signing keys through OpenID Connect discovery and caches them. It checks the issuer, audience and token times. It allows 30 seconds for differences between clocks.
@@ -347,6 +348,142 @@ Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or 
 Every export carries a note of its source, filters, time window, coordinate system, request and generation times, row count and the requesting role. It never names the people involved. GeoPackage and Excel files hold it in the `export_note` and `export_fields` tables. Every other format is a zip file with the note in `README.txt` beside the data. Shapefile field names are limited to 10 characters. The note lists each field's short name, such as `divisio_cd` for `division_code`. Each export, and each download, is recorded in the audit log with its filters and row count.
 
 Run `make export-test-integration` with the stack, Keycloak and geo worker running. It exports as each demo user and checks that the rows match what the same user sees in the alert queue and in detection tiles. It checks that `no.role` is refused, that one user cannot read another's export, that expiry removes the file and that the audit rows exist. It then opens every downloaded format with OGR in the geo worker container and prints its layers, geometry, coordinate system, fields and feature count.
+
+## GIS link
+
+Desktop GIS such as QGIS and ArcGIS Pro can read a workspace live, without
+downloading a file. The core API serves a read-only
+[OGC API – Features](https://ogcapi.ogc.org/features/) service for each
+workspace at `/ogc/workspaces/{slug}`. It implements Part 1, Core, with GeoJSON
+responses and the OpenAPI 3.0 definition. Coordinates are WGS 84 longitude and
+latitude (CRS84), the only coordinate system offered.
+
+### What each person sees
+
+Every answer contains only what the person sees in the web app. The rules are
+the same SQL as the endpoints the web app uses:
+
+| Collection | ID | Rule |
+|---|---|---|
+| Detections | `detections` | As [detection tiles](#detection-tiles): `match_under_grant()` on the match's paths. A root grant covers every match, including matches with no unit. All four forest classes are included. |
+| Alerts | `alerts` | As the [alert queue](#alert-queues): `alert_path_visible()` on the alert's own routing snapshot, so the review and triage queues need a grant at division level or above. |
+| Published forest and known heat sources | `layer-{layer slug}`, such as `layer-forest` | As the [reference map](#workspace-map): every member of the workspace sees the published version. |
+| Current hierarchy units | `units-{hierarchy}-{level}`, such as `units-territorial-beat` | As the reference map. One collection for each level of each hierarchy. |
+
+A person without a role in the workspace gets HTTP 403 for every page,
+including the landing page. A hidden or missing feature returns 404.
+
+Detections have the detection ID, observation time in UTC, source, product,
+satellite, forest class, triage reason, forest feature code, fire radiative
+power and confidence. Then come `place_hierarchy`, the code and name of every
+level of the main territorial hierarchy (`state_code`, `beat_name` and so on,
+as in file exports) and `places`, the JSON text that detection tiles carry.
+Alerts add the alert ID, queue, current workflow step with its label and time,
+`overdue` and creation time, and keep the class, reason and units they were
+routed with. Layers have the feature code and name, and forest adds
+`legal_status`. Units have the code, name, path, hierarchy and level.
+
+### Requests
+
+| Path | Returns |
+|---|---|
+| `/ogc/workspaces/{slug}` | The landing page with links to the rest |
+| `/ogc/workspaces/{slug}/conformance` | The conformance classes: core, GeoJSON and OpenAPI 3.0 |
+| `/ogc/workspaces/{slug}/api` | The OpenAPI 3.0 definition, which tells clients the page size limits |
+| `/ogc/workspaces/{slug}/collections` and `/collections/{id}` | The collections the workspace offers, with the workspace boundary as their extent |
+| `/ogc/workspaces/{slug}/collections/{id}/items` | One page of features as a GeoJSON feature collection |
+| `/ogc/workspaces/{slug}/collections/{id}/items/{featureId}` | One feature |
+
+The items request accepts:
+
+| Parameter | Meaning |
+|---|---|
+| `limit` | Features on one page, 100 by default. Values above 1,000 are reduced to 1,000. |
+| `bbox` | `west,south,east,north` in degrees. Six numbers are accepted and the heights are ignored. |
+| `datetime` | Detections and alerts only, on observation time: one RFC 3339 time, or an interval such as `2026-03-01T00:00:00Z/..` or `../2026-03-31T23:59:59Z`. Layers and units ignore it. |
+| `forest_class` | Detections and alerts only: classes separated by commas, such as `inside,near_edge` |
+| `queue`, `step` | Alerts only: one queue (`unit`, `edge_review` or `triage`) and one current workflow step, such as `new` |
+| `cursor` | Set by the `next` link. Follow the link rather than building it. |
+
+Detections and alerts are newest first, and layers and units are in ID order.
+When there are more features, the page has a `next` link. Each page continues
+after the last row of the previous one, by observation time and ID, on the
+existing indexes of matches and alerts by workspace and observation time. No
+rows are skipped with an offset, so later pages cost no more than the first.
+Pages do not report a total count. Unknown
+parameters, a coordinate system other than CRS84 and a malformed `bbox` or
+`datetime` return HTTP 400. Links use the request's host. Behind a proxy, keep
+the `Host` header and set `X-Forwarded-Proto: https`.
+
+Incidents will be one more collection when they are built.
+
+### Personal access keys
+
+Desktop GIS cannot easily use the browser sign-in, so each person can make
+personal access keys in the web app (**GIS link keys** in the account menu),
+or with these endpoints and a signed-in bearer token:
+
+- `GET /api/v1/access-keys` lists the caller's unrevoked keys with `id`,
+  `name`, `hint` (the first six characters after `fimra_`), `createdAt`,
+  `expiresAt`, `lastUsedAt` and `expired`.
+- `POST /api/v1/access-keys` takes `{"name": "Office laptop", "expiresInDays": 90}`
+  and returns HTTP 201 with the key in `key`. This is the only time the key is
+  shown. Leave out `expiresInDays` (1 to 730) for a key that does not expire.
+  A person can hold 20 unexpired keys.
+- `DELETE /api/v1/access-keys/{id}` revokes one of the caller's own keys at
+  once. Another person's key returns 404.
+
+Serve the API over HTTPS outside development, because HTTP Basic sends the key
+with every request. The database stores only a SHA-256 hash of each key. A key acts with exactly
+its owner's grants at the time of each request, so removing a role takes effect
+at once. Revoke the keys of anyone who leaves.
+
+A key is accepted **only on the `/ogc/` routes**, in either of these ways:
+
+- **HTTP Basic**, with any user name and the key as the password. This is what
+  QGIS and most GIS software offer.
+- The **`X-API-Key` header**, for scripts and for QGIS's API header method.
+
+Every other route refuses a key with HTTP 401, including the key endpoints
+themselves. A missing, malformed, revoked or expired key gets HTTP 401 with a
+Basic challenge. A signed-in bearer token also works on the `/ogc/` routes.
+
+The audit log records `access_key.create` and `access_key.revoke` with the
+person's subject, and `access_key.use` with the key as the actor (`api_key`),
+the owner's subject, the workspace and the path. Use is recorded with the
+key's last-used time at most once a minute for each key, so the log shows when
+and from where a key was used without a row for every map pan.
+
+### Connecting QGIS
+
+1. In the web app, open the account menu and choose **GIS link keys**. Make a
+   key and copy it. Copy the service address shown on the same page, for
+   example `http://127.0.0.1:18090/ogc/workspaces/demo`.
+2. In QGIS 3, choose **Layer › Add Layer › Add WFS / OGC API – Features Layer**,
+   then **New**.
+3. Give the connection a name and paste the address as the URL. Set
+   **Version** to **OGC API – Features** if QGIS asks.
+4. Under **Authentication**, add a configuration with the **Basic** method.
+   Enter any user name and paste the key as the password. QGIS keeps it in its
+   encrypted password store.
+5. Choose **OK**, then **Connect**. Pick `detections`, `alerts` or a layer and
+   choose **Add**.
+
+To read the service from the command line with GDAL's OAPIF driver:
+
+```sh
+ogrinfo -ro -so -al --config GDAL_HTTP_AUTH BASIC \
+  --config GDAL_HTTP_USERPWD "gis:$KEY" \
+  OAPIF:http://127.0.0.1:18090/ogc/workspaces/demo
+```
+
+`make api-test-integration` makes a key for each demo user and compares every
+collection with the detection tiles, the alert queue and the reference data
+for that user. It checks single features, bounding boxes, paging, refused,
+revoked and expired keys and the audit rows. It then runs `ogrinfo` in the
+geo worker's GDAL base image on the host network. ogrinfo reads every
+collection, the state administrator with HTTP Basic and the division officer
+with the `X-API-Key` header, and the test compares each count with the API.
 
 ## Notifications
 
