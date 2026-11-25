@@ -41,7 +41,7 @@ When run through Make, the database URL defaults to `DATABASE_URL` and the issue
 - `GET /api/v1/workspaces/{slug}/feeds` returns feed health for workspace administrators. See [Feed health](#feed-health).
 - `/api/v1/workspaces/{slug}/forms` and the alert's `submissions` and `attachments` hold forms and field reports. See [Forms and field reports](#forms-and-field-reports).
 - `/ogc/workspaces/{slug}` is the read-only GIS link, and `/api/v1/access-keys` manages the personal access keys it accepts. See [GIS link](#gis-link).
-- `GET /api/v1/me` takes an access token in the `Authorization: Bearer` header. It returns the caller's `subject`, `username` and `roleAssignments`. Each assignment includes the workspace slug and name, hierarchy slug, role, unit code and name, level slug, path and beat count. A grant to one beat counts that beat. A signed-in user without grants gets an empty list. A missing or rejected token gets a JSON error and a bearer challenge with HTTP 401.
+- `GET /api/v1/me` takes an access token in the `Authorization: Bearer` header. It returns the caller's `subject`, `username` and `roleAssignments`. Each assignment includes the workspace slug and name, hierarchy slug, role, unit code and name, level slug, path, the unit's `bounds` as `[west, south, east, north]` in degrees (null for a unit without a shape) and beat count. The field app fits its map to these bounds. A grant to one beat counts that beat. A signed-in user without grants gets an empty list. A missing or rejected token gets a JSON error and a bearer challenge with HTTP 401.
 
 The service finds the signing keys through OpenID Connect discovery and caches them. It checks the issuer, audience and token times. It allows 30 seconds for differences between clocks.
 

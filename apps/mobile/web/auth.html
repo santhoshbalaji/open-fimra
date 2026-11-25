@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="UTF-8">
+<title>Signing in</title>
+<p>Signing in. This window closes by itself.</p>
+<script>
+  // Passes the sign-in reply back to the app window (flutter_web_auth_2).
+  const message = { 'flutter-web-auth-2': window.location.href };
+  if (window.opener) {
+    window.opener.postMessage(message, window.location.origin);
+    window.close();
+  } else if (window.parent && window.parent !== window) {
+    window.parent.postMessage(message, window.location.origin);
+  } else {
+    localStorage.setItem('flutter-web-auth-2', window.location.href);
+    window.close();
+  }
+</script>
+</html>

@@ -44,6 +44,44 @@
       ]
     },
     {
+      "clientId": "open-fimra-mobile",
+      "name": "Open FIMRA field app",
+      "description": "The Flutter field app. Public client: authorisation code with PKCE only.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "org.openfimra.field:/callback",
+        "http://127.0.0.1:4300/auth.html",
+        "http://localhost:4300/auth.html",
+        "http://127.0.0.1:4301/auth.html",
+        "http://localhost:4301/auth.html",
+        "http://127.0.0.1:4302/auth.html",
+        "http://localhost:4302/auth.html",
+        "http://127.0.0.1:4303/auth.html",
+        "http://localhost:4303/auth.html"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "open-fimra-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
       "clientId": "open-fimra-api",
       "name": "Open FIMRA core API",
       "enabled": true,

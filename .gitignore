@@ -14,6 +14,8 @@ Thumbs.db
 /.geo-exports-check/
 /.form-attachments/
 /.xlsforms/
+# Flutter packages and Gradle files for the container builds (make mobile-*)
+/.mobile-cache/
 
 # Agency data must never be committed
 *.gpkg

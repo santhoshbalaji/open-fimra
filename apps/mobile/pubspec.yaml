@@ -1,0 +1,36 @@
+name: fimra_field
+description: Open FIMRA field app for forest staff.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.0
+  flutter: 3.44.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.6
+  flutter_secure_storage: ^10.0.0
+  flutter_svg: ^2.3.0
+  flutter_web_auth_2: ^5.0.0
+  geolocator: ^14.0.2
+  http: ^1.6.0
+  intl: ^0.20.2
+  maplibre_gl: ^0.28.0
+  shared_preferences: ^2.5.6
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/InterVariable.ttf
