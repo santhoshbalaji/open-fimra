@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
@@ -50,7 +49,7 @@ func ingestCommand(ctx context.Context, cfg config, args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, cfg.databaseURL)
+	pool, err := openPool(ctx, cfg.databaseURL)
 	if err != nil {
 		return fmt.Errorf("configure ingest database: %w", err)
 	}
@@ -163,7 +162,7 @@ func backfillCommand(ctx context.Context, cfg config, args []string) error {
 		return errors.New("a queued backfill always calls FIRMS, so -enqueue cannot use -fixtures")
 	}
 
-	pool, err := pgxpool.New(ctx, cfg.databaseURL)
+	pool, err := openPool(ctx, cfg.databaseURL)
 	if err != nil {
 		return fmt.Errorf("configure backfill database: %w", err)
 	}
@@ -233,7 +232,7 @@ func feedHealthCommand(ctx context.Context, cfg config, args []string) error {
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return errors.Join(errors.New("feed-health takes no arguments"), err)
 	}
-	pool, err := pgxpool.New(ctx, cfg.databaseURL)
+	pool, err := openPool(ctx, cfg.databaseURL)
 	if err != nil {
 		return fmt.Errorf("configure feed health database: %w", err)
 	}
@@ -271,7 +270,7 @@ func rotateCommand(ctx context.Context, cfg config, args []string) error {
 	if err != nil {
 		return err
 	}
-	pool, err := pgxpool.New(ctx, cfg.databaseURL)
+	pool, err := openPool(ctx, cfg.databaseURL)
 	if err != nil {
 		return fmt.Errorf("configure rotation database: %w", err)
 	}
