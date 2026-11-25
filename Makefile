@@ -317,7 +317,7 @@ xlsform-odk-check: ## Export every example form and convert it with pyxform, the
 
 # Field app (Flutter). Everything runs in a pinned Flutter image through
 # Docker, so no Flutter or Android SDK install is needed. Packages, Gradle
-# files and the Android parts the build downloads (NDK, CMake, platform 35)
+# files and the Android parts the build downloads (NDK, CMake, platforms)
 # are cached in the ignored .mobile-cache folder.
 FLUTTER_IMAGE ?= ghcr.io/cirruslabs/flutter:3.44.0@sha256:46691e311715845de03a3ba4753a475476936805b29431b1f00f1816981033f8
 MOBILE_MEMORY ?= 4g
@@ -337,7 +337,7 @@ MOBILE_RUN = docker run --rm --init --memory $(MOBILE_MEMORY) --cpus $(MOBILE_CP
 	-e PUB_CACHE=/repo/.mobile-cache/pub -e GRADLE_USER_HOME=/repo/.mobile-cache/gradle \
 	-v "$(CURDIR)/.mobile-cache/android-ndk:/opt/android-sdk-linux/ndk" \
 	-v "$(CURDIR)/.mobile-cache/android-cmake:/opt/android-sdk-linux/cmake" \
-	-v "$(CURDIR)/.mobile-cache/android-35:/opt/android-sdk-linux/platforms/android-35" \
+	-v "$(CURDIR)/.mobile-cache/android-platforms:/opt/android-sdk-linux/platforms" \
 	-e GRADLE_OPTS=-Dorg.gradle.daemon=false \
 	$(MOBILE_DOCKER_FLAGS) $(FLUTTER_IMAGE)
 MOBILE_DEFINES = --dart-define=FIMRA_API_URL=$(MOBILE_API_URL) --dart-define=FIMRA_OIDC_ISSUER=$(MOBILE_OIDC_ISSUER)
@@ -345,7 +345,7 @@ MOBILE_DEFINES = --dart-define=FIMRA_API_URL=$(MOBILE_API_URL) --dart-define=FIM
 .PHONY: mobile-deps mobile-tokens mobile-lint mobile-test mobile-build mobile-web mobile-test-integration mobile-walkthrough
 
 mobile-deps: ## Fetch the field app's locked Flutter packages in the container
-	install -d .mobile-cache/pub .mobile-cache/gradle .mobile-cache/android-ndk .mobile-cache/android-cmake .mobile-cache/android-35
+	install -d .mobile-cache/pub .mobile-cache/gradle .mobile-cache/android-ndk .mobile-cache/android-cmake .mobile-cache/android-platforms
 	$(MOBILE_RUN) flutter --suppress-analytics pub get --enforce-lockfile
 
 mobile-tokens: mobile-deps ## Regenerate the field app's theme from docs/design-system/tokens.json
