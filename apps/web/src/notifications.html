@@ -1,0 +1,36 @@
+<div class="notification-bell" tabindex="-1" (keydown.escape)="close($event)">
+  <button #bell brnButton class="icon-button" (click)="toggle()"
+          [attr.aria-label]="'Notifications, ' + (inbox()?.unreadCount ?? 0) + ' unread'"
+          [attr.aria-expanded]="open()" aria-controls="notification-inbox">
+    <svg lucideBell aria-hidden="true"></svg>
+    @if (inbox()?.unreadCount; as count) {
+      <span class="unread-count" aria-hidden="true">{{ count > 99 ? '99+' : count }}</span>
+    }
+  </button>
+  <section id="notification-inbox" class="inbox" aria-labelledby="notifications-heading" [hidden]="!open()">
+    <h2 id="notifications-heading">Notifications</h2>
+    @if (error()) {
+      <p role="status">{{ error() }}</p>
+      <button class="inbox-action" (click)="load()">Try again</button>
+    } @else if (inbox()?.items?.length) {
+      <ul>
+        @for (item of inbox()?.items; track item.id) {
+          <li>
+            <a [href]="link(item)" (click)="follow($event, item)">
+              {{ labels[item.event] }}@if (item.alertId) { #{{ item.alertId }} }
+            </a>
+            <small>
+              <time [attr.datetime]="item.createdAt">{{ date.format(timestamp(item.createdAt)) }}</time>
+              @if (!item.readAt) { <strong>Unread</strong> }
+            </small>
+          </li>
+        }
+      </ul>
+      @if (inbox()?.hasMore) {
+        <button class="inbox-action" [disabled]="loading()" (click)="load(true)">Show more</button>
+      }
+    } @else {
+      <p role="status">{{ loading() ? 'Loading notifications…' : 'You have no notifications.' }}</p>
+    }
+  </section>
+</div>

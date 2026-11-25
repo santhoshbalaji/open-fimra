@@ -16,6 +16,7 @@ export class WorkspaceService {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly subject = computed(() => this.auth.user()?.profile.sub);
   readonly current = signal<Workspace | null>(null);
+  readonly loaded = signal(false);
   readonly message = signal('');
   private readonly grants = signal<Assignment[]>([]);
   readonly canManageLayers = computed(() => {
@@ -28,6 +29,7 @@ export class WorkspaceService {
     effect(onCleanup => {
       const subject = this.subject();
       this.current.set(null);
+      this.loaded.set(false);
       this.grants.set([]);
       this.message.set('');
       if (!subject) return;
@@ -37,6 +39,7 @@ export class WorkspaceService {
           this.grants.set(profile.roleAssignments);
           const workspace = profile.roleAssignments[0]?.workspace;
           this.current.set(workspace ?? null);
+          this.loaded.set(true);
           this.message.set(workspace ? '' : noAccess);
         },
         error: (error: HttpErrorResponse) => {
@@ -51,6 +54,14 @@ export class WorkspaceService {
       let request = load();
       onCleanup(() => { clearTimeout(retry); request.unsubscribe(); });
     });
+  }
+
+  select(slug: string): boolean {
+    const workspace = this.grants().find(grant => grant.workspace.slug === slug)?.workspace;
+    if (!workspace) return false;
+    this.current.set(workspace);
+    this.message.set('');
+    return true;
   }
 
   deny(): void {

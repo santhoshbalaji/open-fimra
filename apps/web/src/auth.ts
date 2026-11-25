@@ -12,7 +12,7 @@ export class AuthService {
     redirect_uri: new URL('callback', document.baseURI).href,
     post_logout_redirect_uri: new URL('signed-out', document.baseURI).href,
     response_type: 'code',
-    scope: 'openid profile',
+    scope: 'openid profile email',
     monitorSession: false,
     automaticSilentRenew: true
   });
@@ -42,7 +42,10 @@ export class AuthService {
       }
       const callback = location.pathname === '/callback';
       const user = callback ? await this.manager.signinRedirectCallback() : await this.manager.getUser();
-      if (callback) history.replaceState(null, '', '/');
+      if (callback) {
+        const search = typeof user?.state === 'string' && user.state.startsWith('?') ? user.state : '';
+        history.replaceState(null, '', new URL(search || '.', document.baseURI));
+      }
       if (user && !user.expired) this.user.set(user);
       else await this.signIn();
     } catch {
@@ -53,7 +56,7 @@ export class AuthService {
   async signIn(): Promise<void> {
     this.error.set('');
     try {
-      await this.manager.signinRedirect();
+      await this.manager.signinRedirect({ state: location.search });
     } catch {
       this.error.set('Cannot reach the sign-in service. Try again.');
     }

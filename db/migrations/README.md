@@ -19,6 +19,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00014_workflow` | Workflow templates, alert instances, append-only step history and response times |
 | `00015_layer_publishing` | Shared detection matching, saved alert routing and layer versions, and replay progress |
 | `00016_exports` | File exports and their frozen rows, which only the request transaction can add |
+| `00017_notifications` | Notification rules, a replay-safe inbox and the email delivery outbox |
 
 ## Commands
 

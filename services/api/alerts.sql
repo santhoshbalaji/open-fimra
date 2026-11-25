@@ -6,8 +6,7 @@ visible AS (
     FROM alerts a JOIN workflow_instances i ON i.alert_id = a.id
     WHERE EXISTS (
         SELECT 1 FROM grants g WHERE g.workspace_id = a.workspace_id
-          AND (a.queue = 'unit' OR g.can_review)
-          AND match_under_grant(a.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
+          AND alert_path_visible(a.queue, a.hierarchy_unit_paths, g.can_review, g.hierarchy_id, g.unit_path, g.depth)
     )
       AND ($3::bigint IS NULL OR a.id = $3)
       AND ($3 IS NOT NULL OR a.observed_at BETWEEN now() - make_interval(hours => $4) AND now())

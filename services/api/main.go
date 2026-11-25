@@ -97,7 +97,17 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	}
 	defer listener.Close()
 
-	jobs, err := newJobClient(pool, logger, cfg.firmsMapKey)
+	smtp, err := readSMTPConfig()
+	if err != nil {
+		return err
+	}
+	var email notificationChannel
+	if smtp != nil {
+		email = smtp
+	}
+	auth := newAuthenticator(provider, cfg.issuer, cfg.audience)
+	auth.emailEnabled = email != nil
+	jobs, err := newJobClient(pool, logger, cfg.firmsMapKey, email)
 	if err != nil {
 		return fmt.Errorf("could not configure the job queue: %w", err)
 	}
@@ -119,7 +129,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	}
 
 	server := &http.Server{
-		Handler: newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins, cfg.uploadDir, jobs,
+		Handler: newHandler(pool, auth, logger, cfg.corsOrigins, cfg.uploadDir, jobs,
 			withExports(cfg.exportDir, cfg.exportTTL)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,

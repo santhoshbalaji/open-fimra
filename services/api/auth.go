@@ -16,11 +16,13 @@ type identity struct {
 	Subject  string
 	Username string
 	Name     string
+	Email    *string
 }
 
 type authenticator struct {
-	issuer   string
-	verifier *oidc.IDTokenVerifier
+	issuer       string
+	verifier     *oidc.IDTokenVerifier
+	emailEnabled bool
 }
 
 func discoverProvider(ctx context.Context, issuer string) (*oidc.Provider, error) {
@@ -89,5 +91,17 @@ func (a authenticator) verify(ctx context.Context, rawToken string) (identity, b
 	if claims.Name == "" {
 		claims.Name = claims.Username
 	}
-	return identity{Subject: token.Subject, Username: claims.Username, Name: claims.Name}, true
+	caller := identity{Subject: token.Subject, Username: claims.Username, Name: claims.Name}
+	if a.emailEnabled {
+		var contact struct {
+			Email    string `json:"email"`
+			Verified bool   `json:"email_verified"`
+		}
+		if token.Claims(&contact) == nil && contact.Verified {
+			if email := notificationAddress(contact.Email); email != "" {
+				caller.Email = &email
+			}
+		}
+	}
+	return caller, true
 }
