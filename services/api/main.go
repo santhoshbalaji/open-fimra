@@ -106,7 +106,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	startup, cancelStartup := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelStartup()
 
-	pool, err := pgxpool.New(startup, cfg.databaseURL)
+	pool, err := openPool(startup, cfg.databaseURL)
 	if err != nil {
 		return fmt.Errorf("could not configure the database connection: %w", err)
 	}
