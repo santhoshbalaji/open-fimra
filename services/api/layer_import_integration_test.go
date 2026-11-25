@@ -117,7 +117,7 @@ func TestLayerImportIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience),
-		slog.Default(), devOrigins, cfg.uploadDir))
+		slog.Default(), devOrigins, cfg.uploadDir, nil))
 	t.Cleanup(server.Close)
 	client := &http.Client{Timeout: 10 * time.Second}
 	admin := demoToken(t, client, provider.Endpoint().TokenURL, "state.admin")

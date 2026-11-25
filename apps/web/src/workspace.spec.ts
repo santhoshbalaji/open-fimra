@@ -37,6 +37,19 @@ describe('Signed-in workspace', () => {
     expect(service.current()).toBeNull();
     expect(service.message()).toBe(noAccess);
   });
+  it('shows Layers only for a state administrator at the current workspace root', () => {
+    const { service, request } = lookup();
+    const workspace = { slug: 'demo', name: 'Demo State' };
+    request.flush({ roleAssignments: [
+      { workspace, role: 'state_admin', unit: { path: 'ds.c1' } },
+      { workspace: { slug: 'other', name: 'Other' }, role: 'state_admin', unit: { path: 'os' } }
+    ] });
+    expect(service.canManageLayers()).toBe(false);
+    service.current.set({ slug: 'other', name: 'Other' });
+    expect(service.canManageLayers()).toBe(true);
+    service.deny();
+    expect(service.canManageLayers()).toBe(false);
+  });
   it('retries a failed workspace lookup after one minute', () => {
     vi.useFakeTimers();
     try {

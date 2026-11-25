@@ -50,13 +50,15 @@ With Go 1.26 or later, run `make dev`, `make db-migrate` and `make api-test-inte
 
 Run `make api-lint api-test` for formatting, Go vet and unit tests. The integration tests check the reference matches, replay a synthetic feed and check which tile features each demo grant can see. They also check that a backfill is safe to repeat and that a silent feed opens exactly one feed-health alert. To replay a file yourself, run `make ingest-fixture FILE=packages/connectors/firms/fixtures/viirs.csv`. Run `make backfill-demo` to backfill the demo workspace from synthetic standard-processing files, and `make feed-health` to check feed health once. See the [core API guide](services/api/README.md) for settings and endpoints.
 
-## Running layer imports
+## Running layer imports and publishing
 
 Run `make dev db-migrate geo-worker-up` to start the layer import worker with
 the development stack. The worker has no published ports and all its geospatial
 libraries are inside the container. Run `make geo-test geo-test-integration`
-before pushing changes to imports. The integration test uses only the synthetic
-demo uploads and checks their drafts against the demo seed.
+before pushing changes to imports or publishing. The integration tests check
+synthetic drafts against the demo seed and publish a changed beat boundary.
+The publishing test verifies updated detection matches, grant confirmation and
+historical alerts in the running API.
 
 Uploads are kept in the ignored `.geo-uploads/` directory in each checkout.
 If you set `FIMRA_UPLOAD_DIR` in `.env`, use a separate directory for each stack.

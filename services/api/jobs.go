@@ -30,9 +30,10 @@ func (*heartbeatWorker) Work(context.Context, *river.Job[heartbeatArgs]) error {
 func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &heartbeatWorker{})
+	river.AddWorker(workers, &rematchWorker{pool: pool})
 
 	const heartbeat = "heartbeat"
-	queues := map[string]river.QueueConfig{heartbeat: {MaxWorkers: 1}}
+	queues := map[string]river.QueueConfig{heartbeat: {MaxWorkers: 1}, rematchQueue: {MaxWorkers: 1}}
 	periodic := []*river.PeriodicJob{
 		river.NewPeriodicJob(
 			river.PeriodicInterval(5*time.Minute),

@@ -3,6 +3,11 @@
     <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
     <h1 class="workspace font-semibold">{{ workspace.current()?.name || 'Control room' }}</h1>
     <div class="ml-auto flex items-center gap-2">
+      @if (workspace.canManageLayers()) {
+        <button brnButton class="user-trigger" (click)="showLayers.set(!showLayers())">
+          {{ showLayers() ? 'Control room' : 'Layers' }}
+        </button>
+      }
       <button brnButton class="icon-button" (click)="appearance.toggle()"
               aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'" title="Toggle dark theme">
         @if (appearance.theme() === 'dark') { <svg lucideSun></svg> } @else { <svg lucideMoon></svg> }
@@ -21,7 +26,13 @@
       </ng-template>
     </div>
   </header>
-  <main>@defer (on immediate) { <fimra-demo-map /> }</main>
+  <main>
+    @if (showLayers() && workspace.canManageLayers()) {
+      <fimra-layers />
+    } @else {
+      @defer (on immediate) { <fimra-demo-map /> }
+    }
+  </main>
 } @else {
   <main class="welcome">
     <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">

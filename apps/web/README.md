@@ -7,6 +7,20 @@ Click a point or use the **Detections in view** menu to open its details. Times 
 
 The **Alert queue** sits beside the map. On a small screen, switch between **Map** and **Alert queue**. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
 
+## Layers
+
+Sign in as a state administrator at the workspace root and open **Layers**.
+Choose an existing layer or create one, select the file, and enter the field
+names to import. The screen checks the upload in the background and lists any
+problems that need review.
+
+Open an upload and choose **Run preview** to check the last 30 days of
+detections. You can change the window to 1–90 days. Open a result group to see
+examples. A blocking problem requires a corrected upload. If units disappear,
+the preview lists the grants that publishing would remove. Review the list and
+confirm the removal before publishing. The screen shows progress as recent
+detections are checked again.
+
 ## Run locally
 
 Use Node.js 24.15 or later in the 24.x series, with Corepack. Run these commands from the repository root.
