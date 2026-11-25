@@ -9,12 +9,12 @@ import { WorkspaceService } from './workspace';
 import { ClassChart } from './class-chart';
 import { DashboardFilters } from './dashboard-filters';
 import { queueLabels } from './alert-queue';
-import { LucideTriangleAlert } from '@lucide/angular';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
+import { Icon } from './ui/icon';
 
 type BadgeIcon = 'step' | 'complete' | 'overdue';
 // The badge always pairs its icon with the visible label.
@@ -34,7 +34,7 @@ interface Summary {
 
 @Component({
   selector: 'fimra-dashboard',
-  imports: [KeyValuePipe, ClassChart, LucideTriangleAlert, HlmCardImports, HlmSkeleton, HlmTableImports, EmptyState, StatusBadge],
+  imports: [KeyValuePipe, ClassChart, HlmCardImports, HlmSkeleton, HlmTableImports, EmptyState, StatusBadge, Icon],
   templateUrl: './dashboard.html'
 })
 export class Dashboard {

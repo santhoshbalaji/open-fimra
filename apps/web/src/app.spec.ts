@@ -31,9 +31,12 @@ describe('App shell', () => {
 
   afterEach(() => localStorage.removeItem('fimra.lowBandwidth'));
 
-  it('reads and saves the low-bandwidth preference through the labelled switch', () => {
+  it('reads and saves the low-bandwidth preference through the labelled switch', async () => {
     localStorage.setItem('fimra.lowBandwidth', 'true');
     const {fixture, page} = open();
+    expect(page.querySelector('button[role=switch]')).toBeNull();
+    // The filters are the first deferred block, ahead of the main screen.
+    await (await fixture.getDeferBlocks())[0].render(DeferBlockState.Complete);
     const toggle = page.querySelector<HTMLButtonElement>('button[role=switch]')!;
     expect(page.querySelector('label[for="' + toggle.id + '"]')?.textContent).toContain('Low bandwidth');
     expect(toggle.getAttribute('aria-checked')).toBe('true');

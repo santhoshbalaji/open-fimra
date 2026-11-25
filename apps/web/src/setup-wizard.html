@@ -19,8 +19,8 @@
                 <span aria-hidden="true" class="row-span-2 grid size-7 place-items-center rounded-full border text-xs font-semibold"
                   [class]="current ? 'border-primary bg-primary text-primary-foreground' :
                     itemStatus === 'done' ? 'border-primary text-primary' : itemStatus === 'skipped' ? 'border-dashed border-border text-muted-foreground' : 'border-border'">
-                  @if (itemStatus === 'done' && !current) { <svg lucideCheck class="size-4"></svg> }
-                  @else if (itemStatus === 'skipped' && !current) { <svg lucideMinus class="size-4"></svg> }
+                  @if (itemStatus === 'done' && !current) { <svg fimraIcon="check" class="size-4"></svg> }
+                  @else if (itemStatus === 'skipped' && !current) { <svg fimraIcon="minus" class="size-4"></svg> }
                   @else { {{ index + 1 }} }
                 </span>
                 <span class="whitespace-nowrap">{{ item.label }}</span>
@@ -37,24 +37,24 @@
           <h3 id="step-heading" #stepHeading tabindex="-1" class="text-title focus:outline-none focus-visible:outline-3 focus-visible:outline-ring">{{ steps[stepIndex()].label }}</h3>
         </div>
         @if (error()) {
-          <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+          <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
             <p hlmAlertDescription>{{ error() }}</p></div>
         }
         @if (notice()) {
           <p role="status" class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-primary px-3 py-2">
-            <svg lucideCircleCheck aria-hidden="true" class="size-4 shrink-0"></svg>{{ notice() }}</p>
+            <svg fimraIcon="circle-check" aria-hidden="true" class="size-4 shrink-0"></svg>{{ notice() }}</p>
         }
 
         @switch (step()) {
           @case ('mode') {
             <div class="grid gap-3">
               <div class="flex items-start gap-3 rounded-control border border-primary p-3">
-                <svg lucideCircleCheck aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-primary"></svg>
+                <svg fimraIcon="circle-check" aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-primary"></svg>
                 <p><strong>{{ state.mode === 'state' ? 'State mode' : 'National mode' }}.</strong>
                   This installation serves one state forest department.</p>
               </div>
               <div class="flex items-start gap-3 rounded-control border border-dashed border-border p-3 text-muted-foreground">
-                <svg lucideLock aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                <svg fimraIcon="lock" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
                 <p><span hlmBadge variant="outline" class="me-1">Not available yet</span>
                   National mode, for a national body that follows several states, is not available yet.
                   Phase 1 fully supports state mode only.</p>
@@ -133,7 +133,7 @@
                       <fimra-status-badge class="layer-state mx-0! justify-self-start" [icon]="layerIcon(layer)" [label]="layerStatus(layer)" />
                     </div>
                     @if (locked) {
-                      <p class="flex items-center gap-2 text-muted-foreground"><svg lucideLock aria-hidden="true" class="size-4 shrink-0"></svg>Publish the levels above first.</p>
+                      <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4 shrink-0"></svg>Publish the levels above first.</p>
                     } @else {
                       <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                         <label class="sr-only" [for]="'file-' + layer.key">File for {{ layer.name }}</label>
@@ -151,7 +151,7 @@
                   @if (blocking(layer); as problems) {
                     @if (problems.length) {
                       <div class="grid gap-2 rounded-control border border-border border-s-4 border-s-danger px-3 py-2">
-                        <p class="flex items-center gap-2 font-medium text-danger"><svg lucideCircleX aria-hidden="true" class="size-4 shrink-0"></svg>
+                        <p class="flex items-center gap-2 font-medium text-danger"><svg fimraIcon="circle-x" aria-hidden="true" class="size-4 shrink-0"></svg>
                           Correct these problems in the file and upload it again:</p>
                         <ul class="grid gap-1 [overflow-wrap:anywhere]">
                           @for (problem of problems; track $index) {
@@ -164,7 +164,7 @@
                     }
                   }
                   @if (reviewCount(layer)) {
-                    <p class="flex items-center gap-2 text-sm text-muted-foreground"><svg lucideInfo aria-hidden="true" class="size-4 shrink-0"></svg>
+                    <p class="flex items-center gap-2 text-sm text-muted-foreground"><svg fimraIcon="info" aria-hidden="true" class="size-4 shrink-0"></svg>
                       {{ reviewCount(layer) }} {{ reviewCount(layer) === 1 ? 'item' : 'items' }} to review that do not block publishing.</p>
                   }
                 </li>
@@ -174,7 +174,7 @@
               <button hlmBtn variant="link" type="button" class="h-auto px-0" (click)="openLayers.emit()">Layers screen</button>.</p>
             @if (!state.boundarySet) {
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
-                <svg lucideInfo aria-hidden="true" class="size-4 shrink-0"></svg>The workspace boundary is set when the state level is published.</p>
+                <svg fimraIcon="info" aria-hidden="true" class="size-4 shrink-0"></svg>The workspace boundary is set when the state level is published.</p>
             }
             <button hlmBtn type="button" class="self-start" [disabled]="busy() || !layersReady()"
               (click)="finishLayers()">Continue</button>
@@ -186,11 +186,11 @@
               with a department mailbox, not a personal address.</p>
             <p role="status" class="flex items-start gap-2 rounded-control bg-background px-3 py-2">
               @switch (state.firms.source) {
-                @case ('settings') { <svg lucideKeyRound aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                @case ('settings') { <svg fimraIcon="key-round" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
                   <span>A key is saved, set on {{ state.firms.setAt | date:'medium' }}@if (state.firms.hint) {, ending in {{ state.firms.hint }}}. It is stored encrypted and is never shown again.</span> }
-                @case ('environment') { <svg lucideKeyRound aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                @case ('environment') { <svg fimraIcon="key-round" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
                   <span>This server uses the key in its FIMRA_FIRMS_MAP_KEY setting. A key saved here takes its place.</span> }
-                @default { <svg lucideInfo aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg><span>No key is saved yet.</span> }
+                @default { <svg fimraIcon="info" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg><span>No key is saved yet.</span> }
               }
             </p>
             @if (state.firms.encryption) {
@@ -204,7 +204,7 @@
                 <button hlmBtn type="submit" class="self-start sm:mt-7" [disabled]="busy()">Save and test</button>
               </form>
             } @else {
-              <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+              <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
                 <p hlmAlertDescription>Encrypted settings are off on this server, so a key cannot be saved here. Ask the
                   system operator to set FIMRA_SETTINGS_KEY.</p></div>
             }
@@ -214,13 +214,13 @@
             @if (firmsResult(); as result) {
               <p role="status" class="flex items-center gap-2 rounded-control border border-border border-s-4 px-3 py-2"
                 [class]="result.ok ? 'border-s-primary' : 'border-s-danger'">
-                @if (result.ok) { <svg lucideCircleCheck aria-hidden="true" class="size-4 shrink-0"></svg> }
-                @else { <svg lucideCircleX aria-hidden="true" class="size-4 shrink-0 text-danger"></svg> }
+                @if (result.ok) { <svg fimraIcon="circle-check" aria-hidden="true" class="size-4 shrink-0"></svg> }
+                @else { <svg fimraIcon="circle-x" aria-hidden="true" class="size-4 shrink-0 text-danger"></svg> }
                 {{ result.message }}</p>
             }
             @if (skippingFirms()) {
               <div hlmAlert class="grid-cols-[auto_1fr] gap-x-2.5">
-                <svg lucideTriangleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+                <svg fimraIcon="triangle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
                 <p hlmAlertTitle class="leading-normal"><strong>Without a key, no new fire detections arrive and the alert map stays empty.</strong></p>
                 <div hlmAlertDescription class="grid gap-3"><p>You can add a key later from this wizard.</p>
                   <div class="flex flex-wrap items-center gap-2">
@@ -248,7 +248,7 @@
               if the account marks it as verified. Invitations expire after 14 days.</p>
             @if (!state.emailEnabled) {
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
-                <svg lucideInfo aria-hidden="true" class="size-4 shrink-0"></svg>Email is off on this server, so tell officers yourself.</p>
+                <svg fimraIcon="info" aria-hidden="true" class="size-4 shrink-0"></svg>Email is off on this server, so tell officers yourself.</p>
             }
             <form #inviteForm class="invite-form" (submit)="$event.preventDefault(); invite(inviteForm)">
               <fieldset class="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_auto]" [disabled]="busy()">
@@ -288,8 +288,8 @@
                       <tr hlmTr>
                         <td hlmTd class="whitespace-normal">
                           <span class="font-mono [overflow-wrap:anywhere]">{{ item.email }}</span>
-                          @if (item.emailStatus === 'sent') { <span hlmBadge variant="outline" class="ms-2"><svg lucideMailCheck aria-hidden="true" class="size-3"></svg>Email sent</span> }
-                          @if (item.emailStatus === 'failed') { <span hlmBadge variant="destructive" class="ms-2"><svg lucideMailX aria-hidden="true" class="size-3"></svg>Email failed</span> }
+                          @if (item.emailStatus === 'sent') { <span hlmBadge variant="outline" class="ms-2"><svg fimraIcon="mail-check" aria-hidden="true" class="size-3"></svg>Email sent</span> }
+                          @if (item.emailStatus === 'failed') { <span hlmBadge variant="destructive" class="ms-2"><svg fimraIcon="mail-x" aria-hidden="true" class="size-3"></svg>Email failed</span> }
                           <span class="mt-1 block text-muted-foreground sm:hidden">{{ roleLabels[item.role] }} · {{ item.unitName || item.unitPath }} ·
                             Expires {{ item.expiresAt | date:'mediumDate' }}</span>
                         </td>
@@ -320,7 +320,7 @@
             </ul>
             @if (status('firms') === 'skipped') {
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
-                <svg lucideTriangleAlert aria-hidden="true" class="size-4 shrink-0"></svg>No FIRMS key yet: the map shows no new detections until you add one.</p>
+                <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4 shrink-0"></svg>No FIRMS key yet: the map shows no new detections until you add one.</p>
             }
             <p>Reopen this wizard at any time from the account menu.</p>
             <button hlmBtn type="button" size="lg" class="self-start" [disabled]="busy()" (click)="finish()">Finish and open the alert map</button>
@@ -329,7 +329,7 @@
       </section>
     </div>
   } @else if (error()) {
-    <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+    <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
       <p hlmAlertDescription>{{ error() }}</p></div>
     <button hlmBtn variant="outline" type="button" class="self-start" (click)="load(true)">Try again</button>
   } @else {

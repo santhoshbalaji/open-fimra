@@ -29,9 +29,6 @@ importers:
       '@fontsource-variable/inter':
         specifier: 5.3.0
         version: 5.3.0
-      '@lucide/angular':
-        specifier: 1.71.0
-        version: 1.71.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))
       '@ng-icons/core':
         specifier: 33.4.0
         version: 33.4.0(@angular-devkit/schematics@22.3.0(chokidar@6.0.0))(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@schematics/angular@22.3.0(chokidar@6.0.0))(rxjs@7.8.2)
@@ -1462,12 +1459,6 @@ packages:
     resolution: {integrity: sha512-UP0dMDLQ9z8V7VcasGsd9zvHdwwsYT2tQ7u37h5sGzoyLB+S3UHPEzj9lssH7JqF/U8kB3IwJGkYwLTOkoEzNw==}
     cpu: [x64]
     os: [win32]
-
-  '@lucide/angular@1.71.0':
-    resolution: {integrity: sha512-bXd8cIkD+RrBcoENVoSE8Orm7BYAoTNYxJeCupmZENmDcrAA3pMabHI1W1RQctJlmPgvimS/LhDL9jKau7DD/w==}
-    peerDependencies:
-      '@angular/common': '>=17.0.0'
-      '@angular/core': '>=17.0.0'
 
   '@mapbox/jsonlint-lines-primitives@2.0.3':
     resolution: {integrity: sha512-0SElaV0uMxEnxzBhhX9WTuPyUeMsAN/SS0i16tjuba4/mio63MG9khjC1a0JAiPGXAwvwm4UfHJURCN7nyudQg==}
@@ -6015,12 +6006,6 @@ snapshots:
 
   '@lmdb/lmdb-win32-x64@3.5.9':
     optional: true
-
-  '@lucide/angular@1.71.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))':
-    dependencies:
-      '@angular/common': 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
-      '@angular/core': 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)
-      tslib: 2.9.1
 
   '@mapbox/jsonlint-lines-primitives@2.0.3': {}
 

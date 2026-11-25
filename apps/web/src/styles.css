@@ -1,6 +1,5 @@
 @import 'tailwindcss' source('./');
 @import '@fontsource-variable/inter/wght.css';
-@import 'maplibre-gl/dist/maplibre-gl.css';
 @import '@spartan-ng/brain/hlm-tailwind-preset.css';
 @import './tokens.css';
 @import './helm-theme.css';
@@ -22,7 +21,6 @@ button .chevron { width: 14px; }
 .user-trigger { max-width: 32vw; }
 .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .welcome { display: grid; align-content: center; justify-items: center; gap: 16px; }
-.map-canvas { position: absolute; inset: 0; }
 .map-actions { display: grid; position: absolute; top: 16px; right: 16px; padding: 4px; }
 .map-actions button { display: grid; place-items: center; border-radius: var(--radius-control); }
 .map-key { position: absolute; left: 16px; bottom: 16px; padding: 4px; }

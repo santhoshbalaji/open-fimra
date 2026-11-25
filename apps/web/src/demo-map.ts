@@ -5,12 +5,11 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import tokens from '../../../docs/design-system/tokens.json';
-import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ViewEncapsulation, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, EMPTY, exhaustMap, timer } from 'rxjs';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
-import { LucideDownload, LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
@@ -23,10 +22,14 @@ import type { NotificationLink } from './notifications';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
 import { unavailable, WorkspaceService } from './workspace';
+import { Icon } from './ui/icon';
 
 @Component({
   selector: 'fimra-demo-map',
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, LucideLayers, LucideMaximize, LucideMinus, LucidePlus, ExportDialog, LucideDownload],
+  styleUrl: './demo-map.css',
+  // The map library's class names are global.
+  encapsulation: ViewEncapsulation.None,
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, Icon],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })

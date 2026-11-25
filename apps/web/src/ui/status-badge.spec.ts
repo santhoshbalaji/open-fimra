@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { StatusBadge } from './status-badge';
 
 describe('StatusBadge', () => {
-  it.each([['healthy', 'lucideCircleCheck'], ['delayed', 'lucideClock'], ['quiet', 'lucideBellOff'], ['failing', 'lucideCircleX']])(
-    'renders a distinct %s feed icon and label', (state, directive) => {
+  it.each([['healthy', 'circle-check'], ['delayed', 'clock'], ['quiet', 'bell-off'], ['failing', 'circle-x']])(
+    'renders a distinct %s feed icon and label', (state, icon) => {
       const fixture = TestBed.createComponent(StatusBadge);
       fixture.componentRef.setInput('icon', state);
       fixture.componentRef.setInput('label', state);
       fixture.detectChanges();
-      expect(fixture.nativeElement.querySelector('svg[' + directive + '][aria-hidden=true]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('svg[data-icon="' + icon + '"][aria-hidden=true] path, svg[data-icon="' + icon + '"][aria-hidden=true] circle')).toBeTruthy();
       expect(fixture.nativeElement.textContent.trim()).toBe(state);
     });
 

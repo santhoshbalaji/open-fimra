@@ -14,21 +14,21 @@
       }
       <button hlmBtn variant="ghost" class="icon-button" (click)="appearance.toggle()"
               aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'" title="Toggle dark theme">
-        @if (appearance.theme() === 'dark') { <svg lucideSun></svg> } @else { <svg lucideMoon></svg> }
+        @if (appearance.theme() === 'dark') { <svg fimraIcon="sun"></svg> } @else { <svg fimraIcon="moon"></svg> }
       </button>
       <fimra-notifications (openNotice)="openNotice($event)" />
       <button hlmBtn variant="ghost" [hlmDropdownMenuTrigger]="account" class="user-trigger account-trigger flex items-center gap-2"
               [attr.aria-label]="'Account for ' + name">
         <span class="avatar" aria-hidden="true">{{ name.charAt(0).toUpperCase() }}</span>
         <span class="user-name">{{ name }}</span>
-        <svg lucideChevronDown class="chevron"></svg>
+        <svg fimraIcon="chevron-down" class="chevron"></svg>
       </button>
       <ng-template #account>
         <hlm-dropdown-menu>
           @if (workspace.canManageLayers()) {
-            <button hlmDropdownMenuItem (triggered)="openSetup()"><svg lucideSettings></svg> First-run setup</button>
+            <button hlmDropdownMenuItem (triggered)="openSetup()"><svg fimraIcon="settings"></svg> First-run setup</button>
           }
-          <button hlmDropdownMenuItem (triggered)="auth.signOut()"><svg lucideLogOut></svg> Sign out</button>
+          <button hlmDropdownMenuItem (triggered)="auth.signOut()"><svg fimraIcon="log-out"></svg> Sign out</button>
         </hlm-dropdown-menu>
       </ng-template>
     </div>
@@ -40,24 +40,7 @@
         <button hlmBtn variant="ghost" [attr.aria-pressed]="dashboard()" (click)="dashboard.set(true)">Dashboard</button>
       </nav>
       <button hlmBtn variant="outline" size="sm" class="filter-toggle" [attr.aria-expanded]="filtersOpen()" aria-controls="map-filters" (click)="filtersOpen.set(!filtersOpen())">Filters</button>
-      <div class="filter-fields" id="map-filters">
-        <hlm-field><label hlmFieldLabel for="hours">Past {{ filters.hours() }} hours</label>
-          <input hlmInput id="hours" #hours type="range" min="1" max="720" [value]="filters.hours()" (change)="filters.hours.set(+hours.value)">
-        </hlm-field>
-        <hlm-field><label hlmFieldLabel for="forest">Forest class</label>
-          <hlm-select [value]="filters.forestClass() || 'all'" (valueChange)="selectForest($event)">
-            <hlm-select-trigger buttonId="forest">{{ forestLabel() }}</hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal><hlm-select-item value="all">All classes</hlm-select-item>
-              @for (key of classKeys; track key) { <hlm-select-item [value]="key">{{ classes[key] }}</hlm-select-item> }
-            </hlm-select-content>
-          </hlm-select>
-        </hlm-field>
-        <hlm-field><label hlmFieldLabel for="unit-path">Unit path</label>
-          <input hlmInput id="unit-path" #path placeholder="All units" pattern="[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)*"
-            [value]="filters.unitPath()" (change)="path.reportValidity() && filters.unitPath.set(path.value)">
-        </hlm-field>
-        <label hlmFieldLabel for="low-bandwidth"><hlm-switch inputId="low-bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> Low bandwidth</label>
-      </div>
+      @defer (on immediate) { <fimra-filter-fields /> } @placeholder { <div class="filter-fields" id="map-filters"></div> }
     </div>
   }
   <main>

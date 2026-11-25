@@ -61,6 +61,8 @@ make web-build
 
 The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to stop the dev server.
 
+The first download should stay under 150 kB compressed, for slow mobile connections in the field. It is about 138 kB. The map library, its styles, charts and every screen except the shell load afterwards. For icons, use the `fimraIcon` directive in [`src/ui/icon.ts`](src/ui/icon.ts), for example `<svg fimraIcon="bell" aria-hidden="true">`. It draws Lucide icons from `@ng-icons/lucide`; add a new icon to its list. The build warns above 620 kB and fails above 700 kB before compression.
+
 The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. The report steps record a pending report until report forms are available.
 
 ## First-run setup

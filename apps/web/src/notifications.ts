@@ -5,9 +5,9 @@ import { Component, DestroyRef, inject, output, signal, viewChild, ElementRef } 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { classes, ForestClass, relativeAge } from './detections';
 import { EmptyState } from './ui/empty-state';
-import { LucideBell } from '@lucide/angular';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { Icon } from './ui/icon';
 
 export interface NotificationLink { workspace: string; alert: string | null }
 
@@ -34,7 +34,7 @@ interface Inbox { unreadCount: number; items: Notice[]; hasMore: boolean }
 
 @Component({
   selector: 'fimra-notifications',
-  imports: [HlmButtonImports, HlmSkeletonImports, EmptyState, LucideBell],
+  imports: [HlmButtonImports, HlmSkeletonImports, EmptyState, Icon],
   templateUrl: './notifications.html',
   styleUrl: './notifications.css'
 })
