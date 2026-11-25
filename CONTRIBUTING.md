@@ -26,6 +26,16 @@ The development stack binds to 127.0.0.1 only:
 | PostgreSQL with PostGIS | `127.0.0.1:15432`, database `fimra` | `fimra` / `fimra-dev` |
 | Keycloak admin console | <http://127.0.0.1:18180> | `admin` / `admin-dev` |
 
+On first start Keycloak imports the development realm `open-fimra` from [deploy/compose/keycloak](deploy/compose/keycloak/open-fimra-realm.json). It has three clients:
+
+| Client | Use |
+|---|---|
+| `open-fimra-web` | The web app: public client, authorisation code with PKCE, redirects to `http://127.0.0.1:4200` and `http://localhost:4200` |
+| `open-fimra-api` | The core API, as the token audience |
+| `open-fimra-dev-cli` | Password sign-in for local tests only. A real installation never has this client. |
+
+It also has demo users `state.admin`, `division.officer`, `beat.guard` and `no.role`, all with the password `demo` and fixed user IDs ending `…a1` to `…a4`. They are made up.
+
 These defaults are for local development only. `make dev-down` stops the stack and keeps its data; `make dev-reset` deletes the data too.
 
 Database migrations need Go (the version in CI is the current stable release). `make db-migrate` applies them, and `make db-test` checks that they roll back cleanly and runs the schema tests. See [db/migrations](db/migrations/README.md).
