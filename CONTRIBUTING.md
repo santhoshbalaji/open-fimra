@@ -59,6 +59,17 @@ TypeScript validator. Both validators must give the same messages. Run
 validators or its examples. Example forms stay synthetic and use the fictional
 Demo State.
 
+## Running forms and field reports
+
+Forms, submissions, attachments and approvals live in the core API. With the
+development stack running and migrated, `make api-test-integration` publishes
+the synthetic example forms, takes a synthetic alert through its first report
+and checks every request as each demo user. `make attachments-s3-test` checks
+S3-compatible attachment storage against a small server that runs for the test
+only. Attachments are kept in the ignored `.form-attachments/` directory. If
+you set `FIMRA_ATTACHMENT_DIR` in `.env`, use a separate directory for each
+stack. See the [forms endpoints](services/api/README.md#forms-and-field-reports).
+
 ## Running layer imports and publishing
 
 Run `make dev db-migrate geo-worker-up` to start the layer import worker with

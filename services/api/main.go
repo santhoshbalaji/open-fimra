@@ -165,13 +165,18 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 
 	go runExportCleanup(ctx, pool, cfg.exportDir, logger)
 
+	attachments, maxAttachment, err := attachmentStoreFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+
 	if cfg.firmsMapKey == "" {
 		logger.Info("FIMRA_FIRMS_MAP_KEY is empty, so only workspaces with a FIRMS key saved in settings are polled")
 	}
 
 	server := &http.Server{
 		Handler: newHandler(pool, auth, logger, cfg.corsOrigins, cfg.uploadDir, jobs,
-			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys)),
+			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys), withAttachments(attachments, maxAttachment)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,

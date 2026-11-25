@@ -26,6 +26,9 @@ FIMRA_MAILPIT_SMTP_PORT ?= 11025
 export FIMRA_UPLOAD_DIR := $(abspath $(FIMRA_UPLOAD_DIR))
 FIMRA_EXPORT_DIR ?= .geo-exports
 export FIMRA_EXPORT_DIR := $(abspath $(FIMRA_EXPORT_DIR))
+# Photos and files from field reports, when they are kept on local disk.
+FIMRA_ATTACHMENT_DIR ?= .form-attachments
+export FIMRA_ATTACHMENT_DIR := $(abspath $(FIMRA_ATTACHMENT_DIR))
 # Downloads from the export integration test, read back with OGR.
 EXPORT_CHECK_DIR := $(CURDIR)/.geo-exports-check
 
@@ -51,6 +54,14 @@ api-run: export FIMRA_SMTP_PASSWORD := $(FIMRA_SMTP_PASSWORD)
 api-run: export FIMRA_SMTP_SECURITY := $(FIMRA_SMTP_SECURITY)
 api-run: export FIMRA_WEB_URL := $(FIMRA_WEB_URL)
 api-run: export FIMRA_SETUP_CODE := $(FIMRA_SETUP_CODE)
+api-run: export FIMRA_ATTACHMENT_STORE := $(FIMRA_ATTACHMENT_STORE)
+api-run: export FIMRA_ATTACHMENT_MAX_MB := $(FIMRA_ATTACHMENT_MAX_MB)
+api-run: export FIMRA_S3_ENDPOINT := $(FIMRA_S3_ENDPOINT)
+api-run: export FIMRA_S3_REGION := $(FIMRA_S3_REGION)
+api-run: export FIMRA_S3_BUCKET := $(FIMRA_S3_BUCKET)
+api-run: export FIMRA_S3_PREFIX := $(FIMRA_S3_PREFIX)
+api-run: export FIMRA_S3_ACCESS_KEY := $(FIMRA_S3_ACCESS_KEY)
+api-run: export FIMRA_S3_SECRET_KEY := $(FIMRA_S3_SECRET_KEY)
 api-run backfill-firms rotate-settings-key: export FIMRA_SETTINGS_KEY := $(FIMRA_SETTINGS_KEY)
 api-run backfill-firms rotate-settings-key: export FIMRA_SETTINGS_OLD_KEYS := $(FIMRA_SETTINGS_OLD_KEYS)
 api-test-integration: export FIMRA_TEST_MAILPIT_URL := http://127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT)
@@ -135,7 +146,7 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: mail-up ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration)$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
@@ -191,6 +202,21 @@ wizard-walkthrough: mail-up web-build ## Drive the wizard in headless Chromium o
 	GOOSE_VERSION=$(GOOSE_VERSION) PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble \
 	COMPOSE_CMD="$(COMPOSE)" FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
 	scripts/wizard-walkthrough.sh
+
+# The S3 attachment test needs an S3-compatible server. This starts rclone's
+# small one for the test only; it is not a choice of store for installs.
+S3_TEST_IMAGE ?= rclone/rclone:1.76.0
+S3_TEST_PORT ?= 19020
+.PHONY: attachments-s3-test
+attachments-s3-test: ## Check S3 attachment storage against a throwaway S3-compatible server
+	@set -e; name=$${COMPOSE_PROJECT_NAME:-open-fimra-dev}-s3-test; \
+		docker run -d --rm --name "$$name" --memory 128m -p 127.0.0.1:$(S3_TEST_PORT):8080 $(S3_TEST_IMAGE) \
+			serve s3 --auth-key fimra-test-key,fimra-test-secret --addr :8080 /data > /dev/null; \
+		trap 'docker stop "$$name" > /dev/null' EXIT; \
+		for i in $$(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:$(S3_TEST_PORT)/ && break; sleep 0.5; done; \
+		cd services/api && FIMRA_TEST_S3_ENDPOINT=http://127.0.0.1:$(S3_TEST_PORT) FIMRA_TEST_S3_BUCKET=fimra-test \
+			FIMRA_TEST_S3_ACCESS_KEY=fimra-test-key FIMRA_TEST_S3_SECRET_KEY=fimra-test-secret \
+			go test -run '^TestS3AttachmentsIntegration$$' -count=1 -v .
 
 api-lint: ## Check core API formatting and run Go vet
 	cd services/api && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi

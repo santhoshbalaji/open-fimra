@@ -144,6 +144,14 @@ func recordStep(ctx context.Context, tx pgx.Tx, subject, slug string, id int64, 
 	if required && !near && in.Reason == "" {
 		return &stepError{422, "Record a location near the detection."}
 	}
+	// A step with an assigned form is complete only once the form is in.
+	var missing []string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(title ORDER BY form_key),'{}') FROM alert_missing_forms($1,$2)`, id, in.Step).Scan(&missing); err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return &stepError{422, "Submit the " + strings.Join(missing, ", ") + " form before leaving this step."}
+	}
 	at := now
 	if in.ClientTime != nil {
 		at = *in.ClientTime
