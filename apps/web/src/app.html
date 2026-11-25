@@ -1,7 +1,7 @@
 @if (auth.user(); as user) {
   <header class="topbar flex items-center gap-4 bg-card">
     <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
-    <h1 class="workspace font-semibold">Demo State</h1>
+    <h1 class="workspace font-semibold">{{ workspace.current()?.name || 'Control room' }}</h1>
     <div class="ml-auto flex items-center gap-2">
       <button brnButton class="icon-button" (click)="appearance.toggle()"
               aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'" title="Toggle dark theme">

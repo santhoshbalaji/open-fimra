@@ -1,9 +1,13 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, effect, inject, signal, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { BrnButton } from '@spartan-ng/brain/button';
 import { LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
+import { AuthService } from './auth';
+import { WEB_CONFIG } from './config';
+import { ageLabels, classes, Detection, detectionLayer, ForestClass, iconName, mapRequest, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { boundaries, demoStyle } from './map-style';
 import { ThemeService, type Theme } from './theme';
+import { unavailable, WorkspaceService } from './workspace';
 
 @Component({
   selector: 'fimra-demo-map',
@@ -12,23 +16,88 @@ import { ThemeService, type Theme } from './theme';
 })
 export class DemoMap implements AfterViewInit, OnDestroy {
   readonly boundaries = boundaries;
+  readonly workspace = inject(WorkspaceService);
+  readonly classes = classes;
+  readonly forestClasses = Object.keys(classes) as ForestClass[];
+  readonly ageLabels = ageLabels;
+  readonly reasons = triageReasons;
   readonly error = signal('');
+  readonly tileError = signal('');
   readonly ready = signal(false);
   readonly legend = signal(true);
+  readonly hours = signal(168);
+  readonly outside = signal(false);
+  readonly visible = signal<Detection[]>([]);
+  readonly selected = signal<Detection | null>(null);
+  readonly now = signal(Date.now());
+  readonly relativeAge = relativeAge;
+  readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'long' });
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
+  private readonly picker = viewChild<ElementRef<HTMLSelectElement>>('picker');
+  private readonly detailTitle = viewChild<ElementRef<HTMLHeadingElement>>('detailTitle');
   private readonly appearance = inject(ThemeService);
+  private readonly auth = inject(AuthService);
+  private readonly base = inject(WEB_CONFIG).apiBaseUrl;
+  private readonly url = computed(() => {
+    const workspace = this.workspace.current();
+    return workspace && tileUrl(this.base, workspace.slug, this.hours(), this.outside());
+  });
   private map?: LibreMap;
   private bounds?: LngLatBounds;
   private appliedTheme?: Theme;
+  private appliedUrl: string | null = null;
+  private timer?: ReturnType<typeof setInterval>;
 
   constructor() {
     effect(() => {
       const theme = this.appearance.theme();
-      if (this.map && this.ready() && theme !== this.appliedTheme) {
-        this.map.setStyle(demoStyle(theme));
-        this.appliedTheme = theme;
-      }
+      const url = this.url();
+      if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url));
     });
+    effect(() => this.detailTitle()?.nativeElement.focus());
+  }
+
+  private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
+    const changed = theme !== this.appliedTheme;
+    if (changed) {
+      for (const layer of demoStyle(theme).layers) {
+        if (!('paint' in layer)) continue;
+        for (const [name, value] of Object.entries(layer.paint ?? {})) {
+          const property = name as Parameters<LibreMap['setPaintProperty']>[1];
+          map.setPaintProperty(layer.id, property, value);
+        }
+      }
+      this.appliedTheme = theme;
+    }
+    if (url !== this.appliedUrl) {
+      this.removeDetections(map);
+      this.selected.set(null);
+      this.visible.set([]);
+      this.tileError.set('');
+      this.appliedUrl = url;
+    }
+    if (!url) return;
+    const source = map.getSource('detections');
+    if (!source || changed) {
+      for (const cls of this.forestClasses) {
+        for (const age of this.ageLabels.keys()) {
+          const name = iconName(cls, age, theme);
+          if (!map.hasImage(name)) map.addImage(name, symbolImage(cls, age, theme), { pixelRatio: 2 });
+        }
+      }
+    }
+    const layer = detectionLayer(theme);
+    if (!source) {
+      map.addSource('detections', { type: 'vector', tiles: [url] });
+      map.addLayer(layer);
+    } else if (changed) {
+      map.setLayoutProperty(layer.id, 'icon-image', layer.layout!['icon-image']);
+    }
+  }
+
+  private removeDetections(map: LibreMap): void {
+    if (map.getLayer('detections')) map.removeLayer('detections');
+    if (map.getSource('detections')) map.removeSource('detections');
   }
 
   ngAfterViewInit(): void {
@@ -38,22 +107,56 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const map = new LibreMap({
         container: this.container().nativeElement,
         style: demoStyle(this.appliedTheme),
-        attributionControl: false,
-        renderWorldCopies: false,
-        dragRotate: false,
-        pitchWithRotate: false,
+        transformRequest: url => mapRequest(url, this.base, document.baseURI, () => {
+          const user = this.auth.user();
+          if (user?.expired) { this.auth.sessionEnded(); return; }
+          return user?.access_token;
+        }),
+        attributionControl: false, renderWorldCopies: false, dragRotate: false, pitchWithRotate: false,
         canvasContextAttributes: { antialias: true }
       });
       this.map = map;
-      map.getCanvas().setAttribute('aria-label', 'Demo State map. Use arrow keys to pan and plus or minus to zoom.');
-      map.on('error', () => this.error.set('Some map data could not load. Reload to try again.'));
+      map.getCanvas().setAttribute('aria-label', 'Workspace map. Use arrow keys to pan and plus or minus to zoom.');
+      map.on('error', event => {
+        if ('sourceId' in event && event.sourceId === 'detections') {
+          const status = tileErrorStatus(event.error);
+          if (status === 401) this.auth.sessionEnded();
+          else if (status === 403) this.workspace.deny();
+          else this.tileError.set(unavailable);
+        } else this.error.set('Some map data could not load. Reload to try again.');
+      });
+      map.on('click', event => {
+        if (!map.getLayer('detections')) return;
+        const [feature] = map.queryRenderedFeatures(event.point, { layers: ['detections'] });
+        if (feature) this.selected.set(readDetection(feature));
+      });
+      map.on('idle', () => {
+        if (!map.getLayer('detections')) return;
+        const points = new Map<string, Detection>();
+        for (const feature of map.queryRenderedFeatures({ layers: ['detections'] })) {
+          const point = readDetection(feature);
+          points.set(String(point.id), point);
+        }
+        this.visible.set([...points.values()].sort((a, b) => b.observed_at - a.observed_at));
+        const selected = this.selected();
+        if (selected) this.selected.set(points.get(String(selected.id)) ?? null);
+      });
       map.once('load', async () => {
         try {
-          const state = map.getSource<GeoJSONSource>('state');
-          this.bounds = await state?.getBounds();
-          if (!this.map || !this.bounds || this.bounds.isEmpty()) return;
+          this.bounds = await map.getSource<GeoJSONSource>('state')?.getBounds();
+          if (!this.map) return;
           this.fit();
           this.ready.set(true);
+          this.timer = setInterval(() => {
+            this.now.set(Date.now());
+            if (map.getSource('detections')) {
+              if (this.tileError()) {
+                this.removeDetections(map);
+                this.tileError.set('');
+                this.updateLayers(map, this.appearance.theme(), this.url());
+              } else map.refreshTiles('detections');
+            }
+          }, 60_000);
         } catch {
           this.error.set('Could not find the state boundary. Reload to try again.');
         }
@@ -63,8 +166,18 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     }
   }
 
+  choose(id: string): void {
+    this.selected.set(this.visible().find(point => String(point.id) === id) ?? null);
+    if (id) this.detailTitle()?.nativeElement.focus();
+  }
+
+  closeDetails(): void {
+    this.selected.set(null);
+    this.picker()?.nativeElement.focus();
+  }
+
   fit(): void {
-    if (this.bounds) this.map?.fitBounds(this.bounds, { padding: Math.min(80, this.container().nativeElement.clientWidth * 0.1), duration: 0 });
+    if (this.bounds && !this.bounds.isEmpty()) this.map?.fitBounds(this.bounds, { padding: Math.min(80, this.container().nativeElement.clientWidth * 0.1), duration: 0 });
   }
 
   zoom(inward: boolean): void {
@@ -73,6 +186,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    clearInterval(this.timer);
     this.map?.remove();
     this.map = undefined;
   }
