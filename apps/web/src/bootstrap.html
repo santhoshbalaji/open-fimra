@@ -1,40 +1,69 @@
-<div class="setup-page">
-  <section class="setup-card bootstrap" aria-labelledby="bootstrap-heading">
-    <h2 id="bootstrap-heading">Set up Open FIMRA</h2>
-    <p>This installation has no workspace yet. The first person to finish this step becomes its administrator.
-      The setup code is printed in the core API's log when it starts, or set by the system operator in
-      <code>FIMRA_SETUP_CODE</code>.</p>
-    <form #form novalidate (submit)="$event.preventDefault(); submit(form)">
-      <fieldset [disabled]="busy()">
-        <label>Setup code
-          <input name="setupCode" required autocomplete="one-time-code" spellcheck="false" maxlength="64"
-            aria-describedby="code-help">
-          <small id="code-help">Four groups of letters and digits, such as ABCD-EFGH-JKMN-PQRS.</small>
-        </label>
-        <fieldset class="choice-group">
-          <legend>Mode</legend>
-          <label class="choice"><input type="radio" name="mode" value="state" checked> State
-            <small>One state forest department on this installation.</small></label>
-          <label class="choice"><input type="radio" name="mode" value="national" disabled aria-describedby="national-help"> National
-            <small id="national-help">Not available yet. Phase 1 supports one state per installation.</small></label>
+<div class="mx-auto max-w-[560px] px-4 py-6 sm:py-10">
+  <section hlmCard aria-labelledby="bootstrap-heading">
+    <hlm-card-header>
+      <h2 hlmCardTitle id="bootstrap-heading" class="text-display">Set up Open FIMRA</h2>
+      <p hlmCardDescription class="leading-normal">This installation has no workspace yet. The first person to finish this step
+        becomes its administrator. The setup code is printed in the core API's log when it starts, or set by the system
+        operator in <code class="rounded-sm bg-background px-1 text-xs">FIMRA_SETUP_CODE</code>.</p>
+    </hlm-card-header>
+    <form hlmCardContent #form novalidate (submit)="$event.preventDefault(); submit(form)">
+      <fieldset class="grid min-w-0 gap-6" [disabled]="busy()">
+        <hlm-field>
+          <label hlmFieldLabel for="setup-code">Setup code</label>
+          <div class="flex gap-2">
+            <input hlmInput id="setup-code" name="setupCode" required autocomplete="one-time-code" spellcheck="false" maxlength="64"
+              autocapitalize="characters" [type]="showCode() ? 'text' : 'password'" class="font-mono tracking-wide">
+            <button hlmBtn type="button" variant="outline" class="shrink-0" aria-controls="setup-code"
+              [attr.aria-pressed]="showCode()" (click)="showCode.set(!showCode())">
+              @if (showCode()) { <svg lucideEyeOff aria-hidden="true"></svg> } @else { <svg lucideEye aria-hidden="true"></svg> }
+              Show<span class="sr-only"> setup code</span>
+            </button>
+          </div>
+          <p hlmFieldDescription>Four groups of letters and digits, such as ABCD-EFGH-JKMN-PQRS.</p>
+        </hlm-field>
+
+        <fieldset hlmFieldSet class="min-w-0 gap-3">
+          <legend hlmFieldLegend variant="label">Mode</legend>
+          <hlm-radio-group name="mode" value="state" class="gap-2">
+            <label hlmLabel class="items-start rounded-control border border-border p-3 font-normal leading-normal has-data-[checked=true]:border-primary">
+              <hlm-radio value="state"><hlm-radio-indicator indicator /></hlm-radio>
+              <span class="grid gap-0.5"><span class="font-medium">State</span>
+                <span class="text-muted-foreground">One state forest department on this installation.</span></span>
+            </label>
+            <label hlmLabel class="national-mode items-start rounded-control border border-dashed border-border p-3 font-normal leading-normal">
+              <hlm-radio value="national" disabled aria-describedby="national-help"><hlm-radio-indicator indicator /></hlm-radio>
+              <span class="grid gap-1"><span class="flex flex-wrap items-center gap-2 font-medium">National
+                <span hlmBadge variant="outline"><svg lucideLock aria-hidden="true" class="size-3"></svg>Not available yet</span></span>
+                <span id="national-help" class="text-muted-foreground">Not available yet. Phase 1 supports one state per installation.</span></span>
+            </label>
+          </hlm-radio-group>
         </fieldset>
-        <label>Workspace name
-          <input #name name="workspaceName" required maxlength="120" (input)="nameChanged(name.value)"
+
+        <hlm-field>
+          <label hlmFieldLabel for="workspace-name">Workspace name</label>
+          <input hlmInput #name id="workspace-name" name="workspaceName" required maxlength="120" (input)="nameChanged(name.value)"
             placeholder="Demo State">
-        </label>
-        <label>Workspace address
-          <input name="workspaceSlug" required maxlength="40" pattern="[a-z0-9][a-z0-9\-]*" [value]="slug()"
-            (input)="slugEdited.set(true); slug.set($any($event.target).value)" aria-describedby="slug-help">
-          <small id="slug-help">Lowercase letters, numbers and hyphens. It appears in links and cannot be changed later.</small>
-        </label>
-        <label>State code
-          <input name="stateCode" required maxlength="40" pattern="[A-Za-z0-9]([A-Za-z0-9_\-]*[A-Za-z0-9])?"
-            aria-describedby="state-help" placeholder="DS">
-          <small id="state-help">The code of the state in your boundary file, in its code column. The state boundary you
-            upload later must use the same code.</small>
-        </label>
-        @if (error()) { <p class="setup-error" role="alert">{{ error() }}</p> }
-        <button brnButton type="submit" class="setup-primary">Start setup</button>
+        </hlm-field>
+        <hlm-field>
+          <label hlmFieldLabel for="workspace-slug">Workspace address</label>
+          <input hlmInput id="workspace-slug" name="workspaceSlug" required maxlength="40" pattern="[a-z0-9][a-z0-9\-]*" [value]="slug()"
+            (input)="slugEdited.set(true); slug.set($any($event.target).value)">
+          <p hlmFieldDescription>Lowercase letters, numbers and hyphens. It appears in links and cannot be changed later.</p>
+        </hlm-field>
+        <hlm-field>
+          <label hlmFieldLabel for="state-code">State code</label>
+          <input hlmInput id="state-code" name="stateCode" required maxlength="40" pattern="[A-Za-z0-9]([A-Za-z0-9_\-]*[A-Za-z0-9])?"
+            placeholder="DS" class="sm:max-w-48">
+          <p hlmFieldDescription>The code of the state in your boundary file, in its code column. The state boundary you
+            upload later must use the same code.</p>
+        </hlm-field>
+        @if (error()) {
+          <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
+            <svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+            <p hlmAlertDescription>{{ error() }}</p>
+          </div>
+        }
+        <button hlmBtn type="submit" size="lg" class="justify-self-start">Start setup</button>
       </fieldset>
     </form>
   </section>

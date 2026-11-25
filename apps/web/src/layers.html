@@ -1,8 +1,8 @@
 <div class="mx-auto grid max-w-[1160px] gap-4 px-4 pt-6 pb-10 sm:px-8">
   <h2 class="text-display">Layers</h2>
   @if (error()) {
-    <div hlmAlert variant="destructive" class="error-alert">
-      <svg lucideCircleAlert aria-hidden="true" class="size-4"></svg>
+    <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
+      <svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
       <p hlmAlertDescription>{{ error() }}</p>
     </div>
   }
@@ -260,8 +260,8 @@
                 </div>
               }
               @if (preview.blocked || hasBlockingProblems()) {
-                <div hlmAlert variant="destructive">
-                  <svg lucideCircleX aria-hidden="true" class="size-4"></svg>
+                <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
+                  <svg lucideCircleX aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
                   <h4 hlmAlertTitle>Cannot publish yet</h4>
                   <p hlmAlertDescription>{{ preview.blocked || 'Fix blocking problems before publishing.' }}</p>
                 </div>
