@@ -1,3 +1,9 @@
+-- Ingest runs and per-hierarchy match paths (PLAN.md section 5.1).
+--
+-- Every fetch from a source is recorded, with how many records it fetched,
+-- inserted and skipped as duplicates, so feed health can be shown. Silent
+-- failure in fire season is the largest operational risk.
+
 -- +goose Up
 CREATE TABLE ingest_runs (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
