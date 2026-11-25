@@ -24,9 +24,10 @@
 }
 :root[data-theme=dark] { color-scheme: dark; }
 
-[data-slot]:focus-visible, [data-slot]:has(> input:focus-visible) {
+[data-slot]:focus-visible {
   outline: 3px solid var(--ring);
   outline-offset: 2px;
+  box-shadow: none;
 }
 [data-slot]:is(button, a, input, select, textarea, [role=option], [role=menuitem]),
 label[data-slot]:has(input), [data-slot=field-label] { min-height: var(--target-web); min-width: var(--target-web); }
@@ -61,6 +62,7 @@ brn-radio:has(input:focus-visible) [data-slot=radio-group-indicator],
 button:is([role=checkbox], [role=switch]):focus-visible {
   outline: 3px solid var(--ring);
   outline-offset: 2px;
+  box-shadow: none;
 }
 label[data-slot=label]:has(hlm-checkbox, hlm-switch, hlm-radio) { min-height: var(--target-web); }
 @theme inline {

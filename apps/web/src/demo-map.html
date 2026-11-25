@@ -72,8 +72,10 @@
         <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
         @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
       </div>
-      <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
-        (changed)="queue.refresh()" />
+      @defer (on immediate) {
+        <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
+          (changed)="queue.refresh()" />
+      }
     }
     <dl>
       <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
@@ -97,9 +99,11 @@
           <button hlmBtn variant="outline" hlmDialogTrigger><svg lucideDownload></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
             <h2 hlmDialogTitle>Export</h2>
-            <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
-              [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
-              (closed)="dialog.close()" />
+            @defer (on immediate) {
+              <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
+                [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
+                (closed)="dialog.close()" />
+            }
           </hlm-dialog-content>
         </hlm-dialog>
       }

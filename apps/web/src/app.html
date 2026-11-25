@@ -56,18 +56,18 @@
           <input hlmInput id="unit-path" #path placeholder="All units" pattern="[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)*"
             [value]="filters.unitPath()" (change)="path.reportValidity() && filters.unitPath.set(path.value)">
         </hlm-field>
-        <label hlmFieldLabel><hlm-checkbox aria-label="Low bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> Low bandwidth</label>
+        <label hlmFieldLabel for="low-bandwidth"><hlm-switch inputId="low-bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> Low bandwidth</label>
       </div>
     </div>
   }
   <main>
     @if (linkMessage()) { <p role="status">{{ linkMessage() }}</p> }
     @if (showBootstrap()) {
-      <fimra-bootstrap />
+      @defer (on immediate) { <fimra-bootstrap /> }
     } @else if (showSetup()) {
-      <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" />
+      @defer (on immediate) { <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" /> }
     } @else if (showLayers() && workspace.canManageLayers()) {
-      <fimra-layers />
+      @defer (on immediate) { <fimra-layers /> }
     } @else if (dashboard() && workspace.current()) {
       @defer (on immediate) { <fimra-dashboard [focusFeedHealth]="focusFeedHealth()" /> }
     } @else {
@@ -86,4 +86,4 @@
   </main>
 }
 
-<hlm-toaster [theme]="appearance.theme()" />
+@defer (on immediate) { <hlm-toaster [theme]="appearance.theme()" /> }

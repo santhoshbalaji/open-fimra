@@ -18,12 +18,7 @@ import { StatusBadge } from './ui/status-badge';
 
 type BadgeIcon = 'step' | 'complete' | 'overdue';
 // The badge always pairs its icon with the visible label.
-const feedStates: Record<string, {icon: BadgeIcon; label: string}> = {
-  healthy: {icon: 'complete', label: 'Healthy'},
-  delayed: {icon: 'step', label: 'Delayed'},
-  quiet: {icon: 'step', label: 'Quiet'},
-  failing: {icon: 'overdue', label: 'Failing'}
-};
+const feedLabels = { healthy: 'Healthy', delayed: 'Delayed', quiet: 'Quiet', failing: 'Failing' };
 const finishedSteps = new Set(['closed', 'false_alarm', 'verified']);
 interface Summary {
   detections: Partial<Record<ForestClass, number>>;
@@ -52,7 +47,7 @@ export class Dashboard {
   readonly classKeys = Object.keys(classes) as ForestClass[];
   readonly queues = queueLabels;
   readonly queueKeys = Object.keys(queueLabels) as (keyof typeof queueLabels)[];
-  readonly feedStates = feedStates;
+  readonly feedLabels = feedLabels;
   readonly tiles = [
     {key: 'active', label: 'Active alerts'}, {key: 'overdue', label: 'Overdue alerts'},
     {key: 'pendingReports', label: 'Pending reports'}

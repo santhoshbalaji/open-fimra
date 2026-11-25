@@ -57,6 +57,9 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
   private selectionTrigger?: HTMLElement;
   private resize?: ResizeObserver;
+  private selectedId = '';
+  private previousView?: { center: [number, number]; zoom: number };
+  private movedInDetails = false;
   private readonly detailTitle = viewChild<ElementRef<HTMLHeadingElement>>('detailTitle');
   private readonly http = inject(HttpClient);
   private readonly appearance = inject(ThemeService);
@@ -85,10 +88,22 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     });
     effect(() => {
       const id = String(this.selected()?.id ?? '');
-      if (this.ready() && this.map?.getLayer('selected-detection')) {
-        this.map.setFilter('selected-detection', ['==', ['to-string', ['get', 'id']], id]);
-        this.centerSelection();
+      const map = this.map;
+      if (!this.ready() || !map) return;
+      if (map.getLayer('selected-detection')) {
+        map.setFilter('selected-detection', ['==', ['to-string', ['get', 'id']], id]);
       }
+      if (id !== this.selectedId) {
+        if (id && (!this.selectedId || this.movedInDetails)) {
+          this.previousView = { center: map.getCenter().toArray(), zoom: map.getZoom() };
+        } else if (!id && this.previousView && !this.movedInDetails) {
+          map.resize();
+          map.jumpTo(this.previousView);
+        }
+        this.selectedId = id;
+        this.movedInDetails = false;
+      }
+      this.centerSelection();
     });
     effect(() => this.detailTitle()?.nativeElement.focus({ preventScroll: true }));
     effect(onCleanup => {
@@ -216,6 +231,9 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         canvasContextAttributes: { antialias: true }
       });
       this.map = map;
+      map.on('movestart', event => {
+        if (event.originalEvent && this.selected()) this.movedInDetails = true;
+      });
       this.resize = new ResizeObserver(() => {
         map.resize();
         this.centerSelection();
@@ -252,7 +270,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         try {
           this.bounds = await map.getSource<GeoJSONSource>('state')?.getBounds();
           if (!this.map) return;
-          this.fit();
+          this.fitState();
           map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
           map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
             paint: { 'circle-radius': 9, 'circle-color': tokens.color[this.appearance.theme()].brand, 'circle-opacity': 0.2,
@@ -279,7 +297,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   private centerSelection(): void {
     const point = this.selected();
-    if (point?.longitude != null && point.latitude != null) {
+    if (this.selectedId && !this.movedInDetails && point?.longitude != null && point.latitude != null) {
       this.map?.jumpTo({ center: [point.longitude, point.latitude] });
     }
   }
@@ -310,10 +328,16 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
 
   fit(): void {
+    if (this.selected()) this.movedInDetails = true;
+    this.fitState();
+  }
+
+  private fitState(): void {
     if (this.bounds && !this.bounds.isEmpty()) this.map?.fitBounds(this.bounds, { padding: Math.min(80, this.container().nativeElement.clientWidth * 0.1), duration: 0 });
   }
 
   zoom(inward: boolean): void {
+    if (this.selected()) this.movedInDetails = true;
     if (inward) this.map?.zoomIn();
     else this.map?.zoomOut();
   }
