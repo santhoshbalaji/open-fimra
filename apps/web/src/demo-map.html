@@ -82,7 +82,7 @@
       @for (place of places(point).all; track place.label; let first = $first) {
         <dt>{{ place.label }}</dt><dd>{{ place.name || place.code || 'Unknown' }} @if (first && place.name && place.code) { ({{ place.code }}) }</dd>
       }
-      <dt>Source</dt><dd>{{ point.source || 'Unknown' }}</dd>
+      <dt>Source</dt><dd>{{ sourceLabel(point.source) }}</dd>
       <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
       <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
       <dt>Confidence</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>

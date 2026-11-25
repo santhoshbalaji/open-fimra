@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import tokens from '../../../docs/design-system/tokens.json';
-import { confidenceLabel, detectionLayer, mapRequest, placesOf, readDetection, symbolStyle, tileErrorStatus, tileUrl } from './detections';
+import { confidenceLabel, detectionLayer, mapRequest, placesOf, readDetection, sourceLabel, symbolStyle, tileErrorStatus, tileUrl } from './detections';
 
 describe('Detection symbols', () => {
   it.each(['light', 'dark'] as const)('uses the %s palette and distinct class shapes', theme => {
@@ -74,6 +74,10 @@ describe('Places and confidence', () => {
     expect(placesOf({ place_hierarchy: 'territorial', places: '{"beat":{"name":"B"},"range":{"name":"R"}}' }, []).map(p => p.label))
       .toEqual(['Beat', 'Range']);
     expect(placesOf({ places: 'not json' }, levels)).toEqual([]);
+  });
+
+  it('names detection sources', () => {
+    expect(['firms', 'upload', '', undefined].map(sourceLabel)).toEqual(['NASA FIRMS', 'upload', 'Unknown', 'Unknown']);
   });
 
   it('names satellite confidence in words', () => {

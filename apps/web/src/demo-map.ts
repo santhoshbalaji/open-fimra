@@ -17,7 +17,7 @@ import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { ageLabels, classes, confidenceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
+import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import type { NotificationLink } from './notifications';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
@@ -42,6 +42,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly ageLabels = ageLabels;
   readonly reasons = triageReasons;
   readonly confidenceLabel = confidenceLabel;
+  readonly sourceLabel = sourceLabel;
   private readonly placeLevels = computed(() => this.geography()?.info.levels ?? []);
   /** The smallest place first, then the rest from smaller to larger. */
   places(detection: Detection) {
