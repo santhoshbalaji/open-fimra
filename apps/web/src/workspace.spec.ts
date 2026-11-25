@@ -50,6 +50,28 @@ describe('Signed-in workspace', () => {
     service.deny();
     expect(service.canManageLayers()).toBe(false);
   });
+  it('reads the setup flags and opens the wizard for an unfinished workspace', () => {
+    const { service, request } = lookup();
+    const workspace = { slug: 'new-state', name: 'New State' };
+    request.flush({
+      roleAssignments: [{ workspace, role: 'state_admin', unit: { path: 'ns' } }],
+      setup: { bootstrapAvailable: false, unfinished: ['new-state'] }
+    });
+    expect(service.setupPending()).toBe(true);
+    service.reload();
+    TestBed.tick();
+    TestBed.inject(HttpTestingController).expectOne('https://api.test/api/v1/me').flush({
+      roleAssignments: [{ workspace, role: 'state_admin', unit: { path: 'ns' } }], setup: { bootstrapAvailable: false, unfinished: [] }
+    });
+    expect(service.current()).toEqual(workspace);
+    expect(service.setupPending()).toBe(false);
+  });
+  it('offers bootstrap on a fresh install instead of the no-access message', () => {
+    const { service, request } = lookup();
+    request.flush({ roleAssignments: [], setup: { bootstrapAvailable: true, unfinished: [] } });
+    expect(service.bootstrapAvailable()).toBe(true);
+    expect(service.message()).toBe('');
+  });
   it('retries a failed workspace lookup after one minute', () => {
     vi.useFakeTimers();
     try {

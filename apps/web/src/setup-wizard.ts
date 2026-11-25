@@ -1,0 +1,376 @@
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { DatePipe } from '@angular/common';
+import { Component, DestroyRef, ElementRef, OnInit, computed, inject, output, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { BrnButton } from '@spartan-ng/brain/button';
+import { Observable, Subscription, exhaustMap, finalize, switchMap, takeWhile, timer } from 'rxjs';
+import { AuthService } from './auth';
+import { WEB_CONFIG } from './config';
+import { WorkspaceService } from './workspace';
+
+export type StepKey = 'mode' | 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
+type Labels = Record<string, string>;
+interface Level { depth: number; slug: string; labels: Labels; units: number }
+interface PresetLevel { slug: string; labels: Labels }
+interface Preset { slug: string; name: string; levels: PresetLevel[] }
+interface Upload { versionId: string; version: number; status: 'pending' | 'ready' | 'failed' | 'published' | 'retired' }
+export interface SetupLayer {
+  key: string; slug: string; name: string; role: 'hierarchy' | 'forest' | 'exclusion';
+  depth?: number; required: boolean; published: boolean; latest: Upload | null;
+}
+interface Firms { set: boolean; setAt?: string; hint?: string; source: 'settings' | 'environment' | 'none'; encryption: boolean }
+export interface SetupState {
+  workspace: { slug: string; name: string }; mode: 'state' | 'national'; preset: string | null;
+  hierarchy: string; root: { code: string; path: string; published: boolean } | null; boundarySet: boolean;
+  levels: Level[]; layers: SetupLayer[]; steps: Partial<Record<StepKey, { status: 'done' | 'skipped'; updatedAt: string }>>;
+  firms: Firms; emailEnabled: boolean; finishedAt: string | null; presets: Preset[];
+}
+interface Problem { kind: string; featureRef: string | null; message: string; blocksPublish: boolean }
+interface Draft { versionId: string; status: Upload['status']; unitCount: number; featureCount: number; problems: Problem[] }
+interface Preview { days: number; blocked: string; grantConfirmation: string; brokenGrants: unknown[] }
+interface Invitation { id: string; email: string; role: string; unitPath: string; unitName: string; expiresAt: string; emailStatus: string }
+interface Unit { depth: number; code: string; name: string; path: string }
+
+export const steps: { key: StepKey; label: string }[] = [
+  { key: 'mode', label: 'Mode' },
+  { key: 'workspace', label: 'Workspace' },
+  { key: 'hierarchy', label: 'Hierarchy' },
+  { key: 'layers', label: 'Layers' },
+  { key: 'firms', label: 'NASA FIRMS' },
+  { key: 'forms', label: 'Starter forms' },
+  { key: 'invitations', label: 'Invite officers' },
+  { key: 'finish', label: 'Finish' }
+];
+
+export const roleLabels: Record<string, string> = {
+  state_admin: 'State administrator', division_officer: 'Division officer', field_staff: 'Field staff'
+};
+
+const uploadLabels: Record<Upload['status'], string> = {
+  pending: 'Importing', ready: 'Ready to publish', failed: 'Import failed', published: 'Published', retired: 'Retired'
+};
+
+/** The guided first-run wizard (PLAN.md section 7) for a root administrator. */
+@Component({
+  selector: 'fimra-setup-wizard',
+  imports: [BrnButton, DatePipe],
+  templateUrl: './setup-wizard.html',
+  styleUrl: './setup.css'
+})
+export class SetupWizard implements OnInit {
+  private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+  private readonly destroy = inject(DestroyRef);
+  private readonly workspaces = inject(WorkspaceService);
+  private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '') + '/api/v1/workspaces/' +
+    encodeURIComponent(this.workspaces.current()?.slug ?? '');
+  private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+  private watches = new Map<string, Subscription>();
+  readonly finished = output<void>();
+  readonly openLayers = output<void>();
+  readonly leave = output<void>();
+
+  readonly steps = steps;
+  readonly roleLabels = roleLabels;
+  readonly roles = Object.keys(roleLabels);
+  readonly uploadLabels = uploadLabels;
+  readonly state = signal<SetupState | null>(null);
+  readonly step = signal<StepKey>('mode');
+  readonly busy = signal(false);
+  readonly error = signal('');
+  readonly notice = signal('');
+
+  readonly presetSlug = signal('');
+  readonly levels = signal<PresetLevel[]>([]);
+
+  readonly drafts = signal<Record<string, Draft>>({});
+  readonly layerMessages = signal<Record<string, string>>({});
+  readonly fields = signal({ nameField: 'name', codeField: 'code', parentCodeField: 'parent_code' });
+
+  readonly firmsResult = signal<{ ok: boolean; message: string } | null>(null);
+  readonly skippingFirms = signal(false);
+
+  readonly invitations = signal<Invitation[]>([]);
+  readonly units = signal<Unit[]>([]);
+
+  readonly stepIndex = computed(() => steps.findIndex(item => item.key === this.step()));
+  readonly lockedLayers = computed(() => {
+    // A hierarchy level needs the level above it, and other layers need the
+    // whole hierarchy, because parents come from published units.
+    const layers = this.state()?.layers ?? [];
+    const locked = new Set<string>();
+    let blocked = false;
+    for (const layer of layers) {
+      if (blocked) locked.add(layer.key);
+      if (layer.role === 'hierarchy' && !layer.published) blocked = true;
+    }
+    return locked;
+  });
+  readonly layersReady = computed(() => {
+    const state = this.state();
+    return !!state && state.boundarySet && state.layers.every(layer => !layer.required || layer.published);
+  });
+
+  ngOnInit(): void {
+    this.load(true);
+  }
+
+  status(key: StepKey): 'done' | 'skipped' | 'todo' {
+    const state = this.state();
+    if (key === 'finish') return state?.finishedAt ? 'done' : 'todo';
+    return state?.steps[key]?.status ?? 'todo';
+  }
+
+  statusLabel(key: StepKey): string {
+    return { done: 'Done', skipped: 'Skipped', todo: 'To do' }[this.status(key)];
+  }
+
+  load(chooseStep = false): void {
+    this.http.get<SetupState>(this.base + '/setup').pipe(takeUntilDestroyed(this.destroy)).subscribe({
+      next: state => {
+        this.apply(state);
+        if (chooseStep) {
+          const next = steps.find(item => item.key !== 'finish' && this.status(item.key) === 'todo');
+          this.go(next?.key ?? 'finish', false);
+        }
+      },
+      error: error => this.failed(error)
+    });
+  }
+
+  go(key: StepKey, focus = true): void {
+    this.step.set(key);
+    this.error.set('');
+    this.notice.set('');
+    if (key === 'invitations') this.loadInvitations();
+    if (focus) setTimeout(() => this.heading()?.nativeElement.focus());
+  }
+
+  next(): void {
+    const following = steps[this.stepIndex() + 1];
+    if (following) this.go(following.key);
+  }
+
+  // Hierarchy
+
+  choosePreset(slug: string): void {
+    const preset = this.state()?.presets.find(item => item.slug === slug);
+    if (!preset) return;
+    this.presetSlug.set(slug);
+    this.levels.set(preset.levels.map(level => ({ slug: level.slug, labels: { ...level.labels } })));
+  }
+
+  setLabel(index: number, language: string, value: string): void {
+    this.levels.update(levels => levels.map((level, i) =>
+      i === index ? { ...level, labels: { ...level.labels, [language]: value } } : level));
+  }
+
+  saveHierarchy(): void {
+    const levels = this.levels().map(level => ({
+      slug: level.slug,
+      labels: Object.fromEntries(Object.entries(level.labels).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value))
+    }));
+    this.run(this.http.post<SetupState>(this.base + '/setup/hierarchy', { preset: this.presetSlug(), levels }), state => {
+      this.apply(state);
+      this.next();
+    });
+  }
+
+  // Layers
+
+  layerStatus(layer: SetupLayer): string {
+    if (layer.published && (!layer.latest || layer.latest.status === 'published')) return 'Published';
+    const draft = this.drafts()[layer.key];
+    const status = draft?.status ?? layer.latest?.status;
+    if (!status) return layer.published ? 'Published' : 'Not uploaded';
+    return (layer.published ? 'Published. New upload: ' : '') + uploadLabels[status];
+  }
+
+  blocking(layer: SetupLayer): Problem[] {
+    return this.drafts()[layer.key]?.problems.filter(problem => problem.blocksPublish) ?? [];
+  }
+
+  reviewCount(layer: SetupLayer): number {
+    return this.drafts()[layer.key]?.problems.filter(problem => !problem.blocksPublish).length ?? 0;
+  }
+
+  canPublish(layer: SetupLayer): boolean {
+    const draft = this.drafts()[layer.key];
+    return draft?.status === 'ready' && !this.blocking(layer).length;
+  }
+
+  uploadLayer(layer: SetupLayer, input: HTMLInputElement): void {
+    const file = input.files?.[0];
+    if (!file) {
+      this.setLayerMessage(layer, 'Choose a file first.');
+      return;
+    }
+    const fields = this.fields();
+    const settings: Record<string, string | number> = { nameField: fields.nameField };
+    if (fields.codeField) settings['codeField'] = fields.codeField;
+    const data = new FormData();
+    data.set('layerSlug', layer.slug);
+    data.set('layerName', layer.name);
+    data.set('role', layer.role);
+    if (layer.role === 'hierarchy') {
+      settings['depth'] = layer.depth ?? 0;
+      if (fields.parentCodeField && layer.depth) settings['parentCodeField'] = fields.parentCodeField;
+      data.set('hierarchy', this.state()?.hierarchy ?? '');
+    }
+    data.set('settings', JSON.stringify(settings));
+    data.set('file', file);
+    this.setLayerMessage(layer, '');
+    this.run(this.http.post<Draft>(this.base + '/layer-imports', data), draft => {
+      input.value = '';
+      this.watch(layer, draft);
+    }, layer);
+  }
+
+  publishLayer(layer: SetupLayer): void {
+    const draft = this.drafts()[layer.key];
+    if (!draft) return;
+    const url = this.base + '/layer-imports/' + encodeURIComponent(draft.versionId);
+    this.run(this.http.get<Preview>(url + '/preview').pipe(
+      switchMap(preview => {
+        if (preview.blocked) throw new HttpErrorResponse({ status: 409, error: { error: preview.blocked } });
+        if (preview.brokenGrants.length) {
+          throw new HttpErrorResponse({ status: 409, error: {
+            error: 'Publishing would remove role grants. Review it on the Layers screen.' } });
+        }
+        return this.http.post(url + '/publish', { days: preview.days, grantConfirmation: '' });
+      })
+    ), () => {
+      this.drafts.update(drafts => { const copy = { ...drafts }; delete copy[layer.key]; return copy; });
+      this.setLayerMessage(layer, 'Published.');
+      this.load();
+    }, layer);
+  }
+
+  finishLayers(): void {
+    this.markStep('layers', 'done');
+  }
+
+  // FIRMS
+
+  saveKey(input: HTMLInputElement): void {
+    const mapKey = input.value.trim();
+    if (!mapKey) return;
+    this.firmsResult.set(null);
+    this.run(this.http.put<Firms>(this.base + '/settings/firms', { mapKey }), firms => {
+      // Never keep the key in the page after saving it.
+      input.value = '';
+      this.state.update(state => state && { ...state, firms });
+      this.testKey();
+    });
+  }
+
+  testKey(): void {
+    this.run(this.http.post<{ ok: boolean; message: string }>(this.base + '/settings/firms/test', {}),
+      result => this.firmsResult.set(result));
+  }
+
+  // Invitations
+
+  loadInvitations(): void {
+    this.http.get<{ invitations: Invitation[] }>(this.base + '/invitations').pipe(takeUntilDestroyed(this.destroy))
+      .subscribe({ next: list => this.invitations.set(list.invitations), error: error => this.failed(error) });
+    if (!this.units().length) {
+      this.http.get<{ units: Unit[] }>(this.base + '/setup/units').pipe(takeUntilDestroyed(this.destroy))
+        .subscribe({ next: list => this.units.set(list.units), error: error => this.failed(error) });
+    }
+  }
+
+  unitLabel(unit: Unit): string {
+    const level = this.state()?.levels[unit.depth]?.labels['en'] ?? '';
+    return ' '.repeat(unit.depth) + unit.name + ' (' + level + ' ' + unit.code + ')';
+  }
+
+  invite(form: HTMLFormElement): void {
+    if (!form.reportValidity()) return;
+    const data = new FormData(form);
+    const body = { email: String(data.get('email') ?? '').trim(), role: data.get('role'), unitPath: data.get('unitPath') };
+    this.run(this.http.post(this.base + '/invitations', body), () => {
+      (form.querySelector('[name=email]') as HTMLInputElement).value = '';
+      this.notice.set('Invitation saved.');
+      this.loadInvitations();
+    });
+  }
+
+  revoke(item: Invitation): void {
+    this.run(this.http.delete<{ invitations: Invitation[] }>(this.base + '/invitations/' + encodeURIComponent(item.id)),
+      list => this.invitations.set(list.invitations));
+  }
+
+  // Steps
+
+  markStep(step: StepKey, status: 'done' | 'skipped'): void {
+    this.run(this.http.post<SetupState>(this.base + '/setup/steps/' + step, { status }), state => {
+      this.apply(state);
+      this.skippingFirms.set(false);
+      this.next();
+    });
+  }
+
+  finish(): void {
+    this.run(this.http.post<SetupState>(this.base + '/setup/finish', {}), state => {
+      this.apply(state);
+      this.finished.emit();
+    });
+  }
+
+  private apply(state: SetupState): void {
+    this.state.set(state);
+    if (!this.presetSlug()) {
+      const preset = state.presets.find(item => item.slug === state.preset) ?? state.presets[0];
+      if (state.preset && state.levels.length > 1) {
+        this.presetSlug.set(state.preset);
+        this.levels.set(state.levels.map(level => ({ slug: level.slug, labels: { ...level.labels } })));
+      } else if (preset) {
+        this.choosePreset(preset.slug);
+      }
+    }
+    for (const layer of state.layers) {
+      const latest = layer.latest;
+      if (latest && (latest.status === 'pending' || latest.status === 'ready' || latest.status === 'failed') &&
+          !this.watches.has(layer.key) && this.drafts()[layer.key]?.versionId !== latest.versionId) {
+        this.watch(layer, null, latest.versionId);
+      }
+    }
+  }
+
+  private watch(layer: SetupLayer, initial: Draft | null, versionId = initial?.versionId ?? ''): void {
+    this.watches.get(layer.key)?.unsubscribe();
+    if (initial) this.drafts.update(drafts => ({ ...drafts, [layer.key]: initial }));
+    const url = this.base + '/layer-imports/' + encodeURIComponent(versionId);
+    const subscription = timer(initial ? 1000 : 0, 1000).pipe(
+      exhaustMap(() => this.http.get<Draft>(url)),
+      takeWhile(draft => draft.status === 'pending', true),
+      takeUntilDestroyed(this.destroy),
+      finalize(() => this.watches.delete(layer.key))
+    ).subscribe({
+      next: draft => this.drafts.update(drafts => ({ ...drafts, [layer.key]: draft })),
+      error: error => this.failed(error, layer)
+    });
+    this.watches.set(layer.key, subscription);
+  }
+
+  private setLayerMessage(layer: SetupLayer, message: string): void {
+    this.layerMessages.update(messages => ({ ...messages, [layer.key]: message }));
+  }
+
+  private run<T>(request: Observable<T>, next: (value: T) => void, layer?: SetupLayer): void {
+    this.busy.set(true);
+    this.error.set('');
+    this.notice.set('');
+    request.pipe(takeUntilDestroyed(this.destroy), finalize(() => this.busy.set(false))).subscribe({
+      next, error: error => this.failed(error, layer)
+    });
+  }
+
+  private failed(error: HttpErrorResponse, layer?: SetupLayer): void {
+    if (error.status === 401) this.auth.sessionEnded();
+    const message = typeof error.error?.error === 'string' ? error.error.error : 'The setup request failed. Try again.';
+    if (layer) this.setLayerMessage(layer, message);
+    else this.error.set(message);
+  }
+}

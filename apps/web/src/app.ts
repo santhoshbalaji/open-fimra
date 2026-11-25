@@ -1,7 +1,8 @@
-import { Component, OnInit, effect, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { CdkMenu, CdkMenuItem, CdkMenuTrigger } from '@angular/cdk/menu';
 import { BrnButton } from '@spartan-ng/brain/button';
-import { LucideChevronDown, LucideCircleUserRound, LucideLogOut, LucideMoon, LucideSun } from '@lucide/angular';
+import { LucideChevronDown, LucideCircleUserRound, LucideLogOut, LucideMoon, LucideSettings, LucideSun } from '@lucide/angular';
 import { AuthService } from './auth';
 import { ThemeService } from './theme';
 import { WorkspaceService } from './workspace';
@@ -11,11 +12,14 @@ import { NotificationLink, Notifications, notificationURL } from './notification
 import { Dashboard } from './dashboard';
 import { DashboardFilters } from './dashboard-filters';
 import { classes, ForestClass } from './detections';
+import { Bootstrap } from './bootstrap';
+import { SetupWizard } from './setup-wizard';
+import { WEB_CONFIG } from './config';
 
 @Component({
   selector: 'fimra-root',
-  imports: [CdkMenu, CdkMenuItem, CdkMenuTrigger, BrnButton, DemoMap, Layers, Dashboard, Notifications,
-    LucideChevronDown, LucideCircleUserRound, LucideLogOut, LucideMoon, LucideSun],
+  imports: [CdkMenu, CdkMenuItem, CdkMenuTrigger, BrnButton, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard,
+    LucideChevronDown, LucideCircleUserRound, LucideLogOut, LucideMoon, LucideSettings, LucideSun],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }
 })
@@ -24,6 +28,13 @@ export class App implements OnInit {
   readonly auth = inject(AuthService);
   readonly appearance = inject(ThemeService);
   readonly showLayers = signal(false);
+  private readonly http = inject(HttpClient);
+  private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
+  /** null follows the setup state: the wizard opens until it is finished. */
+  private readonly setupChoice = signal<boolean | null>(null);
+  readonly showSetup = computed(() => this.workspace.canManageLayers() &&
+    (this.setupChoice() ?? this.workspace.setupPending()));
+  readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
 
   readonly dashboard = signal(false);
   readonly filters = inject(DashboardFilters);
@@ -47,6 +58,7 @@ export class App implements OnInit {
         return;
       }
       this.showLayers.set(false);
+      this.setupChoice.set(false);
       this.dashboard.set(target.alert === null);
       if (target.alert) this.linkedAlert.set(target);
       else this.focusFeedHealth.set(true);
@@ -63,6 +75,36 @@ export class App implements OnInit {
     const alert = params.get('alert');
     const feedHealth = params.get('view') === 'feed-health';
     this.target.set(workspace && (alert ? /^[1-9][0-9]*$/.test(alert) : feedHealth) ? { workspace, alert } : null);
+  }
+
+  toggleLayers(): void {
+    this.setupChoice.set(false);
+    this.showLayers.set(!this.showLayers());
+  }
+
+  openSetup(): void {
+    const workspace = this.workspace.current();
+    if (!workspace) return;
+    this.showLayers.set(false);
+    if (this.workspace.setupPending()) {
+      this.setupChoice.set(true);
+      return;
+    }
+    // Reopening records the choice and shows the wizard until it is finished again.
+    this.http.post(this.api + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug) + '/setup/reopen', {})
+      .subscribe({ next: () => { this.setupChoice.set(true); this.workspace.reload(); } });
+  }
+
+  leaveSetup(layers: boolean): void {
+    this.setupChoice.set(false);
+    this.showLayers.set(layers);
+  }
+
+  setupFinished(): void {
+    this.setupChoice.set(null);
+    this.showLayers.set(false);
+    this.dashboard.set(false);
+    this.workspace.reload();
   }
 
   openNotice(link: NotificationLink): void {
