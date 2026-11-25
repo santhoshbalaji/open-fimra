@@ -4,6 +4,9 @@ Sign in to see detections in your first assigned workspace. The map starts with 
 
 Click a point or use the **Detections in view** menu to open its details. Times use your local time zone. Press Escape to close the details and return to the menu. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit state to map** to return to the whole state.
 
+
+The **Alert queue** sits beside the map. On a small screen, switch between **Map** and **Alert queue**. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
+
 ## Run locally
 
 Use Node.js 24.15 or later in the 24.x series, with Corepack. Run these commands from the repository root.

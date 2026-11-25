@@ -74,3 +74,33 @@ fimra-demo-map { display: block; height: 100%; position: relative; background: v
 .detail-card dt { color: var(--color-text-secondary); }
 .detail-card dd { overflow-wrap: anywhere; }
 .detail-card .triage { border-top: 1px solid var(--color-border); padding-top: 8px; margin: 10px 0 0; }
+
+fimra-demo-map { display: flex; flex-direction: column; }
+.queue-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 16px; background: var(--color-card); border-bottom: 1px solid var(--color-border); }
+.queue-toolbar select { padding: 4px 8px; margin-left: 6px; background: var(--color-background); border-radius: var(--radius-control); }
+.workspace-panes { display: flex; flex: 1; min-height: 0; position: relative; }
+.map-pane { position: relative; flex: 1; min-width: 0; }
+.alert-panel { width: clamp(340px, 31vw, 480px); background: var(--color-card); border-left: 1px solid var(--color-border); padding: 16px; overflow: auto; }
+.alert-panel h2 { font-size: var(--text-title); font-weight: 600; }
+.queue-tabs, .view-switch { display: flex; gap: 4px; }
+.queue-tabs { margin: 10px 0 16px; border-bottom: 1px solid var(--color-border); }
+.queue-tabs button, .view-switch button, .page-button { padding: 6px 8px; }
+.queue-tabs [aria-pressed=true], .view-switch [aria-pressed=true] { color: var(--color-brand); box-shadow: inset 0 -2px var(--color-brand); font-weight: 600; }
+.queue-tabs span { font-variant-numeric: tabular-nums; }
+.alert-table { width: 100%; text-align: left; }
+.alert-table td, .alert-table th { padding: 10px 6px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.alert-table th, .alert-table small { color: var(--color-text-secondary); font-size: var(--text-label); }
+.alert-table small { display: block; }
+.alert-table .row-open { color: var(--color-brand); text-align: left; font-weight: 600; text-decoration: underline; }
+.alert-table tr { position: relative; }
+.alert-table .row-open::after { content: ''; position: absolute; inset: 0; }
+.alert-table tr.is-selected { background: var(--color-brand-soft); }
+.view-switch { display: none; }
+@media (max-width: 840px) {
+  .view-switch { display: flex; }
+  .alert-panel { display: none; }
+  .detail-card { max-height: 42%; }
+  .show-queue .map-pane { visibility: hidden; }
+  .show-queue .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }
+  .queue-toolbar { padding-inline: 6px; }
+}

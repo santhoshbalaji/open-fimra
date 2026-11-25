@@ -94,7 +94,7 @@ classified AS (
 SELECT id,
   expected_forest_class, forest_class,
   (SELECT COALESCE(array_agg(x ORDER BY x), '{}') FROM unnest(expected_beats) x) AS expected_beats, beats,
-  expected_triage,
+  expected_queue, expected_triage,
   CASE
     WHEN forest_class NOT IN ('inside', 'near_edge') OR forest_class IS NULL THEN NULL
     WHEN cardinality(beats) = 0 THEN 'no_unit'
@@ -108,16 +108,22 @@ DO $$
 DECLARE
   r record;
   bad int := 0;
+  queue text;
 BEGIN
   FOR r IN SELECT * FROM reference_results ORDER BY id LOOP
+    queue := CASE
+      WHEN r.triage IS NOT NULL THEN 'triage'
+      WHEN r.forest_class = 'inside' THEN 'unit'
+      WHEN r.forest_class = 'near_edge' THEN 'edge_review' END;
     IF r.forest_class IS DISTINCT FROM r.expected_forest_class
        OR r.beats IS DISTINCT FROM r.expected_beats
+       OR queue IS DISTINCT FROM r.expected_queue
        OR r.triage IS DISTINCT FROM r.expected_triage
        OR r.forest_code IS DISTINCT FROM r.expected_forest_code THEN
       bad := bad + 1;
-      RAISE WARNING '%: class % (expected %), beats % (expected %), triage % (expected %), forest % (expected %)',
+      RAISE WARNING '%: class % (expected %), beats % (expected %), triage % (expected %), forest % (expected %), queue % (expected %)',
         r.id, r.forest_class, r.expected_forest_class, r.beats, r.expected_beats,
-        r.triage, r.expected_triage, r.forest_code, r.expected_forest_code;
+        r.triage, r.expected_triage, r.forest_code, r.expected_forest_code, queue, r.expected_queue;
     END IF;
   END LOOP;
   IF bad > 0 THEN

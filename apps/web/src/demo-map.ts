@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inje
 import { BrnButton } from '@spartan-ng/brain/button';
 import { LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
+import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, Detection, detectionLayer, ForestClass, iconName, mapRequest, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
@@ -12,6 +13,7 @@ import { unavailable, WorkspaceService } from './workspace';
 @Component({
   selector: 'fimra-demo-map',
   imports: [BrnButton, LucideLayers, LucideMaximize, LucideMinus, LucidePlus],
+  providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
 export class DemoMap implements AfterViewInit, OnDestroy {
@@ -25,11 +27,15 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly tileError = signal('');
   readonly ready = signal(false);
   readonly legend = signal(true);
-  readonly hours = signal(168);
+  readonly queue = inject(AlertQueue);
+  readonly queueLabels = queueLabels;
+  readonly hours = this.queue.hours;
+  readonly mobileQueue = signal(false);
+  private rowButton?: HTMLButtonElement;
   readonly outside = signal(false);
   readonly visible = signal<Detection[]>([]);
-  readonly selected = signal<Detection | null>(null);
-  readonly now = signal(Date.now());
+  readonly selected = this.queue.selected;
+  readonly now = this.queue.now;
   readonly relativeAge = relativeAge;
   readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'long' });
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
@@ -54,6 +60,12 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const url = this.url();
       if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url));
     });
+    effect(() => {
+      const id = String(this.selected()?.id ?? '');
+      if (this.ready() && this.map?.getLayer('selected-detection')) {
+        this.map.setFilter('selected-detection', ['==', ['to-string', ['get', 'id']], id]);
+      }
+    });
     effect(() => this.detailTitle()?.nativeElement.focus());
   }
 
@@ -71,7 +83,6 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     }
     if (url !== this.appliedUrl) {
       this.removeDetections(map);
-      this.selected.set(null);
       this.visible.set([]);
       this.tileError.set('');
       this.appliedUrl = url;
@@ -90,12 +101,17 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     if (!source) {
       map.addSource('detections', { type: 'vector', tiles: [url] });
       map.addLayer(layer);
+      map.addLayer({ id: 'selected-detection', type: 'circle', source: 'detections', 'source-layer': 'detections',
+        filter: ['==', ['to-string', ['get', 'id']], String(this.selected()?.id ?? '')],
+        paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': '#277ea3' }
+      });
     } else if (changed) {
       map.setLayoutProperty(layer.id, 'icon-image', layer.layout!['icon-image']);
     }
   }
 
   private removeDetections(map: LibreMap): void {
+    if (map.getLayer('selected-detection')) map.removeLayer('selected-detection');
     if (map.getLayer('detections')) map.removeLayer('detections');
     if (map.getSource('detections')) map.removeSource('detections');
   }
@@ -128,7 +144,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       map.on('click', event => {
         if (!map.getLayer('detections')) return;
         const [feature] = map.queryRenderedFeatures(event.point, { layers: ['detections'] });
-        if (feature) this.selected.set(readDetection(feature));
+        if (feature) { this.rowButton = undefined; this.queue.select(readDetection(feature)); }
       });
       map.on('idle', () => {
         if (!map.getLayer('detections')) return;
@@ -138,8 +154,6 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           points.set(String(point.id), point);
         }
         this.visible.set([...points.values()].sort((a, b) => b.observed_at - a.observed_at));
-        const selected = this.selected();
-        if (selected) this.selected.set(points.get(String(selected.id)) ?? null);
       });
       map.once('load', async () => {
         try {
@@ -148,7 +162,6 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           this.fit();
           this.ready.set(true);
           this.timer = setInterval(() => {
-            this.now.set(Date.now());
             if (map.getSource('detections')) {
               if (this.tileError()) {
                 this.removeDetections(map);
@@ -167,13 +180,26 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
 
   choose(id: string): void {
-    this.selected.set(this.visible().find(point => String(point.id) === id) ?? null);
+    this.rowButton = undefined;
+    this.queue.select(this.visible().find(point => String(point.id) === id) ?? null);
     if (id) this.detailTitle()?.nativeElement.focus();
   }
 
+  openRow(row: AlertRow, button: HTMLButtonElement): void {
+    this.rowButton = button;
+    this.mobileQueue.set(false);
+    this.queue.selectRow(row);
+    this.map?.jumpTo({ center: [row.longitude, row.latitude] });
+    this.detailTitle()?.nativeElement.focus();
+  }
+
   closeDetails(): void {
-    this.selected.set(null);
-    this.picker()?.nativeElement.focus();
+    this.queue.select(null);
+    if (this.rowButton?.isConnected) {
+      this.mobileQueue.set(true);
+      const button = this.rowButton;
+      requestAnimationFrame(() => button.focus());
+    } else this.picker()?.nativeElement.focus();
   }
 
   fit(): void {

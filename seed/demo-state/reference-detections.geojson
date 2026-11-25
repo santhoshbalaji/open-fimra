@@ -12,7 +12,8 @@
      "ds.c1.d1.r2.b05"
     ],
     "expected_triage": null,
-    "expected_forest_code": "F01"
+    "expected_forest_code": "F01",
+    "expected_queue": "unit"
    },
    "geometry": {
     "type": "Point",
@@ -33,7 +34,8 @@
      "ds.c1.d2.r3.b08"
     ],
     "expected_triage": "shared_boundary",
-    "expected_forest_code": "F01"
+    "expected_forest_code": "F01",
+    "expected_queue": "triage"
    },
    "geometry": {
     "type": "Point",
@@ -53,7 +55,8 @@
      "ds.c1.d2.r4.b11"
     ],
     "expected_triage": null,
-    "expected_forest_code": null
+    "expected_forest_code": null,
+    "expected_queue": null
    },
    "geometry": {
     "type": "Point",
@@ -73,7 +76,8 @@
      "ds.c1.d2.r4.b11"
     ],
     "expected_triage": null,
-    "expected_forest_code": "F02"
+    "expected_forest_code": "F02",
+    "expected_queue": "unit"
    },
    "geometry": {
     "type": "Point",
@@ -93,7 +97,8 @@
      "ds.c2.d3.r5.b14"
     ],
     "expected_triage": null,
-    "expected_forest_code": null
+    "expected_forest_code": null,
+    "expected_queue": "edge_review"
    },
    "geometry": {
     "type": "Point",
@@ -113,7 +118,8 @@
      "ds.c1.d1.r1.b03"
     ],
     "expected_triage": null,
-    "expected_forest_code": null
+    "expected_forest_code": null,
+    "expected_queue": null
    },
    "geometry": {
     "type": "Point",
@@ -134,7 +140,8 @@
      "ds.c2.d4.r7.b20"
     ],
     "expected_triage": "overlapping_units",
-    "expected_forest_code": "F05"
+    "expected_forest_code": "F05",
+    "expected_queue": "triage"
    },
    "geometry": {
     "type": "Point",
@@ -152,7 +159,8 @@
     "expected_forest_class": "inside",
     "expected_beats": [],
     "expected_triage": "no_unit",
-    "expected_forest_code": "F03"
+    "expected_forest_code": "F03",
+    "expected_queue": "triage"
    },
    "geometry": {
     "type": "Point",
@@ -172,7 +180,8 @@
      "ds.c1.d2.r4.b12"
     ],
     "expected_triage": null,
-    "expected_forest_code": null
+    "expected_forest_code": null,
+    "expected_queue": null
    },
    "geometry": {
     "type": "Point",
@@ -192,7 +201,8 @@
      "ds.c2.d4.r7.b19"
     ],
     "expected_triage": null,
-    "expected_forest_code": null
+    "expected_forest_code": null,
+    "expected_queue": "unit"
    },
    "geometry": {
     "type": "Point",
@@ -210,7 +220,8 @@
     "expected_forest_class": null,
     "expected_beats": [],
     "expected_triage": null,
-    "expected_forest_code": null
+    "expected_forest_code": null,
+    "expected_queue": null
    },
    "geometry": {
     "type": "Point",

@@ -11,7 +11,7 @@ Never add real forest boundaries, staff details or field reports to this folder 
 | `state.geojson`, `circles.geojson`, `divisions.geojson`, `ranges.geojson`, `beats.geojson` | A territorial hierarchy: 1 state, 2 circles, 4 divisions, 8 ranges and 24 beats, each with `code`, `name` and `parent_code`, as an agency would upload them |
 | `forest.geojson` | Five forest features with a legal status |
 | `exclusions.geojson` | One known heat source (a brick kiln) |
-| `reference-detections.geojson` | Eleven test detections, each with the result it should get |
+| `reference-detections.geojson` | Eleven test detections, each with its expected class, beats, triage reason and default queue |
 | `load.sql` | Loads the demo workspace, hierarchy, layers and features into the database |
 | `roles.sql` | Adds the demo role grants after `load.sql`. It also works with a previously loaded demo workspace. |
 | `reference.sql` | The reference detections as a temporary table |
