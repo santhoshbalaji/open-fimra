@@ -5,6 +5,8 @@ import { WEB_CONFIG } from './config';
 import { Detection } from './detections';
 import { WorkspaceService } from './workspace';
 
+import { DashboardFilters } from './dashboard-filters';
+
 export const queueLabels = { unit: 'Unit', edge_review: 'Edge review', triage: 'Triage' };
 type Queue = keyof typeof queueLabels;
 export interface AlertRow extends Detection {
@@ -26,7 +28,8 @@ export class AlertQueue {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly workspace = inject(WorkspaceService);
   private readonly auth = inject(AuthService);
-  readonly hours = signal(168);
+  private readonly filters = inject(DashboardFilters);
+  readonly hours = this.filters.hours;
   readonly now = signal(Date.now());
   readonly selected = signal<Detection | null>(null);
   readonly active = signal<Queue>('unit');
@@ -52,7 +55,7 @@ export class AlertQueue {
     });
     effect(() => {
       this.endpoint();
-      this.hours();
+      this.filters.params();
       this.message.set('');
       this.page.set(null);
       this.cursor.set('');
@@ -61,7 +64,7 @@ export class AlertQueue {
     });
     effect(onCleanup => {
       const url = this.endpoint();
-      const params: Record<string, string | number> = { hours: this.hours(), queue: this.active() };
+      const params: Record<string, string | number> = { ...this.filters.params(), queue: this.active() };
       const cursor = this.cursor();
       if (cursor) params['cursor'] = cursor;
       this.now();
@@ -85,7 +88,7 @@ export class AlertQueue {
       const now = this.now();
       if (!point || !url) return;
       if (point.observed_at * 1000 < now - hours * 3600_000) { this.select(null); return; }
-      const request = this.http.get<Page>(url, { params: { hours, detection: String(point.id) } }).subscribe({
+      const request = this.http.get<Page>(url, { params: { ...this.filters.params(), detection: String(point.id) } }).subscribe({
         next: result => {
           const row = result.items[0];
           this.pinned.set(row ?? null);

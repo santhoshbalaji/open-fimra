@@ -81,8 +81,13 @@ jobs:
           cache-dependency-path: services/api/go.sum
       - run: make dev
       - run: make db-migrate
-      - name: Test sign-in, ingestion, alert workflow, queues, tiles, backfill and feed health
-        run: make api-test-integration
+      - name: Test sign-in, ingestion, alert workflow, dashboard SQL parity, queues, tiles, backfill and feed health
+        shell: bash
+        run: |
+          make api-test-integration | tee api-integration.log
+          echo '### Dashboard timings on the demo data' >> "$GITHUB_STEP_SUMMARY"
+          awk '/^=== RUN .*dashboard_SQL_parity\// {n=split($NF, parts, "/"); user=parts[n]}
+               /summary, 20 signed requests/ {sub(/^.*summary, /, ""); print "- " user ": " $0}' api-integration.log >> "$GITHUB_STEP_SUMMARY"
       - name: Backfill the demo fixtures twice; the second run must fetch nothing
         run: |
           make backfill-demo

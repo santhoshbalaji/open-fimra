@@ -115,3 +115,35 @@ fimra-workflow button { border: 1px solid var(--color-border); border-radius: va
 fimra-workflow form label:not([hidden]), fimra-workflow textarea { display: block; margin-bottom: 6px; }
 fimra-workflow textarea { width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
 .overdue { border-bottom: 2px solid var(--color-warning); color: var(--color-text); }
+
+.workspace-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding: 8px 16px; background: var(--color-card); border-bottom: 1px solid var(--color-border); }
+.workspace-controls nav { display: flex; }
+.workspace-controls button { padding: 4px 10px; }
+.workspace-controls [aria-pressed=true] { color: var(--color-brand); box-shadow: inset 0 -2px var(--color-brand); font-weight: 600; }
+.workspace-controls label { display: flex; gap: 6px; align-items: center; font-size: var(--text-label); }
+.workspace-controls select, .workspace-controls input:not([type]) { max-width: 145px; background: var(--color-background); padding: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.workspace-controls input { accent-color: var(--color-brand); }
+@media (min-width: 841px) { .queue-toolbar { display: none; } }
+fimra-dashboard { display: block; height: 100%; overflow: auto; }
+.dashboard { max-width: 1440px; margin: auto; padding: clamp(12px, 2vw, 32px); }
+.dashboard h2 { font-size: var(--text-display); font-weight: 600; margin-bottom: 16px; }
+.dashboard h3 { font-size: var(--text-subhead); font-weight: 600; }
+.dashboard h4 { margin-top: 16px; font-weight: 600; }
+.dashboard small { color: var(--color-text-secondary); }
+.metric-grid, .report-grid { display: grid; gap: 12px; margin-bottom: 12px; }
+.metric-grid { grid-template-columns: 1.5fr repeat(3, 1fr); }
+.report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dashboard section { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 16px; }
+.dashboard strong { display: block; font-size: 36px; margin-top: 10px; }
+.dashboard dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; margin-top: 8px; }
+.dashboard dd, .dashboard td { font-variant-numeric: tabular-nums; }
+.dashboard dd { font-weight: 600; }
+.dashboard table { width: 100%; margin-top: 12px; text-align: left; }
+.dashboard th, .dashboard td { padding: 5px 4px; border-bottom: 1px solid var(--color-border); }
+.dashboard tbody th { font-weight: 400; }
+.dashboard ul { margin-top: 8px; }
+.feed-status { display: inline-block; padding: 2px 8px; margin-right: 4px; border-left: 4px solid; }
+.step-name::first-letter { text-transform: uppercase; }
+.class-chart { height: 165px; width: 100%; }
+@media (max-width: 800px) { .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .report-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .metric-grid section:first-child { grid-column: 1 / -1; } .workspace-controls { gap: 4px 12px; } }

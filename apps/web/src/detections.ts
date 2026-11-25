@@ -40,10 +40,10 @@ export function tileErrorStatus(error: { message: string; status?: number }): nu
   return match ? Number(match[1]) : undefined;
 }
 
-export function tileUrl(base: string, slug: string, hours: number, outside: boolean): string {
+export function tileUrl(base: string, slug: string, hours: number, forestClasses: string, unitPath: string): string {
   const url = base.replace(/\/$/, '') + '/api/v1/workspaces/' + encodeURIComponent(slug) +
     '/tiles/detections/{z}/{x}/{y}.mvt?hours=' + hours;
-  return outside ? url + '&classes=inside,near_edge,fixed_heat_source,outside' : url;
+  return url + '&classes=' + forestClasses + (unitPath ? '&unitPath=' + encodeURIComponent(unitPath) : '');
 }
 
 export function mapRequest(url: string, base: string, page: string, token: () => string | undefined): RequestParameters {

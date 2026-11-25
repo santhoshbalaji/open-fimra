@@ -46,6 +46,7 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports", a.layerCatalog)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/layer-imports", a.uploadLayer)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports/{version}", a.layerDraft)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/summary", a.summary)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/feeds", a.feeds)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports/{version}/preview", a.layerPreview)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/layer-imports/{version}/publish", a.layerPublish)

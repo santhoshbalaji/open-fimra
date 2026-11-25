@@ -255,7 +255,7 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 	const issuer, audience = "https://issuer.invalid", "open-fimra-api"
 	auth := authenticator{issuer: issuer, verifier: oidc.NewVerifier(issuer,
 		&oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: audience})}
-	handler := api{reader: tx, logger: slog.Default()}.handler(auth, devOrigins)
+	handler := api{reader: tx, feedDB: tx, logger: slog.Default()}.handler(auth, devOrigins)
 	const origin = "http://localhost:4200"
 	path := "/api/v1/workspaces/" + slug + "/tiles/detections/8/189/116.mvt"
 	requestBody := func(method, path, subject, body string) *httptest.ResponseRecorder {
@@ -283,6 +283,7 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 	})
 
 	t.Run("default workflow", func(t *testing.T) { checkWorkflow(t, ctx, tx, slug, prefix, requestBody) })
+	t.Run("dashboard SQL parity", func(t *testing.T) { checkSummary(t, ctx, tx, slug, prefix, requestBody) })
 
 	if w := request(http.MethodOptions, path, ""); w.Code != http.StatusNoContent ||
 		w.Header().Get("Access-Control-Allow-Origin") != origin ||
@@ -361,7 +362,10 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 		len(tileFeatures(t, w.Body.Bytes())) != 1 {
 		t.Fatalf("hours and class filter returned HTTP %d", w.Code)
 	}
-	for _, bad := range []string{"?hours=721", "?classes=unknown"} {
+	if w := request(http.MethodGet, path+all+"&unitPath=ds.c1.d1.r1.b01", "a1"); w.Code != http.StatusOK || len(tileFeatures(t, w.Body.Bytes())) != 1 {
+		t.Fatalf("beat prefix returned HTTP %d or wrong tile count", w.Code)
+	}
+	for _, bad := range []string{"?hours=721", "?classes=unknown", "?unitPath=a..b"} {
 		if w := request(http.MethodGet, path+bad, "a1"); w.Code != http.StatusBadRequest {
 			t.Fatalf("invalid tile filter returned HTTP %d", w.Code)
 		}

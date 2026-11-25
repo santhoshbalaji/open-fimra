@@ -1,0 +1,48 @@
+<section class="dashboard" aria-labelledby="dashboard-title">
+<h2 id="dashboard-title">Control-room dashboard</h2>
+@if (message()) { <p role="status">{{ message() }}</p> }
+@if (summary(); as data) {
+  <div class="metric-grid">
+    <section><h3>Detections today</h3><small>Since midnight in India</small>
+      <dl>@for (key of classKeys; track key) {
+        <dt>{{ classes[key] }}</dt><dd>{{ data.today[key] || 0 }}</dd>
+      }</dl>
+    </section>
+    <section><h3>Active alerts</h3><strong>{{ data.active }}</strong></section>
+    <section><h3>Overdue alerts</h3><strong>{{ data.overdue }}</strong></section>
+    <section><h3>Pending reports</h3><strong>{{ data.pendingReports }}</strong></section>
+  </div>
+  <div class="report-grid">
+    <section><h3>Detections by forest class</h3><small>Past {{ filters.hours() }} hours</small>
+      @if (!filters.lowBandwidth()) {
+        @defer (on immediate) { <fimra-class-chart [counts]="data.detections" /> }
+      }
+      <table tabindex="0"><caption class="sr-only">Detections in the selected window</caption>
+        <thead><tr><th scope="col">Forest class</th><th scope="col">Detections</th></tr></thead>
+        <tbody>@for (key of classKeys; track key) {
+          <tr><th scope="row">{{ classes[key] }}</th><td>{{ data.detections[key] || 0 }}</td></tr>
+        }</tbody>
+      </table>
+    </section>
+    <section><h3>Routed alerts</h3><dl>
+      @for (key of queueKeys; track key) { <dt>{{ queues[key] }}</dt><dd>{{ data.queues[key] || 0 }}</dd> }
+    </dl><h4>Current step</h4><dl>@for (row of data.steps | keyvalue; track row.key) {
+      <dt class="step-name">{{ row.key.replaceAll('_', ' ') }}</dt><dd>{{ row.value }}</dd>
+    } @empty { <dt>No alerts in this window.</dt> }</dl></section>
+    <section><h3>Response times</h3><table>
+      <caption class="sr-only">Time from routing to first reaching each step</caption>
+      <thead><tr><th scope="col">Step</th><th scope="col">Median</th><th scope="col">90th percentile</th></tr></thead>
+      <tbody>@for (step of milestones | keyvalue: null; track step.key) {
+        <tr><th scope="row">{{ step.value }}</th><td>{{ duration(data.responseSeconds[step.key].median) }}</td>
+          <td>{{ duration(data.responseSeconds[step.key].p90) }}</td></tr>
+      }</tbody></table></section>
+    @if (data.feedHealth; as feeds) {
+      <section><h3>Feed health</h3><ul>@for (feed of feeds; track feed.source + '/' + feed.product) {
+        <li><span class="feed-status" [style.border-color]="'var(--color-' + feedStates[feed.status].color + ')'">
+          <b aria-hidden="true">{{ feedStates[feed.status].icon }}</b> {{ feedStates[feed.status].label }}</span>
+          {{ feed.source }} · {{ feed.product }}</li>
+      } @empty { <li>No feeds have polled yet.</li> }</ul></section>
+    }
+  </div>
+} @else if (!message()) { <p role="status">Loading dashboard…</p> }
+</section>

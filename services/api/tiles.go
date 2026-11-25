@@ -51,13 +51,22 @@ func (a api) detectionTile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var path *string
+	if query.Has("unitPath") {
+		value := query.Get("unitPath")
+		if !unitPrefix.MatchString(value) {
+			writeError(w, 400, "Invalid unit path.")
+			return
+		}
+		path = &value
+	}
 	caller := r.Context().Value(identityKey{}).(identity)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	var allowed bool
 	var tile []byte
 	err := a.reader.QueryRow(ctx, tilesSQL, caller.Subject, chi.URLParam(r, "slug"),
-		int32(z), int32(x), int32(y), hours, classes).Scan(&allowed, &tile)
+		int32(z), int32(x), int32(y), hours, classes, path).Scan(&allowed, &tile)
 	if err != nil {
 		a.logger.Error("Could not read the detection tile", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load the detection tile.")
