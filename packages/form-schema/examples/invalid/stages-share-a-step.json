@@ -1,0 +1,61 @@
+{
+  "expected": "Stages \"sent\" and \"arrived\" both use the workflow step \"team_sent\".",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ],
+        "stage": "sent"
+      },
+      {
+        "key": "site",
+        "title": {
+          "en": "Site"
+        },
+        "items": [
+          {
+            "key": "site_notes",
+            "type": "text",
+            "label": {
+              "en": "Site notes"
+            }
+          }
+        ],
+        "stage": "arrived"
+      }
+    ],
+    "stages": [
+      {
+        "key": "sent",
+        "title": {
+          "en": "Team sent"
+        },
+        "workflowStep": "team_sent"
+      },
+      {
+        "key": "arrived",
+        "title": {
+          "en": "Reached site"
+        },
+        "workflowStep": "team_sent"
+      }
+    ]
+  }
+}

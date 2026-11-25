@@ -1,0 +1,90 @@
+[
+  {
+    "name": "alert_id",
+    "field": "alert_id",
+    "valueType": "text"
+  },
+  {
+    "name": "observed_at",
+    "field": "observed_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "alert_location",
+    "field": "alert_location",
+    "valueType": "point"
+  },
+  {
+    "name": "responsible_unit",
+    "field": "responsible_unit",
+    "valueType": "text"
+  },
+  {
+    "name": "forest_class",
+    "field": "forest_class",
+    "valueType": "text"
+  },
+  {
+    "name": "fire_power",
+    "field": "fire_power",
+    "valueType": "number",
+    "unit": "MW"
+  },
+  {
+    "name": "team_name",
+    "field": "team_name",
+    "valueType": "text"
+  },
+  {
+    "name": "team_leader",
+    "field": "team_leader",
+    "valueType": "text"
+  },
+  {
+    "name": "team_size",
+    "field": "team_size",
+    "valueType": "number",
+    "unit": "people"
+  },
+  {
+    "name": "vehicle",
+    "field": "vehicle",
+    "valueType": "choice"
+  },
+  {
+    "name": "vehicle_other",
+    "field": "vehicle_other",
+    "valueType": "text"
+  },
+  {
+    "name": "dispatched_at",
+    "field": "dispatched_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "instructions",
+    "field": "instructions",
+    "valueType": "text"
+  },
+  {
+    "name": "reached_at",
+    "field": "reached_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "site_location",
+    "field": "site_location",
+    "valueType": "point"
+  },
+  {
+    "name": "fire_found",
+    "field": "fire_found",
+    "valueType": "choice"
+  },
+  {
+    "name": "travel_hours",
+    "field": "travel_hours",
+    "valueType": "number",
+    "unit": "h"
+  }
+]

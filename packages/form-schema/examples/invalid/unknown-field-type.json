@@ -1,0 +1,28 @@
+{
+  "expected": "sections[0].items[0].type must be one of: group, repeat, text, number, date, time, date-time, single-choice, multiple-choice, point, track, polygon, photo, signature, file, calculated, alert-value.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "colour",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

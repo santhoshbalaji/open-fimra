@@ -1,0 +1,47 @@
+{
+  "expected": "Field \"hours\": calculate uses \"started_on\" in hours-between, which is not a date and time.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "started_on",
+            "type": "date",
+            "label": {
+              "en": "Started on"
+            }
+          },
+          {
+            "key": "ended_at",
+            "type": "date-time",
+            "label": {
+              "en": "Ended at"
+            }
+          },
+          {
+            "key": "hours",
+            "type": "calculated",
+            "label": {
+              "en": "Hours"
+            },
+            "calculate": {
+              "op": "hours-between",
+              "start": "started_on",
+              "end": "ended_at"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

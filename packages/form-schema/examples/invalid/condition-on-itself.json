@@ -1,0 +1,32 @@
+{
+  "expected": "Field \"notes\" depends on itself: notes → notes.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "answered",
+              "field": "notes"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

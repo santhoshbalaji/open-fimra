@@ -1,0 +1,104 @@
+[
+  {
+    "name": "observed_at",
+    "field": "observed_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "alert_location",
+    "field": "alert_location",
+    "valueType": "point"
+  },
+  {
+    "name": "reached_at",
+    "field": "reached_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "hours_to_reach",
+    "field": "hours_to_reach",
+    "valueType": "number",
+    "unit": "h"
+  },
+  {
+    "name": "fire_status",
+    "field": "fire_status",
+    "valueType": "choice"
+  },
+  {
+    "name": "cause_group",
+    "field": "cause_group",
+    "valueType": "choice"
+  },
+  {
+    "name": "cause",
+    "field": "cause",
+    "valueType": "choice"
+  },
+  {
+    "name": "cause_notes",
+    "field": "cause_notes",
+    "valueType": "text"
+  },
+  {
+    "name": "estimated_area",
+    "field": "estimated_area",
+    "valueType": "number",
+    "unit": "ha"
+  },
+  {
+    "name": "vegetation",
+    "field": "vegetation",
+    "valueType": "choices"
+  },
+  {
+    "name": "site_photos",
+    "field": "site_photos",
+    "valueType": "attachments"
+  },
+  {
+    "name": "team_name",
+    "field": "team_name",
+    "valueType": "text",
+    "repeat": "teams"
+  },
+  {
+    "name": "members",
+    "field": "members",
+    "valueType": "number",
+    "unit": "people",
+    "repeat": "teams"
+  },
+  {
+    "name": "team_arrived",
+    "field": "team_arrived",
+    "valueType": "time",
+    "repeat": "teams"
+  },
+  {
+    "name": "total_staff",
+    "field": "total_staff",
+    "valueType": "number",
+    "unit": "people"
+  },
+  {
+    "name": "team_count",
+    "field": "team_count",
+    "valueType": "number"
+  },
+  {
+    "name": "equipment",
+    "field": "equipment",
+    "valueType": "choices"
+  },
+  {
+    "name": "remarks",
+    "field": "remarks",
+    "valueType": "text"
+  },
+  {
+    "name": "reporter_signature",
+    "field": "reporter_signature",
+    "valueType": "attachment"
+  }
+]

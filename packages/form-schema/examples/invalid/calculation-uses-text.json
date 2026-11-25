@@ -1,0 +1,48 @@
+{
+  "expected": "Field \"total\": calculate uses \"notes\", which is not a number.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          },
+          {
+            "key": "total",
+            "type": "calculated",
+            "label": {
+              "en": "Total"
+            },
+            "calculate": {
+              "op": "add",
+              "args": [
+                {
+                  "op": "field",
+                  "field": "notes"
+                },
+                {
+                  "op": "number",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

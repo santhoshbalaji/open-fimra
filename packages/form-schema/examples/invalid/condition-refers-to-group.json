@@ -1,0 +1,68 @@
+{
+  "expected": "Field \"notes\": showWhen refers to \"details\", which is a group, not a field.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "details",
+            "type": "group",
+            "title": {
+              "en": "Details"
+            },
+            "items": [
+              {
+                "key": "weather",
+                "type": "single-choice",
+                "label": {
+                  "en": "Weather"
+                },
+                "choices": [
+                  {
+                    "key": "dry",
+                    "label": {
+                      "en": "Dry"
+                    }
+                  },
+                  {
+                    "key": "windy",
+                    "label": {
+                      "en": "Windy"
+                    }
+                  },
+                  {
+                    "key": "rain",
+                    "label": {
+                      "en": "Rain"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "answered",
+              "field": "details"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

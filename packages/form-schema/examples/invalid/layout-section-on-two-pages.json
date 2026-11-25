@@ -1,0 +1,44 @@
+{
+  "expected": "Layout: the section \"main\" is on more than one page.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      }
+    ],
+    "layout": {
+      "pages": [
+        {
+          "key": "one",
+          "sections": [
+            "main"
+          ]
+        },
+        {
+          "key": "two",
+          "sections": [
+            "main"
+          ]
+        }
+      ]
+    }
+  }
+}

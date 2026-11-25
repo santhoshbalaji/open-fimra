@@ -1,0 +1,29 @@
+{
+  "expected": "sections[0].items[0].source must be one of: alert-id, observed-at, raised-at, location, unit, forest-class, source, confidence, fire-power.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "beat_name",
+            "type": "alert-value",
+            "label": {
+              "en": "Beat"
+            },
+            "source": "beat-name"
+          }
+        ]
+      }
+    ]
+  }
+}

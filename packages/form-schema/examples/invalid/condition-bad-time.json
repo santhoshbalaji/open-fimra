@@ -1,0 +1,40 @@
+{
+  "expected": "Field \"notes\": showWhen compares \"seen_at\" with a value that is not a time such as 14:30.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "seen_at",
+            "type": "time",
+            "label": {
+              "en": "Seen at"
+            }
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "less-than",
+              "field": "seen_at",
+              "value": "2pm"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

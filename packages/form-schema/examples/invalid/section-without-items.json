@@ -1,0 +1,20 @@
+{
+  "expected": "sections[0].items must not be empty.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": []
+      }
+    ]
+  }
+}

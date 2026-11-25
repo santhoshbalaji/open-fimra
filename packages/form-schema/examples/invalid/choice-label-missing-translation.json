@@ -1,0 +1,50 @@
+{
+  "expected": "sections[0].items[0].choices[1].label is missing the \"hi\" translation.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example",
+      "hi": "टूटा हुआ उदाहरण"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main",
+          "hi": "मुख्य"
+        },
+        "items": [
+          {
+            "key": "weather",
+            "type": "single-choice",
+            "label": {
+              "en": "Weather",
+              "hi": "मौसम"
+            },
+            "choices": [
+              {
+                "key": "dry",
+                "label": {
+                  "en": "Dry",
+                  "hi": "सूखा"
+                }
+              },
+              {
+                "key": "rain",
+                "label": {
+                  "en": "Rain"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "languages": [
+      "en",
+      "hi"
+    ]
+  }
+}

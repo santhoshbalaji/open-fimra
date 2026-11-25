@@ -1,0 +1,59 @@
+{
+  "expected": "Layout: the page \"one\" is defined more than once.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      },
+      {
+        "key": "site",
+        "title": {
+          "en": "Site"
+        },
+        "items": [
+          {
+            "key": "site_notes",
+            "type": "text",
+            "label": {
+              "en": "Site notes"
+            }
+          }
+        ]
+      }
+    ],
+    "layout": {
+      "pages": [
+        {
+          "key": "one",
+          "sections": [
+            "main"
+          ]
+        },
+        {
+          "key": "one",
+          "sections": [
+            "site"
+          ]
+        }
+      ]
+    }
+  }
+}

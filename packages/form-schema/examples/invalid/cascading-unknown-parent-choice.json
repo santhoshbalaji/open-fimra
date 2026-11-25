@@ -1,0 +1,66 @@
+{
+  "expected": "Field \"beat\": the choice \"b2\" has the parent \"east\", which is not a choice of \"range\".",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "range",
+            "type": "single-choice",
+            "label": {
+              "en": "Range"
+            },
+            "choices": [
+              {
+                "key": "north",
+                "label": {
+                  "en": "North"
+                }
+              },
+              {
+                "key": "south",
+                "label": {
+                  "en": "South"
+                }
+              }
+            ]
+          },
+          {
+            "key": "beat",
+            "type": "single-choice",
+            "label": {
+              "en": "Beat"
+            },
+            "parent": "range",
+            "choices": [
+              {
+                "key": "b1",
+                "label": {
+                  "en": "Beat 1"
+                },
+                "parent": "north"
+              },
+              {
+                "key": "b2",
+                "label": {
+                  "en": "Beat 2"
+                },
+                "parent": "east"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,78 @@
+[
+  {
+    "name": "patrol_date",
+    "field": "patrol_date",
+    "valueType": "date"
+  },
+  {
+    "name": "start_time",
+    "field": "start_time",
+    "valueType": "time"
+  },
+  {
+    "name": "end_time",
+    "field": "end_time",
+    "valueType": "time"
+  },
+  {
+    "name": "patrol_type",
+    "field": "patrol_type",
+    "valueType": "choice"
+  },
+  {
+    "name": "staff_count",
+    "field": "staff_count",
+    "valueType": "number",
+    "unit": "people"
+  },
+  {
+    "name": "route",
+    "field": "route",
+    "valueType": "line"
+  },
+  {
+    "name": "route_length_km",
+    "field": "route",
+    "valueType": "number",
+    "unit": "km"
+  },
+  {
+    "name": "observation_type",
+    "field": "observation_type",
+    "valueType": "choice",
+    "repeat": "observations"
+  },
+  {
+    "name": "observed_location",
+    "field": "observed_location",
+    "valueType": "point",
+    "repeat": "observations"
+  },
+  {
+    "name": "observation_photos",
+    "field": "observation_photos",
+    "valueType": "attachments",
+    "repeat": "observations"
+  },
+  {
+    "name": "observation_notes",
+    "field": "observation_notes",
+    "valueType": "text",
+    "repeat": "observations"
+  },
+  {
+    "name": "observation_count",
+    "field": "observation_count",
+    "valueType": "number"
+  },
+  {
+    "name": "fire_line_checked",
+    "field": "fire_line_checked",
+    "valueType": "choice"
+  },
+  {
+    "name": "fire_line_condition",
+    "field": "fire_line_condition",
+    "valueType": "choice"
+  }
+]

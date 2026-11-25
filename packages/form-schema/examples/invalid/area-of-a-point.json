@@ -1,0 +1,39 @@
+{
+  "expected": "Field \"spot_area\": calculate takes the area of \"spot\", which is not a drawn area.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "spot",
+            "type": "point",
+            "label": {
+              "en": "Spot"
+            }
+          },
+          {
+            "key": "spot_area",
+            "type": "calculated",
+            "label": {
+              "en": "Spot area"
+            },
+            "calculate": {
+              "op": "area",
+              "field": "spot"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

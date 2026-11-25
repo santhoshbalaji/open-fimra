@@ -1,0 +1,39 @@
+{
+  "expected": "Layout: the page \"one\" lists \"notes\", which is not a section.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      }
+    ],
+    "layout": {
+      "pages": [
+        {
+          "key": "one",
+          "sections": [
+            "main",
+            "notes"
+          ]
+        }
+      ]
+    }
+  }
+}

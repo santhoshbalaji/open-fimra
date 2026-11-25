@@ -1,0 +1,53 @@
+{
+  "expected": "List \"weathers\" is defined more than once.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "weather",
+            "type": "single-choice",
+            "label": {
+              "en": "Weather"
+            },
+            "list": "weathers"
+          }
+        ]
+      }
+    ],
+    "lists": [
+      {
+        "key": "weathers",
+        "choices": [
+          {
+            "key": "dry",
+            "label": {
+              "en": "Dry"
+            }
+          }
+        ]
+      },
+      {
+        "key": "weathers",
+        "choices": [
+          {
+            "key": "wet",
+            "label": {
+              "en": "Wet"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

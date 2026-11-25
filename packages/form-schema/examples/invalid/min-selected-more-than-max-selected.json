@@ -1,0 +1,50 @@
+{
+  "expected": "Field \"weather\": minSelected is more than maxSelected.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "weather",
+            "type": "multiple-choice",
+            "label": {
+              "en": "Weather"
+            },
+            "choices": [
+              {
+                "key": "dry",
+                "label": {
+                  "en": "Dry"
+                }
+              },
+              {
+                "key": "windy",
+                "label": {
+                  "en": "Windy"
+                }
+              },
+              {
+                "key": "rain",
+                "label": {
+                  "en": "Rain"
+                }
+              }
+            ],
+            "minSelected": 3,
+            "maxSelected": 2
+          }
+        ]
+      }
+    ]
+  }
+}

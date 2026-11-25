@@ -1,0 +1,48 @@
+[
+  {
+    "name": "report_source",
+    "field": "report_source",
+    "valueType": "choice"
+  },
+  {
+    "name": "reporter_name",
+    "field": "reporter_name",
+    "valueType": "text"
+  },
+  {
+    "name": "reporter_phone",
+    "field": "reporter_phone",
+    "valueType": "text"
+  },
+  {
+    "name": "reported_at",
+    "field": "reported_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "fire_location",
+    "field": "fire_location",
+    "valueType": "point"
+  },
+  {
+    "name": "landmark",
+    "field": "landmark",
+    "valueType": "text"
+  },
+  {
+    "name": "visible_signs",
+    "field": "visible_signs",
+    "valueType": "choice"
+  },
+  {
+    "name": "estimated_area",
+    "field": "estimated_area",
+    "valueType": "number",
+    "unit": "ha"
+  },
+  {
+    "name": "photos",
+    "field": "photos",
+    "valueType": "attachments"
+  }
+]

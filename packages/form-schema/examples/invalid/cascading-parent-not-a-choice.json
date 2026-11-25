@@ -1,0 +1,45 @@
+{
+  "expected": "Field \"beat\": parent \"range\" is a text field, not a single choice field.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "range",
+            "type": "text",
+            "label": {
+              "en": "Range"
+            }
+          },
+          {
+            "key": "beat",
+            "type": "single-choice",
+            "label": {
+              "en": "Beat"
+            },
+            "parent": "range",
+            "choices": [
+              {
+                "key": "b1",
+                "label": {
+                  "en": "Beat 1"
+                },
+                "parent": "north"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

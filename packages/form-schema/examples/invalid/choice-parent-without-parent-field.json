@@ -1,0 +1,37 @@
+{
+  "expected": "Field \"weather\": the choice \"dry\" has a parent, but the field has no \"parent\".",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "weather",
+            "type": "single-choice",
+            "label": {
+              "en": "Weather"
+            },
+            "choices": [
+              {
+                "key": "dry",
+                "label": {
+                  "en": "Dry"
+                },
+                "parent": "summer"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "expected": "Field \"team_total\": calculate refers to \"teams\", which contains it.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "teams",
+            "type": "repeat",
+            "title": {
+              "en": "Teams"
+            },
+            "items": [
+              {
+                "key": "team_name",
+                "type": "text",
+                "label": {
+                  "en": "Team name"
+                }
+              },
+              {
+                "key": "team_total",
+                "type": "calculated",
+                "label": {
+                  "en": "Team total"
+                },
+                "calculate": {
+                  "op": "count",
+                  "group": "teams"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

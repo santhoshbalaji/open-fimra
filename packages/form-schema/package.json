@@ -1,0 +1,10 @@
+{
+  "name": "@open-fimra/form-schema",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./ts/form-schema.ts",
+    "./form.schema.json": "./form.schema.json"
+  }
+}

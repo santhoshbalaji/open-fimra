@@ -1,0 +1,40 @@
+{
+  "expected": "Field \"notes\": showWhen cannot use \"equals\" on \"photos\", which is a photo field.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "photos",
+            "type": "photo",
+            "label": {
+              "en": "Photos"
+            }
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "equals",
+              "field": "photos",
+              "value": "x"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

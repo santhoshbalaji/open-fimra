@@ -1,0 +1,28 @@
+{
+  "expected": "title is missing \"en\".",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "hi": "टूटा हुआ उदाहरण"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
