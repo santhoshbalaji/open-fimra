@@ -38,9 +38,6 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
-      luxon:
-        specifier: 3.7.2
-        version: 3.7.2
       maplibre-gl:
         specifier: 6.17.0
         version: 6.17.0
@@ -5224,7 +5221,8 @@ snapshots:
 
   lru-cache@11.5.3: {}
 
-  luxon@3.7.2: {}
+  luxon@3.7.2:
+    optional: true
 
   magic-string@0.30.21:
     dependencies:
