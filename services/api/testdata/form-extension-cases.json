@@ -1,0 +1,996 @@
+{
+ "comment": "Shared cases for template extension. services/api/form_templates_test.go and apps/web/src/form-locks.spec.ts both run them and must give the same messages. Synthetic content only.",
+ "parent": {
+  "formatVersion": 1,
+  "id": "national-report",
+  "version": 1,
+  "title": {
+   "en": "National report"
+  },
+  "lists": [
+   {
+    "key": "causes",
+    "choices": [
+     {
+      "key": "lightning",
+      "label": {
+       "en": "Lightning"
+      }
+     },
+     {
+      "key": "people",
+      "label": {
+       "en": "People"
+      }
+     }
+    ]
+   }
+  ],
+  "sections": [
+   {
+    "key": "basics",
+    "title": {
+     "en": "Basics"
+    },
+    "items": [
+     {
+      "key": "reached_at",
+      "type": "date-time",
+      "label": {
+       "en": "Team reached the site at"
+      },
+      "required": true
+     },
+     {
+      "key": "cause",
+      "type": "single-choice",
+      "label": {
+       "en": "Likely cause"
+      },
+      "list": "causes"
+     }
+    ]
+   },
+   {
+    "key": "extra",
+    "title": {
+     "en": "More details"
+    },
+    "items": [
+     {
+      "key": "notes",
+      "type": "text",
+      "label": {
+       "en": "Notes"
+      }
+     },
+     {
+      "key": "crew",
+      "type": "group",
+      "title": {
+       "en": "Crew"
+      },
+      "items": [
+       {
+        "key": "crew_size",
+        "type": "number",
+        "label": {
+         "en": "People in the crew"
+        },
+        "unit": "people",
+        "decimals": 0
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "extension": [
+  {
+   "name": "an unchanged copy with a new section",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "key": "state_extra",
+      "title": {
+       "en": "Demo State details"
+      },
+      "items": [
+       {
+        "key": "range_office",
+        "type": "text",
+        "label": {
+         "en": "Range office"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "expected": []
+  },
+  {
+   "name": "unlocked parts change freely",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "Other details"
+      },
+      "items": [
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Team"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": []
+  },
+  {
+   "name": "a change inside a locked section",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Arrived at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": [
+    "Section \"basics\" is locked by the template it extends and cannot change."
+   ]
+  },
+  {
+   "name": "a new field inside a locked section",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       },
+       {
+        "key": "extra_note",
+        "type": "text",
+        "label": {
+         "en": "Note"
+        }
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": [
+    "Section \"basics\" is locked by the template it extends and cannot change."
+   ]
+  },
+  {
+   "name": "a locked field removed",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_lead",
+          "type": "text",
+          "label": {
+           "en": "Crew lead"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": [
+    "Field \"crew_size\" is locked by the template it extends and cannot be removed."
+   ]
+  },
+  {
+   "name": "a locked field moved out of its group",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_lead",
+          "type": "text",
+          "label": {
+           "en": "Crew lead"
+          }
+         }
+        ]
+       },
+       {
+        "key": "crew_size",
+        "type": "number",
+        "label": {
+         "en": "People in the crew"
+        },
+        "unit": "people",
+        "decimals": 0
+       }
+      ]
+     }
+    ]
+   },
+   "expected": [
+    "Field \"crew_size\" is locked by the template it extends and must stay in group \"crew\"."
+   ]
+  },
+  {
+   "name": "a list that a locked field uses",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       },
+       {
+        "key": "unknown",
+        "label": {
+         "en": "Not known"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes"
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": [
+    "The list \"causes\" is used by a locked part of the template and cannot change."
+   ]
+  },
+  {
+   "name": "two locked parts changed",
+   "locked": [
+    "basics",
+    "crew_size"
+   ],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "basics",
+      "title": {
+       "en": "Basics"
+      },
+      "items": [
+       {
+        "key": "reached_at",
+        "type": "date-time",
+        "label": {
+         "en": "Team reached the site at"
+        },
+        "required": true
+       },
+       {
+        "key": "cause",
+        "type": "single-choice",
+        "label": {
+         "en": "Likely cause"
+        },
+        "list": "causes",
+        "hint": {
+         "en": "Pick one"
+        }
+       }
+      ]
+     },
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0,
+          "max": 50
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": [
+    "Section \"basics\" is locked by the template it extends and cannot change.",
+    "Field \"crew_size\" is locked by the template it extends and cannot change."
+   ]
+  },
+  {
+   "name": "nothing locked",
+   "locked": [],
+   "child": {
+    "formatVersion": 1,
+    "id": "demo-report",
+    "version": 1,
+    "title": {
+     "en": "National report"
+    },
+    "lists": [
+     {
+      "key": "causes",
+      "choices": [
+       {
+        "key": "lightning",
+        "label": {
+         "en": "Lightning"
+        }
+       },
+       {
+        "key": "people",
+        "label": {
+         "en": "People"
+        }
+       }
+      ]
+     }
+    ],
+    "sections": [
+     {
+      "key": "extra",
+      "title": {
+       "en": "More details"
+      },
+      "items": [
+       {
+        "key": "notes",
+        "type": "text",
+        "label": {
+         "en": "Notes"
+        }
+       },
+       {
+        "key": "crew",
+        "type": "group",
+        "title": {
+         "en": "Crew"
+        },
+        "items": [
+         {
+          "key": "crew_size",
+          "type": "number",
+          "label": {
+           "en": "People in the crew"
+          },
+          "unit": "people",
+          "decimals": 0
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expected": []
+  }
+ ],
+ "rules": [
+  {
+   "name": "no rules",
+   "rules": null,
+   "expected": []
+  },
+  {
+   "name": "locks that exist",
+   "rules": {
+    "allowExtension": true,
+    "locked": [
+     "basics",
+     "crew"
+    ]
+   },
+   "expected": []
+  },
+  {
+   "name": "a lock on a missing key",
+   "rules": {
+    "allowExtension": false,
+    "locked": [
+     "fire"
+    ]
+   },
+   "expected": [
+    "The template locks \"fire\", which is not a section or item of this form."
+   ]
+  },
+  {
+   "name": "a lock given twice",
+   "rules": {
+    "allowExtension": true,
+    "locked": [
+     "notes",
+     "notes"
+    ]
+   },
+   "expected": [
+    "The template locks \"notes\" more than once."
+   ]
+  }
+ ]
+}

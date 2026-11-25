@@ -100,8 +100,13 @@ func enableStarterPack(ctx context.Context, tx pgx.Tx, access workspaceAccess, s
 		if len(problems) > 0 {
 			return nil, problem(http.StatusInternalServerError, "The starter form "+form.Key+" is not valid.", problems...)
 		}
+		tree, err := parseFormTree(form.Source)
+		if err != nil {
+			return nil, err
+		}
+		upload := &formUpload{source: form.Source, columns: columns, tree: tree, key: form.Key, version: form.Version, level: "state"}
 		var created json.RawMessage
-		if err := createFormVersion(ctx, tx, access, form.Source, columns, form.Key, form.Version, &created); err != nil {
+		if err := createFormVersion(ctx, tx, subject, access, upload, &created); err != nil {
 			return nil, err
 		}
 		var formID, versionID int64
