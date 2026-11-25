@@ -15,6 +15,11 @@ describe('Detection symbols', () => {
 });
 
 describe('Detection identity', () => {
+  it('keeps the point coordinates for the resized map when opening details', () => {
+    expect(readDetection({ id: 42, properties: {}, geometry: { type: 'Point', coordinates: [86, 16] } }))
+      .toMatchObject({ id: 42, longitude: 86, latitude: 16 });
+  });
+
   it('reads both property IDs and native tile feature IDs', () => {
     expect(readDetection({ id: 12, properties: { id: 'sample' } }).id).toBe('sample');
     expect(readDetection({ id: 12, properties: {} }).id).toBe(12);

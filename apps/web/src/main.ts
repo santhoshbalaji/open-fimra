@@ -1,6 +1,7 @@
 import { isDevMode } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { App } from './app';
 import { bearerInterceptor } from './auth';
 import { WEB_CONFIG, loadConfig } from './config';
@@ -11,6 +12,7 @@ const start = guide
   ? import('./design-system/guide').then(module => module.openGuide())
   : loadConfig().then(config => bootstrapApplication(App, {
     providers: [
+      provideSpartanHlm(),
       { provide: WEB_CONFIG, useValue: config },
       provideHttpClient(withInterceptors([bearerInterceptor]))
     ]

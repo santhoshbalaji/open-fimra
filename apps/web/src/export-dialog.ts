@@ -1,4 +1,8 @@
-import { A11yModule } from '@angular/cdk/a11y';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
+import { HlmLabelImports } from '@spartan-ng/helm/label';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
@@ -32,7 +36,7 @@ const allClasses = Object.keys(classes) as ForestClass[];
 
 @Component({
   selector: 'fimra-export-dialog',
-  imports: [A11yModule],
+  imports: [HlmButtonImports, HlmFieldImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports],
   templateUrl: './export-dialog.html'
 })
 export class ExportDialog {
@@ -47,6 +51,7 @@ export class ExportDialog {
   readonly queueLabel = input.required<string>();
   readonly closed = output<void>();
 
+  readonly formatLabels = exportFormats;
   readonly formats = Object.entries(exportFormats) as [ExportFormat, string][];
   readonly kind = signal<Kind>('alerts');
   readonly format = signal<ExportFormat>('gpkg');
@@ -54,6 +59,7 @@ export class ExportDialog {
   readonly status = signal<ExportStatus | null>(null);
   readonly busy = signal(false);
   readonly error = signal('');
+  private readonly lifetime = inject(DestroyRef);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private timer?: ReturnType<typeof setTimeout>;
@@ -79,7 +85,7 @@ export class ExportDialog {
   });
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => clearTimeout(this.timer));
+    this.lifetime.onDestroy(() => clearTimeout(this.timer));
   }
 
   choose(kind: Kind): void {
@@ -133,6 +139,7 @@ export class ExportDialog {
   }
 
   private track(status: ExportStatus): void {
+    if (this.lifetime.destroyed) return;
     this.status.set(status);
     this.busy.set(status.status === 'pending');
     if (status.status !== 'pending') return;

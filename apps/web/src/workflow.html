@@ -1,8 +1,43 @@
 @if (history(); as data) {
+  @if (chosen(); as move) {
+    <form (submit)="$event.preventDefault(); save(note.value, reason.value)">
+      <h3>{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
+      @if (move.terminal) { <p>This ends the workflow for this alert.</p> }
+      <hlm-field><label hlmFieldLabel for="step-note">Note (optional)</label>
+        <textarea hlmTextarea id="step-note" #note maxlength="2000"></textarea>
+      </hlm-field>
+      @if (move.location_required) {
+        <p>Your browser will ask to share your location.</p>
+        @if (move.can_override) {
+          <label hlmFieldLabel><hlm-checkbox aria-label="Enter a reason instead" [checked]="exception()" (checkedChange)="exception.set($event)" /> Enter a reason instead</label>
+        }
+      }
+      <div [hidden]="!exception()"><hlm-field><label hlmFieldLabel for="location-reason">Reason for the location exception</label>
+        <textarea hlmTextarea id="location-reason" #reason [required]="exception()" maxlength="2000"></textarea>
+      </hlm-field></div>
+      <button hlmBtn type="submit" [disabled]="busy()">{{ move.terminal ? 'Confirm' : 'Save' }} {{ move.label }}</button>
+      <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="choose(null)">Cancel</button>
+    </form>
+  } @else if (data.moves.length) {
+    <h3>Next step</h3>
+    <div class="workflow-moves">
+      @for (move of steps(); track move.step; let first = $first) {
+        <button hlmBtn [variant]="first ? 'primary' : 'outline'" (click)="choose(move)">{{ move.label }}</button>
+      }
+      @if (outcomes().length) {
+        <button hlmBtn variant="outline" [hlmDropdownMenuTrigger]="menu">Close alert…</button>
+        <ng-template #menu><hlm-dropdown-menu>
+          @for (move of outcomes(); track move.step) {
+            <button hlmDropdownMenuItem (triggered)="choose(move)">{{ move.label }}</button>
+          }
+        </hlm-dropdown-menu></ng-template>
+      }
+    </div>
+  }
   <h3>Timeline</h3>
   <ol class="step-timeline">
     @for (entry of data.entries; track $index) {
-      <li><strong>{{ entry.label }}</strong> · <time [attr.datetime]="entry.at">{{ entry.at | date:'medium' }}</time>
+      <li><fimra-status-badge icon="step" [label]="entry.label" /><time [attr.datetime]="entry.at">{{ entry.at | date:'medium' }}</time>
         <small>{{ entry.actor || 'Opened automatically' }}</small>
         @if (entry.latitude !== null) { <small>{{ entry.latitude }}, {{ entry.longitude }}</small> }
         @if (entry.note) { <small>{{ entry.note }}</small> }
@@ -11,30 +46,7 @@
       </li>
     }
   </ol>
-  @if (chosen(); as move) {
-    <form (submit)="$event.preventDefault(); save(note.value, reason.value)">
-      <h3>{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
-      @if (move.terminal) { <p>This ends the workflow for this alert.</p> }
-      <label>Note (optional)<textarea #note maxlength="2000"></textarea></label>
-      @if (move.location_required) {
-        <p>Your browser will ask to share your location.</p>
-        @if (move.can_override) {
-          <label><input type="checkbox" [checked]="exception()" (change)="exception.set(!exception())"> Enter a reason instead</label>
-        }
-      }
-      <label [hidden]="!exception()">Reason for the location exception
-        <textarea #reason [required]="exception()" maxlength="2000"></textarea>
-      </label>
-      <button type="submit" [disabled]="busy()">{{ move.terminal ? 'Confirm' : 'Save' }} {{ move.label }}</button>
-      <button type="button" [disabled]="busy()" (click)="choose(null)">Cancel</button>
-    </form>
-  } @else if (data.moves.length) {
-    <h3>Next step</h3>
-    <div class="workflow-moves">
-      @for (move of data.moves; track move.step) {
-        <button (click)="choose(move)">{{ move.label }}</button>
-      }
-    </div>
-  }
+} @else if (!message()) {
+  <hlm-skeleton class="h-12" role="status" aria-label="Loading timeline" />
 }
-<p role="status">{{ message() }}</p>
+@if (message()) { <p role="status">{{ message() }}</p> }

@@ -1,5 +1,5 @@
 <div class="notification-bell" tabindex="-1" (keydown.escape)="close($event)">
-  <button #bell brnButton class="icon-button" (click)="toggle()"
+  <button #bell hlmBtn variant="ghost" size="icon" class="icon-button" (click)="toggle()"
           [attr.aria-label]="'Notifications, ' + (inbox()?.unreadCount ?? 0) + ' unread'"
           [attr.aria-expanded]="open()" aria-controls="notification-inbox">
     <svg lucideBell aria-hidden="true"></svg>
@@ -11,26 +11,29 @@
     <h2 id="notifications-heading">Notifications</h2>
     @if (error()) {
       <p role="status">{{ error() }}</p>
-      <button class="inbox-action" (click)="load()">Try again</button>
+      <button hlmBtn variant="outline" (click)="load()">Try again</button>
     } @else if (inbox()?.items?.length) {
       <ul>
         @for (item of inbox()?.items; track item.id) {
           <li>
             <a [href]="link(item)" (click)="follow($event, item)">
-              {{ labels[item.event] }}@if (item.alertId) { #{{ item.alertId }} }
+              {{ title(item) }}
             </a>
             <small>
-              <time [attr.datetime]="item.createdAt">{{ date.format(timestamp(item.createdAt)) }}</time>
+              @if (item.alertId) { <span>{{ labels[item.event] }}</span> }
+              <time [title]="date.format(timestamp(item.createdAt))" [attr.datetime]="item.createdAt">{{ relativeAge(timestamp(item.createdAt) / 1000, now()) }}</time>
               @if (!item.readAt) { <strong>Unread</strong> }
             </small>
           </li>
         }
       </ul>
       @if (inbox()?.hasMore) {
-        <button class="inbox-action" [disabled]="loading()" (click)="load(true)">Show more</button>
+        <button hlmBtn variant="outline" [disabled]="loading()" (click)="load(true)">Show more</button>
       }
+    } @else if (loading()) {
+      <hlm-skeleton role="status" aria-label="Loading notifications" class="h-8" />
     } @else {
-      <p role="status">{{ loading() ? 'Loading notifications…' : 'You have no notifications.' }}</p>
+      <fimra-empty-state heading="You have no notifications." detail="New alerts will appear here." />
     }
   </section>
 </div>

@@ -59,9 +59,15 @@ WITH inbox AS MATERIALIZED (
 )
 SELECT jsonb_build_object('unreadCount',(SELECT count(*) FROM inbox WHERE read_at IS NULL),
     'hasMore', (SELECT count(*) FROM inbox) > $2::bigint+50,
-    'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id::text,'event',event,
-        'createdAt',created_at,'readAt',read_at,'workspace',workspace,'alertId',alert_id::text)
-        ORDER BY read_at IS NOT NULL,id DESC) FROM page),'[]'))`, subject, offset).Scan(&result)
+    'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',page.id::text,'event',event,
+        'createdAt',page.created_at,'readAt',read_at,'workspace',workspace,'alertId',page.alert_id::text,
+        'forestClass',a.forest_class,'beatName',line.levels #>> '{beat,name}',
+        'divisionName',line.levels #>> '{division,name}')
+        ORDER BY read_at IS NOT NULL,page.id DESC) FROM page
+        LEFT JOIN alerts a ON a.id=page.alert_id
+        LEFT JOIN hierarchies h ON h.id=a.hierarchy_id
+        LEFT JOIN LATERAL (SELECT value AS levels FROM jsonb_each(a.hierarchy)
+            ORDER BY (key=h.slug) DESC,key LIMIT 1) line ON true),'[]'))`, subject, offset).Scan(&result)
 	if err != nil {
 		a.notificationError(w, err)
 		return
