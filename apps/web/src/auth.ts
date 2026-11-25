@@ -23,10 +23,13 @@ export class AuthService {
   constructor() {
     this.manager.events.addUserLoaded(user => this.user.set(user));
     this.manager.events.addUserUnloaded(() => this.user.set(null));
-    this.manager.events.addAccessTokenExpired(() => {
-      this.user.set(null);
-      this.error.set('Your session has ended. Sign in again.');
-    });
+    this.manager.events.addAccessTokenExpired(() => this.sessionEnded());
+  }
+
+  sessionEnded(): void {
+    if (!this.user()) return;
+    this.user.set(null);
+    void this.signIn();
   }
 
   async open(): Promise<void> {

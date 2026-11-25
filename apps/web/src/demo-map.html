@@ -4,16 +4,70 @@
   <button brnButton [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg lucideMinus></svg></button>
   <button brnButton [disabled]="!ready()" (click)="fit()" title="Fit state to map" aria-label="Fit state to map"><svg lucideMaximize></svg></button>
 </div>
+<div class="fire-controls">
+  @if (workspace.current()) {
+    <div class="filter-card">
+      <label>Show the past
+        <select #windowSelect [value]="hours()" (change)="hours.set(+windowSelect.value)">
+          <option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option>
+        </select>
+      </label>
+      <label><input #outsideCheck type="checkbox" [checked]="outside()" (change)="outside.set(outsideCheck.checked)"> Show outside forest</label>
+      <label>Detections in view
+        <select #picker [disabled]="!visible().length" (change)="choose(picker.value)">
+          <option value="" [selected]="!selected()">{{ visible().length ? 'Select a detection' : 'None in view' }}</option>
+          @for (point of visible(); track point.id) {
+            <option [value]="point.id" [selected]="point.id === selected()?.id">{{ classes[point.forest_class] }} · {{ point.beat_name || 'Unknown beat' }} · {{ relativeAge(point.observed_at, now()) }} · #{{ point.id }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  }
+  @if (workspace.message() || tileError() || error()) {
+    <p class="map-message" role="status">{{ workspace.message() || tileError() || error() }}</p>
+  }
+</div>
 <section class="map-key" aria-label="Map key">
   <button brnButton (click)="legend.set(!legend())" [attr.aria-expanded]="legend()" aria-controls="map-key-items">
     <svg lucideLayers></svg> Map key
   </button>
-  <ul id="map-key-items" [hidden]="!legend()">
+  <div id="map-key-items" class="key-groups" [hidden]="!legend()">
+    @if (workspace.current()) {
+      <div><h2>Detection age</h2><ul>
+        @for (label of ageLabels; track label; let i = $index) {
+          <li><i class="age-swatch" [style.background]="'var(--color-fire-age-' + (i+1) + ')'"></i>{{ label }}</li>
+        }
+      </ul>
+      <h2>Forest class</h2><ul>
+        @for (cls of forestClasses; track cls) {
+          <li><i class="key-symbol" [class]="cls"></i>{{ classes[cls] }}</li>
+        }
+      </ul></div>
+    }
+    <div><h2>Reference layers</h2><ul>
     @for (item of boundaries; track item.id) {
       <li><i class="key-line" [class]="item.id" [style.border-top-width.px]="item.width"></i>{{ item.label }}</li>
     }
     <li><i class="key-forest"></i>Forest</li>
     <li><i class="key-kiln"></i>Brick kiln</li>
-  </ul>
+    </ul></div>
+  </div>
 </section>
-@if (error()) { <p role="alert" class="map-message">{{ error() }}</p> }
+@if (selected(); as point) {
+  <section tabindex="-1" class="detail-card" aria-labelledby="detail-title" (keydown.escape)="closeDetails()">
+    <div class="detail-heading"><h2 id="detail-title" #detailTitle tabindex="-1">Detection details</h2>
+      <button brnButton (click)="closeDetails()" aria-label="Close detection details">Close</button></div>
+    <p>{{ localTime.format(point.observed_at * 1000) }} · {{ relativeAge(point.observed_at, now()) }}</p>
+    <dl>
+      <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
+      <dt>Beat</dt><dd>{{ point.beat_name || point.beat_code || 'Unknown' }} @if (point.beat_name && point.beat_code) { ({{ point.beat_code }}) }</dd>
+      <dt>Range</dt><dd>{{ point.range_name || 'Unknown' }}</dd>
+      <dt>Division</dt><dd>{{ point.division_name || 'Unknown' }}</dd>
+      <dt>Source</dt><dd>{{ point.source || 'Unknown' }}</dd>
+      <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
+      <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
+      <dt>Confidence</dt><dd>{{ point.confidence ?? 'Unknown' }}</dd>
+    </dl>
+    @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
+  </section>
+}

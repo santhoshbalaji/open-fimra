@@ -49,3 +49,28 @@ fimra-demo-map { display: block; height: 100%; position: relative; background: v
   .map-key ul { columns: 2; }
   .map-key li { break-inside: avoid; }
 }
+
+.fire-controls { position: absolute; left: 16px; top: 16px; max-width: calc(100% - 84px); display: grid; gap: 6px; }
+.filter-card, .detail-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 2px 9px rgb(0 0 0 / .10); }
+.filter-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; }
+.filter-card label { display: flex; align-items: center; gap: 6px; min-height: 32px; }
+.filter-card select { max-width: 165px; min-height: 32px; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-background); }
+.fire-controls .map-message { position: static; max-width: fit-content; padding: 8px 12px; }
+.key-groups:not([hidden]) { display: flex; align-items: flex-start; flex-wrap: wrap; }
+.map-key { max-width: calc(100% - 32px); max-height: 48%; overflow: auto; }
+.map-key h2 { font-size: var(--text-label); font-weight: 600; padding: 3px 12px 0; }
+.map-key ul { columns: auto; }
+.age-swatch { width: 17px; height: 8px; border-radius: 3px; }
+.key-symbol { width: 12px; height: 12px; margin-inline: 2.5px; border-radius: 50%; background: var(--color-neutral-mark); }
+.key-symbol.near_edge { background: transparent; border: 2.5px solid var(--color-neutral-mark); }
+.key-symbol.outside { width: 6px; height: 6px; margin-inline: 5.5px; }
+.key-symbol.fixed_heat_source { border-radius: 0; width: 10px; height: 10px; margin-inline: 3.5px; }
+.detail-card { position: absolute; right: 16px; bottom: 16px; width: min(360px, calc(100% - 32px)); max-height: 65%; overflow: auto; padding: 12px 16px; }
+.detail-heading { display: flex; align-items: center; justify-content: space-between; }
+.detail-heading h2 { font-weight: 600; font-size: var(--text-subhead); }
+.detail-heading button { padding: 4px 6px; color: var(--color-brand); }
+.detail-card p { color: var(--color-text-secondary); margin-block: 4px 10px; }
+.detail-card dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; }
+.detail-card dt { color: var(--color-text-secondary); }
+.detail-card dd { overflow-wrap: anywhere; }
+.detail-card .triage { border-top: 1px solid var(--color-border); padding-top: 8px; margin: 10px 0 0; }
