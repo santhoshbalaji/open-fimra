@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -88,23 +89,83 @@ func requireFormAdmin(access workspaceAccess) error {
 	return nil
 }
 
-// readFormFile reads and validates a form file. It returns the exact text,
-// the columns and the form's id and version.
-func readFormFile(w http.ResponseWriter, r *http.Request) ([]byte, []formschema.Column, string, int, error) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxFormBytes))
+// formRef names a version of a form in the same workspace.
+type formRef struct {
+	Form    string `json:"form"`
+	Version int    `json:"version"`
+}
+
+// formUpload is a form file as sent, either alone or inside an envelope
+// with its template settings:
+//
+//	{"level": "state", "extends": {"form": "first-report", "version": 1},
+//	 "template": {"allowExtension": true, "locked": ["fire"]}, "definition": {...}}
+type formUpload struct {
+	source    []byte
+	columns   []formschema.Column
+	tree      *formTree
+	key       string
+	version   int
+	envelope  bool
+	level     string
+	hierarchy string
+	unitPath  string
+	extends   *formRef
+	template  json.RawMessage
+}
+
+// readFormUpload reads and validates a form file, or an envelope around one.
+func readFormUpload(w http.ResponseWriter, r *http.Request) (*formUpload, error) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxFormBytes+64<<10))
 	if err != nil {
-		return nil, nil, "", 0, problem(http.StatusRequestEntityTooLarge, "A form file can be at most 1 MB.")
+		return nil, problem(http.StatusRequestEntityTooLarge, "A form file can be at most 1 MB.")
 	}
-	columns, problems := formschema.Columns(body)
+	u := &formUpload{source: body}
+	var probe map[string]json.RawMessage
+	if json.Unmarshal(body, &probe) == nil && probe["definition"] != nil {
+		var env struct {
+			Level      string          `json:"level"`
+			Hierarchy  string          `json:"hierarchy"`
+			UnitPath   string          `json:"unitPath"`
+			Extends    *formRef        `json:"extends"`
+			Template   json.RawMessage `json:"template"`
+			Definition json.RawMessage `json:"definition"`
+		}
+		d := json.NewDecoder(bytes.NewReader(body))
+		d.DisallowUnknownFields()
+		if d.Decode(&env) != nil || d.Decode(new(any)) != io.EOF {
+			return nil, problem(http.StatusBadRequest, "A form upload holds definition, and optionally level, hierarchy, unitPath, extends and template.")
+		}
+		if env.Level != "" && !slices.Contains(formLevels, env.Level) {
+			return nil, problem(http.StatusUnprocessableEntity, `The level must be "national", "state" or "division".`)
+		}
+		if env.UnitPath != "" && !unitPrefix.MatchString(env.UnitPath) {
+			return nil, problem(http.StatusUnprocessableEntity, "Invalid unit path.")
+		}
+		if env.Extends != nil && (!formKeyPattern.MatchString(env.Extends.Form) || env.Extends.Version < 1) {
+			return nil, problem(http.StatusUnprocessableEntity, "extends needs the form and version of a published template.")
+		}
+		u.envelope, u.level, u.hierarchy, u.unitPath, u.extends, u.template = true, env.Level, env.Hierarchy, env.UnitPath, env.Extends, env.Template
+		u.source = []byte(env.Definition)
+	}
+	if len(u.source) > maxFormBytes {
+		return nil, problem(http.StatusRequestEntityTooLarge, "A form file can be at most 1 MB.")
+	}
+	columns, problems := formschema.Columns(u.source)
 	if len(problems) > 0 {
-		return nil, nil, "", 0, problem(http.StatusUnprocessableEntity, "The form is not valid.", problems...)
+		return nil, problem(http.StatusUnprocessableEntity, "The form is not valid.", problems...)
+	}
+	u.columns = columns
+	if u.tree, err = parseFormTree(u.source); err != nil {
+		return nil, err
 	}
 	var head struct {
 		ID      string `json:"id"`
 		Version int    `json:"version"`
 	}
-	_ = json.Unmarshal(body, &head)
-	return body, columns, head.ID, head.Version, nil
+	_ = json.Unmarshal(u.source, &head)
+	u.key, u.version = head.ID, head.Version
+	return u, nil
 }
 
 func formRoute(r *http.Request) (string, int, error) {
@@ -123,15 +184,28 @@ func formRoute(r *http.Request) (string, int, error) {
 	return key, version, nil
 }
 
-// formVersionJSON describes one version. Drafts are shown only to administrators.
+// formVersionJSON describes one version. Drafts are shown only to the
+// people who manage the form.
 const formVersionJSON = `jsonb_build_object('form', f.form_key, 'version', v.version,
-    'title', v.definition->'title',
+    'title', v.definition->'title', 'level', f.level,
+    'unit', CASE WHEN f.owner_unit_path IS NOT NULL THEN jsonb_build_object(
+        'hierarchy', (SELECT h.slug FROM hierarchies h WHERE h.id = f.owner_hierarchy_id), 'path', f.owner_unit_path::text) END,
     'status', CASE WHEN v.published_at IS NULL THEN 'draft' ELSE 'published' END,
     'createdAt', v.created_at, 'updatedAt', v.updated_at, 'publishedAt', v.published_at,
     'extendsVersionId', v.extends_version_id::text,
+    'extends', (SELECT jsonb_build_object('form', pf.form_key, 'version', pv.version, 'level', pf.level)
+        FROM form_versions pv JOIN forms pf ON pf.id = pv.form_id WHERE pv.id = v.extends_version_id),
+    'template', v.template,
     'columns', v.columns,
     'views', (SELECT COALESCE(jsonb_object_agg(CASE WHEN fv.repeat_key = '' THEN 'submissions' ELSE fv.repeat_key END,
         'form_views.' || fv.view_name), '{}') FROM form_version_views fv WHERE fv.form_version_id = v.id))`
+
+// formManaged adds what only the form's managers see: how many submissions
+// each version has, so they can tell which versions are in use.
+func formManaged(subject string) string {
+	return `|| CASE WHEN form_manager(` + subject + `, f.id) THEN jsonb_build_object('canManage', true,
+    'submissionCount', (SELECT count(*) FROM submissions s WHERE s.form_version_id = v.id)) ELSE '{}' END`
+}
 
 func (a api) forms(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
@@ -141,13 +215,10 @@ func (a api) forms(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	var result json.RawMessage
 	status := http.StatusOK
-	var body []byte
-	var columns []formschema.Column
-	var fileKey string
-	var fileVersion int
+	var upload *formUpload
 	var err error
 	if r.Method == http.MethodPost || r.Method == http.MethodPut {
-		body, columns, fileKey, fileVersion, err = readFormFile(w, r)
+		upload, err = readFormUpload(w, r)
 	}
 	if err == nil {
 		err = pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
@@ -158,44 +229,42 @@ func (a api) forms(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case r.Method == http.MethodGet && chi.URLParam(r, "form") == "":
 				return tx.QueryRow(ctx, `
-SELECT COALESCE(jsonb_agg(jsonb_build_object('form', f.form_key,
-    'versions', (SELECT jsonb_agg(`+formVersionJSON+` - 'columns' - 'views' ORDER BY v.version)
-        FROM form_versions v WHERE v.form_id = f.id AND ($2 OR v.published_at IS NOT NULL)),
+SELECT COALESCE(jsonb_agg(jsonb_build_object('form', f.form_key, 'level', f.level,
+    'unit', CASE WHEN f.owner_unit_path IS NOT NULL THEN jsonb_build_object(
+        'hierarchy', (SELECT h.slug FROM hierarchies h WHERE h.id = f.owner_hierarchy_id), 'path', f.owner_unit_path::text) END,
+    'canManage', form_manager($3, f.id),
+    'versions', (SELECT jsonb_agg(`+formVersionJSON+` - 'columns' - 'views' `+formManaged("$3")+` ORDER BY v.version)
+        FROM form_versions v WHERE v.form_id = f.id AND ($2 OR v.published_at IS NOT NULL OR form_manager($3, f.id))),
     'assignments', (SELECT COALESCE(jsonb_agg(jsonb_build_object('step', fa.step, 'version', av.version,
         'hierarchy', h.slug, 'unitPaths', to_jsonb(fa.unit_paths::text[])) ORDER BY fa.step), '[]')
         FROM form_assignments fa JOIN form_versions av ON av.id = fa.form_version_id
-        LEFT JOIN hierarchies h ON h.id = fa.hierarchy_id WHERE fa.form_id = f.id)) ORDER BY f.form_key), '[]')
+        LEFT JOIN hierarchies h ON h.id = fa.hierarchy_id WHERE fa.form_id = f.id))
+    ORDER BY array_position(ARRAY['national', 'state', 'division'], f.level), f.form_key), '[]')
 FROM forms f WHERE f.workspace_id = $1
-  AND ($2 OR EXISTS (SELECT FROM form_versions v WHERE v.form_id = f.id AND v.published_at IS NOT NULL))`,
-					access.workspaceID, access.admin).Scan(&result)
+  AND ($2 OR form_manager($3, f.id) OR EXISTS (SELECT FROM form_versions v WHERE v.form_id = f.id AND v.published_at IS NOT NULL))`,
+					access.workspaceID, access.admin, subject).Scan(&result)
 			case r.Method == http.MethodGet:
 				key, version, err := formRoute(r)
 				if err != nil {
 					return err
 				}
 				return tx.QueryRow(ctx, `
-SELECT `+formVersionJSON+` || jsonb_build_object('definition', v.source::jsonb)
+SELECT `+formVersionJSON+` || jsonb_build_object('definition', v.source::jsonb) `+formManaged("$3")+`
 FROM forms f JOIN form_versions v ON v.form_id = f.id
-WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 AND ($4 OR v.published_at IS NOT NULL)`,
-					access.workspaceID, key, version, access.admin).Scan(&result)
+WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $4 AND (v.published_at IS NOT NULL OR form_manager($3, f.id))`,
+					access.workspaceID, key, subject, version).Scan(&result)
 			case r.Method == http.MethodPost:
-				if err := requireFormAdmin(access); err != nil {
-					return err
-				}
 				status = http.StatusCreated
-				return createFormVersion(ctx, tx, access, body, columns, fileKey, fileVersion, &result)
+				return createFormVersion(ctx, tx, subject, access, upload, &result)
 			default:
-				if err := requireFormAdmin(access); err != nil {
-					return err
-				}
 				key, version, err := formRoute(r)
 				if err != nil {
 					return err
 				}
-				if key != fileKey || version != fileVersion {
+				if key != upload.key || version != upload.version {
 					return problem(http.StatusUnprocessableEntity, "The form file's id and version must match the address.")
 				}
-				return updateFormDraft(ctx, tx, access, body, columns, key, version, &result)
+				return updateFormDraft(ctx, tx, subject, access, upload, &result)
 			}
 		})
 	}
@@ -204,71 +273,251 @@ WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 AND ($4 OR v.pu
 		return
 	}
 	if status == http.StatusCreated {
-		w.Header().Set("Location", "/api/v1/workspaces/"+slug+"/forms/"+fileKey+"/versions/"+strconv.Itoa(fileVersion))
+		w.Header().Set("Location", "/api/v1/workspaces/"+slug+"/forms/"+upload.key+"/versions/"+strconv.Itoa(upload.version))
 	}
 	writeJSON(w, status, result)
 }
 
-func createFormVersion(ctx context.Context, tx pgx.Tx, access workspaceAccess, body []byte, columns []formschema.Column, key string, version int, result *json.RawMessage) error {
-	columnJSON, err := json.Marshal(columns)
-	if err != nil {
-		return err
-	}
-	var formID int64
-	err = tx.QueryRow(ctx, `
-WITH added AS (
-    INSERT INTO forms (workspace_id, form_key, created_by) VALUES ($1, $2, $3)
-    ON CONFLICT (workspace_id, form_key) DO NOTHING RETURNING id
-)
-SELECT id FROM added UNION ALL SELECT id FROM forms WHERE workspace_id = $1 AND form_key = $2`,
-		access.workspaceID, key, access.userID).Scan(&formID)
-	if err != nil {
-		return err
-	}
-	// Lock the form so two new versions cannot take the same number.
-	var latest int
-	if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT max(version) FROM form_versions WHERE form_id = $1), 0)
-FROM forms WHERE id = $1 FOR UPDATE`, formID).Scan(&latest); err != nil {
-		return err
-	}
-	if version <= latest {
-		return problem(http.StatusConflict, "Version "+strconv.Itoa(version)+" is not newer than version "+strconv.Itoa(latest)+
-			" of this form. Change a draft with PUT, or give the new version the next number.")
-	}
-	return tx.QueryRow(ctx, `
-WITH v AS (
-    INSERT INTO form_versions (form_id, version, source, definition, columns, created_by)
-    VALUES ($1, $2, $3::text, $3::jsonb, $4, $5) RETURNING *
-)
-SELECT `+formVersionJSON+` FROM v JOIN forms f ON f.id = v.form_id`,
-		formID, version, string(body), columnJSON, access.userID).Scan(result)
+// storedForm is a form row with its owner.
+type storedForm struct {
+	id        int64
+	level     string
+	hierarchy string
+	unitPath  string
 }
 
-func updateFormDraft(ctx context.Context, tx pgx.Tx, access workspaceAccess, body []byte, columns []formschema.Column, key string, version int, result *json.RawMessage) error {
+// findOrAddForm finds the form an upload belongs to, or adds it at the
+// upload's level, and checks that the caller manages it. The form row is
+// locked, so two new versions cannot take the same number.
+func findOrAddForm(ctx context.Context, tx pgx.Tx, subject string, access workspaceAccess, u *formUpload, add bool) (storedForm, error) {
+	var f storedForm
+	err := tx.QueryRow(ctx, `SELECT f.id, f.level, COALESCE(h.slug, ''), COALESCE(f.owner_unit_path::text, '')
+FROM forms f LEFT JOIN hierarchies h ON h.id = f.owner_hierarchy_id
+WHERE f.workspace_id = $1 AND f.form_key = $2 FOR UPDATE OF f`, access.workspaceID, u.key).Scan(&f.id, &f.level, &f.hierarchy, &f.unitPath)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows) && !add:
+		return f, err
+	case errors.Is(err, pgx.ErrNoRows):
+		f.level = u.level
+		if f.level == "" {
+			f.level = "state"
+		}
+		if f.level != "division" && (u.hierarchy != "" || u.unitPath != "") {
+			return f, problem(http.StatusUnprocessableEntity, "Only a division form has a hierarchy and unit path.")
+		}
+		if f.level != "division" {
+			if err := requireFormAdmin(access); err != nil {
+				return f, err
+			}
+			err = tx.QueryRow(ctx, `INSERT INTO forms (workspace_id, form_key, level, created_by) VALUES ($1, $2, $3, $4) RETURNING id`,
+				access.workspaceID, u.key, f.level, access.userID).Scan(&f.id)
+			return f, err
+		}
+		if u.hierarchy == "" || u.unitPath == "" {
+			return f, problem(http.StatusUnprocessableEntity, "A division form needs the hierarchy and unit path of the unit that owns it.")
+		}
+		var hierarchyID string
+		err = tx.QueryRow(ctx, `SELECT h.id::text FROM hierarchies h JOIN units u ON u.hierarchy_id = h.id
+WHERE h.workspace_id = $1 AND h.slug = $2 AND u.current_path = $3::ltree AND nlevel(u.current_path) > 1`,
+			access.workspaceID, u.hierarchy, u.unitPath).Scan(&hierarchyID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return f, problem(http.StatusUnprocessableEntity, "No current unit below the top of that hierarchy has the path "+u.unitPath+".")
+		}
+		if err != nil {
+			return f, err
+		}
+		f.hierarchy, f.unitPath = u.hierarchy, u.unitPath
+		err = tx.QueryRow(ctx, `INSERT INTO forms (workspace_id, form_key, level, owner_hierarchy_id, owner_unit_path, created_by)
+VALUES ($1, $2, 'division', $3, $4::ltree, $5) RETURNING id`, access.workspaceID, u.key, hierarchyID, u.unitPath, access.userID).Scan(&f.id)
+		if err != nil {
+			return f, err
+		}
+	case err != nil:
+		return f, err
+	default:
+		if u.level != "" && u.level != f.level {
+			return f, problem(http.StatusUnprocessableEntity, "This form is a "+f.level+" form. A form keeps its level.")
+		}
+		if (u.hierarchy != "" && u.hierarchy != f.hierarchy) || (u.unitPath != "" && u.unitPath != f.unitPath) {
+			return f, problem(http.StatusUnprocessableEntity, "A division form keeps the unit that owns it.")
+		}
+	}
+	var manager bool
+	if err := tx.QueryRow(ctx, `SELECT form_manager($1, $2)`, subject, f.id).Scan(&manager); err != nil {
+		return f, err
+	}
+	if !manager {
+		if f.level == "division" {
+			return f, problem(http.StatusForbidden, "A supervising officer for "+f.unitPath+" or a workspace administrator at the root is required.")
+		}
+		return f, problem(http.StatusForbidden, "A workspace administrator role at the root is required.")
+	}
+	return f, nil
+}
+
+// templateSettings works out a version's template rules and the version it
+// extends, and checks the form against the locked parts of that version.
+func templateSettings(ctx context.Context, tx pgx.Tx, access workspaceAccess, f storedForm, u *formUpload, extends *formRef, rawRules json.RawMessage) (*int64, templateRules, error) {
+	rules, problems := parseTemplateRules(rawRules, u.tree)
+	if len(problems) > 0 {
+		return nil, rules, problem(http.StatusUnprocessableEntity, "The template rules are not valid.", problems...)
+	}
+	if f.level == "division" && rules.AllowExtension {
+		return nil, rules, problem(http.StatusUnprocessableEntity, "Division forms are the lowest level, so no form can extend them.")
+	}
+	if extends == nil {
+		if f.level == "division" {
+			return nil, rules, problem(http.StatusUnprocessableEntity, "A division form must extend a state form. Name it in extends.")
+		}
+		return nil, rules, nil
+	}
+	want := parentLevel(f.level)
+	if want == "" {
+		return nil, rules, problem(http.StatusUnprocessableEntity, "A national template comes from a national body and does not extend another form.")
+	}
+	if extends.Form == u.key {
+		return nil, rules, problem(http.StatusUnprocessableEntity, "A form cannot extend itself. Give the new form its own id.")
+	}
+	var parentID int64
+	var level, source string
+	var published bool
+	var rulesJSON []byte
+	err := tx.QueryRow(ctx, `SELECT v.id, pf.level, v.source, v.published_at IS NOT NULL, v.template
+FROM forms pf JOIN form_versions v ON v.form_id = pf.id
+WHERE pf.workspace_id = $1 AND pf.form_key = $2 AND v.version = $3`, access.workspaceID, extends.Form, extends.Version).Scan(&parentID, &level, &source, &published, &rulesJSON)
+	name := extends.Form + " version " + strconv.Itoa(extends.Version)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !published) {
+		return nil, rules, problem(http.StatusUnprocessableEntity, "The form extends "+name+", which is not a published version in this workspace.")
+	}
+	if err != nil {
+		return nil, rules, err
+	}
+	if level != want {
+		words := map[string]string{"state": "A state form can extend only a national template.", "division": "A division form can extend only a state form."}
+		return nil, rules, problem(http.StatusUnprocessableEntity, words[f.level])
+	}
+	var parentRules templateRules
+	if err := json.Unmarshal(rulesJSON, &parentRules); err != nil {
+		return nil, rules, err
+	}
+	if !parentRules.AllowExtension {
+		return nil, rules, problem(http.StatusUnprocessableEntity, name+" does not allow other forms to extend it.")
+	}
+	problems, err = checkExtension([]byte(source), parentRules, u.source)
+	if err != nil {
+		return nil, rules, err
+	}
+	if len(problems) > 0 {
+		return nil, rules, problem(http.StatusUnprocessableEntity, "The form changes locked parts of "+name+".", problems...)
+	}
+	return &parentID, mergeLocks(rules, parentRules), nil
+}
+
+func createFormVersion(ctx context.Context, tx pgx.Tx, subject string, access workspaceAccess, u *formUpload, result *json.RawMessage) error {
+	f, err := findOrAddForm(ctx, tx, subject, access, u, true)
+	if err != nil {
+		return err
+	}
+	var latest int
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) FROM form_versions WHERE form_id = $1`, f.id).Scan(&latest); err != nil {
+		return err
+	}
+	if u.version <= latest {
+		return problem(http.StatusConflict, "Version "+strconv.Itoa(u.version)+" is not newer than version "+strconv.Itoa(latest)+
+			" of this form. Change a draft with PUT, or give the new version the next number.")
+	}
+	extendsID, rules, err := templateSettings(ctx, tx, access, f, u, u.extends, u.template)
+	if err != nil {
+		return err
+	}
+	columnJSON, err := json.Marshal(u.columns)
+	if err != nil {
+		return err
+	}
+	rulesJSON, err := json.Marshal(rules)
+	if err != nil {
+		return err
+	}
+	var id int64
+	if err := tx.QueryRow(ctx, `
+INSERT INTO form_versions (form_id, version, source, definition, columns, template, extends_version_id, created_by)
+VALUES ($1, $2, $3::text, $3::jsonb, $4, $5, $6, $7) RETURNING id`,
+		f.id, u.version, string(u.source), columnJSON, rulesJSON, extendsID, access.userID).Scan(&id); err != nil {
+		return err
+	}
+	// A national template arrives from the national body ready to use, so
+	// nobody in the workspace edits it as a draft.
+	if f.level == "national" {
+		if err := publishFormVersion(ctx, tx, id, string(u.source), access.userID); err != nil {
+			return err
+		}
+	}
+	return versionResult(ctx, tx, id, subject, result)
+}
+
+func versionResult(ctx context.Context, tx pgx.Tx, id int64, subject string, result *json.RawMessage) error {
+	return tx.QueryRow(ctx, `SELECT `+formVersionJSON+` `+formManaged("$2")+`
+FROM form_versions v JOIN forms f ON f.id = v.form_id WHERE v.id = $1`, id, subject).Scan(result)
+}
+
+func updateFormDraft(ctx context.Context, tx pgx.Tx, subject string, access workspaceAccess, u *formUpload, result *json.RawMessage) error {
+	f, err := findOrAddForm(ctx, tx, subject, access, u, false)
+	if err != nil {
+		return err
+	}
+	if f.level == "national" {
+		return problem(http.StatusConflict, "A national template arrives published and never changes. Add the national body's next version instead.")
+	}
 	var id int64
 	var published bool
-	err := tx.QueryRow(ctx, `SELECT v.id, v.published_at IS NOT NULL FROM forms f JOIN form_versions v ON v.form_id = f.id
-WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 FOR UPDATE OF v`, access.workspaceID, key, version).Scan(&id, &published)
+	var rulesJSON []byte
+	var extends *formRef
+	err = tx.QueryRow(ctx, `SELECT v.id, v.published_at IS NOT NULL, v.template,
+    (SELECT jsonb_build_object('form', pf.form_key, 'version', pv.version) FROM form_versions pv JOIN forms pf ON pf.id = pv.form_id
+     WHERE pv.id = v.extends_version_id)
+FROM form_versions v WHERE v.form_id = $1 AND v.version = $2 FOR UPDATE`, f.id, u.version).Scan(&id, &published, &rulesJSON, &extends)
 	if err != nil {
 		return err
 	}
 	if published {
 		return problem(http.StatusConflict, "Published versions never change. Add a new version instead.")
 	}
-	columnJSON, err := json.Marshal(columns)
+	// With a plain form file the draft keeps its template settings. An
+	// envelope replaces them.
+	rawRules := json.RawMessage(rulesJSON)
+	if u.envelope {
+		extends, rawRules = u.extends, u.template
+	} else {
+		// Keep the locks on keys the new file still has. If it drops a key
+		// the parent locked, the extension check says so.
+		var stored templateRules
+		if err := json.Unmarshal(rulesJSON, &stored); err != nil {
+			return err
+		}
+		stored.Locked = slices.DeleteFunc(stored.Locked, func(key string) bool { return u.tree.byKey[key] == nil })
+		rawRules, _ = json.Marshal(stored)
+	}
+	extendsID, rules, err := templateSettings(ctx, tx, access, f, u, extends, rawRules)
 	if err != nil {
 		return err
 	}
-	return tx.QueryRow(ctx, `
-WITH v AS (
-    UPDATE form_versions SET source = $2::text, definition = $2::jsonb, columns = $3, updated_at = now()
-    WHERE id = $1 RETURNING *
-)
-SELECT `+formVersionJSON+` FROM v JOIN forms f ON f.id = v.form_id`, id, string(body), columnJSON).Scan(result)
+	columnJSON, err := json.Marshal(u.columns)
+	if err != nil {
+		return err
+	}
+	newRules, err := json.Marshal(rules)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE form_versions SET source = $2::text, definition = $2::jsonb, columns = $3, template = $4,
+    extends_version_id = $5, updated_at = now() WHERE id = $1`, id, string(u.source), columnJSON, newRules, extendsID); err != nil {
+		return err
+	}
+	return versionResult(ctx, tx, id, subject, result)
 }
 
-// publishForm freezes a draft and creates its flat views in the same
-// transaction. Publishing a published version again returns it unchanged.
+// publishForm publishes a draft. Publishing a published version again
+// returns it unchanged.
 func (a api) publishForm(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
@@ -276,9 +525,6 @@ func (a api) publishForm(w http.ResponseWriter, r *http.Request) {
 	var result json.RawMessage
 	err := pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
 		access, err := formAccess(ctx, tx, subject, chi.URLParam(r, "slug"))
-		if err == nil {
-			err = requireFormAdmin(access)
-		}
 		if err != nil {
 			return err
 		}
@@ -287,20 +533,47 @@ func (a api) publishForm(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var id int64
-		var published bool
+		var published, manager bool
 		var source string
-		var columnJSON []byte
-		err = tx.QueryRow(ctx, `SELECT v.id, v.published_at IS NOT NULL, v.source, v.columns FROM forms f JOIN form_versions v ON v.form_id = f.id
-WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 FOR UPDATE OF v`, access.workspaceID, key, version).Scan(&id, &published, &source, &columnJSON)
+		var rulesJSON []byte
+		var extends *formRef
+		err = tx.QueryRow(ctx, `SELECT v.id, v.published_at IS NOT NULL, v.source, v.template, form_manager($4, f.id),
+    (SELECT jsonb_build_object('form', pf.form_key, 'version', pv.version) FROM form_versions pv JOIN forms pf ON pf.id = pv.form_id
+     WHERE pv.id = v.extends_version_id)
+FROM forms f JOIN form_versions v ON v.form_id = f.id
+WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 FOR UPDATE OF v`, access.workspaceID, key, version, subject).Scan(&id, &published, &source, &rulesJSON, &manager, &extends)
 		if err != nil {
 			return err
 		}
+		if !manager {
+			return problem(http.StatusForbidden, "Only the people who manage this form can publish it.")
+		}
 		if !published {
+			if extends != nil {
+				// The template it extends is frozen, but the checks may be newer.
+				var parentSource string
+				var parentRules []byte
+				if err := tx.QueryRow(ctx, `SELECT pv.source, pv.template FROM form_versions v JOIN form_versions pv ON pv.id = v.extends_version_id
+WHERE v.id = $1`, id).Scan(&parentSource, &parentRules); err != nil {
+					return err
+				}
+				var rules templateRules
+				if err := json.Unmarshal(parentRules, &rules); err != nil {
+					return err
+				}
+				problems, err := checkExtension([]byte(parentSource), rules, []byte(source))
+				if err != nil {
+					return err
+				}
+				if len(problems) > 0 {
+					return problem(http.StatusUnprocessableEntity, "The form changes locked parts of "+extends.Form+" version "+strconv.Itoa(extends.Version)+".", problems...)
+				}
+			}
 			if err := publishFormVersion(ctx, tx, id, source, access.userID); err != nil {
 				return err
 			}
 		}
-		return tx.QueryRow(ctx, `SELECT `+formVersionJSON+` FROM form_versions v JOIN forms f ON f.id = v.form_id WHERE v.id = $1`, id).Scan(&result)
+		return versionResult(ctx, tx, id, subject, &result)
 	})
 	if err != nil {
 		a.writeProblem(w, err, "Form version not found.", "Could not publish the form")
@@ -423,12 +696,15 @@ func (a api) formAssignment(w http.ResponseWriter, r *http.Request) {
 		}
 		var formID, templateID int64
 		var stepFound bool
+		var level, ownerHierarchy, ownerPath string
 		err = tx.QueryRow(ctx, `
-SELECT f.id, t.id, EXISTS (SELECT FROM workflow_steps s WHERE s.template_id = t.id AND s.slug = $3)
+SELECT f.id, t.id, EXISTS (SELECT FROM workflow_steps s WHERE s.template_id = t.id AND s.slug = $3),
+    f.level, COALESCE(f.owner_hierarchy_id::text, ''), COALESCE(f.owner_unit_path::text, '')
 FROM forms f CROSS JOIN LATERAL (
     SELECT t.id FROM workflow_templates t WHERE t.workspace_id IS NULL OR t.workspace_id = f.workspace_id
     ORDER BY t.workspace_id NULLS LAST LIMIT 1) t
-WHERE f.workspace_id = $1 AND f.form_key = $2 FOR UPDATE OF f`, access.workspaceID, key, step).Scan(&formID, &templateID, &stepFound)
+WHERE f.workspace_id = $1 AND f.form_key = $2 FOR UPDATE OF f`, access.workspaceID, key, step).Scan(&formID, &templateID, &stepFound,
+			&level, &ownerHierarchy, &ownerPath)
 		if err != nil {
 			return err
 		}
@@ -480,6 +756,16 @@ WHERE h.workspace_id = $1 AND h.slug = $2 GROUP BY h.id`, access.workspaceID, in
 			}
 			if len(missing) > 0 {
 				return problem(http.StatusUnprocessableEntity, "No current unit has the path "+strings.Join(missing, ", ")+".")
+			}
+		}
+		// A division form is used only under the unit that owns it.
+		if level == "division" {
+			inside := hierarchyID != nil && *hierarchyID == ownerHierarchy
+			for _, p := range input.UnitPaths {
+				inside = inside && (p == ownerPath || strings.HasPrefix(p, ownerPath+"."))
+			}
+			if !inside {
+				return problem(http.StatusUnprocessableEntity, "A division form can be assigned only under its own unit, "+ownerPath+".")
 			}
 		}
 		if input.UnitPaths == nil {
