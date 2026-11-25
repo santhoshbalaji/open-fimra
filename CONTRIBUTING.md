@@ -99,6 +99,20 @@ Each stack has about 2.5 GB of memory available. The optional geo worker has a s
 
 Write documentation and interface text in plain English: short sentences, everyday words, and no unexplained abbreviations.
 
+## Running the first-run wizard
+
+A fresh install starts with the setup wizard instead of the demo data. To try it by hand, use an empty, migrated database without `make seed-test` or `make demo-detections`. Set `FIMRA_SETTINGS_KEY` in `.env` (make one with `openssl rand -base64 32`) so the FIRMS key can be saved. Start the API and copy the `setupCode` it prints, then sign in as `state.admin`.
+
+Run these before pushing changes to setup:
+
+```bash
+make dev                      # the tests build the geo worker image and start their own copy
+make wizard-test-integration  # an empty database to a working alert map, through the wizard's endpoints
+make wizard-walkthrough       # the same in headless Chromium, with screenshots outside the repository
+```
+
+Both create their own database beside the development one (`fimra_wizard_test` and `fimra_walkthrough`) and run a geo worker against it, so they leave the demo data alone. Both use a fake FIRMS server and the mail catcher, so nothing reaches NASA or a real mailbox.
+
 ## Trying email notifications
 
 Run `make mail-up` to start the local mail catcher. Add these settings to your

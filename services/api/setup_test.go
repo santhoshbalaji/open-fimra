@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -205,6 +206,26 @@ func TestMaskEmail(t *testing.T) {
 	} {
 		if got := maskEmail(in); got != want {
 			t.Errorf("maskEmail(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The wizard saves the FIRMS key with PUT and revokes invitations with DELETE.
+func TestPreflightAllowsWizardMethods(t *testing.T) {
+	handler := allowOrigins(devOrigins)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("a preflight request must not reach the handler")
+	}))
+	for method, want := range map[string]int{"PUT": 204, "DELETE": 204, "POST": 204, "PATCH": 403} {
+		r := httptest.NewRequest(http.MethodOptions, "/api/v1/workspaces/demo/settings/firms", nil)
+		r.Header.Set("Origin", "http://127.0.0.1:4200")
+		r.Header.Set("Access-Control-Request-Method", method)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != want || (want == 204 && w.Header().Get("Access-Control-Allow-Methods") != method) {
+			t.Errorf("%s preflight got HTTP %d, methods %q", method, w.Code, w.Header().Get("Access-Control-Allow-Methods"))
+		}
+		if method == "PUT" && w.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type" {
+			t.Errorf("PUT preflight must allow Content-Type, got %q", w.Header().Get("Access-Control-Allow-Headers"))
 		}
 	}
 }
