@@ -28,11 +28,13 @@ The development stack binds to 127.0.0.1 only:
 
 These defaults are for local development only. `make dev-down` stops the stack and keeps its data; `make dev-reset` deletes the data too.
 
+Database migrations need Go (the version in CI is the current stable release). `make db-migrate` applies them, and `make db-test` checks that they roll back cleanly and runs the schema tests. See [db/migrations](db/migrations/README.md).
+
 ## Making a change
 
 1. Branch from `main`.
 2. Keep each pull request to one slice or one clear change.
-3. Run `make check` before pushing. Continuous integration runs the same checks.
+3. Run `make check` before pushing, and `make db-test` if you changed the database. Continuous integration runs the same checks.
 4. Describe what changed and how you tested it in the pull request.
 
 Write documentation and interface text in plain English: short sentences, everyday words, and no unexplained abbreviations.

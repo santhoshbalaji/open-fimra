@@ -23,3 +23,18 @@ jobs:
         run: shellcheck scripts/*.sh
       - name: Run repository checks
         run: make check
+
+  database:
+    name: Database migrations and schema tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Start the development database
+        run: make db-up
+      - name: Apply, roll back and reapply migrations, then run the schema tests
+        run: make db-test
