@@ -1,0 +1,261 @@
+<div class="setup-page">
+  <div class="setup-title">
+    <h2>First-run setup</h2>
+    @if (state(); as state) { <p>{{ state.workspace.name }}</p> }
+    <button brnButton type="button" class="setup-link" (click)="leave.emit()">Leave setup for now</button>
+  </div>
+  @if (state(); as state) {
+    <div class="setup-layout">
+      <nav class="setup-steps" aria-label="Setup steps">
+        <ol>
+          @for (item of steps; track item.key; let index = $index) {
+            <li>
+              <button brnButton type="button" [attr.aria-current]="step() === item.key ? 'step' : null" (click)="go(item.key)"
+                [attr.aria-label]="(index + 1) + '. ' + item.label + ', ' + statusLabel(item.key)">
+                <span class="step-number" aria-hidden="true">{{ index + 1 }}</span>
+                <span>{{ item.label }}</span>
+                <small>{{ statusLabel(item.key) }}</small>
+              </button>
+            </li>
+          }
+        </ol>
+      </nav>
+
+      <section class="setup-card setup-step" aria-labelledby="step-heading">
+        <p class="step-count">Step {{ stepIndex() + 1 }} of {{ steps.length }}</p>
+        <h3 id="step-heading" #stepHeading tabindex="-1">{{ steps[stepIndex()].label }}</h3>
+        @if (error()) { <p class="setup-error" role="alert">{{ error() }}</p> }
+        @if (notice()) { <p class="setup-notice" role="status">{{ notice() }}</p> }
+
+        @switch (step()) {
+          @case ('mode') {
+            <p><strong>{{ state.mode === 'state' ? 'State mode' : 'National mode' }}.</strong>
+              This installation serves one state forest department.</p>
+            <p>National mode, for a national body that follows several states, is not available yet.
+              Phase 1 fully supports state mode only.</p>
+            <button brnButton type="button" class="setup-primary" (click)="next()">Next</button>
+          }
+          @case ('workspace') {
+            <dl class="setup-summary">
+              <div><dt>Name</dt><dd>{{ state.workspace.name }}</dd></div>
+              <div><dt>Address</dt><dd>{{ state.workspace.slug }}</dd></div>
+              <div><dt>State code</dt><dd>{{ state.root?.code }}</dd></div>
+            </dl>
+            <p>These were chosen when setup started. The state boundary file must use the state code above.</p>
+            <button brnButton type="button" class="setup-primary" (click)="next()">Next</button>
+          }
+          @case ('hierarchy') {
+            <p>Choose the levels your department uses, from the state down to the smallest unit. You can change the
+              labels, including the Hindi ones. A level's identifier cannot change once it has units.</p>
+            <fieldset class="choice-group" [disabled]="busy()">
+              <legend>Preset</legend>
+              @for (preset of state.presets; track preset.slug) {
+                <label class="choice">
+                  <input type="radio" name="preset" [value]="preset.slug" [checked]="presetSlug() === preset.slug"
+                    (change)="choosePreset(preset.slug)">
+                  {{ preset.name }}
+                </label>
+              }
+            </fieldset>
+            <table class="level-table">
+              <caption>Level labels</caption>
+              <thead><tr><th scope="col">Level</th><th scope="col">English</th><th scope="col">Hindi</th></tr></thead>
+              <tbody>
+                @for (level of levels(); track level.slug; let index = $index) {
+                  <tr>
+                    <th scope="row">{{ index + 1 }}. <code>{{ level.slug }}</code></th>
+                    <td><input [attr.aria-label]="'English label for level ' + (index + 1)" maxlength="60" required
+                      [value]="level.labels['en'] ?? ''" (input)="setLabel(index, 'en', $any($event.target).value)"></td>
+                    <td><input lang="hi" [attr.aria-label]="'Hindi label for level ' + (index + 1)" maxlength="60"
+                      [value]="level.labels['hi'] ?? ''" (input)="setLabel(index, 'hi', $any($event.target).value)"></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <button brnButton type="button" class="setup-primary" [disabled]="busy() || !levels().length"
+              (click)="saveHierarchy()">Save hierarchy</button>
+          }
+          @case ('layers') {
+            <p>Upload one file for each level, in order from the state down, then the forest layer. Known heat sources,
+              such as brick kilns, are optional. Each upload is checked in the background. Publish it once it has no
+              blocking problems. The published state boundary becomes the workspace boundary.</p>
+            <fieldset class="mapping" [disabled]="busy()">
+              <legend>Field names in your files</legend>
+              <div class="fields">
+                <label>Name field <input [value]="fields().nameField" required maxlength="255"
+                  (input)="fields.set({ ...fields(), nameField: $any($event.target).value })"></label>
+                <label>Code field <input [value]="fields().codeField" maxlength="255"
+                  (input)="fields.set({ ...fields(), codeField: $any($event.target).value })"></label>
+                <label>Parent code field <input [value]="fields().parentCodeField" maxlength="255"
+                  (input)="fields.set({ ...fields(), parentCodeField: $any($event.target).value })"></label>
+              </div>
+            </fieldset>
+            <ul class="layer-checklist">
+              @for (layer of state.layers; track layer.key) {
+                <li [class.is-locked]="lockedLayers().has(layer.key)">
+                  <div class="layer-row">
+                    <div>
+                      <strong>{{ layer.name }}</strong>@if (!layer.required) { <small> (optional)</small> }
+                      <p class="layer-state" [class.is-done]="layer.published">{{ layerStatus(layer) }}</p>
+                    </div>
+                    @if (lockedLayers().has(layer.key)) {
+                      <small>Publish the levels above first.</small>
+                    } @else {
+                      <div class="layer-actions">
+                        <label class="visually-hidden" [for]="'file-' + layer.key">File for {{ layer.name }}</label>
+                        <input #file type="file" [id]="'file-' + layer.key" accept=".gpkg,.zip,.geojson,.kml,.kmz"
+                          [disabled]="busy()">
+                        <button brnButton type="button" class="setup-secondary" [disabled]="busy()"
+                          (click)="uploadLayer(layer, file)">Upload</button>
+                        @if (canPublish(layer)) {
+                          <button brnButton type="button" class="setup-primary" [disabled]="busy()"
+                            (click)="publishLayer(layer)">Publish</button>
+                        }
+                      </div>
+                    }
+                  </div>
+                  @if (layerMessages()[layer.key]; as message) { <p class="layer-message" role="status">{{ message }}</p> }
+                  @if (blocking(layer); as problems) {
+                    @if (problems.length) {
+                      <div class="setup-error">
+                        <p>Correct these problems in the file and upload it again:</p>
+                        <ul>
+                          @for (problem of problems; track $index) {
+                            <li>@if (problem.featureRef) { <small>{{ problem.featureRef }}</small> } {{ problem.message }}</li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                  }
+                  @if (reviewCount(layer)) {
+                    <p><small>{{ reviewCount(layer) }} {{ reviewCount(layer) === 1 ? 'item' : 'items' }} to review that do not block publishing.</small></p>
+                  }
+                </li>
+              }
+            </ul>
+            <p>For a full review with previews of past detections, use the
+              <button brnButton type="button" class="setup-link" (click)="openLayers.emit()">Layers screen</button>.</p>
+            @if (!state.boundarySet) { <p class="setup-hint">The workspace boundary is set when the state level is published.</p> }
+            <button brnButton type="button" class="setup-primary" [disabled]="busy() || !layersReady()"
+              (click)="finishLayers()">Continue</button>
+          }
+          @case ('firms') {
+            <p>NASA FIRMS sends satellite fire detections. Request a free map key at
+              <a href="https://firms.modaps.eosdis.nasa.gov/api/map_key/" target="_blank" rel="noopener">the FIRMS map key page</a>
+              with a department mailbox, not a personal address.</p>
+            <p role="status" class="setup-summary-line">
+              @switch (state.firms.source) {
+                @case ('settings') { A key is saved, set on {{ state.firms.setAt | date:'medium' }}@if (state.firms.hint) {, ending in {{ state.firms.hint }}}. It is stored encrypted and is never shown again. }
+                @case ('environment') { This server uses the key in its FIMRA_FIRMS_MAP_KEY setting. A key saved here takes its place. }
+                @default { No key is saved yet. }
+              }
+            </p>
+            @if (state.firms.encryption) {
+              <form class="inline-form" (submit)="$event.preventDefault(); saveKey(keyInput)">
+                <label>Map key
+                  <input #keyInput type="password" autocomplete="off" spellcheck="false" maxlength="64" required
+                    pattern="[A-Za-z0-9]{16,64}" aria-describedby="key-help">
+                  <small id="key-help">Paste the key from the FIRMS email. It is saved, then tested.</small>
+                </label>
+                <button brnButton type="submit" class="setup-primary" [disabled]="busy()">Save and test</button>
+              </form>
+            } @else {
+              <p class="setup-error">Encrypted settings are off on this server, so a key cannot be saved here. Ask the
+                system operator to set FIMRA_SETTINGS_KEY.</p>
+            }
+            @if (state.firms.source !== 'none') {
+              <button brnButton type="button" class="setup-secondary" [disabled]="busy()" (click)="testKey()">Test connection</button>
+            }
+            @if (firmsResult(); as result) {
+              <p role="status" [class]="result.ok ? 'setup-notice' : 'setup-error'">{{ result.message }}</p>
+            }
+            @if (skippingFirms()) {
+              <div class="setup-error" role="alert">
+                <p><strong>Without a key, no new fire detections arrive and the alert map stays empty.</strong>
+                  You can add a key later from this wizard.</p>
+                <div class="setup-actions">
+                  <button brnButton type="button" class="setup-secondary" [disabled]="busy()" (click)="markStep('firms', 'skipped')">Skip anyway</button>
+                  <button brnButton type="button" class="setup-link" (click)="skippingFirms.set(false)">Go back</button>
+                </div>
+              </div>
+            } @else {
+              <div class="setup-actions">
+                <button brnButton type="button" class="setup-primary" [disabled]="busy() || state.firms.source === 'none'"
+                  (click)="markStep('firms', 'done')">Continue</button>
+                <button brnButton type="button" class="setup-link" (click)="skippingFirms.set(true)">Skip for now</button>
+              </div>
+            }
+          }
+          @case ('forms') {
+            <p><strong>Coming later.</strong> Starter forms for dispatch, first and final reports and patrol logs arrive
+              in a later release. This step is switched off for now and does not block setup.</p>
+            <label class="choice"><input type="checkbox" disabled> Switch on the starter forms</label>
+            <button brnButton type="button" class="setup-primary" [disabled]="busy()" (click)="markStep('forms', 'skipped')">Continue</button>
+          }
+          @case ('invitations') {
+            <p>Invite each officer with the email address their sign-in account uses. Accounts are made in your identity
+              provider, not here. An invitation becomes a role the first time the officer signs in with that address,
+              if the account marks it as verified. Invitations expire after 14 days.</p>
+            @if (!state.emailEnabled) { <p class="setup-hint">Email is off on this server, so tell officers yourself.</p> }
+            <form #inviteForm class="invite-form" (submit)="$event.preventDefault(); invite(inviteForm)">
+              <fieldset [disabled]="busy()">
+                <label>Email <input name="email" type="email" required maxlength="254" autocomplete="off"
+                  placeholder="officer@example.invalid"></label>
+                <label>Role
+                  <select name="role" required>
+                    @for (role of roles; track role) { <option [value]="role" [selected]="role === 'field_staff'">{{ roleLabels[role] }}</option> }
+                  </select>
+                </label>
+                <label>Unit
+                  <select name="unitPath" required>
+                    <option value="">Choose a unit</option>
+                    @for (unit of units(); track unit.path) { <option [value]="unit.path">{{ unitLabel(unit) }}</option> }
+                  </select>
+                </label>
+                <button brnButton type="submit" class="setup-primary">Invite</button>
+              </fieldset>
+            </form>
+            @if (invitations().length) {
+              <table class="invite-table">
+                <caption>Pending invitations</caption>
+                <thead><tr><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Unit</th><th scope="col">Expires</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                  @for (item of invitations(); track item.id) {
+                    <tr>
+                      <td>{{ item.email }}@if (item.emailStatus === 'sent') { <small>Email sent</small> }@if (item.emailStatus === 'failed') { <small>Email failed</small> }</td>
+                      <td>{{ roleLabels[item.role] }}</td>
+                      <td>{{ item.unitName || item.unitPath }}</td>
+                      <td>{{ item.expiresAt | date:'mediumDate' }}</td>
+                      <td><button brnButton type="button" class="setup-link" [disabled]="busy()" (click)="revoke(item)">Revoke</button></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <p>No pending invitations.</p>
+            }
+            <div class="setup-actions">
+              <button brnButton type="button" class="setup-primary" [disabled]="busy()" (click)="markStep('invitations', 'done')">Continue</button>
+              <button brnButton type="button" class="setup-link" (click)="markStep('invitations', 'skipped')">Skip for now</button>
+            </div>
+          }
+          @case ('finish') {
+            <ul class="finish-list">
+              @for (item of steps.slice(0, -1); track item.key) {
+                <li><span>{{ item.label }}</span> <strong>{{ statusLabel(item.key) }}</strong></li>
+              }
+            </ul>
+            @if (status('firms') === 'skipped') { <p class="setup-hint">No FIRMS key yet: the map shows no new detections until you add one.</p> }
+            <p>Reopen this wizard at any time from the account menu.</p>
+            <button brnButton type="button" class="setup-primary" [disabled]="busy()" (click)="finish()">Finish and open the alert map</button>
+          }
+        }
+      </section>
+    </div>
+  } @else if (error()) {
+    <p class="setup-error" role="alert">{{ error() }}</p>
+    <button brnButton type="button" class="setup-secondary" (click)="load(true)">Try again</button>
+  } @else {
+    <p role="status">Loading setup…</p>
+  }
+</div>

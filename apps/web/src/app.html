@@ -3,9 +3,12 @@
     <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
     <h1 class="workspace font-semibold">{{ workspace.current()?.name || 'Control room' }}</h1>
     <div class="ml-auto flex items-center gap-2">
+      @if (workspace.setupPending() && !showSetup()) {
+        <button brnButton class="user-trigger" (click)="openSetup()">Finish setup</button>
+      }
       @if (workspace.canManageLayers()) {
-        <button brnButton class="user-trigger" (click)="showLayers.set(!showLayers())">
-          {{ showLayers() ? 'Control room' : 'Layers' }}
+        <button brnButton class="user-trigger" (click)="toggleLayers()">
+          {{ showLayers() || showSetup() ? 'Control room' : 'Layers' }}
         </button>
       }
       <button brnButton class="icon-button" (click)="appearance.toggle()"
@@ -22,12 +25,15 @@
       <ng-template #account>
         <div cdkMenu class="account-menu">
           @if (!dashboard()) { <p>{{ user.profile.name || user.profile.preferred_username || 'User' }}</p> }
+          @if (workspace.canManageLayers()) {
+            <button brnButton cdkMenuItem (cdkMenuItemTriggered)="openSetup()"><svg lucideSettings></svg> Settings: first-run setup</button>
+          }
           <button brnButton cdkMenuItem (cdkMenuItemTriggered)="auth.signOut()"><svg lucideLogOut></svg> Sign out</button>
         </div>
       </ng-template>
     </div>
   </header>
-  @if (workspace.current() && !(showLayers() && workspace.canManageLayers())) {
+  @if (workspace.current() && !showSetup() && !(showLayers() && workspace.canManageLayers())) {
     <div class="workspace-controls">
       <nav aria-label="Control room views">
         <button [attr.aria-pressed]="!dashboard()" (click)="dashboard.set(false); focusFeedHealth.set(false)">Map and queue</button>
@@ -49,7 +55,11 @@
   }
   <main>
     @if (linkMessage()) { <p role="status">{{ linkMessage() }}</p> }
-    @if (showLayers() && workspace.canManageLayers()) {
+    @if (showBootstrap()) {
+      <fimra-bootstrap />
+    } @else if (showSetup()) {
+      <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" />
+    } @else if (showLayers() && workspace.canManageLayers()) {
       <fimra-layers />
     } @else if (dashboard() && workspace.current()) {
       @defer (on immediate) { <fimra-dashboard [focusFeedHealth]="focusFeedHealth()" /> }

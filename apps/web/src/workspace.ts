@@ -1,11 +1,12 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 
 interface Workspace { slug: string; name: string }
 interface Assignment { workspace: Workspace; role: string; unit: { path: string } }
-interface Profile { roleAssignments: Assignment[] }
+interface SetupInfo { bootstrapAvailable: boolean; unfinished: string[] }
+interface Profile { roleAssignments: Assignment[]; setup?: SetupInfo }
 export const noAccess = 'You have no access to this workspace yet';
 export const unavailable = 'Fire detections could not load. Trying again in a minute.';
 
@@ -19,15 +20,26 @@ export class WorkspaceService {
   readonly loaded = signal(false);
   readonly message = signal('');
   private readonly grants = signal<Assignment[]>([]);
+  /** True on a fresh install that has not been claimed yet. */
+  readonly bootstrapAvailable = signal(false);
+  /** Workspaces whose first-run wizard this user should finish. */
+  readonly unfinishedSetup = signal<string[]>([]);
+  private readonly reloads = signal(0);
   readonly canManageLayers = computed(() => {
     const workspace = this.current();
     return this.grants().some(grant => grant.workspace.slug === workspace?.slug &&
       grant.role === 'state_admin' && !!grant.unit?.path && !grant.unit.path.includes('.'));
   });
 
+  /** The wizard opens by itself until a root administrator finishes it. */
+  readonly setupPending = computed(() => this.canManageLayers() &&
+    this.unfinishedSetup().includes(this.current()?.slug ?? ''));
+
   constructor() {
     effect(onCleanup => {
       const subject = this.subject();
+      this.reloads();
+      const previous = untracked(this.current)?.slug;
       this.current.set(null);
       this.loaded.set(false);
       this.grants.set([]);
@@ -37,10 +49,13 @@ export class WorkspaceService {
       const load = () => this.http.get<Profile>(this.base + '/api/v1/me').subscribe({
         next: profile => {
           this.grants.set(profile.roleAssignments);
-          const workspace = profile.roleAssignments[0]?.workspace;
+          this.bootstrapAvailable.set(profile.setup?.bootstrapAvailable ?? false);
+          this.unfinishedSetup.set(profile.setup?.unfinished ?? []);
+          const workspace = profile.roleAssignments.find(grant => grant.workspace.slug === previous)?.workspace ??
+            profile.roleAssignments[0]?.workspace;
           this.current.set(workspace ?? null);
           this.loaded.set(true);
-          this.message.set(workspace ? '' : noAccess);
+          this.message.set(workspace || this.bootstrapAvailable() ? '' : noAccess);
         },
         error: (error: HttpErrorResponse) => {
           if (error.status === 401) this.auth.sessionEnded();
@@ -54,6 +69,11 @@ export class WorkspaceService {
       let request = load();
       onCleanup(() => { clearTimeout(retry); request.unsubscribe(); });
     });
+  }
+
+  /** Reads the profile again, for example after setup creates a workspace. */
+  reload(): void {
+    this.reloads.update(count => count + 1);
   }
 
   select(slug: string): boolean {
