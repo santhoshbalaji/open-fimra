@@ -2,14 +2,14 @@
 
 Sign in to see detections in your first assigned workspace. The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. The map key explains the age colours and forest shapes.
 
-Click a point or use the **Detections in view** menu to open its details. Times use your local time zone. Press Escape to close the details and return to the menu. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit state to map** to return to the whole state.
+Click a point or use the **Detections in view** menu to open its details. Times use your local time zone. Press Escape to close the details and return to the menu. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit workspace to map** to return to the workspace boundary.
 
 
 The **Alert queue** sits beside the map. On a small screen, switch between **Map** and **Alert queue**. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
 
 Choose **Dashboard** to see detections by forest class, routed alerts by queue and step, and times to acknowledgment, arrival and control. The map, queue and dashboard keep the same filters when you switch views. Today's detections start at midnight in India. A root grant also shows each feed's health.
 
-The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. It skips the chart and hides reference layers. The browser remembers your choice when storage is available.
+The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. The map shows only the top-level reference outline, and the dashboard skips the chart. The browser remembers your choice when storage is available.
 
 ## Exports
 
@@ -47,7 +47,7 @@ For a remote development host, forward the web, sign-in and API ports to your co
 
 [public/config.json](public/config.json) sets the sign-in issuer, public client ID and core API address. The app reads it at startup. Keycloak uses the authorisation code flow with a one-time proof key (PKCE). The callback and sign-out return addresses use the web app's own origin. A static host must serve `index.html` for `/callback` and `/signed-out`.
 
-The map loads [seed GeoJSON](../../seed/demo-state) directly through the linked asset directories in [angular.json](angular.json). It uses local fonts and a bundled map worker. It needs WebGL. The fictional reference layers stay available if you have no assigned workspace or the API is unavailable. Only the configured API receives your access token.
+The map loads the signed-in workspace’s published reference tiles and fits to its boundary. The synthetic GeoJSON in seed/demo-state remains available for seed generation and import tests. The map uses local fonts and a bundled worker and needs WebGL. Only the configured API receives your access token.
 
 The two palettes in [src/tokens.css](src/tokens.css) map the shared [design tokens](../../docs/design-system/tokens.json) to Tailwind. Regenerate the mapping with `node scripts/theme.mjs` when the design tokens change.
 

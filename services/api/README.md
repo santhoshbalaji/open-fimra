@@ -475,3 +475,18 @@ Officers' accounts live in the agency's identity provider, so the wizard does no
 
 `make wizard-test-integration` checks all of this on a fresh database with only migrations applied. It claims the install, picks a preset, uploads the demo source files through the import and publish endpoints, saves a FIRMS key, invites the demo officers, polls a fake FIRMS server and checks what each officer's alert queue shows. It also checks that a second claim fails, that expired and unverified invitations grant nothing, and that no key or address reaches the logs, API answers, audit log or job queue.
 
+
+### Workspace map
+
+`GET /api/v1/workspaces/{slug}` returns the workspace boundary as
+`[west, south, east, north]` in degrees (null before a boundary is set) and
+`levels` ordered by hierarchy and depth. Each level has a hierarchy slug,
+depth, level slug and translated labels keyed by language.
+
+`GET /api/v1/workspaces/{slug}/tiles/reference/{z}/{x}/{y}.mvt` serves
+current units, published forest and published exclusions. Add `?outline=1`
+to download only the top-level outlines. Empty tiles return 204. Both routes
+require a bearer token and a workspace role. Members see the whole reference
+map. Tiles are privately cached and revalidated against published version IDs.
+The metadata includes a `version` for the published reference layers. The map
+checks it once a minute and reloads visible reference tiles when it changes.

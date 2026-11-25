@@ -13,7 +13,7 @@ describe('Bearer token destination', () => {
     ['http://api.example.test/v1', false],
     ['https://api.example.test:8443/v1', false],
     [base + '../outside', false],
-    ['/demo-state/beats.geojson', false],
+    ['/logo/lockup-light.svg', false],
   ])('checks %s', (url, allowed) => {
     expect(isApiRequest(url, base, page)).toBe(allowed);
   });

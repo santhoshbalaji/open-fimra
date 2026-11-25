@@ -40,7 +40,7 @@ describe('Tile requests', () => {
   });
   it('reads the current token for API tiles only', () => {
     const token = vi.fn(() => 'first');
-    for (const asset of ['/demo-state/state.geojson', base + '../other', 'https://api.example.test.evil.test/core/']) {
+    for (const asset of ['/map/maplibre-gl-worker.mjs', base + '../other', 'https://api.example.test.evil.test/core/']) {
       expect(mapRequest(asset, base, page, token)).toEqual({ url: asset });
     }
     expect(token).not.toHaveBeenCalled();
