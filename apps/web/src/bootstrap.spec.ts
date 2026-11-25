@@ -43,9 +43,24 @@ describe('Bootstrap', () => {
   });
 
   it('offers state mode only and says why national mode is off', () => {
-    const national = fixture.nativeElement.querySelector('[value=national]') as HTMLInputElement;
+    const national = fixture.nativeElement.querySelector('input[value=national]') as HTMLInputElement;
     expect(national.disabled).toBe(true);
-    expect(fixture.nativeElement.textContent).toContain('Phase 1 supports one state per installation');
+    expect((fixture.nativeElement.querySelector('input[value=state]') as HTMLInputElement).checked).toBe(true);
+    expect(national.closest('label')?.textContent).toContain('Not available yet');
+    expect(document.getElementById(national.getAttribute('aria-describedby') ?? '')?.textContent)
+      .toContain('Phase 1 supports one state per installation');
+  });
+
+  it('hides the setup code until it is shown', () => {
+    const code = field('setupCode');
+    const toggle = fixture.nativeElement.querySelector('[aria-controls=setup-code]') as HTMLButtonElement;
+    expect(code.type).toBe('password');
+    expect(toggle.textContent.replace(/\s+/g, ' ').trim()).toBe('Show setup code');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    toggle.click();
+    fixture.detectChanges();
+    expect(code.type).toBe('text');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('claims the install with the setup code and reloads the profile', () => {

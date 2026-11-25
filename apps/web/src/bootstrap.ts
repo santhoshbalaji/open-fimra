@@ -1,6 +1,14 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { BrnButton } from '@spartan-ng/brain/button';
+import { LucideCircleAlert, LucideEye, LucideEyeOff, LucideLock } from '@lucide/angular';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmLabel } from '@spartan-ng/helm/label';
+import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { WorkspaceService } from './workspace';
@@ -17,9 +25,10 @@ export function slugFrom(name: string): string {
  */
 @Component({
   selector: 'fimra-bootstrap',
-  imports: [BrnButton],
+  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports,
+    LucideCircleAlert, LucideEye, LucideEyeOff, LucideLock],
   templateUrl: './bootstrap.html',
-  styleUrl: './setup.css'
+  host: { class: 'block h-full overflow-auto' }
 })
 export class Bootstrap {
   private readonly http = inject(HttpClient);
@@ -28,6 +37,7 @@ export class Bootstrap {
   private readonly url = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '') + '/api/v1/setup/bootstrap';
   readonly slug = signal('');
   readonly slugEdited = signal(false);
+  readonly showCode = signal(false);
   readonly busy = signal(false);
   readonly error = signal('');
 

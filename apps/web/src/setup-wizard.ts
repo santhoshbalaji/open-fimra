@@ -2,10 +2,27 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, ElementRef, OnInit, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { BrnButton } from '@spartan-ng/brain/button';
+import {
+  LucideCheck, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideKeyRound, LucideLock, LucideMailCheck,
+  LucideMailX, LucideMinus, LucideTriangleAlert
+} from '@lucide/angular';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmLabel } from '@spartan-ng/helm/label';
+import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
+import { HlmSwitch } from '@spartan-ng/helm/switch';
+import { HlmTableImports } from '@spartan-ng/helm/table';
 import { Observable, Subscription, exhaustMap, finalize, switchMap, takeWhile, timer } from 'rxjs';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { EmptyState } from './ui/empty-state';
+import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
 
 export type StepKey = 'mode' | 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
@@ -53,9 +70,12 @@ const uploadLabels: Record<Upload['status'], string> = {
 /** The guided first-run wizard (PLAN.md section 7) for a root administrator. */
 @Component({
   selector: 'fimra-setup-wizard',
-  imports: [BrnButton, DatePipe],
+  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput,
+    HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmSkeleton, HlmSwitch, HlmTableImports,
+    LucideCheck, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideKeyRound, LucideLock, LucideMailCheck,
+    LucideMailX, LucideMinus, LucideTriangleAlert],
   templateUrl: './setup-wizard.html',
-  styleUrl: './setup.css'
+  host: { class: 'block h-full overflow-auto' }
 })
 export class SetupWizard implements OnInit {
   private readonly http = inject(HttpClient);
@@ -92,6 +112,15 @@ export class SetupWizard implements OnInit {
 
   readonly invitations = signal<Invitation[]>([]);
   readonly units = signal<Unit[]>([]);
+  readonly inviteRole = signal('field_staff');
+  readonly inviteUnit = signal('');
+  private readonly inviteTried = signal(false);
+  readonly unitMissing = computed(() => this.inviteTried() && !this.inviteUnit());
+  readonly roleLabel = (role: string) => roleLabels[role] ?? role;
+  readonly unitName = (path: string) => {
+    const unit = this.units().find(item => item.path === path);
+    return unit ? this.unitLabel(unit) : path;
+  };
 
   readonly stepIndex = computed(() => steps.findIndex(item => item.key === this.step()));
   readonly lockedLayers = computed(() => {
@@ -184,6 +213,12 @@ export class SetupWizard implements OnInit {
     const status = draft?.status ?? layer.latest?.status;
     if (!status) return layer.published ? 'Published' : 'Not uploaded';
     return (layer.published ? 'Published. New upload: ' : '') + uploadLabels[status];
+  }
+
+  layerIcon(layer: SetupLayer): 'step' | 'complete' | 'overdue' {
+    const status = this.drafts()[layer.key]?.status ?? layer.latest?.status;
+    if (status === 'failed') return 'overdue';
+    return layer.published && (!layer.latest || layer.latest.status === 'published') ? 'complete' : 'step';
   }
 
   blocking(layer: SetupLayer): Problem[] {
@@ -287,8 +322,14 @@ export class SetupWizard implements OnInit {
 
   invite(form: HTMLFormElement): void {
     if (!form.reportValidity()) return;
+    this.inviteTried.set(true);
+    if (!this.inviteUnit()) {
+      form.querySelector<HTMLElement>('#invite-unit')?.focus();
+      return;
+    }
+    this.inviteTried.set(false);
     const data = new FormData(form);
-    const body = { email: String(data.get('email') ?? '').trim(), role: data.get('role'), unitPath: data.get('unitPath') };
+    const body = { email: String(data.get('email') ?? '').trim(), role: this.inviteRole(), unitPath: this.inviteUnit() };
     this.run(this.http.post(this.base + '/invitations', body), () => {
       (form.querySelector('[name=email]') as HTMLInputElement).value = '';
       this.notice.set('Invitation saved.');

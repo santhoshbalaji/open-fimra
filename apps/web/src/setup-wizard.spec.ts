@@ -4,6 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth';
+import { stubLayoutApis } from './overlay-testing';
 import { WEB_CONFIG } from './config';
 import { SetupLayer, SetupState, SetupWizard } from './setup-wizard';
 import { WorkspaceService } from './workspace';
@@ -39,6 +40,14 @@ describe('SetupWizard', () => {
   const text = () => fixture.nativeElement.textContent as string;
   const button = (label: string) => [...fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>]
     .find(element => element.textContent.trim() === label);
+  function choose(trigger: string, option: string): void {
+    (document.getElementById(trigger) as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const item = [...document.querySelectorAll<HTMLElement>('hlm-select-item')].find(element => element.textContent.trim() === option);
+    if (!item) throw new Error('No option ' + option);
+    item.click();
+    fixture.detectChanges();
+  }
   const heading = () => (fixture.nativeElement.querySelector('#step-heading') as HTMLElement).textContent.trim();
 
   function open(state: SetupState): void {
@@ -50,6 +59,7 @@ describe('SetupWizard', () => {
   }
 
   beforeEach(() => {
+    stubLayoutApis();
     vi.useFakeTimers();
     TestBed.configureTestingModule({ imports: [SetupWizard], providers: [
       provideHttpClient(), provideHttpClientTesting(),
@@ -71,7 +81,12 @@ describe('SetupWizard', () => {
     const items = [...fixture.nativeElement.querySelectorAll('.setup-steps button')].map(item => (item as HTMLElement).getAttribute('aria-label'));
     expect(items).toEqual(['1. Mode, Done', '2. Workspace, Done', '3. Hierarchy, To do', '4. Layers, To do',
       '5. NASA FIRMS, To do', '6. Starter forms, To do', '7. Invite officers, To do', '8. Finish, To do']);
-    expect(fixture.nativeElement.querySelector('[aria-current=step]').textContent).toContain('Hierarchy');
+    const current = fixture.nativeElement.querySelector('[aria-current=step]') as HTMLElement;
+    expect(current.textContent).toContain('Hierarchy');
+    expect(current.textContent).toContain('To do · Current');
+    const done = fixture.nativeElement.querySelector('.setup-steps button') as HTMLElement;
+    expect(done.querySelector('svg')).not.toBeNull();
+    expect(done.textContent).toContain('Done');
     (fixture.nativeElement.querySelector('.setup-steps button') as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(text()).toContain('Phase 1 fully supports state mode only');
@@ -79,11 +94,20 @@ describe('SetupWizard', () => {
 
   it('saves a preset with edited Hindi labels', () => {
     open(setupState());
-    const radios = fixture.nativeElement.querySelectorAll('[name=preset]') as NodeListOf<HTMLInputElement>;
+    const radios = fixture.nativeElement.querySelectorAll('input[name=preset]') as NodeListOf<HTMLInputElement>;
+    expect(radios).toHaveLength(2);
     expect(radios[0].checked).toBe(true);
     const hindi = fixture.nativeElement.querySelector('[aria-label="Hindi label for level 5"]') as HTMLInputElement;
     hindi.value = ' बीट (वन) ';
     hindi.dispatchEvent(new Event('input'));
+    radios[1].click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.presetSlug()).toBe('circle-division-subdivision-range-section-beat');
+    radios[0].click();
+    fixture.detectChanges();
+    const edited = fixture.nativeElement.querySelector('[aria-label="Hindi label for level 5"]') as HTMLInputElement;
+    edited.value = ' बीट (वन) ';
+    edited.dispatchEvent(new Event('input'));
     button('Save hierarchy')?.click();
     const request = http.expectOne(base + '/setup/hierarchy');
     expect(request.request.body.preset).toBe('circle-division-range-beat');
@@ -174,7 +198,7 @@ describe('SetupWizard', () => {
     open(setupState({ steps: { ...setupState().steps, hierarchy: done, layers: done, firms: done } }));
     expect(heading()).toBe('Starter forms');
     expect(text()).toContain('Coming later');
-    expect((fixture.nativeElement.querySelector('.setup-step input[type=checkbox]') as HTMLInputElement).disabled).toBe(true);
+    expect((fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement).disabled).toBe(true);
     button('Continue')?.click();
     expect(http.expectOne(base + '/setup/steps/forms').request.body).toEqual({ status: 'skipped' });
   });
@@ -189,8 +213,13 @@ describe('SetupWizard', () => {
     fixture.detectChanges();
     const form = fixture.nativeElement.querySelector('.invite-form') as HTMLFormElement;
     (form.querySelector('[name=email]') as HTMLInputElement).value = 'division.officer@example.invalid';
-    (form.querySelector('[name=role]') as HTMLSelectElement).value = 'division_officer';
-    (form.querySelector('[name=unitPath]') as HTMLSelectElement).value = 'ds.c1';
+    expect(document.getElementById('invite-role')?.textContent).toContain('Field staff');
+    choose('invite-role', 'Division officer');
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.detectChanges();
+    expect(text()).toContain('Choose a unit.');
+    expect(document.getElementById('invite-unit')?.getAttribute('aria-invalid')).toBe('true');
+    choose('invite-unit', 'North Circle ( C1)');
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     const invite = http.expectOne(base + '/invitations');
     expect(invite.request.method).toBe('POST');
@@ -201,6 +230,9 @@ describe('SetupWizard', () => {
     fixture.detectChanges();
     expect(text()).toContain('d…@example.invalid');
     expect(text()).toContain('Email sent');
+    const row = fixture.nativeElement.querySelector('.invite-table tbody tr') as HTMLElement;
+    expect(row.textContent).toContain('Division officer');
+    expect(row.querySelector('button')?.getAttribute('aria-label')).toBe('Revoke invitation for d…@example.invalid');
     expect(text()).not.toContain('division.officer@example.invalid');
   });
 
