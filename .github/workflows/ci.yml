@@ -113,3 +113,21 @@ jobs:
         run: make geo-test-integration
       - if: failure()
         run: docker compose -f deploy/compose/compose.dev.yml --profile geo logs geo-worker
+
+  exports:
+    name: File exports
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: services/api/go.sum
+      - name: Write and read back every format with OGR
+        run: make geo-test
+      - run: make dev db-migrate geo-worker-up
+      - name: Export as each demo user, compare with the queue and tiles, and read every download back with OGR
+        run: make export-test-integration
+      - if: failure()
+        run: docker compose -f deploy/compose/compose.dev.yml --profile geo logs geo-worker

@@ -1,7 +1,8 @@
 # Geo worker
 
-The worker reads GeoPackage, zipped Shapefile, GeoJSON, KML and KMZ. It saves
-draft layers and review items. GDAL reads the files and transforms their
+The worker imports layers and writes file exports. It reads GeoPackage, zipped
+Shapefile, GeoJSON, KML and KMZ, and saves draft layers and review items. It
+writes exports in eight formats from rows the core API has already chosen. GDAL reads the files and transforms their
 coordinates. Shapely repairs geometry and checks how the shapes fit together.
 The container supplies GDAL and the Python lock file pins the other libraries.
 
@@ -59,3 +60,32 @@ the version and re-matches detections through the Go job queue. See the
   unmapped attributes in `layer_features`, linked to a draft version. Each
   review item goes into `layer_import_problems`. A large review list shows
   the first 2,000 items and a blocking item telling the user to fix and retry.
+
+## How exports work
+
+- The API saves each request in `exports` and the permitted rows in
+  `export_rows`, in one transaction. The worker claims a pending export with
+  `FOR UPDATE SKIP LOCKED`, reads its rows by key, writes the file and marks it
+  ready in the same transaction. It never decides which rows a user may see.
+  The [API guide](../api/README.md#how-the-rows-are-chosen) explains how the
+  database stops the row set from growing.
+- Files go to `FIMRA_EXPORT_DIR`, mounted read-write at `/exports`. The worker
+  writes into a `.part` directory and moves the finished file into place.
+- GeoPackage and Excel keep the note in `export_note` and `export_fields`
+  tables. Shapefile, GeoJSON, FlatGeobuf and both CSV formats are zipped with a
+  `README.txt` note. KML is a KMZ file with `doc.kml` and `README.txt`.
+- Date and time fields are native in GeoPackage, GeoJSON and FlatGeobuf. Other
+  formats hold UTC text such as `2026-01-31T09:45:00Z`. CSV files come with a
+  `.csvt` file of column types. The longitude and latitude CSV has no
+  coordinate system in the file, and the note gives it.
+- Shapefile names are limited to 10 characters. Fixed fields have set short
+  names, such as `det_id` and `obs_time`. Hierarchy fields keep the first seven
+  characters of the level and end in `_cd` or `_nm`, with a digit when two
+  names would clash.
+- Excel needs no extra library: GDAL's XLSX driver writes it. The GDAL build
+  in the container has the plain KML driver, which reads back only each
+  placemark's name and description. QGIS builds with LIBKML show every field.
+  `readback.py` lists the KML schema fields for that reason.
+
+Run `python readback.py FILE` in the container to describe any export with
+OGR. `make export-test-integration` does this for every format it downloads.

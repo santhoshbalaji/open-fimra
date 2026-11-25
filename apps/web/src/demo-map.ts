@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { BrnButton } from '@spartan-ng/brain/button';
-import { LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
+import { LucideDownload, LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
@@ -8,13 +8,14 @@ import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, Detection, detectionLayer, ForestClass, iconName, mapRequest, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
+import { ExportDialog } from './export-dialog';
 import { boundaries, demoStyle } from './map-style';
 import { ThemeService, type Theme } from './theme';
 import { unavailable, WorkspaceService } from './workspace';
 
 @Component({
   selector: 'fimra-demo-map',
-  imports: [Workflow, BrnButton, LucideLayers, LucideMaximize, LucideMinus, LucidePlus],
+  imports: [Workflow, BrnButton, LucideLayers, LucideMaximize, LucideMinus, LucidePlus, ExportDialog, LucideDownload],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -33,6 +34,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly queueLabels = queueLabels;
   readonly hours = this.queue.hours;
   readonly mobileQueue = signal(false);
+  readonly exporting = signal(false);
+  private readonly exportButton = viewChild<ElementRef<HTMLButtonElement>>('exportButton');
   private rowButton?: HTMLButtonElement;
   readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
@@ -50,6 +53,10 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly url = computed(() => {
     const workspace = this.workspace.current();
     return workspace && tileUrl(this.base, workspace.slug, this.hours(), this.filters.tileClasses(), this.filters.unitPath());
+  });
+  readonly exportEndpoint = computed(() => {
+    const workspace = this.workspace.current();
+    return workspace && this.base.replace(/\/$/, '') + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug);
   });
   private map?: LibreMap;
   private bounds?: LngLatBounds;
@@ -212,6 +219,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     this.queue.selectRow(row);
     this.map?.jumpTo({ center: [row.longitude, row.latitude] });
     this.detailTitle()?.nativeElement.focus();
+  }
+
+  closeExport(): void {
+    this.exporting.set(false);
+    requestAnimationFrame(() => this.exportButton()?.nativeElement.focus());
   }
 
   closeDetails(): void {

@@ -1,4 +1,4 @@
-"""Import jobs from PostgreSQL. Each job and its result share a transaction."""
+"""Import and export jobs from PostgreSQL. Each job and its result share a transaction."""
 
 import logging
 import os
@@ -12,6 +12,7 @@ from shapely import from_wkb, to_wkb
 from shapely.errors import ShapelyError
 
 from checks import Parent, Review, hierarchy_paths, review_layer, unit_topology
+from export import process_next_export
 from source import ImportErrorWithProblem, Problem, read_source, square_metres
 
 logger = logging.getLogger("geo-worker")
@@ -132,11 +133,14 @@ def process_next(conn, upload_dir):
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     upload_dir = Path(os.environ.get("FIMRA_UPLOAD_DIR", "/uploads"))
+    export_dir = Path(os.environ.get("FIMRA_EXPORT_DIR", "/exports"))
     while True:
         try:
             with psycopg.connect(autocommit=True, row_factory=dict_row, connect_timeout=5) as conn:
                 while True:
-                    if not process_next(conn, upload_dir):
+                    imported = process_next(conn, upload_dir)
+                    exported = process_next_export(conn, export_dir)
+                    if not (imported or exported):
                         time.sleep(0.5)
         except psycopg.Error as exc:
             logger.error("Database error in the geo worker: %s", error_cause(exc))

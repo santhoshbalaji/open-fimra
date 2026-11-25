@@ -66,6 +66,10 @@ services:
         source: ${FIMRA_UPLOAD_DIR:-../../.geo-uploads}
         target: /uploads
         read_only: true
+      # Export files the worker writes and the API serves to their requester.
+      - type: bind
+        source: ${FIMRA_EXPORT_DIR:-../../.geo-exports}
+        target: /exports
     depends_on:
       db:
         condition: service_healthy

@@ -147,3 +147,23 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 .class-chart { height: 165px; width: 100%; }
 @media (max-width: 800px) { .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .report-grid { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .metric-grid section:first-child { grid-column: 1 / -1; } .workspace-controls { gap: 4px 12px; } }
+.queue-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.export-button { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 10; background: rgb(0 0 0 / .35); }
+.export-dialog { position: fixed; z-index: 11; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 20px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 8px 28px rgb(0 0 0 / .22); }
+.export-dialog h2 { font-size: var(--text-title); font-weight: 600; margin-bottom: 12px; }
+.export-dialog fieldset { margin-bottom: 12px; }
+.export-dialog legend { font-weight: 600; margin-bottom: 4px; }
+.export-dialog fieldset label { display: flex; align-items: center; gap: 8px; min-height: var(--target-web); }
+.export-format { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; font-weight: 600; margin-bottom: 12px; }
+.export-format select { width: 100%; font-weight: 400; min-height: var(--target-web); padding: 4px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-background); }
+.export-summary { margin-bottom: 4px; }
+.export-hint, .export-progress { color: var(--color-text-secondary); font-size: var(--text-label); }
+.export-progress:empty { display: none; }
+.export-actions { display: flex; justify-content: flex-end; gap: 8px; margin-block: 16px 8px; }
+.export-dialog .primary, .export-dialog .secondary { padding: 6px 14px; border-radius: var(--radius-control); font-weight: 600; }
+.export-dialog .primary { color: var(--color-brand-foreground); background: var(--color-brand); }
+.export-dialog .primary:hover { background: color-mix(in srgb, var(--color-brand) 85%, var(--color-text)); }
+.export-dialog .secondary { border: 1px solid var(--color-border); }
+.export-dialog .download { width: 100%; margin-top: 8px; overflow-wrap: anywhere; }
+.export-error { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--color-critical); background: color-mix(in srgb, var(--color-critical) 10%, var(--color-card)); }
