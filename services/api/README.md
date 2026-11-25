@@ -122,3 +122,24 @@ go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 ```
 
 The role query starts from the signed-in user's ID. The tile query checks grants and reads matches in one SQL statement. The ingest statement saves detections and builds their match snapshots in the same transaction.
+
+## Alert queues
+
+A workspace gets one new alert per matched detection inside forest or near its edge. The alert links to the match and keeps a copy of its hierarchy snapshot. Inside forest goes to the covering beat. Near-edge detections go to edge review by default. To route future near-edge detections straight to the beat, set the workspace column `review_near_edge` to false. A shared boundary, overlapping beats or a missing beat sends the alert to triage. Replaying a feed keeps the original assignment.
+
+Use a bearer token with `GET /api/v1/workspaces/{slug}/alerts`. Results are newest first by observation time, then by alert ID. A page contains `items`, `canReview`, per-queue `counts` and, when another page exists, `nextCursor`. Counts include all visible rows matching the time, class, status and path filters. Queue and cursor apply only to the rows. Missing counts mean zero.
+
+| Parameter | Accepted values |
+|---|---|
+| `queue` | `unit`, `edge_review`, `triage` |
+| `status` | `new` |
+| `hours` | Past 1–720 hours, default 168 |
+| `class` | A detection forest class |
+| `unitPath` | A whole path prefix, such as `ds.c1.d1` |
+| `detection` | A detection ID, for selecting a point from the map |
+| `limit` | 1–200 rows, default 100 |
+| `cursor` | URL-encoded `nextCursor` from the previous page |
+
+Use the row's `id` with `GET /api/v1/workspaces/{slug}/alerts/{id}`. Details are available for older alerts outside the list's time window. The `detection_id` identifies the corresponding map point.
+
+A grant covers the same matched paths as it does on the map. Sections 5.3 and 6 of the plan leave review with officers responsible for that area. For the review queues, the **covering grant itself** must be at division level or above in its own hierarchy. A root grant sees every queue in the workspace, including points without a path. In a hierarchy without a division level, only a root grant qualifies for review. A caller without a workspace grant gets 403. A hidden or missing alert detail returns 404.

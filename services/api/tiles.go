@@ -17,7 +17,7 @@ var tilesSQL string
 
 const tileType = "application/vnd.mapbox-vector-tile"
 
-type tileDB interface {
+type queryReader interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
@@ -61,7 +61,7 @@ func (a api) detectionTile(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	var allowed bool
 	var tile []byte
-	err := a.tiles.QueryRow(ctx, tilesSQL, caller.Subject, chi.URLParam(r, "slug"),
+	err := a.reader.QueryRow(ctx, tilesSQL, caller.Subject, chi.URLParam(r, "slug"),
 		int32(z), int32(x), int32(y), hours, classes).Scan(&allowed, &tile)
 	if err != nil {
 		a.logger.Error("Could not read the detection tile", "error", err)

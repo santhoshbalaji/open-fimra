@@ -7,18 +7,19 @@ CREATE TEMP TABLE reference_detections (
     expected_forest_class text,
     expected_beats ltree[] NOT NULL,
     expected_triage text,
-    expected_forest_code text
+    expected_forest_code text,
+    expected_queue text
 ) ON COMMIT DROP;
 
 INSERT INTO reference_detections VALUES
-  ('inside', ST_SetSRID(ST_Point(86.297475, 16.418669), 4326), 'inside', ARRAY['ds.c1.d1.r2.b05']::ltree[], NULL, 'F01'),
-  ('shared-boundary', ST_SetSRID(ST_Point(86.315928, 16.419102), 4326), 'inside', ARRAY['ds.c1.d1.r2.b05', 'ds.c1.d2.r3.b08']::ltree[], 'shared_boundary', 'F01'),
-  ('hole', ST_SetSRID(ST_Point(86.416257, 16.412498), 4326), 'outside', ARRAY['ds.c1.d2.r4.b11']::ltree[], NULL, NULL),
-  ('ring', ST_SetSRID(ST_Point(86.380981, 16.418498), 4326), 'inside', ARRAY['ds.c1.d2.r4.b11']::ltree[], NULL, 'F02'),
-  ('near-edge', ST_SetSRID(ST_Point(86.457995, 16.418498), 4326), 'near_edge', ARRAY['ds.c2.d3.r5.b14']::ltree[], NULL, NULL),
-  ('outside', ST_SetSRID(ST_Point(86.230369, 16.500157), 4326), 'outside', ARRAY['ds.c1.d1.r1.b03']::ltree[], NULL, NULL),
-  ('overlap', ST_SetSRID(ST_Point(86.55884, 16.418379), 4326), 'inside', ARRAY['ds.c2.d3.r6.b17', 'ds.c2.d4.r7.b20']::ltree[], 'overlapping_units', 'F05'),
-  ('no-unit', ST_SetSRID(ST_Point(86.70034, 16.499825), 4326), 'inside', '{}'::ltree[], 'no_unit', 'F03'),
-  ('kiln', ST_SetSRID(ST_Point(86.412257, 16.480248), 4326), 'fixed_heat_source', ARRAY['ds.c1.d2.r4.b12']::ltree[], NULL, NULL),
-  ('uncoded-forest', ST_SetSRID(ST_Point(86.591907, 16.338721), 4326), 'inside', ARRAY['ds.c2.d4.r7.b19']::ltree[], NULL, NULL),
-  ('far-away', ST_SetSRID(ST_Point(84.7, 15.3), 4326), NULL, '{}'::ltree[], NULL, NULL);
+  ('inside', ST_SetSRID(ST_Point(86.297475, 16.418669), 4326), 'inside', ARRAY['ds.c1.d1.r2.b05']::ltree[], NULL, 'F01', 'unit'),
+  ('shared-boundary', ST_SetSRID(ST_Point(86.315928, 16.419102), 4326), 'inside', ARRAY['ds.c1.d1.r2.b05', 'ds.c1.d2.r3.b08']::ltree[], 'shared_boundary', 'F01', 'triage'),
+  ('hole', ST_SetSRID(ST_Point(86.416257, 16.412498), 4326), 'outside', ARRAY['ds.c1.d2.r4.b11']::ltree[], NULL, NULL, NULL),
+  ('ring', ST_SetSRID(ST_Point(86.380981, 16.418498), 4326), 'inside', ARRAY['ds.c1.d2.r4.b11']::ltree[], NULL, 'F02', 'unit'),
+  ('near-edge', ST_SetSRID(ST_Point(86.457995, 16.418498), 4326), 'near_edge', ARRAY['ds.c2.d3.r5.b14']::ltree[], NULL, NULL, 'edge_review'),
+  ('outside', ST_SetSRID(ST_Point(86.230369, 16.500157), 4326), 'outside', ARRAY['ds.c1.d1.r1.b03']::ltree[], NULL, NULL, NULL),
+  ('overlap', ST_SetSRID(ST_Point(86.55884, 16.418379), 4326), 'inside', ARRAY['ds.c2.d3.r6.b17', 'ds.c2.d4.r7.b20']::ltree[], 'overlapping_units', 'F05', 'triage'),
+  ('no-unit', ST_SetSRID(ST_Point(86.70034, 16.499825), 4326), 'inside', '{}'::ltree[], 'no_unit', 'F03', 'triage'),
+  ('kiln', ST_SetSRID(ST_Point(86.412257, 16.480248), 4326), 'fixed_heat_source', ARRAY['ds.c1.d2.r4.b12']::ltree[], NULL, NULL, NULL),
+  ('uncoded-forest', ST_SetSRID(ST_Point(86.591907, 16.338721), 4326), 'inside', ARRAY['ds.c2.d4.r7.b19']::ltree[], NULL, NULL, 'unit'),
+  ('far-away', ST_SetSRID(ST_Point(84.7, 15.3), 4326), NULL, '{}'::ltree[], NULL, NULL, NULL);

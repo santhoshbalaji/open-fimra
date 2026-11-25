@@ -12,6 +12,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00006_audit_log` | The append-only audit log |
 | `00007_users_and_roles` | User records, roles and grants at current unit paths |
 | `00008_ingest_runs` | Feed run history and matched paths grouped by hierarchy |
+| `00010_alerts` | Alerts, the workspace setting for near-edge review, and routing of existing matches |
 
 ## Commands
 

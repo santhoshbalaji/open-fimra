@@ -16,12 +16,12 @@ type api struct {
 	pool      *pgxpool.Pool
 	queries   *db.Queries
 	logger    *slog.Logger
-	tiles     tileDB
+	reader    queryReader
 	uploadDir string
 }
 
 func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger, origins, uploadDir string) http.Handler {
-	return api{pool: pool, queries: db.New(pool), logger: logger, tiles: pool, uploadDir: uploadDir}.handler(auth, origins)
+	return api{pool: pool, queries: db.New(pool), logger: logger, reader: pool, uploadDir: uploadDir}.handler(auth, origins)
 }
 
 func (a api) handler(auth authenticator, origins string) http.Handler {
@@ -32,6 +32,8 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	})
 	router.Get("/readyz", a.ready)
 	router.With(auth.require).Get("/api/v1/me", a.me)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts", a.alerts)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}", a.alerts)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}", a.detectionTile)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/layer-imports", a.uploadLayer)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports/{version}", a.layerDraft)

@@ -103,6 +103,12 @@ matched AS (
             ), '{}')) FROM hierarchies h WHERE h.workspace_id = c.workspace_id), '{}') AS snapshot
     ) units
     ON CONFLICT DO NOTHING
-    RETURNING 1
+    RETURNING detection_matches AS match
+),
+routed AS (
+    INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path)
+    SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*
+    FROM matched CROSS JOIN LATERAL alert_route(match) route
+    ON CONFLICT DO NOTHING
 )
 SELECT (SELECT count(*) FROM inserted)::integer, (SELECT count(*) FROM matched)::integer;

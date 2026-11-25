@@ -92,11 +92,32 @@ func checkReferenceMatches(t *testing.T, ctx context.Context, tx pgx.Tx, workspa
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts, err := runIngest(ctx, tx, ingestRun{Source: source, Product: demoProduct}, func(context.Context) ([]firms.Observation, error) {
-		return observations, nil
-	})
+	read := func(context.Context) ([]firms.Observation, error) { return observations, nil }
+	run := ingestRun{Source: source, Product: demoProduct}
+	counts, err := runIngest(ctx, tx, run, read)
 	if err != nil || counts.Inserted != 11 {
 		t.Fatalf("insert reference detections: %+v, %v", counts, err)
+	}
+
+	// A replay must keep the original alert IDs, even if routing settings change.
+	alertIDs := func() []int64 {
+		var ids []int64
+		err := tx.QueryRow(ctx, `SELECT array_agg(a.id ORDER BY a.id) FROM alerts a
+			JOIN workspaces w ON w.id = a.workspace_id
+			JOIN detections d ON (d.id,d.observed_at)=(a.detection_id,a.observed_at)
+			WHERE w.slug=$1 AND d.source=$2`, workspace, source).Scan(&ids)
+		if err != nil || len(ids) != 7 {
+			t.Fatalf("expected seven alert IDs, got %v: %v", ids, err)
+		}
+		return ids
+	}
+	original := alertIDs()
+	if _, err := tx.Exec(ctx, "UPDATE workspaces SET review_near_edge=false WHERE slug=$1", workspace); err != nil {
+		t.Fatal(err)
+	}
+	replay, err := runIngest(ctx, tx, run, read)
+	if err != nil || replay.Duplicates != 11 || !slices.Equal(original, alertIDs()) {
+		t.Fatalf("reference alert replay: %+v, %v", replay, err)
 	}
 
 	rows, err = tx.Query(ctx, `
@@ -105,8 +126,14 @@ func checkReferenceMatches(t *testing.T, ctx context.Context, tx pgx.Tx, workspa
 	    JOIN workspaces w ON w.slug = $1
 	    LEFT JOIN detections d ON d.source = $2 AND d.raw->>'reference_id' = r.id
 	    LEFT JOIN detection_matches m ON m.workspace_id = w.id AND (m.detection_id, m.observed_at) = (d.id, d.observed_at)
+	    LEFT JOIN alerts a ON a.workspace_id=w.id AND a.detection_id=d.id
 	    LEFT JOIN layer_features f ON f.id = m.forest_feature_id
 	    WHERE d.id IS NULL OR m.forest_class IS DISTINCT FROM r.expected_forest_class
+	       OR a.queue IS DISTINCT FROM r.expected_queue
+	       OR (a.id IS NOT NULL AND a.hierarchy IS DISTINCT FROM m.hierarchy)
+	       OR (a.queue IN ('edge_review','unit') AND (a.unit_path IS DISTINCT FROM r.expected_beats[1]
+	            OR NOT (m.hierarchy_unit_paths ? a.hierarchy_id::text)))
+	       OR (a.queue='triage' AND a.unit_path IS NOT NULL)
 	       OR m.triage_reason IS DISTINCT FROM r.expected_triage
 	       OR f.code IS DISTINCT FROM r.expected_forest_code
 	       OR ARRAY(SELECT p FROM unnest(m.unit_paths) p WHERE nlevel(p) = 5 ORDER BY p)
@@ -124,7 +151,21 @@ func checkReferenceMatches(t *testing.T, ctx context.Context, tx pgx.Tx, workspa
 	if err != nil || len(bad) != 0 {
 		t.Fatalf("reference cases that did not match: %v (%v)", bad, err)
 	}
-	t.Log("11 reference detections matched every expected beat, class, triage reason and forest code")
+	t.Log("11 reference detections matched every expected class, beat, triage reason, forest code and queue; replay kept all 7 alert IDs")
+	run.Source += "_direct"
+	if _, err := runIngest(ctx, tx, run, read); err != nil {
+		t.Fatal(err)
+	}
+	var queue, path string
+	err = tx.QueryRow(ctx, `SELECT a.queue, a.unit_path::text FROM alerts a JOIN workspaces w ON w.id=a.workspace_id
+	    JOIN detections d ON (d.id,d.observed_at)=(a.detection_id,a.observed_at)
+	    WHERE w.slug=$1 AND d.source=$2 AND d.raw->>'reference_id'='near-edge'`, workspace, source+"_direct").Scan(&queue, &path)
+	if err != nil || queue != "unit" || path != "ds.c2.d3.r5.b14" {
+		t.Fatalf("direct edge route: %s %s %v", queue, path, err)
+	}
+	if _, err := tx.Exec(ctx, "UPDATE workspaces SET review_near_edge=true WHERE slug=$1", workspace); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func checkReplay(t *testing.T, ctx context.Context, tx pgx.Tx, workspaceID, source string, now time.Time) {
@@ -207,7 +248,7 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 	const issuer, audience = "https://issuer.invalid", "open-fimra-api"
 	auth := authenticator{issuer: issuer, verifier: oidc.NewVerifier(issuer,
 		&oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: audience})}
-	handler := api{tiles: tx, logger: slog.Default()}.handler(auth, devOrigins)
+	handler := api{reader: tx, logger: slog.Default()}.handler(auth, devOrigins)
 	const origin = "http://localhost:4200"
 	path := "/api/v1/workspaces/" + slug + "/tiles/detections/8/189/116.mvt"
 	request := func(method, path, subject string) *httptest.ResponseRecorder {
@@ -226,6 +267,10 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 		handler.ServeHTTP(w, r)
 		return w
 	}
+
+	t.Run("alert permissions, counts, filters and pagination", func(t *testing.T) {
+		checkAlertAccess(t, ctx, tx, slug, prefix, request)
+	})
 
 	if w := request(http.MethodOptions, path, ""); w.Code != http.StatusNoContent ||
 		w.Header().Get("Access-Control-Allow-Origin") != origin ||

@@ -81,7 +81,7 @@ jobs:
           cache-dependency-path: services/api/go.sum
       - run: make dev
       - run: make db-migrate
-      - name: Test sign-in, reference matching, feed replay and tile permissions
+      - name: Test sign-in, reference alerts, replay and access to queues and tiles
         run: make api-test-integration
 
   layer-import:

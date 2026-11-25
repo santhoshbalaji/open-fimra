@@ -1,3 +1,18 @@
+@if (workspace.current()) {
+  <div class="queue-toolbar">
+    <div class="view-switch" role="group" aria-label="Workspace view">
+      <button [attr.aria-pressed]="!mobileQueue()" (click)="mobileQueue.set(false)">Map</button>
+      <button [attr.aria-pressed]="mobileQueue()" (click)="mobileQueue.set(true)">Alert queue</button>
+    </div>
+    <label>Show the past
+      <select #windowSelect [value]="hours()" (change)="hours.set(+windowSelect.value)">
+        <option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option>
+      </select>
+    </label>
+  </div>
+}
+<div class="workspace-panes" [class.show-queue]="mobileQueue() && workspace.current()">
+<section class="map-pane" aria-label="Detection map">
 <div #canvas class="map-canvas"></div>
 <div class="map-actions" role="group" aria-label="Map controls">
   <button brnButton [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg lucidePlus></svg></button>
@@ -7,17 +22,12 @@
 <div class="fire-controls">
   @if (workspace.current()) {
     <div class="filter-card">
-      <label>Show the past
-        <select #windowSelect [value]="hours()" (change)="hours.set(+windowSelect.value)">
-          <option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option>
-        </select>
-      </label>
       <label><input #outsideCheck type="checkbox" [checked]="outside()" (change)="outside.set(outsideCheck.checked)"> Show outside forest</label>
       <label>Detections in view
         <select #picker [disabled]="!visible().length" (change)="choose(picker.value)">
           <option value="" [selected]="!selected()">{{ visible().length ? 'Select a detection' : 'None in view' }}</option>
           @for (point of visible(); track point.id) {
-            <option [value]="point.id" [selected]="point.id === selected()?.id">{{ classes[point.forest_class] }} · {{ point.beat_name || 'Unknown beat' }} · {{ relativeAge(point.observed_at, now()) }} · #{{ point.id }}</option>
+            <option [value]="point.id" [selected]="point.id.toString() === selected()?.id?.toString()">{{ classes[point.forest_class] }} · {{ point.beat_name || 'Unknown beat' }} · {{ relativeAge(point.observed_at, now()) }} · #{{ point.id }}</option>
           }
         </select>
       </label>
@@ -71,3 +81,48 @@
     @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
   </section>
 }
+</section>
+@if (workspace.current()) {
+  <aside class="alert-panel" aria-labelledby="queue-title">
+    <h2 id="queue-title">Alert queue</h2>
+    <div class="queue-tabs" role="group" aria-label="Alert queues">
+      @for (tab of queue.tabs(); track tab) {
+        <button [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
+          @if (queue.page(); as page) { <span>{{ page.counts[tab] || 0 }}</span> }
+        </button>
+      }
+    </div>
+    @if (queue.message()) { <p role="status">{{ queue.message() }}</p> }
+    @if (queue.rows().length) {
+      <table class="alert-table">
+        <caption class="sr-only">{{ queueLabels[queue.active()] }} alerts</caption>
+        <thead><tr><th scope="col">Detection</th><th scope="col">Location</th></tr></thead>
+        <tbody>
+          @for (row of queue.rows(); track row.id) {
+            <tr [class.is-selected]="row.detection_id === selected()?.id?.toString()">
+              <td><button #rowButton class="row-open" (click)="openRow(row, rowButton)"
+                    [attr.aria-label]="classes[row.forest_class] + ', ' + (row.beat_name || 'unknown beat') + ', ' + localTime.format(row.observed_at * 1000)"
+                    [attr.aria-current]="row.detection_id === selected()?.id?.toString() ? 'true' : null">
+                {{ classes[row.forest_class] }}
+              </button>
+              <small>{{ localTime.format(row.observed_at * 1000) }}</small>
+              <small>{{ relativeAge(row.observed_at, now()) }}</small>
+              @if (row.triage) { <p>{{ reasons[row.triage] }}</p> }</td>
+              <td>{{ row.beat_name || 'Unknown beat' }}
+                <small>{{ row.range_name || 'Unknown range' }}</small>
+                <small>{{ row.division_name || 'Unknown division' }}</small>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else if (!queue.message()) {
+      <p role="status">{{ queue.page() ? 'No alerts on this page.' : 'Loading alerts…' }}</p>
+    }
+    @if (queue.cursor()) { <button class="page-button" (click)="queue.changePage('')">Newest alerts</button> }
+    @if (queue.page()?.nextCursor; as cursor) {
+      <button class="page-button" (click)="queue.changePage(cursor)">Older alerts</button>
+    }
+  </aside>
+}
+</div>

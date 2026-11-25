@@ -34,13 +34,8 @@ points AS (
       AND m.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.forest_class = ANY($7::text[])
       AND EXISTS (
-          SELECT 1 FROM grants g WHERE g.workspace_id = m.workspace_id AND (
-              g.depth = 0 OR EXISTS (
-                  SELECT 1
-                  FROM jsonb_array_elements_text(m.hierarchy_unit_paths -> (g.hierarchy_id::text)) AS p(path)
-                  WHERE p.path::ltree <@ g.unit_path
-              )
-          )
+          SELECT 1 FROM grants g WHERE g.workspace_id = m.workspace_id AND
+              match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
       )
 )
 SELECT EXISTS (SELECT 1 FROM grants),
