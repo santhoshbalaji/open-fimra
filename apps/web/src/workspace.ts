@@ -4,7 +4,9 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 
 interface Workspace { slug: string; name: string }
-interface Assignment { workspace: Workspace; role: string; unit: { path: string } }
+interface Assignment { workspace: Workspace; role: string; hierarchy?: string; unit: { path: string } }
+/** A role the user holds in the current workspace. */
+export interface Role { role: string; hierarchy: string; path: string }
 interface SetupInfo { bootstrapAvailable: boolean; unfinished: string[] }
 interface Profile { roleAssignments: Assignment[]; setup?: SetupInfo }
 export const noAccess = 'You have no access to this workspace yet';
@@ -30,6 +32,15 @@ export class WorkspaceService {
     return this.grants().some(grant => grant.workspace.slug === workspace?.slug &&
       grant.role === 'state_admin' && !!grant.unit?.path && !grant.unit.path.includes('.'));
   });
+
+  /** The user's roles in the current workspace. */
+  readonly roles = computed<Role[]>(() => this.grants()
+    .filter(grant => grant.workspace.slug === this.current()?.slug)
+    .map(grant => ({ role: grant.role, hierarchy: grant.hierarchy ?? '', path: grant.unit?.path ?? '' })));
+
+  /** Root administrators design forms; supervising officers design forms for their division. */
+  readonly canDesignForms = computed(() => this.canManageLayers() ||
+    this.roles().some(role => role.role === 'division_officer' && role.path.includes('.')));
 
   /** The wizard opens by itself until a root administrator finishes it. */
   readonly setupPending = computed(() => this.canManageLayers() &&

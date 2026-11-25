@@ -15,6 +15,19 @@ The chart has a matching data table. **Low bandwidth** keeps the numbers, table 
 
 Choose **Incidents** at the top of the queue panel to see alerts grouped into incidents: fires close together in place and time. **Alerts** returns to the alert queue. The list uses the same time window, forest class and unit path. Each row shows how many alerts you can see, their places, when the fire was last seen and the incident's own step. Open an incident to draw its alerts on the map, read its timeline and record a step. A step on the incident also moves each member alert that you could move the same way. Choose a member alert to open its own details. A merged incident links to the incident that now holds its alerts. The incident screen loads only when you open it, so it adds nothing to the first download.
 
+## Forms
+
+Root administrators and division officers see **Forms** in the top bar. The screen lists national templates, state forms and division forms, with each version's status, the template it extends and how many reports were filled in on it. Published versions open read-only; earlier reports keep showing with the version they used.
+
+- **Add a national template** takes a template file from a national body. It is published at once.
+- **Extend** starts a state form from a national template, or a division form from a state form, when the template allows it. Parts the template locks show **Locked by template** and cannot be changed.
+- **New state form** starts a blank form, and **Start version 2** copies the latest version.
+- **Template file** downloads a published version with its level and template rules, for another workspace to add.
+
+The designer has three views. **Design** shows the sections and questions. Choose a type under **Add** to put it after the selected item, or drag it into place. Drag the handles to move items, or use the arrow buttons or Alt with the up or down arrow on a selected row; **Move to** puts an item in another section or group. Select an item to change its key, question, hint, limits, choices and when it is shown. With **Let states extend this form** (or divisions) switched on in the form settings, each item can be locked for the forms that extend it. **Preview** shows the form read-only as people will fill it in, with its conditions in plain English. **Form file** shows the form in the [form format](../../packages/form-schema/SPEC.md) for stages, shared lists and layout. The shared validator checks the form as it changes and lists each problem in plain English; choose a problem to go to the item. **Publish** saves the draft and freezes the version.
+
+The designer and its validator load only when you open **Forms**, so they add nothing to the first download. The read-only renderer in [`src/forms/form-preview.ts`](src/forms/form-preview.ts) takes a form and, optionally, a submission's answers, so other screens can show a report with the version it used.
+
 ## Exports
 
 Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit path, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.
@@ -65,7 +78,7 @@ make web-build
 
 The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to stop the dev server.
 
-The first download should stay under 150 kB compressed, for slow mobile connections in the field. It is about 138 kB. The map library, its styles, charts and every screen except the shell load afterwards. For icons, use the `fimraIcon` directive in [`src/ui/icon.ts`](src/ui/icon.ts), for example `<svg fimraIcon="bell" aria-hidden="true">`. It draws Lucide icons from `@ng-icons/lucide`; add a new icon to its list. The build warns above 620 kB and fails above 700 kB before compression.
+The first download should stay under 150 kB compressed, for slow mobile connections in the field. It is about 139 kB. The map library, its styles, charts and every screen except the shell load afterwards. For icons, use the `fimraIcon` directive in [`src/ui/icon.ts`](src/ui/icon.ts), for example `<svg fimraIcon="bell" aria-hidden="true">`. It draws Lucide icons from `@ng-icons/lucide`; add a new icon to its list. The build warns above 620 kB and fails above 700 kB before compression.
 
 **GIS link keys** in the account menu shows the workspace's read-only GIS link address and QGIS steps. Each person can make personal access keys for desktop GIS there, see when each was last used and revoke them. A new key is shown once. See the [GIS link](../../services/api/README.md#gis-link).
 

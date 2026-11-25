@@ -203,6 +203,16 @@ wizard-walkthrough: mail-up web-build ## Drive the wizard in headless Chromium o
 	COMPOSE_CMD="$(COMPOSE)" FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
 	scripts/wizard-walkthrough.sh
 
+FORMS_WALKTHROUGH_SHOTS ?= $(HOME)/open-fimra-screenshots/form-designer
+.PHONY: form-designer-walkthrough
+form-designer-walkthrough: web-build ## Extend a national template in the form designer in headless Chromium, with screenshots outside the repository
+	WALK_DB=fimra_forms_walkthrough \
+	WALK_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/fimra_forms_walkthrough?sslmode=disable" \
+	SHOTS="$(FORMS_WALKTHROUGH_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	GOOSE_VERSION=$(GOOSE_VERSION) PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble \
+	COMPOSE_CMD="$(COMPOSE)" FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
+	scripts/form-designer-walkthrough.sh
+
 # The S3 attachment test needs an S3-compatible server. This starts rclone's
 # small one for the test only; it is not a choice of store for installs.
 S3_TEST_IMAGE ?= rclone/rclone:1.76.0

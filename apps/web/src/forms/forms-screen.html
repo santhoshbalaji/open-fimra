@@ -1,0 +1,201 @@
+<div class="mx-auto grid max-w-[1400px] gap-4 px-4 pt-6 pb-10 sm:px-8">
+  @if (editing(); as editing) {
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="grid gap-1">
+        <h2 class="text-display">{{ text(editing.definition.title) || editing.definition.id }}</h2>
+        <p class="flex flex-wrap items-center gap-2 text-muted-foreground">
+          <span hlmBadge variant="outline">{{ levelWords[editing.level].one }}</span>
+          <span>{{ editing.definition.id }}, version {{ editing.definition.version }}</span>
+          <span hlmBadge [variant]="editing.status === 'published' ? 'secondary' : 'outline'">{{ editing.status === 'published' ? 'Published' : 'Draft' }}</span>
+          @if (editing.unit) { <span>For {{ editing.unit.path }}</span> }
+          @if (editing.parent) { <span>Extends {{ editing.parent.form }} version {{ editing.parent.version }}</span> }
+          @if (editing.submissionCount !== undefined && editing.status === 'published') {
+            <span>{{ editing.submissionCount }} {{ editing.submissionCount === 1 ? 'report' : 'reports' }} filled in on this version</span>
+          }
+        </p>
+      </div>
+      <div class="ml-auto flex flex-wrap gap-2">
+        @if (!editing.readonly) {
+          <button hlmBtn variant="outline" [disabled]="busy() || !dirty()" (click)="save()">{{ editing.stored ? 'Save draft' : 'Save as draft' }}</button>
+          <button hlmBtn [disabled]="busy()" (click)="confirmPublish.set(true)">Publish…</button>
+        }
+        <button hlmBtn variant="ghost" (click)="closeDesigner()">Back to forms</button>
+      </div>
+    </div>
+    @if (editing.readonly && editing.status === 'published') {
+      <p class="text-muted-foreground">Published versions never change. Reports filled in on this version always show with it. To make changes, start the next version.</p>
+    }
+    @if (confirmPublish() && !editing.readonly) {
+      <div hlmAlert class="grid-cols-[auto_1fr] gap-x-2.5" role="alertdialog" aria-labelledby="publish-title">
+        <svg fimraIcon="info" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+        <h3 hlmAlertTitle id="publish-title">Publish version {{ editing.definition.version }}?</h3>
+        <div hlmAlertDescription class="grid gap-2">
+          <p>Publishing freezes this version: it can never change again. Reports already filled in keep the version they used.
+            @if (editing.rules.allowExtension) { Forms one level down can then extend it, keeping its locked parts. }</p>
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn size="sm" [disabled]="busy()" (click)="publish()">Publish</button>
+            <button hlmBtn size="sm" variant="ghost" (click)="confirmPublish.set(false)">Not now</button>
+          </div>
+        </div>
+      </div>
+    }
+    @if (error()) {
+      <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5" role="alert">
+        <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+        <p hlmAlertDescription>{{ error() }}</p>
+      </div>
+    }
+    <fimra-form-designer [form]="editing.definition" (formChange)="setDefinition($event)" [rules]="editing.rules" (rulesChange)="setRules($event)"
+                         [parent]="editing.parent" [level]="editing.level" [readonly]="editing.readonly" [serverProblems]="serverProblems()" />
+  } @else {
+    <div class="flex flex-wrap items-center gap-3">
+      <h2 class="text-display">Forms</h2>
+      <div class="ml-auto flex flex-wrap gap-2">
+        @if (admin()) {
+          <button hlmBtn variant="outline" (click)="importing.set(!importing())" [attr.aria-expanded]="importing()">Add a national template</button>
+          <button hlmBtn (click)="startBlank()">New state form</button>
+        }
+        <button hlmBtn variant="ghost" (click)="closed.emit()">Back to the control room</button>
+      </div>
+    </div>
+    <p class="max-w-prose text-muted-foreground">
+      A national body publishes templates with core questions. The state extends them with its own sections, and a division can add
+      to the state's form where the state allows it. Locked parts stay exactly as the template has them. Published versions never
+      change, so every report keeps showing with the version it was filled in on.
+    </p>
+    @if (error()) {
+      <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5" role="alert">
+        <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+        <div hlmAlertDescription>
+          <p>{{ error() }}</p>
+          @if (serverProblems().length) { <ul class="list-disc pl-5">@for (p of serverProblems(); track $index) { <li>{{ p }}</li> }</ul> }
+        </div>
+      </div>
+    }
+
+    @if (importing()) {
+      <section hlmCard aria-labelledby="import-heading">
+        <hlm-card-header>
+          <h3 hlmCardTitle id="import-heading" class="text-subhead">Add a national template</h3>
+          <p hlmCardDescription>Choose the template file from the national body, or paste it. It is published when it is added and never changes here.</p>
+        </hlm-card-header>
+        <div hlmCardContent class="grid gap-3">
+          <div class="grid gap-1">
+            <label for="import-file" class="font-medium">Template file</label>
+            <input hlmInput id="import-file" type="file" accept=".json,application/json" (change)="readImportFile($event)">
+          </div>
+          <div class="grid gap-1">
+            <label for="import-text" class="font-medium">Or paste it</label>
+            <textarea hlmTextarea id="import-text" class="min-h-40 font-mono text-sm" spellcheck="false" [value]="importText()" (input)="setImportText($event)"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button hlmBtn [disabled]="busy() || !importText().trim()" (click)="importNational()">Add template</button>
+            <button hlmBtn variant="ghost" (click)="importing.set(false)">Cancel</button>
+          </div>
+        </div>
+      </section>
+    }
+
+    @if (starting(); as start) {
+      <section hlmCard aria-labelledby="start-heading">
+        <hlm-card-header>
+          <h3 hlmCardTitle id="start-heading" class="text-subhead">
+            @if (start.parent) { Extend {{ text(start.parent.title) }} as a {{ levelWords[start.level].one.toLowerCase() }} } @else { New state form }
+          </h3>
+          @if (start.parent) {
+            <p hlmCardDescription>The new form starts as a copy of {{ start.parent.form }} version {{ start.parent.version }}.
+              {{ start.parent.template.locked.length }} locked {{ start.parent.template.locked.length === 1 ? 'part stays' : 'parts stay' }} as they are.</p>
+          }
+        </hlm-card-header>
+        <form hlmCardContent #startForm class="start-form grid gap-3" (submit)="$event.preventDefault(); begin(startForm)">
+          <div class="grid gap-1">
+            <label for="start-id" class="font-medium">Form id</label>
+            <input hlmInput id="start-id" name="id" required spellcheck="false" placeholder="demo-first-report" aria-describedby="start-id-help">
+            <p id="start-id-help" class="text-label text-muted-foreground">Small letters and digits with hyphens. It names the form in reports and cannot change.</p>
+          </div>
+          <div class="grid gap-1">
+            <label for="start-title" class="font-medium">Title</label>
+            <input hlmInput id="start-title" name="title" required [value]="start.parent ? text(start.parent.title) : ''">
+          </div>
+          @if (start.level === 'division') {
+            <div class="grid gap-1">
+              <label for="start-unit" class="font-medium">Division</label>
+              @if (start.units.length) {
+                <select hlmInput id="start-unit" name="unit">
+                  @for (unit of start.units; track unit.path) { <option [value]="unit.path">{{ unit.path }}</option> }
+                </select>
+              } @else {
+                <input hlmInput id="start-unit" name="unit" spellcheck="false" placeholder="ds.c1.d1">
+              }
+            </div>
+          }
+          @if (startError()) { <p class="text-danger" role="alert">{{ startError() }}</p> }
+          <div class="flex gap-2">
+            <button hlmBtn type="submit">Open in the designer</button>
+            <button hlmBtn type="button" variant="ghost" (click)="starting.set(null)">Cancel</button>
+          </div>
+        </form>
+      </section>
+    }
+
+    @if (forms() === null) {
+      <div class="grid gap-2" aria-label="Loading forms"><div hlmSkeleton class="h-20"></div><div hlmSkeleton class="h-20"></div></div>
+    } @else {
+      @for (group of byLevel(); track group.level) {
+        <section class="grid gap-2" [attr.aria-labelledby]="'level-' + group.level">
+          <h3 class="text-title" [id]="'level-' + group.level">{{ levelWords[group.level].group }}</h3>
+          @for (form of group.forms; track form.form) {
+            <article hlmCard class="form-card" [attr.aria-label]="title(form)">
+              <hlm-card-header>
+                <h4 hlmCardTitle class="text-subhead">{{ title(form) }}</h4>
+                <p hlmCardDescription>{{ form.form }}@if (form.unit) { · for {{ form.unit.path }} }
+                  @for (a of form.assignments; track a.step) { · version {{ a.version }} at the {{ a.step.replaceAll('_', ' ') }} step }</p>
+              </hlm-card-header>
+              <div hlmCardContent class="grid gap-2">
+                <ul class="grid gap-2">
+                  @for (version of form.versions; track version.version) {
+                    <li class="version-row flex flex-wrap items-center gap-2 border-t border-border pt-2">
+                      <span class="font-medium">Version {{ version.version }}</span>
+                      <span hlmBadge [variant]="version.status === 'published' ? 'secondary' : 'outline'">{{ version.status === 'published' ? 'Published' : 'Draft' }}</span>
+                      @if (version.publishedAt) { <span class="text-label text-muted-foreground">{{ version.publishedAt | date: 'd MMM y' }}</span> }
+                      @if (version.extends) { <span class="text-label text-muted-foreground">extends {{ version.extends.form }} version {{ version.extends.version }}</span> }
+                      @if (version.template.allowExtension) { <span class="text-label text-muted-foreground">can be extended</span> }
+                      @if (version.submissionCount !== undefined) {
+                        <span class="text-label text-muted-foreground">{{ version.submissionCount }} {{ version.submissionCount === 1 ? 'report' : 'reports' }}</span>
+                      }
+                      <span class="ml-auto flex flex-wrap gap-1">
+                        @if (version.status === 'draft' && form.canManage) {
+                          <button hlmBtn size="sm" (click)="open(form, version)" [attr.aria-label]="'Edit draft version ' + version.version + ' of ' + title(form)">Edit draft</button>
+                        } @else {
+                          <button hlmBtn size="sm" variant="outline" (click)="open(form, version)" [attr.aria-label]="'View version ' + version.version + ' of ' + title(form)">View</button>
+                        }
+                        @if (canExtend(version)) {
+                          <button hlmBtn size="sm" variant="outline" (click)="startExtension(version)" [attr.aria-label]="'Extend version ' + version.version + ' of ' + title(form)">Extend</button>
+                        }
+                        @if (version.status === 'published') {
+                          <button hlmBtn size="sm" variant="ghost" (click)="download(version)" [attr.aria-label]="'Download the template file of version ' + version.version + ' of ' + title(form)">
+                            <svg fimraIcon="download" aria-hidden="true"></svg> Template file</button>
+                        }
+                      </span>
+                    </li>
+                  }
+                </ul>
+                @if (form.canManage && form.level !== 'national' && !hasDraft(form) && latest(form)) {
+                  <button hlmBtn size="sm" variant="outline" class="justify-self-start" (click)="newVersion(form)">Start version {{ latest(form)!.version + 1 }}</button>
+                }
+              </div>
+            </article>
+          } @empty {
+            <p class="text-muted-foreground">
+              @switch (group.level) {
+                @case ('national') { No national templates yet. A workspace administrator adds them from the national body's template files. }
+                @case ('state') { No state forms yet. Start one, or extend a national template. }
+                @default { No division forms yet. A division can extend a state form that allows it. }
+              }
+            </p>
+          }
+        </section>
+      }
+    }
+  }
+</div>

@@ -16,10 +16,11 @@ import { WEB_CONFIG } from './config';
 import { Icon } from './ui/icon';
 import { FilterFields } from './filter-fields';
 import { AccessKeys } from './access-keys';
+import { FormsScreen } from './forms/forms-screen';
 
 @Component({
   selector: 'fimra-root',
-  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, Icon],
+  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, FormsScreen, Icon],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }
 })
@@ -29,6 +30,7 @@ export class App implements OnInit {
   readonly appearance = inject(ThemeService);
   readonly showLayers = signal(false);
   readonly showKeys = signal(false);
+  readonly showForms = signal(false);
   private readonly http = inject(HttpClient);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   /** null follows the setup state: the wizard opens until it is finished. */
@@ -58,6 +60,7 @@ export class App implements OnInit {
       }
       this.showLayers.set(false);
       this.showKeys.set(false);
+      this.showForms.set(false);
       this.setupChoice.set(false);
       this.dashboard.set(target.alert === null);
       if (target.alert) this.linkedAlert.set(target);
@@ -80,12 +83,21 @@ export class App implements OnInit {
   toggleLayers(): void {
     this.setupChoice.set(false);
     this.showKeys.set(false);
+    this.showForms.set(false);
     this.showLayers.set(!this.showLayers());
+  }
+
+  toggleForms(): void {
+    this.setupChoice.set(false);
+    this.showKeys.set(false);
+    this.showLayers.set(false);
+    this.showForms.set(!this.showForms());
   }
 
   openKeys(): void {
     this.setupChoice.set(false);
     this.showLayers.set(false);
+    this.showForms.set(false);
     this.showKeys.set(true);
   }
 
@@ -94,6 +106,7 @@ export class App implements OnInit {
     if (!workspace) return;
     this.showLayers.set(false);
     this.showKeys.set(false);
+    this.showForms.set(false);
     if (this.workspace.setupPending()) {
       this.setupChoice.set(true);
       return;

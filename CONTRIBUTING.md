@@ -75,6 +75,16 @@ Run `make starter-pack-test` after changing the starter forms in
 `make wizard-test-integration` to take an alert through the default workflow
 with them.
 
+National, state and division templates are part of the same test. To try the
+designer in a browser, run `make dev web-install form-designer-walkthrough`.
+It loads the demo workspace into its own database (`fimra_forms_walkthrough`),
+adds a synthetic national template with one report, and drives headless
+Chromium in the Playwright container: the state extends the template by
+keyboard and by drag and drop, publishes it, and checks that the earlier report
+still shows with the version it used. Screenshots go to
+`~/open-fimra-screenshots/form-designer`. Set `WEB_PORT` to serve the app on
+another port from 4200 through 4203.
+
 ## Converting forms to and from XLSForm
 
 The geo worker converts forms between the form format and XLSForm, the

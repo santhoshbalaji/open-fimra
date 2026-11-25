@@ -7,6 +7,9 @@
       @if (workspace.setupPending() && !showSetup()) {
         <button hlmBtn variant="ghost" class="user-trigger" (click)="openSetup()">Finish setup</button>
       }
+      @if (workspace.canDesignForms()) {
+        <button hlmBtn variant="ghost" class="user-trigger" (click)="toggleForms()" [attr.aria-pressed]="showForms()">Forms</button>
+      }
       @if (workspace.canManageLayers()) {
         <button hlmBtn variant="ghost" class="user-trigger" (click)="toggleLayers()">
           {{ showLayers() || showSetup() ? 'Control room' : 'Layers' }}
@@ -34,7 +37,7 @@
       </ng-template>
     </div>
   </header>
-  @if (workspace.current() && !showSetup() && !showKeys() && !(showLayers() && workspace.canManageLayers())) {
+  @if (workspace.current() && !showSetup() && !showKeys() && !showForms() && !(showLayers() && workspace.canManageLayers())) {
     <div class="workspace-controls" [class.filters-open]="filtersOpen()">
       <nav aria-label="Control room views">
         <button hlmBtn variant="ghost" [attr.aria-pressed]="!dashboard()" (click)="dashboard.set(false); focusFeedHealth.set(false)">Map and queue</button>
@@ -50,6 +53,8 @@
       @defer (on immediate) { <fimra-bootstrap /> }
     } @else if (showKeys()) {
       @defer (on immediate) { <fimra-access-keys (closed)="showKeys.set(false)" /> }
+    } @else if (showForms() && workspace.canDesignForms()) {
+      @defer (on immediate) { <fimra-forms-screen (closed)="showForms.set(false)" /> }
     } @else if (showSetup()) {
       @defer (on immediate) { <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" /> }
     } @else if (showLayers() && workspace.canManageLayers()) {
