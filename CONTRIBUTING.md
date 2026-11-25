@@ -46,15 +46,15 @@ With the development stack running, use Node.js 24.15 or later in the 24.x serie
 
 ## Running the core API
 
-With Go 1.26 or later, run `make dev`, `make db-migrate` and `make api-test-integration`. The integration test loads the demo workspace and grants, signs in with the four demo accounts and checks the answers from the API. Then run `make api-run` to serve the API on <http://127.0.0.1:18090>.
+With Go 1.26 or later, run `make dev`, `make db-migrate` and `make api-test-integration`. The integration test loads the demo workspace and grants, signs in with the four demo accounts and checks the answers from the API. Run `make demo-detections` to put synthetic points on the map, then run `make api-run` to serve the API on <http://127.0.0.1:18090>.
 
-Run `make api-lint api-test` for formatting, Go vet and unit tests. See the [core API guide](services/api/README.md) for settings and endpoints.
+Run `make api-lint api-test` for formatting, Go vet and unit tests. The integration tests check the reference matches, replay a synthetic feed and check which tile features each demo grant can see. To replay a file yourself, run `make ingest-fixture FILE=packages/connectors/firms/fixtures/viirs.csv`. See the [core API guide](services/api/README.md) for settings and endpoints.
 
 ## Making a change
 
 1. Branch from `main`.
 2. Keep each pull request to one slice or one clear change.
-3. Run `make check` before pushing, and `make db-test` if you changed the database. Continuous integration runs the same checks.
+3. Run `make check` before pushing, and `make db-test` if you changed the database. Use a disposable database for `make db-test` because it rolls back every migration. Continuous integration runs the same checks.
 4. Describe what changed and how you tested it in the pull request.
 
 Write documentation and interface text in plain English: short sentences, everyday words, and no unexplained abbreviations.

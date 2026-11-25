@@ -16,16 +16,22 @@ type api struct {
 	pool    *pgxpool.Pool
 	queries *db.Queries
 	logger  *slog.Logger
+	tiles   tileDB
 }
 
-func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger) http.Handler {
-	a := api{pool: pool, queries: db.New(pool), logger: logger}
+func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger, origins string) http.Handler {
+	return api{pool: pool, queries: db.New(pool), logger: logger, tiles: pool}.handler(auth, origins)
+}
+
+func (a api) handler(auth authenticator, origins string) http.Handler {
 	router := chi.NewRouter()
+	router.Use(allowOrigins(origins))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	router.Get("/readyz", a.ready)
 	router.With(auth.require).Get("/api/v1/me", a.me)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}", a.detectionTile)
 	return router
 }
 

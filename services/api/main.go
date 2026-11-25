@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,8 @@ type config struct {
 	issuer      string
 	audience    string
 	httpAddr    string
+	firmsMapKey string
+	corsOrigins string
 }
 
 func loadConfig() config {
@@ -27,6 +30,8 @@ func loadConfig() config {
 		issuer:      envOr("FIMRA_OIDC_ISSUER", "http://127.0.0.1:18180/realms/open-fimra"),
 		audience:    envOr("FIMRA_OIDC_AUDIENCE", "open-fimra-api"),
 		httpAddr:    envOr("FIMRA_HTTP_ADDR", "127.0.0.1:18090"),
+		firmsMapKey: strings.TrimSpace(os.Getenv("FIMRA_FIRMS_MAP_KEY")),
+		corsOrigins: envOr("FIMRA_CORS_ORIGINS", devOrigins),
 	}
 }
 
@@ -42,8 +47,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, loadConfig(), logger); err != nil {
-		logger.Error("API stopped", "error", err)
+	cfg := loadConfig()
+	var err error
+	if len(os.Args) > 1 {
+		err = runCommand(ctx, cfg, os.Args[1:])
+	} else {
+		err = run(ctx, cfg, logger)
+	}
+	if err != nil {
+		logger.Error("Open FIMRA stopped", "error", err)
 		os.Exit(1)
 	}
 }
@@ -72,7 +84,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	}
 	defer listener.Close()
 
-	jobs, err := newJobClient(pool, logger)
+	jobs, err := newJobClient(pool, logger, cfg.firmsMapKey)
 	if err != nil {
 		return fmt.Errorf("could not configure the job queue: %w", err)
 	}
@@ -87,8 +99,12 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		}
 	}()
 
+	if cfg.firmsMapKey == "" {
+		logger.Info("FIRMS polling is disabled because FIMRA_FIRMS_MAP_KEY is empty")
+	}
+
 	server := &http.Server{
-		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger),
+		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,

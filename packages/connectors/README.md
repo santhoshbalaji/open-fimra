@@ -1,5 +1,13 @@
 # Connectors
 
-Specifications and recorded test fixtures for each fire data source (NASA FIRMS, FSI, Bhuvan/NRSC, file upload). Fixtures are recorded responses or synthetic records only.
+This folder holds connector specifications and synthetic test fixtures. Never commit real observations.
 
-Not started yet. The FIRMS connector arrives in slice 6 of the build.
+## NASA FIRMS
+
+The [Go connector](../../services/api/internal/firms/) uses the [area API](https://firms.modaps.eosdis.nasa.gov/api/area/) for `VIIRS_SNPP_NRT`, `VIIRS_NOAA20_NRT`, `VIIRS_NOAA21_NRT` and `MODIS_NRT`. Set your own `FIMRA_FIRMS_MAP_KEY` to enable live polling. The key is part of the request URL and is redacted from reported errors.
+
+[The fixtures](firms/fixtures/) use the FIRMS column layout with made-up observations in Demo State. The VIIRS replay file spans two months. The MODIS file covers numeric confidence and a time without leading zeroes. Tests serve these files from memory.
+
+The demo file stores offsets as acquisition times relative to midnight UTC on January 8, 2000. For instance, January 7 at 22:00 means two hours before the anchor. `make demo-detections` moves the anchor to the start of the current UTC hour. A rerun within that hour reuses the keys. Imports in later hours create fresh demo observations.
+
+See the [core API guide](../../services/api/README.md) for ingest commands.
