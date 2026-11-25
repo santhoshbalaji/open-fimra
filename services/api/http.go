@@ -84,6 +84,7 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/alerts/{id}/submissions", a.submissions)
 	router.With(auth.require).Put("/api/v1/workspaces/{slug}/alerts/{id}/attachments/{attachment}", a.uploadAttachment)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/attachments/{attachment}", a.downloadAttachment)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/submissions", a.submissionList)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/submissions/{submission}", a.submission)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/submissions/{submission}/approval", a.approve)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/forms", a.forms)

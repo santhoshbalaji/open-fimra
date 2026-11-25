@@ -237,7 +237,7 @@ FORM_SCHEMA := packages/form-schema
 form-schema-test: ## Run the Go and TypeScript form validators on the shared examples (needs make web-install)
 	cd $(FORM_SCHEMA) && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
 	cd $(FORM_SCHEMA) && go vet ./... && go test -count=1 ./...
-	node --test $(FORM_SCHEMA)/ts/form-schema.test.ts
+	node --test $(FORM_SCHEMA)/ts/form-schema.test.ts $(FORM_SCHEMA)/ts/answers.test.ts
 	@test -x apps/web/node_modules/.bin/tsc || { echo "Run make web-install first: the type check uses the web app's TypeScript."; exit 1; }
 	apps/web/node_modules/.bin/tsc -p $(FORM_SCHEMA)/tsconfig.json
 
@@ -271,7 +271,7 @@ web-test: ## Run the web unit tests
 web-lint: ## Lint the web app and its templates
 	cd apps/web && $(PNPM) run lint
 
-.PHONY: geo-worker-up geo-test geo-test-integration export-test-integration
+.PHONY: geo-worker-up geo-test geo-test-integration export-test-integration submission-export-test-integration
 # The XLSForm tests round-trip the example forms from packages/form-schema.
 FORM_EXAMPLES_MOUNT = -v "$(CURDIR)/packages/form-schema/examples:/form-examples:ro"
 
@@ -297,6 +297,24 @@ export-test-integration: ## Export as each demo user on the running stack, then 
 	install -d -m 700 "$(EXPORT_CHECK_DIR)"
 	cd services/api && FIMRA_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
 		go test -run '^TestExportIntegration$$' -count=1 -v .
+	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
+
+# Field reports can never be deleted, so this test uses its own database and a
+# geo worker that reads it, like the first-run wizard tests.
+SUBMISSION_EXPORT_DB := fimra_submission_export_test
+SUBMISSION_EXPORT_DATABASE_URL := postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(SUBMISSION_EXPORT_DB)?sslmode=disable
+submission-export-test-integration: export FIMRA_DATABASE_URL := $(SUBMISSION_EXPORT_DATABASE_URL)
+submission-export-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
+submission-export-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
+submission-export-test-integration: ## A division officer approves a first report, then field reports are exported as each demo user and read back with OGR
+	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)" "$(EXPORT_CHECK_DIR)"
+	$(COMPOSE) build geo-worker
+	$(COMPOSE) exec -T db sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists --force $(SUBMISSION_EXPORT_DB) && createdb -U "$$POSTGRES_USER" $(SUBMISSION_EXPORT_DB)'
+	go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(SUBMISSION_EXPORT_DATABASE_URL)" up
+	@set -e; worker=$$($(COMPOSE) run -d --rm -e PGDATABASE=$(SUBMISSION_EXPORT_DB) geo-worker); \
+		trap 'docker stop "$$worker" > /dev/null' EXIT; \
+		cd services/api && FIMRA_SUBMISSION_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
+			go test -run '^TestSubmissionExportIntegration$$' -count=1 -v .
 	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
 
 # XLSForm conversion (PLAN.md section 5.4). Output goes to the ignored .xlsforms/ folder unless OUT is given.

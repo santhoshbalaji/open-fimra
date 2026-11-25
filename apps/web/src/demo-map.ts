@@ -19,6 +19,8 @@ import { WEB_CONFIG } from './config';
 import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import { Incidents, type IncidentFocus } from './incidents';
+import { AlertReports } from './forms/alert-reports';
+import { Submissions, type ReportFilters } from './forms/submissions';
 import type { NotificationLink } from './notifications';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
@@ -30,7 +32,7 @@ import { Icon } from './ui/icon';
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, Incidents, Icon],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, Incidents, AlertReports, Submissions, Icon],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -65,7 +67,9 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly hours = this.queue.hours;
   readonly mobileQueue = signal(false);
   /** The panel beside the map lists alerts one by one, or grouped into incidents. */
-  readonly queueView = signal<'alerts' | 'incidents'>('alerts');
+  readonly queueView = signal<'alerts' | 'incidents' | 'reports'>('alerts');
+  /** The reports list's form and decision, which its export uses. */
+  readonly reportFilters = signal<ReportFilters>({ form: '', decision: 'pending', formLabel: '' });
   private readonly incidentFocus = signal<IncidentFocus | null>(null);
   private fromQueue = false;
   readonly filters = inject(DashboardFilters);
@@ -378,7 +382,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     this.detailTitle()?.nativeElement.focus();
   }
 
-  showView(view: 'alerts' | 'incidents'): void {
+  showView(view: 'alerts' | 'incidents' | 'reports'): void {
     if (view === this.queueView()) return;
     this.queueView.set(view);
     if (view === 'alerts') this.incidentFocus.set(null);

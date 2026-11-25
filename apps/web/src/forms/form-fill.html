@@ -1,0 +1,255 @@
+@if (tree(); as t) {
+  <header class="form-heading">
+    <div>
+      <h3>{{ title() }}@if (stageTitle()) { · {{ stageTitle() }} }</h3>
+      @if (description()) { <p>{{ description() }}</p> }
+    </div>
+    @if (languages().length > 1) {
+      <hlm-field class="form-language"><label hlmFieldLabel for="form-language">Language</label>
+        <hlm-select [value]="language()" (valueChange)="$event && language.set($event)">
+          <hlm-select-trigger buttonId="form-language" size="sm">{{ languageName(language()) }}</hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal>
+            @for (code of languages(); track code) { <hlm-select-item [value]="code">{{ languageName(code) }}</hlm-select-item> }
+          </hlm-select-content>
+        </hlm-select>
+      </hlm-field>
+    }
+  </header>
+
+  @if (!readonly() && (tried() && problems().length || serverMessage() || serverProblems().length)) {
+    <div id="form-problems" class="form-problems" role="alert" tabindex="-1">
+      @if (serverMessage()) { <p>{{ serverMessage() }}</p> }
+      @if (tried() && problems().length) {
+        <p>Check {{ problems().length === 1 ? 'this answer' : 'these answers' }} before sending:</p>
+      }
+      <ul>
+        @for (problem of (tried() ? problems() : []); track $index) {
+          <li><button type="button" class="problem-link" (click)="show(problem)">{{ problem.message }}</button></li>
+        }
+        @for (problem of serverProblems(); track $index) {
+          <li><button type="button" class="problem-link" (click)="show(problem)">{{ problem.message }}</button></li>
+        }
+      </ul>
+    </div>
+  }
+
+  <form (submit)="$event.preventDefault(); submit()" novalidate>
+    @if (readonly()) {
+      @for (p of pages(); track p.key) {
+        @if (p.title) { <h4 class="form-page-title">{{ p.title }}</h4> }
+        @for (section of p.sections; track section.key) { <ng-container *ngTemplateOutlet="sectionTpl; context: { $implicit: section }" /> }
+      }
+    } @else if (currentPage(); as p) {
+      @if (pages().length > 1) {
+        <p class="form-page-count">Page {{ pages().indexOf(p) + 1 }} of {{ pages().length }}</p>
+      }
+      <h4 id="form-page-title" class="form-page-title" tabindex="-1" [class.sr-only]="!p.title">{{ p.title || 'Page ' + (pages().indexOf(p) + 1) }}</h4>
+      @for (section of p.sections; track section.key) { <ng-container *ngTemplateOutlet="sectionTpl; context: { $implicit: section }" /> }
+      <div class="form-actions">
+        @if (pages().indexOf(p) > 0) {
+          <button hlmBtn type="button" variant="outline" (click)="goTo(pages().indexOf(p) - 1)">Back</button>
+        }
+        @if (pages().indexOf(p) < pages().length - 1) {
+          <button hlmBtn type="button" (click)="goTo(pages().indexOf(p) + 1)">Next</button>
+        } @else {
+          <button hlmBtn type="submit" [disabled]="busy() || !!uploading()">{{ busy() ? 'Sending…' : 'Send report' }}</button>
+        }
+        <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelled.emit()">Cancel</button>
+      </div>
+      @if (uploading(); as name) { <p role="status">Uploading {{ name }}…</p> }
+    }
+  </form>
+
+  <ng-template #sectionTpl let-section>
+    @let collapsed = layout(section)['collapsed'] === true;
+    <details class="form-section" [open]="!collapsed || readonly()">
+      <summary><h4>{{ name(section) }}</h4></summary>
+      @if (text(section.node['description'])) { <p class="form-hint">{{ text(section.node['description']) }}</p> }
+      <div class="form-items">
+        <ng-container *ngTemplateOutlet="itemsTpl; context: { $implicit: section.children, path: [] }" />
+      </div>
+    </details>
+  </ng-template>
+
+  <ng-template #itemsTpl let-items let-path="path">
+    @for (item of items; track item.key) {
+      @if (visible(item, path)) {
+        @switch (item.kind) {
+          @case ('group') {
+            <details class="form-group" [open]="layout(item)['collapsed'] !== true || readonly()">
+              <summary>{{ name(item) }}</summary>
+              @if (text(item.node['description'])) { <p class="form-hint">{{ text(item.node['description']) }}</p> }
+              <div class="form-items"><ng-container *ngTemplateOutlet="itemsTpl; context: { $implicit: item.children, path: path }" /></div>
+            </details>
+          }
+          @case ('repeat') {
+            <details class="form-group form-repeat" [open]="layout(item)['collapsed'] !== true || readonly()">
+              <summary>{{ name(item) }}</summary>
+              @if (text(item.node['description'])) { <p class="form-hint">{{ text(item.node['description']) }}</p> }
+              @for (entry of entries(item, path); track $index; let i = $index) {
+                @let inner = entryPath(path, item.key, i);
+                <fieldset class="form-entry">
+                  <legend>{{ entryTitle(item, i) }}</legend>
+                  <div class="form-items"><ng-container *ngTemplateOutlet="itemsTpl; context: { $implicit: item.children, path: inner }" /></div>
+                  @if (!locked(item)) {
+                    <button hlmBtn type="button" variant="ghost" size="sm" (click)="removeEntry(item, path, i)">Remove {{ entryTitle(item, i) }}</button>
+                  }
+                </fieldset>
+              } @empty {
+                <p class="form-hint">No entries.</p>
+              }
+              @if (!locked(item) && canAdd(item, path)) {
+                <button hlmBtn type="button" variant="outline" size="sm" (click)="addEntry(item, path)">Add {{ text(item.node['itemLabel']) || name(item) }}</button>
+              }
+              @for (problem of fieldProblems(item, path); track $index) { <small class="field-error">{{ problem.message }}</small> }
+            </details>
+          }
+          @default { <ng-container *ngTemplateOutlet="fieldTpl; context: { $implicit: item, path: path }" /> }
+        }
+      }
+    }
+  </ng-template>
+
+  <ng-template #fieldTpl let-f let-path="path">
+    @let id = fieldId(f, path);
+    @let lock = locked(f);
+    @let issues = fieldProblems(f, path);
+    @let hint = text(f.node['hint']);
+    <div class="form-field" [class.half]="layout(f)['width'] === 'half'" [class.invalid]="issues.length">
+      @if (f.kind === 'multiple-choice' || (f.kind === 'single-choice' && widget(f) !== 'dropdown')) {
+        <span class="form-label" [id]="id + '-label'">{{ name(f) }}@if (required(f, path) && !lock) { <span class="required"> (required)</span> }</span>
+      } @else {
+        <label hlmFieldLabel class="form-label" [for]="id">{{ name(f) }}@if (required(f, path) && !lock) { <span class="required"> (required)</span> }</label>
+      }
+      @if (hint && !lock) { <small class="form-hint" [id]="id + '-hint'">{{ hint }}</small> }
+
+      @if (lock && f.kind !== 'photo' && f.kind !== 'file' && f.kind !== 'signature') {
+        <p class="form-answer" [id]="id">{{ shown(f, path) }}</p>
+      } @else {
+        @switch (f.kind) {
+          @case ('text') {
+            @if (widget(f) === 'paragraph') {
+              <textarea hlmTextarea [id]="id" [value]="textValue(f, path)" [attr.maxlength]="f.node['maxLength'] ?? null"
+                [attr.aria-describedby]="hint ? id + '-hint' : null" [attr.aria-invalid]="issues.length ? 'true' : null"
+                (input)="set(f, path, $any($event.target).value)"></textarea>
+            } @else {
+              <input hlmInput [id]="id" [value]="textValue(f, path)" [attr.maxlength]="f.node['maxLength'] ?? null"
+                [attr.aria-describedby]="hint ? id + '-hint' : null" [attr.aria-invalid]="issues.length ? 'true' : null"
+                (input)="set(f, path, $any($event.target).value)">
+            }
+          }
+          @case ('number') {
+            <div class="form-number">
+              @if (widget(f) === 'stepper') {
+                <button hlmBtn type="button" variant="outline" size="sm" [attr.aria-label]="'Less ' + name(f)" (click)="nudge(f, path, -1)">−</button>
+              }
+              <input hlmInput [id]="id" type="number" inputmode="decimal" [value]="textValue(f, path)"
+                [attr.min]="f.node['min'] ?? null" [attr.max]="f.node['max'] ?? null"
+                [attr.step]="stepOf(f)"
+                [attr.aria-describedby]="hint ? id + '-hint' : null" [attr.aria-invalid]="issues.length ? 'true' : null"
+                (input)="setNumber(f, path, $any($event.target).value)">
+              @if (widget(f) === 'stepper') {
+                <button hlmBtn type="button" variant="outline" size="sm" [attr.aria-label]="'More ' + name(f)" (click)="nudge(f, path, 1)">+</button>
+              }
+              @if (unitOf(f)) { <span class="form-unit">{{ unitOf(f) }}</span> }
+            </div>
+          }
+          @case ('date') {
+            <input hlmInput [id]="id" type="date" [value]="textValue(f, path)" [attr.aria-invalid]="issues.length ? 'true' : null"
+              (change)="set(f, path, $any($event.target).value)">
+          }
+          @case ('time') {
+            <input hlmInput [id]="id" type="time" [value]="textValue(f, path)" [attr.aria-invalid]="issues.length ? 'true' : null"
+              (change)="set(f, path, $any($event.target).value)">
+          }
+          @case ('date-time') {
+            <input hlmInput [id]="id" type="datetime-local" [value]="toLocalInput(value(f, path))" [attr.aria-invalid]="issues.length ? 'true' : null"
+              (change)="setDateTime(f, path, $any($event.target).value)">
+          }
+          @case ('single-choice') {
+            @switch (widget(f)) {
+              @case ('dropdown') {
+                <hlm-select [value]="textValue(f, path)" (valueChange)="set(f, path, $event || null)">
+                  <hlm-select-trigger [buttonId]="id" class="w-full">{{ value(f, path) ? choiceLabel(f, value(f, path)) : 'Choose one' }}</hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (c of choices(f, path); track c['key']) { <hlm-select-item [value]="c['key']">{{ text(c['label']) }}</hlm-select-item> }
+                  </hlm-select-content>
+                </hlm-select>
+              }
+              @case ('buttons') {
+                <div class="choice-buttons" role="group" [attr.aria-labelledby]="id + '-label'" [id]="id" tabindex="-1">
+                  @for (c of choices(f, path); track c['key']) {
+                    <button hlmBtn type="button" size="sm" [variant]="chosen(f, path, c['key']) ? 'primary' : 'outline'"
+                      [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="set(f, path, chosen(f, path, c['key']) ? null : c['key'])">{{ text(c['label']) }}</button>
+                  }
+                </div>
+              }
+              @default {
+                <hlm-radio-group [id]="id" tabindex="-1" [attr.aria-labelledby]="id + '-label'" [value]="value(f, path) ?? null"
+                  (valueChange)="set(f, path, $event)">
+                  @for (c of choices(f, path); track c['key']) {
+                    <label hlmLabel class="choice"><hlm-radio [value]="c['key']" [attr.aria-label]="text(c['label'])"><hlm-radio-indicator /></hlm-radio> {{ text(c['label']) }}</label>
+                  }
+                </hlm-radio-group>
+              }
+            }
+            @if (!choices(f, path).length) { <small class="form-hint">Answer “{{ name(t.byKey.get(f.node['parent'])!) }}” first.</small> }
+          }
+          @case ('multiple-choice') {
+            <div class="choice-list" role="group" [attr.aria-labelledby]="id + '-label'" [id]="id" tabindex="-1">
+              @for (c of choices(f, path); track c['key']) {
+                @if (widget(f) === 'buttons') {
+                  <button hlmBtn type="button" size="sm" [variant]="chosen(f, path, c['key']) ? 'primary' : 'outline'"
+                    [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="toggle(f, path, c['key'], !chosen(f, path, c['key']))">{{ text(c['label']) }}</button>
+                } @else {
+                  <label hlmLabel class="choice"><hlm-checkbox [checked]="chosen(f, path, c['key'])" [attr.aria-label]="text(c['label'])"
+                    (checkedChange)="toggle(f, path, c['key'], $event)" /> {{ text(c['label']) }}</label>
+                }
+              }
+            </div>
+            @if (!choices(f, path).length) { <small class="form-hint">Answer “{{ name(t.byKey.get(f.node['parent'])!) }}” first.</small> }
+          }
+          @case ('point') { <fimra-shape-input kind="point" [inputId]="id" [value]="value(f, path)" [alertPoint]="alertPoint()" (changed)="set(f, path, $event)" /> }
+          @case ('track') { <fimra-shape-input kind="track" [inputId]="id" [value]="value(f, path)" (changed)="set(f, path, $event)" /> }
+          @case ('polygon') { <fimra-shape-input kind="polygon" [inputId]="id" [value]="value(f, path)" (changed)="set(f, path, $event)" /> }
+          @case ('calculated') { <output class="form-answer" [id]="id">{{ shown(f, path) }}</output> }
+          @case ('alert-value') { <output class="form-answer" [id]="id">{{ shown(f, path) }}</output> }
+          @default {
+            <!-- Photos, files and signatures. -->
+            <ul class="form-files">
+              @for (fileId of files(f, path); track fileId; let n = $index) {
+                @let fileName = f.kind === 'signature' ? 'signature' : (f.kind === 'photo' ? 'photo ' : 'file ') + (n + 1);
+                <li>
+                  @if (preview(fileId); as src) { <img [src]="src" [alt]="name(f) + ', ' + fileName"> }
+                  @if (readonly()) {
+                    <button hlmBtn type="button" variant="link" size="sm" (click)="download(fileId)">Download {{ fileName }}</button>
+                  } @else {
+                    <span>{{ fileLabel(fileId) }}</span>
+                    @if (!lock) { <button hlmBtn type="button" variant="ghost" size="sm" (click)="removeFile(f, path, fileId)">Remove</button> }
+                  }
+                </li>
+              } @empty {
+                @if (lock) { <li>No answer</li> }
+              }
+            </ul>
+            @if (!lock) {
+              @if (f.kind === 'signature') {
+                @if (!files(f, path).length) {
+                  <fimra-signature-pad [inputId]="id" [busy]="!!uploading()" (saved)="saveSignature(f, path, $event)" />
+                }
+              } @else if (canAddFile(f, path)) {
+                <input [id]="id" type="file" class="form-file-input" [accept]="accept(f)" [multiple]="true" [disabled]="!!uploading()"
+                  [attr.aria-describedby]="hint ? id + '-hint' : null" (change)="addFiles(f, path, $any($event.target).files); $any($event.target).value = ''">
+              }
+            }
+          }
+        }
+      }
+      @for (problem of issues; track $index) { <small class="field-error">{{ problem.message }}</small> }
+    </div>
+  </ng-template>
+} @else if (loadError()) {
+  <p role="status">{{ loadError() }}</p>
+} @else {
+  <div role="status" aria-label="Loading the form" class="grid gap-2"><hlm-skeleton class="h-10" /><hlm-skeleton class="h-24" /></div>
+}

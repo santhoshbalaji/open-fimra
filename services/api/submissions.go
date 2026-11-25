@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -145,8 +147,10 @@ func (a api) submissions(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if r.Method == http.MethodGet {
-			return tx.QueryRow(ctx, `SELECT COALESCE(jsonb_agg(`+submissionJSON+` ORDER BY s.received_at, s.id), '[]')`+
-				submissionFrom+` WHERE s.alert_id = $1`, id).Scan(&result)
+			return tx.QueryRow(ctx, `SELECT COALESCE(jsonb_agg(`+submissionJSON+` || jsonb_build_object('canApprove', o.officer)
+    ORDER BY s.received_at, s.id), '[]')`+submissionFrom+`
+CROSS JOIN (SELECT COALESCE(bool_or(officer), false) AS officer FROM alert_roles($2, $3, $1)) o
+WHERE s.alert_id = $1`, id, subject, slug).Scan(&result)
 		}
 		created, err := a.recordSubmission(ctx, tx, user, id, input, hash)
 		if err != nil {
@@ -369,10 +373,12 @@ func (a api) submission(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "submission")
 	var result json.RawMessage
 	err := pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
-		if _, _, _, err := submissionAccess(ctx, tx, subject, chi.URLParam(r, "slug"), id); err != nil {
+		_, officer, _, err := submissionAccess(ctx, tx, subject, chi.URLParam(r, "slug"), id)
+		if err != nil {
 			return err
 		}
-		return tx.QueryRow(ctx, `SELECT `+submissionJSON+submissionFrom+` WHERE s.id = $1`, id).Scan(&result)
+		return tx.QueryRow(ctx, `SELECT `+submissionJSON+` || jsonb_build_object('canApprove', $2::boolean)`+submissionFrom+
+			` WHERE s.id = $1`, id, officer).Scan(&result)
 	})
 	if err != nil {
 		a.writeProblem(w, err, "Submission not found.", "Could not load the submission")
@@ -437,11 +443,100 @@ SELECT EXISTS (SELECT FROM added)`, id, input.Decision, input.Note, user).Scan(&
 				return problem(http.StatusConflict, "This submission already has a decision. Decisions never change.")
 			}
 		}
-		return tx.QueryRow(ctx, `SELECT `+submissionJSON+submissionFrom+` WHERE s.id = $1`, id).Scan(&result)
+		return tx.QueryRow(ctx, `SELECT `+submissionJSON+` || jsonb_build_object('canApprove', true)`+submissionFrom+
+			` WHERE s.id = $1`, id).Scan(&result)
 	})
 	if err != nil {
 		a.writeProblem(w, err, "Submission not found.", "Could not save the decision")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+//go:embed submissions.sql
+var submissionListSQL string
+
+type submissionPage struct {
+	Counts     map[string]int    `json:"counts"`
+	Items      []json.RawMessage `json:"items"`
+	NextCursor string            `json:"nextCursor,omitempty"`
+}
+
+// submissionList lists the field reports the caller may see, with the alert
+// queue's filters, a form and a decision. Counts by decision cover every
+// matching submission, not only the page.
+func (a api) submissionList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	q := r.URL.Query()
+	alertQuery := url.Values{}
+	for key, values := range q {
+		if key != "cursor" {
+			alertQuery[key] = values
+		}
+	}
+	f, err := readAlertFilters(alertQuery)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	form, decision := q.Get("form"), q.Get("decision")
+	if (form != "" && !formKeyPattern.MatchString(form)) || !slices.Contains([]string{"", "pending", "approved", "returned"}, decision) {
+		writeError(w, http.StatusBadRequest, "Unknown form or decision.")
+		return
+	}
+	var alertID *int64
+	if q.Has("alert") {
+		n, err := strconv.ParseInt(q.Get("alert"), 10, 64)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "Invalid alert ID.")
+			return
+		}
+		alertID = &n
+	}
+	// The alert filters read the cursor as a time and an alert ID. A
+	// submission cursor ends in a submission ID instead.
+	var beforeID *string
+	if q.Has("cursor") {
+		timestamp, id, _ := strings.Cut(q.Get("cursor"), ",")
+		before, timeErr := time.Parse(time.RFC3339Nano, timestamp)
+		if timeErr != nil || !uuidPattern.MatchString(id) {
+			writeError(w, http.StatusBadRequest, "Invalid submission cursor.")
+			return
+		}
+		f.before, beforeID = &before, &id
+	}
+	caller := r.Context().Value(identityKey{}).(identity)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	var allowed, knownStatus bool
+	var page submissionPage
+	err = a.reader.QueryRow(ctx, submissionListSQL, caller.Subject, chi.URLParam(r, "slug"), f.hours, f.queue, f.status,
+		f.class, f.path, form, decision, alertID, f.before, beforeID, f.limit+1).Scan(&allowed, &knownStatus, &page.Counts, &page.Items)
+	if err != nil {
+		a.logger.Error("Could not read submissions", "error", err)
+		writeError(w, http.StatusInternalServerError, "Could not load the submissions.")
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusForbidden, "A role in this workspace is required.")
+		return
+	}
+	if !knownStatus {
+		writeError(w, http.StatusBadRequest, "Unknown workflow step.")
+		return
+	}
+	if len(page.Items) > f.limit {
+		page.Items = page.Items[:f.limit]
+		var last struct {
+			Time string `json:"received_time"`
+			ID   string `json:"id"`
+		}
+		if err := json.Unmarshal(page.Items[f.limit-1], &last); err != nil {
+			a.logger.Error("Could not read the submission cursor", "error", err)
+			writeError(w, http.StatusInternalServerError, "Could not load the submissions.")
+			return
+		}
+		page.NextCursor = last.Time + "," + last.ID
+	}
+	writeJSON(w, http.StatusOK, page)
 }

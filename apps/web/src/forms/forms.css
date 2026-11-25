@@ -1,0 +1,66 @@
+/* Field reports: the form renderer, a report and its decision, and the reports list.
+   These load with the report screens, not with the first download. */
+.form-fill, .submission-view { display: grid; gap: 12px; min-width: 0; }
+.form-heading { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; justify-content: space-between; }
+.form-heading h3 { font-weight: 600; font-size: var(--text-title); }
+.form-heading p, .form-hint, .form-page-count, .submission-meta, .report-list small, .report-forms small {
+  color: var(--color-text-secondary); font-size: var(--text-label);
+}
+.form-language { width: auto; gap: 2px; }
+.form-fill form { display: grid; gap: 12px; min-width: 0; }
+.form-page-title { font-weight: 600; }
+.form-section { border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 12px; }
+.form-section > summary, .form-group > summary { cursor: pointer; font-weight: 600; }
+.form-section > summary h4 { display: inline; }
+.form-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.form-items > * { grid-column: 1 / -1; }
+.form-items > .form-field.half { grid-column: auto; }
+.form-group { border-left: 2px solid var(--color-border); padding-left: 12px; }
+.form-entry { border: 1px dashed var(--color-border); border-radius: var(--radius-card); padding: 8px 12px; margin-top: 8px; }
+.form-entry legend { font-weight: 600; padding: 0 4px; }
+.form-repeat > button { margin-top: 8px; }
+.form-field { display: grid; gap: 4px; min-width: 0; }
+.form-label { font-weight: 500; }
+.form-label .required { color: var(--color-text-secondary); font-weight: 400; }
+.form-answer { overflow-wrap: anywhere; }
+.form-number { display: flex; gap: 6px; align-items: center; }
+.form-number input { max-width: 180px; }
+.form-unit { color: var(--color-text-secondary); }
+.choice { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+.choice-list, .choice-buttons, hlm-radio-group { display: flex; flex-direction: column; gap: 6px; }
+.choice-buttons, .choice-list:has(> button) { flex-direction: row; flex-wrap: wrap; }
+.field-error { color: var(--color-danger); font-size: var(--text-label); }
+.form-field.invalid input, .form-field.invalid textarea { border-color: var(--color-danger); }
+.form-problems { border: 1px solid var(--color-danger); border-radius: var(--radius-card); padding: 12px; }
+.form-problems ul { list-style: disc; padding-left: 20px; }
+.problem-link { text-align: left; text-decoration: underline; color: var(--color-danger); }
+.form-actions, .shape-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.form-files { display: grid; gap: 6px; }
+.form-files li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; overflow-wrap: anywhere; }
+.form-files img { max-width: 160px; max-height: 120px; border-radius: var(--radius-card); border: 1px solid var(--color-border); }
+.form-file-input { font-size: var(--text-label); }
+.shape-input, .signature-pad { display: grid; gap: 6px; }
+.shape-input small { color: var(--color-text-secondary); font-size: var(--text-label); }
+.shape-drawing { width: 100%; max-width: 240px; background: var(--color-map-background); border-radius: var(--radius-card); }
+.shape-drawing polygon { fill: var(--color-brand-soft); stroke: var(--color-brand); stroke-width: 0.8; }
+.shape-drawing polyline { fill: none; stroke: var(--color-brand); stroke-width: 0.8; }
+.shape-drawing circle { fill: var(--color-brand); }
+.signature-pad canvas { width: 100%; max-width: 480px; aspect-ratio: 3 / 1; touch-action: none; color: var(--color-text);
+  background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); }
+.approval { border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 12px 0; display: grid; gap: 8px; }
+.approval h4 { font-weight: 600; }
+.approval-note { overflow-wrap: anywhere; }
+.approval form { display: grid; gap: 8px; }
+fimra-alert-reports { display: block; margin: 16px 0; }
+fimra-alert-reports h3 { font-weight: 600; margin: 12px 0 8px; }
+.report-forms, .report-list { display: grid; gap: 8px; }
+.report-forms li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.report-forms li > span { flex-basis: 100%; }
+.report-list li { display: grid; }
+.report-dialog { max-height: calc(100dvh - 32px); overflow: auto; gap: 12px; width: min(760px, calc(100vw - 2rem)); max-width: none; }
+.report-dialog-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.report-dialog-heading h2 { font-weight: 600; font-size: var(--text-title); }
+.report-form-filter { gap: 2px; margin-bottom: 8px; }
+@media (max-width: 640px) {
+  .form-items > .form-field.half { grid-column: 1 / -1; }
+}

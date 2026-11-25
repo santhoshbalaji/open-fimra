@@ -99,6 +99,31 @@ describe('Export dialog', () => {
     await vi.waitFor(() => expect(sessionEnded).toHaveBeenCalled());
   });
 
+  it('exports the field reports list with its form and decision', () => {
+    const fixture = TestBed.createComponent(ExportDialog);
+    const set = (name: string, value: unknown) => fixture.componentRef.setInput(name, value);
+    set('endpoint', endpoint);
+    set('hours', 168);
+    set('forestClass', '');
+    set('unitPath', 'ds.c1.d1');
+    set('queue', 'unit');
+    set('queueLabel', 'Unit');
+    set('initialKind', 'submissions');
+    set('form', 'first-report');
+    set('formLabel', 'First report');
+    set('decision', 'approved');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#export-summary')!.textContent).toContain(
+      'received in the past 7 days · all forest classes · units under ds.c1.d1 · First report reports, with a column for each answer · approved');
+    el.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+    fixture.detectChanges();
+    const post = http.expectOne(endpoint + '/exports');
+    expect(post.request.body).toEqual({ kind: 'submissions', format: 'gpkg', hours: 168, unitPath: 'ds.c1.d1',
+      forestClasses: ['inside', 'near_edge', 'outside', 'fixed_heat_source'], form: 'first-report', decision: 'approved' });
+    post.flush(pending);
+  });
+
   it('requests dismissal with the Close button', () => {
     const { el, fixture } = render();
     const closed = vi.fn();

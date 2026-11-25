@@ -1,11 +1,12 @@
 -- Freezes the rows the caller may see into a new export, in one statement.
 -- The grant rule is the one in tiles.sql for detections and alerts.sql for
 -- alerts: the alert_grants view and match_under_grant(), on the match's paths
--- for detections and on the alert's own snapshot for alerts. Review queues
--- need a grant at division level or above.
+-- for detections and on the alert's own snapshot for alerts and submissions.
+-- Review queues need a grant at division level or above.
 -- $1 subject, $2 workspace slug, $3 kind, $4 format, $5 hours, $6 forest classes,
 -- $7 queue ('' for all), $8 unit path prefix (or NULL), $9 workflow step ('' for all),
--- $10 maximum rows, $11 lifetime of the file.
+-- $10 maximum rows, $11 lifetime of the file, $12 form key ('' for all),
+-- $13 approval decision: pending, approved, returned or '' for all.
 WITH grants AS MATERIALIZED (
     SELECT g.*, u.code, u.name, level.slug AS level
     FROM alert_grants g
@@ -14,7 +15,8 @@ WITH grants AS MATERIALIZED (
     WHERE g.oidc_subject = $1 AND g.slug = $2
 ),
 detection_rows AS (
-    SELECT m.workspace_id, m.detection_id, m.observed_at, NULL::bigint AS alert_id
+    SELECT m.workspace_id, m.detection_id, m.observed_at, NULL::bigint AS alert_id,
+           NULL::uuid AS submission_id, m.observed_at AS sort_time
     FROM detection_matches m
     JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
     WHERE $3 = 'detections'
@@ -29,7 +31,8 @@ detection_rows AS (
 ),
 alert_rows AS (
     -- Alerts keep their own routing snapshot, as in alerts.sql.
-    SELECT a.workspace_id, a.detection_id, a.observed_at, a.id AS alert_id
+    SELECT a.workspace_id, a.detection_id, a.observed_at, a.id AS alert_id,
+           NULL::uuid AS submission_id, a.observed_at AS sort_time
     FROM alerts a JOIN workflow_instances i ON i.alert_id = a.id
     WHERE $3 = 'alerts'
       AND EXISTS (
@@ -43,16 +46,44 @@ alert_rows AS (
       AND a.forest_class = ANY($6::text[])
       AND ($8::ltree IS NULL OR a.unit_paths <@ $8)
 ),
+submission_rows AS (
+    -- A submission is seen through its alert, with the alert's rules. The time
+    -- window is when the report arrived; the other filters are the alert's.
+    SELECT a.workspace_id, a.detection_id, a.observed_at, a.id AS alert_id,
+           s.id AS submission_id, s.received_at AS sort_time
+    FROM submissions s
+    JOIN alerts a ON a.id = s.alert_id
+    JOIN workflow_instances i ON i.alert_id = a.id
+    JOIN form_versions v ON v.id = s.form_version_id
+    JOIN forms f ON f.id = v.form_id
+    LEFT JOIN approvals ap ON ap.submission_id = s.id
+    WHERE $3 = 'submissions'
+      AND s.workspace_id IN (SELECT workspace_id FROM grants)
+      AND EXISTS (
+          SELECT 1 FROM grants g WHERE g.workspace_id = a.workspace_id
+            AND (a.queue = 'unit' OR g.can_review)
+            AND match_under_grant(a.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
+      )
+      AND s.received_at >= now() - make_interval(hours => $5)
+      AND ($7 = '' OR a.queue = $7)
+      AND ($9 = '' OR i.current_step = $9)
+      AND a.forest_class = ANY($6::text[])
+      AND ($8::ltree IS NULL OR a.unit_paths <@ $8)
+      AND ($12 = '' OR f.form_key = $12)
+      AND ($13 = '' OR COALESCE(ap.decision, 'pending') = $13)
+),
 permitted AS (
-    SELECT row_number() OVER (ORDER BY observed_at DESC, detection_id DESC, alert_id DESC)::integer AS ordinal, *
-    FROM (SELECT * FROM detection_rows UNION ALL SELECT * FROM alert_rows) picked
+    SELECT row_number() OVER (ORDER BY sort_time DESC, detection_id DESC, alert_id DESC, submission_id DESC)::integer AS ordinal, *
+    FROM (SELECT * FROM detection_rows UNION ALL SELECT * FROM alert_rows UNION ALL SELECT * FROM submission_rows) picked
 ),
 total AS (SELECT count(*)::integer AS n FROM permitted),
 step AS (
-    SELECT $9 = '' OR EXISTS (
+    SELECT ($9 = '' OR EXISTS (
         SELECT FROM workflow_steps s JOIN workflow_templates t ON t.id = s.template_id
         WHERE s.slug = $9 AND (t.workspace_id IS NULL OR t.workspace_id IN (SELECT workspace_id FROM grants))
-    ) AS known
+    )) AND ($12 = '' OR EXISTS (
+        SELECT FROM forms f WHERE f.form_key = $12 AND f.workspace_id IN (SELECT workspace_id FROM grants)
+    )) AS known
 ),
 created AS (
     INSERT INTO exports (workspace_id, requested_by, kind, format, filters, requester_roles, row_count, expires_at)
@@ -62,7 +93,9 @@ created AS (
                'from', to_char((now() - make_interval(hours => $5)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
                'to', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
                'forestClasses', to_jsonb($6::text[]), 'queue', NULLIF($7, ''),
-               'unitPath', $8::text, 'step', NULLIF($9, '')),
+               'unitPath', $8::text, 'step', NULLIF($9, ''))
+           || CASE WHEN $3 = 'submissions' THEN jsonb_build_object('form', NULLIF($12, ''), 'decision', NULLIF($13, ''))
+                   ELSE '{}' END,
            (SELECT jsonb_agg(DISTINCT jsonb_build_object('role', g.role_slug, 'level', g.level,
                                                         'unitCode', g.code, 'unitName', g.name))
             FROM grants g),
@@ -72,8 +105,8 @@ created AS (
     RETURNING id, filters
 ),
 frozen AS (
-    INSERT INTO export_rows (export_id, ordinal, workspace_id, detection_id, observed_at, alert_id)
-    SELECT c.id, p.ordinal, p.workspace_id, p.detection_id, p.observed_at, p.alert_id
+    INSERT INTO export_rows (export_id, ordinal, workspace_id, detection_id, observed_at, alert_id, submission_id)
+    SELECT c.id, p.ordinal, p.workspace_id, p.detection_id, p.observed_at, p.alert_id, p.submission_id
     FROM created c CROSS JOIN permitted p
     RETURNING 1
 )

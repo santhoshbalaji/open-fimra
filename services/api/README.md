@@ -441,7 +441,9 @@ The phone makes the `id`, a UUID in small letters, so it can retry safely. The s
 
 The server checks the values against the form version (form format, sections 8 to 13): types, required questions, `requireWhen`, conditions, text lengths and patterns, number limits and decimal places, dates in the future, choices and cascading lists, the number of choices, files and entries in repeating groups, and GeoJSON shapes. Photos, signatures and files must be attachments uploaded for the same alert; photos and signatures must be images, and files must match `accept` and `maxSizeMegabytes`. Problems come back with 422 in `problems`, one plain-English sentence each. Answers to hidden questions and later stages are not kept. The server works out calculated fields and fills in values from the alert itself, ignoring what was sent for them.
 
-`GET /api/v1/workspaces/{slug}/alerts/{id}/submissions` lists an alert's submissions and `GET /api/v1/workspaces/{slug}/submissions/{id}` returns one. Anyone who can see the alert can read and submit, using the same grants and queue rules as the alert queue. Others get 404.
+`GET /api/v1/workspaces/{slug}/alerts/{id}/submissions` lists an alert's submissions and `GET /api/v1/workspaces/{slug}/submissions/{id}` returns one. Anyone who can see the alert can read and submit, using the same grants and queue rules as the alert queue. Others get 404. Both answers add `canApprove`, which is true for a supervising officer on the alert.
+
+`GET /api/v1/workspaces/{slug}/submissions` lists the submissions you can see, newest first by the time the server received them. It accepts the alert queue's `hours`, `queue`, `status` (the alert's current step), `class`, `unitPath`, `limit` and `cursor`. The time window is when the report arrived. Add `form` for one form, `decision` for `pending`, `approved` or `returned`, and `alert` for one alert's reports whatever their age. A page has `items`, `counts` by decision for every matching report and, when there is another page, `nextCursor`. Each row names the form and version, the report's step and its label, the alert with its current step, forest class and places, who sent it and when, the decision, and `can_approve`. A caller without a role in the workspace gets 403.
 
 ### Approvals
 
@@ -542,12 +544,13 @@ Any user with a role in a workspace can export what they can see on the map or i
 
 | Field | Meaning |
 |---|---|
-| `kind` | `alerts` (the alert queue) or `detections` (the matched detections on the map). Required. |
+| `kind` | `alerts` (the alert queue), `detections` (the matched detections on the map) or `submissions` (field reports). Required. |
 | `format` | `gpkg` (GeoPackage, recommended), `shapefile` (zipped), `kml` (KMZ), `geojson`, `flatgeobuf`, `csv_wkt` (the point as well-known text), `csv_lonlat` (longitude and latitude columns) or `xlsx` (Excel). Required. |
 | `hours` | The time window, from 1 to 720 hours. The default is 168. |
 | `forestClasses` | A list of `inside`, `near_edge`, `outside` and `fixed_heat_source`. Detections default to the map's classes, without `outside`. Alerts default to all four. |
 | `unitPath` | Only rows under this unit path, as on the alert queue. |
-| `queue`, `step` | Alerts only: one queue (`unit`, `edge_review` or `triage`) and one workflow step, such as `new`. |
+| `queue`, `step` | Alerts and submissions only: one queue (`unit`, `edge_review` or `triage`) and the alert's current workflow step, such as `new`. |
+| `form`, `decision` | Submissions only: one form, such as `first-report`, and `pending`, `approved` or `returned`. With a form, the file has a column for each of its answers. |
 
 A user without a role in the workspace gets HTTP 403. An export of more than 100,000 rows gets HTTP 422 and should use narrower filters. Only the requester can read an export's status or download its file. Another user gets HTTP 404, and the requester also needs a role in the workspace at the time. A file is kept until its expiry time, which is set when the export is requested. After that the download returns HTTP 410. The API removes expired files and their saved rows every ten minutes.
 
@@ -557,6 +560,7 @@ The request saves the exact rows the user may see in `export_rows`, in one SQL s
 
 - **Detections** follow [tiles.sql](tiles.sql): `match_under_grant()` on the match's paths.
 - **Alerts** follow [alerts.sql](alerts.sql): `match_under_grant()` on the alert's own routing snapshot, and review queues only for grants at division level or above.
+- **Submissions** follow the same rule through their alert, as in [submissions.sql](submissions.sql). Their time window is when the report arrived.
 
 The worker never sees the user, the grants or the filters. It is given only an export ID, and it reads rows by joining `export_rows` to detections, matches and alerts by their keys. It cannot widen the set:
 
@@ -570,9 +574,13 @@ The values in a file, such as an alert's workflow step, are read when the file i
 
 Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or alert, newest first. The fields are the detection ID, observation time in UTC, source, product, satellite, forest class and triage reason. Then come the code and name of every level of the main territorial hierarchy (`state_code`, `division_name` and so on), the forest feature code, fire radiative power, confidence, longitude and latitude. Alert exports add the alert ID, queue, creation time, the current workflow step with its label and time, and the incident ID. Alerts keep the class, reason and units they were routed with.
 
+Submission exports have one row per report. The point is the detection of the report's alert. The fields start with the report ID, form, version and title, the step it was filled in at, when the server received it and when the device saved it, the decision and its time, and where the report was sent from. The alert's fields follow. With a `form` filter, every answer outside a repeating group follows as a column from the version's flat view: shapes as well-known text, lists joined by commas, and the area and length the server worked out. A column whose name clashes with another field starts with `answer_`. Repeating groups stay in the flat views. The file never names who sent or decided a report, but free-text answers are as staff typed them, and the note says so.
+
 Every export carries a note of its source, filters, time window, coordinate system, request and generation times, row count and the requesting role. It never names the people involved. GeoPackage and Excel files hold it in the `export_note` and `export_fields` tables. Every other format is a zip file with the note in `README.txt` beside the data. Shapefile field names are limited to 10 characters. The note lists each field's short name, such as `divisio_cd` for `division_code`. Each export, and each download, is recorded in the audit log with its filters and row count.
 
 Run `make export-test-integration` with the stack, Keycloak and geo worker running. It exports as each demo user and checks that the rows match what the same user sees in the alert queue and in detection tiles. It checks that `no.role` is refused, that one user cannot read another's export, that expiry removes the file and that the audit rows exist. It then opens every downloaded format with OGR in the geo worker container and prints its layers, geometry, coordinate system, fields and feature count.
+
+Run `make submission-export-test-integration` with the stack and Keycloak running. Reports can never be deleted, so it makes its own database, `fimra_submission_export_test`, and runs a geo worker against it. A beat guard and the state administrator file first reports on two synthetic alerts, one in the division officer's division and one outside it. The officer lists and approves the first, cannot see or decide the second, and every export of field reports holds only what each user may see, in every format.
 
 ## GIS link
 

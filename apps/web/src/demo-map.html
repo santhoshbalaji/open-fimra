@@ -76,6 +76,9 @@
         <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
           (changed)="queue.refresh()" />
       }
+      @defer (on immediate) {
+        <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="queue.refresh()" />
+      }
     }
     <dl>
       <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
@@ -95,10 +98,11 @@
     <div class="view-switch" role="group" aria-label="Group the queue">
       <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'alerts'" (click)="showView('alerts')">Alerts</button>
       <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'incidents'" (click)="showView('incidents')">Incidents</button>
+      <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'reports'" (click)="showView('reports')">Reports</button>
     </div>
     <div class="queue-heading">
-      <h2 id="queue-title">{{ queueView() === 'incidents' ? 'Incidents' : 'Alert queue' }}</h2>
-      @if (queueView() === 'alerts' && exportEndpoint(); as endpoint) {
+      <h2 id="queue-title">{{ queueView() === 'incidents' ? 'Incidents' : queueView() === 'reports' ? 'Field reports' : 'Alert queue' }}</h2>
+      @if (queueView() !== 'incidents' && exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
@@ -106,7 +110,8 @@
             @defer (on immediate) {
               <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
                 [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
-                (closed)="dialog.close()" />
+                [initialKind]="queueView() === 'reports' ? 'submissions' : 'alerts'" [form]="reportFilters().form"
+                [formLabel]="reportFilters().formLabel" [decision]="reportFilters().decision" (closed)="dialog.close()" />
             }
           </hlm-dialog-content>
         </hlm-dialog>
@@ -117,6 +122,12 @@
         <fimra-incidents [endpoint]="exportEndpoint()!" [now]="now()" (openAlert)="openMember($event)" (showOnMap)="showIncident($event)" />
       } @placeholder {
         <div role="status" aria-label="Loading incidents" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
+      }
+    } @else if (queueView() === 'reports') {
+      @defer (on immediate) {
+        <fimra-submissions [endpoint]="exportEndpoint()!" [now]="now()" (openAlert)="openMember($event)" (filtersChanged)="reportFilters.set($event)" />
+      } @placeholder {
+        <div role="status" aria-label="Loading reports" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
       }
     } @else {
     <div class="queue-tabs" role="group" aria-label="Alert queues">

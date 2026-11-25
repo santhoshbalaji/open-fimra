@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./ts/form-schema.ts",
+    "./answers": "./ts/answers.ts",
     "./form.schema.json": "./form.schema.json"
   }
 }

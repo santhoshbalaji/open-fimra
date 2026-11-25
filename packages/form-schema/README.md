@@ -8,9 +8,11 @@ The published form format and its validators, shared by the web form designer, t
 | [form.schema.json](form.schema.json) | The JSON Schema for a form definition. This is the one copy. |
 | `*.go` | The Go validator, for the core API. |
 | [ts/form-schema.ts](ts/form-schema.ts) | The TypeScript validator, for the web app. |
+| [ts/answers.ts](ts/answers.ts) | Checks the answers to a form in the browser, with the core API's rules and messages. |
 | [examples/](examples) | Valid example forms, including drafts of the five starter-pack forms for the fictional Demo State. The finished forms are in [packages/starter-pack](../starter-pack/README.md). |
 | [examples/columns/](examples/columns) | The columns each valid example produces. |
 | [examples/invalid/](examples/invalid) | Forms broken in one way each, with the message both validators must give. |
+| [examples/answers/](examples/answers) | Answers to the example forms, with the problems the core API and `ts/answers.ts` must both report, in the same order. |
 | [cmd/formcheck](cmd/formcheck/main.go) | A small command that runs the Go validator, for programs in other languages. |
 
 ## Testing
@@ -54,5 +56,7 @@ The web app maps `@open-fimra/form-schema` to `ts/form-schema.ts` in its `tsconf
 ```ts
 import { formColumns, validateForm } from '@open-fimra/form-schema';
 ```
+
+Answers are checked with `checkAnswers(form, values, context)` from `@open-fimra/form-schema/answers`. It returns the answers as the server keeps them, or the problems: required questions, conditions, limits, choices, cascading lists, shapes and attachments. `AnswerSession` also tells a form renderer which questions are shown, which are required now, which choices a cascading list offers and what each calculation gives. The core API checks every submission again with [submission_rules.go](../../services/api/submission_rules.go), whose tests run the same cases in `examples/answers`.
 
 The module imports `form.schema.json` directly and has no dependencies. It uses only type syntax that Node.js can strip, so Node.js 24 runs it and its tests without a build step. It does not use a general JSON Schema library: those word their messages differently from each other, and the format promises the same message from Go and TypeScript.

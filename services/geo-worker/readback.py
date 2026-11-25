@@ -89,8 +89,8 @@ def main(paths):
             print("    fields: " + ", ".join(f"{name} {kind}" for name, kind in layer["fields"]))
         if "kml_schema" in info:
             print("    KML schema fields: " + ", ".join(f"{name} {kind}" for name, kind in info["kml_schema"]))
-        if not any(layer["name"] in ("detections", "alerts") for layer in info["layers"]):
-            sys.exit(f"{path} has no detections or alerts layer")
+        if not any(layer["name"] in ("detections", "alerts", "submissions") for layer in info["layers"]):
+            sys.exit(f"{path} has no detections, alerts or submissions layer")
 
 
 if __name__ == "__main__":

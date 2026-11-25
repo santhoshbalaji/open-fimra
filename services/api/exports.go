@@ -70,6 +70,10 @@ type exportRequest struct {
 	// Step is a workflow step, such as new or acknowledged. It is the status
 	// filter of the alert queue.
 	Step string `json:"step"`
+	// Form and Decision narrow a submission export to one form, and to
+	// submissions waiting for a decision (pending), approved or returned.
+	Form     string `json:"form"`
+	Decision string `json:"decision"`
 }
 
 type exportStatus struct {
@@ -97,8 +101,8 @@ func readExportRequest(body io.Reader) (exportRequest, error) {
 	if err := decoder.Decode(&req); err != nil || decoder.Decode(new(any)) != io.EOF {
 		return req, errors.New("Send the export request as one JSON object.")
 	}
-	if req.Kind != "detections" && req.Kind != "alerts" {
-		return req, errors.New("kind must be detections or alerts.")
+	if req.Kind != "detections" && req.Kind != "alerts" && req.Kind != "submissions" {
+		return req, errors.New("kind must be detections, alerts or submissions.")
 	}
 	if _, ok := exportFormats[req.Format]; !ok {
 		return req, errors.New("format must be gpkg, shapefile, kml, geojson, flatgeobuf, csv_wkt, csv_lonlat or xlsx.")
@@ -113,7 +117,7 @@ func readExportRequest(body io.Reader) (exportRequest, error) {
 	if req.ForestClasses == nil {
 		// The same defaults as the map tiles and the alert queue.
 		req.ForestClasses = []string{"inside", "near_edge", "fixed_heat_source"}
-		if req.Kind == "alerts" {
+		if req.Kind != "detections" {
 			req.ForestClasses = all
 		}
 	}
@@ -132,6 +136,12 @@ func readExportRequest(body io.Reader) (exportRequest, error) {
 	}
 	if !slices.Contains([]string{"", "unit", "edge_review", "triage"}, req.Queue) || (req.Step != "" && !stepSlug.MatchString(req.Step)) {
 		return req, errors.New("Unknown queue or workflow step.")
+	}
+	if req.Kind != "submissions" && (req.Form != "" || req.Decision != "") {
+		return req, errors.New("form and decision apply only to submission exports.")
+	}
+	if (req.Form != "" && !formKeyPattern.MatchString(req.Form)) || !slices.Contains([]string{"", "pending", "approved", "returned"}, req.Decision) {
+		return req, errors.New("Unknown form or decision.")
 	}
 	if req.UnitPath != nil && !unitPrefix.MatchString(*req.UnitPath) {
 		return req, errors.New("Invalid unit path.")
@@ -173,7 +183,7 @@ func (a api) createExport(w http.ResponseWriter, r *http.Request) {
 	var frozen int64
 	err = tx.QueryRow(ctx, exportsSQL, caller.Subject, slug, req.Kind, req.Format, *req.Hours,
 		req.ForestClasses, req.Queue, req.UnitPath, req.Step, maxExportRows,
-		pgtype.Interval{Microseconds: a.exports.ttl.Microseconds(), Valid: true},
+		pgtype.Interval{Microseconds: a.exports.ttl.Microseconds(), Valid: true}, req.Form, req.Decision,
 	).Scan(&allowed, &knownStep, &total, &id, &filters, &frozen)
 	if err != nil {
 		a.exportError(w, "Could not freeze the export rows", err)
@@ -184,7 +194,7 @@ func (a api) createExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "A role in this workspace is required.")
 		return
 	case !knownStep:
-		writeError(w, http.StatusBadRequest, "Unknown workflow step.")
+		writeError(w, http.StatusBadRequest, "Unknown workflow step or form.")
 		return
 	case !id.Valid:
 		writeError(w, http.StatusUnprocessableEntity,
