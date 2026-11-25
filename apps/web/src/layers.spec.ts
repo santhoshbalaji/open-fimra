@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { Layers } from './layers';
+import { stubLayoutApis } from './overlay-testing';
 import { WorkspaceService } from './workspace';
 
 const root = 'https://api.test/api/v1/workspaces/demo/layer-imports';
@@ -21,12 +22,21 @@ describe('Layers', () => {
   let fixture: ComponentFixture<Layers>;
   let http: HttpTestingController;
 
+  // Dialogs and select lists open in an overlay outside the component, so search the whole page.
   const button = (label: string): HTMLButtonElement | undefined =>
-    [...fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>]
-      .find(element => element.textContent.trim() === label);
-  const text = () => fixture.nativeElement.textContent as string;
+    [...document.querySelectorAll('button')].find(element => element.textContent.trim() === label);
+  const text = () => document.body.textContent as string;
+  function choose(trigger: string, option: string): void {
+    (document.getElementById(trigger) as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const item = [...document.querySelectorAll<HTMLElement>('hlm-select-item')].find(element => element.textContent.trim() === option);
+    if (!item) throw new Error('No option ' + option);
+    item.click();
+    fixture.detectChanges();
+  }
 
   beforeEach(() => {
+    stubLayoutApis();
     vi.useFakeTimers();
     TestBed.configureTestingModule({ imports: [Layers], providers: [
       provideHttpClient(), provideHttpClientTesting(),
@@ -52,9 +62,7 @@ describe('Layers', () => {
   });
 
   function openDraft(draft: object): void {
-    const upload = fixture.nativeElement.querySelector('.layer-review select') as HTMLSelectElement;
-    upload.value = version;
-    upload.dispatchEvent(new Event('change'));
+    choose('upload-choice', 'Beats · Version 2 · Ready for review');
     vi.advanceTimersByTime(0);
     http.expectOne(detail).flush(draft);
     if (draft === ready || (draft as typeof ready).status === 'ready') {
@@ -72,10 +80,9 @@ describe('Layers', () => {
 
   it('submits the selected hierarchy mapping and polls for review', () => {
     const uploadForm = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    const layer = uploadForm.querySelector('select') as HTMLSelectElement;
-    layer.value = 'beats';
-    layer.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
+    choose('layer-choice', 'Beats (beats)');
+    expect(document.getElementById('layer-choice')?.textContent).toContain('Beats (beats)');
+    expect(text()).toContain('Hierarchy boundaries');
     (uploadForm.querySelector('[name=nameField]') as HTMLInputElement).value = 'label';
     (uploadForm.querySelector('[name=parentCodeField]') as HTMLInputElement).value = 'parent';
     uploadForm.dispatchEvent(new Event('submit', { cancelable: true }));
@@ -100,6 +107,11 @@ describe('Layers', () => {
     openDraft({ ...ready, problems: [{ kind: 'overlap', featureRef: 'feature:3', message: 'These beats overlap.', blocksPublish: true }] });
     runPreview({ ...defaultPreview, blocked: 'Fix the blocking problems.' });
     expect(text()).toContain('These beats overlap.');
+    const row = fixture.nativeElement.querySelector('.problems tbody tr') as HTMLElement;
+    expect(row.dataset['blocking']).toBe('true');
+    expect(row.textContent).toContain('Blocks publishing');
+    expect(row.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(text()).toContain('1 problem blocks publishing.');
     expect(text()).toContain('Fix the blocking problems.');
     expect(button('Publish layer')).toBeUndefined();
   });
@@ -118,10 +130,15 @@ describe('Layers', () => {
     });
     expect(text()).toContain('territorial/ds.b01 → territorial/ds.b02');
     expect(text()).toContain('beat.guard');
+    const counts = [...fixture.nativeElement.querySelectorAll('.preview-counts > div') as NodeListOf<HTMLElement>]
+      .map(card => [card.querySelector('dt')?.textContent, card.querySelector('dd')?.textContent?.trim()]);
+    expect(counts).toContainEqual(['Beat or class changed', '1']);
     button('Publish layer')?.click();
     fixture.detectChanges();
+    const dialog = document.querySelector('[role=alertdialog]') as HTMLElement;
+    expect(dialog.textContent).toContain('Confirm publication');
     expect(button('Confirm and publish')?.disabled).toBe(true);
-    (fixture.nativeElement.querySelector('[type=checkbox]') as HTMLInputElement).click();
+    (dialog.querySelector('[role=checkbox]') as HTMLElement).click();
     fixture.detectChanges();
     button('Confirm and publish')?.click();
     const publish = http.expectOne({ url: detail + '/publish', method: 'POST' });
@@ -136,6 +153,37 @@ describe('Layers', () => {
     http.expectOne(root).flush({ layers: [], hierarchies: [], uploads: [] });
     fixture.detectChanges();
     expect(text()).toContain('Re-match complete. 11 detections checked.');
+  });
+
+  it('closes the confirmation without publishing', () => {
+    openDraft(ready);
+    runPreview(defaultPreview);
+    button('Publish layer')?.click();
+    fixture.detectChanges();
+    expect(document.querySelector('[role=alertdialog]')).not.toBeNull();
+    button('Cancel')?.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.confirming()).toBe(false);
+    expect(button('Publish layer')).toBeDefined();
+  });
+
+  it('asks for a hierarchy and level before uploading a new hierarchy layer', () => {
+    choose('layer-role', 'Hierarchy boundaries');
+    const uploadForm = fixture.nativeElement.querySelector('form') as HTMLFormElement;
+    uploadForm.dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.detectChanges();
+    expect(text()).toContain('Choose a hierarchy.');
+    expect(text()).toContain('Choose a level.');
+    expect(document.getElementById('layer-hierarchy')?.getAttribute('aria-invalid')).toBe('true');
+    choose('layer-hierarchy', 'Territorial');
+    choose('layer-depth', 'Beat');
+    expect(text()).not.toContain('Choose a level.');
+    (uploadForm.querySelector('[name=layerName]') as HTMLInputElement).value = 'Beats';
+    (uploadForm.querySelector('[name=layerSlug]') as HTMLInputElement).value = 'beats-new';
+    uploadForm.dispatchEvent(new Event('submit', { cancelable: true }));
+    const post = http.expectOne({ url: root, method: 'POST' });
+    expect(post.request.body.get('hierarchy')).toBe('territorial');
+    expect(JSON.parse(post.request.body.get('settings'))).toEqual({ depth: 4 });
   });
 
   it('requires a fresh preview after a publish conflict', () => {

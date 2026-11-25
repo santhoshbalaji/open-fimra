@@ -1,209 +1,305 @@
-<div class="layer-page">
-  <h2>Layers</h2>
-  @if (error()) { <p class="notice" role="alert">{{ error() }}</p> }
+<div class="mx-auto grid max-w-[1160px] gap-4 px-4 pt-6 pb-10 sm:px-8">
+  <h2 class="text-display">Layers</h2>
+  @if (error()) {
+    <div hlmAlert variant="destructive" class="error-alert">
+      <svg lucideCircleAlert aria-hidden="true" class="size-4"></svg>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
   @if (catalog(); as catalog) {
-    <div class="layer-grid">
-      <section class="layer-card" aria-labelledby="upload-heading">
-        <h3 id="upload-heading">Upload a layer</h3>
-        <form #uploadForm (submit)="$event.preventDefault(); upload(uploadForm)">
-          <fieldset [disabled]="busy()">
-            <label>Layer
-              <select #layerField (change)="chosenLayer.set(layerField.value)">
-                <option value="">New layer</option>
-                @for (item of catalog.layers; track item.slug) {
-                  <option [value]="item.slug">{{ item.name }} ({{ item.slug }})</option>
-                }
-              </select>
-            </label>
-            @if (!layer()) {
-              <div class="fields">
-                <label>Layer name <input name="layerName" required maxlength="200"></label>
-                <label>Layer identifier
-                  <input name="layerSlug" required maxlength="80" pattern="[a-z0-9][a-z0-9\-]*"
-                    aria-describedby="slug-help">
-                  <small id="slug-help">Lowercase letters, numbers and hyphens.</small>
-                </label>
-              </div>
-              <label>Layer role
-                <select #roleField (change)="selectRole(roleField.value)">
-                  @for (role of roles; track role) {
-                    <option [value]="role" [selected]="role === chosenRole()">{{ roleLabels[role] }}</option>
+    <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <section hlmCard aria-labelledby="upload-heading">
+        <hlm-card-header><h3 hlmCardTitle id="upload-heading" class="text-subhead">Upload a layer</h3>
+          <p hlmCardDescription>The file is checked in the background before you publish it.</p></hlm-card-header>
+        <form hlmCardContent #uploadForm class="upload-form" (submit)="$event.preventDefault(); upload(uploadForm)">
+          <fieldset class="grid min-w-0 gap-5" [disabled]="busy()">
+            <hlm-field>
+              <label hlmFieldLabel for="layer-choice">Layer</label>
+              <hlm-select [value]="chosenLayer()" (valueChange)="chosenLayer.set($event ?? '')" [itemToString]="layerLabel">
+                <hlm-select-trigger buttonId="layer-choice" class="w-full"><hlm-select-value placeholder="New layer" /></hlm-select-trigger>
+                <hlm-select-content *hlmSelectPortal>
+                  <hlm-select-item value="">New layer</hlm-select-item>
+                  @for (item of catalog.layers; track item.slug) {
+                    <hlm-select-item [value]="item.slug">{{ item.name }} ({{ item.slug }})</hlm-select-item>
                   }
-                </select>
-              </label>
+                </hlm-select-content>
+              </hlm-select>
+            </hlm-field>
+            @if (!layer()) {
+              <div class="grid gap-5 sm:grid-cols-2">
+                <hlm-field>
+                  <label hlmFieldLabel for="layer-name">Layer name</label>
+                  <input hlmInput id="layer-name" name="layerName" required maxlength="200">
+                </hlm-field>
+                <hlm-field>
+                  <label hlmFieldLabel for="layer-slug">Layer identifier</label>
+                  <input hlmInput id="layer-slug" name="layerSlug" required maxlength="80" pattern="[a-z0-9][a-z0-9\-]*">
+                  <p hlmFieldDescription>Lowercase letters, numbers and hyphens.</p>
+                </hlm-field>
+              </div>
+              <hlm-field>
+                <label hlmFieldLabel for="layer-role">Layer role</label>
+                <hlm-select [value]="chosenRole()" (valueChange)="selectRole($event ?? '')" [itemToString]="roleLabel">
+                  <hlm-select-trigger buttonId="layer-role" class="w-full"><hlm-select-value /></hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (role of roles; track role) { <hlm-select-item [value]="role">{{ roleLabels[role] }}</hlm-select-item> }
+                  </hlm-select-content>
+                </hlm-select>
+              </hlm-field>
             } @else {
-              <p>{{ roleLabels[role()] }}</p>
+              <p class="flex items-center gap-2"><span class="text-muted-foreground">Role</span>
+                <span hlmBadge variant="secondary">{{ roleLabels[role()] }}</span></p>
             }
             @if (role() === 'hierarchy') {
-              <div class="fields">
+              <div class="grid gap-5 sm:grid-cols-2">
                 @if (!layer()) {
-                  <label>Hierarchy
-                    <select required #hierarchyField (change)="chosenHierarchy.set(hierarchyField.value)">
-                      <option value="">Choose a hierarchy</option>
-                      @for (item of catalog.hierarchies; track item.slug) {
-                        <option [value]="item.slug" [selected]="item.slug === chosenHierarchy()">{{ item.name }}</option>
-                      }
-                    </select>
-                  </label>
+                  <hlm-field>
+                    <label hlmFieldLabel for="layer-hierarchy">Hierarchy</label>
+                    <hlm-select [value]="chosenHierarchy() || null" (valueChange)="chooseHierarchy($event ?? '')" [itemToString]="hierarchyLabel">
+                      <hlm-select-trigger buttonId="layer-hierarchy" class="w-full" [forceInvalid]="missing().hierarchy"
+                        [aria-invalid]="missing().hierarchy"><hlm-select-value placeholder="Choose a hierarchy" /></hlm-select-trigger>
+                      <hlm-select-content *hlmSelectPortal>
+                        @for (item of catalog.hierarchies; track item.slug) {
+                          <hlm-select-item [value]="item.slug">{{ item.name }}</hlm-select-item>
+                        }
+                      </hlm-select-content>
+                    </hlm-select>
+                    @if (missing().hierarchy) { <hlm-field-error forceShow>Choose a hierarchy.</hlm-field-error> }
+                  </hlm-field>
                 }
-                <label>Hierarchy level
-                  <select name="depth" required [disabled]="layer() !== undefined && layer()?.depth !== null">
-                    <option value="">Choose a level</option>
-                    @for (level of hierarchy()?.levels ?? []; track level.depth) {
-                      <option [value]="level.depth" [selected]="level.depth === layer()?.depth">{{ level.name }}</option>
-                    }
-                  </select>
-                </label>
+                <hlm-field>
+                  <label hlmFieldLabel for="layer-depth">Hierarchy level</label>
+                  <hlm-select [value]="depth()" (valueChange)="chosenDepth.set($event ?? null)" [itemToString]="levelLabel"
+                    [disabled]="layer() !== undefined && layer()?.depth !== null">
+                    <hlm-select-trigger buttonId="layer-depth" class="w-full" [forceInvalid]="missing().depth"
+                      [aria-invalid]="missing().depth"><hlm-select-value placeholder="Choose a level" /></hlm-select-trigger>
+                    <hlm-select-content *hlmSelectPortal>
+                      @for (level of hierarchy()?.levels ?? []; track level.depth) {
+                        <hlm-select-item [value]="level.depth">{{ level.name }}</hlm-select-item>
+                      } @empty {
+                        <hlm-select-item [value]="null" disabled>Choose a hierarchy first</hlm-select-item>
+                      }
+                    </hlm-select-content>
+                  </hlm-select>
+                  @if (missing().depth) { <hlm-field-error forceShow>Choose a level.</hlm-field-error> }
+                </hlm-field>
               </div>
             }
-            <label>Layer file
-              <input type="file" name="file" accept=".gpkg,.zip,.geojson,.kml,.kmz" required aria-describedby="file-help">
-              <small id="file-help">GeoPackage, zipped Shapefile, GeoJSON, KML or KMZ. Up to 32 MiB.</small>
-            </label>
-            <fieldset class="mapping">
-              <legend>Field names in the file</legend>
-              <div class="fields">
-                <label>Name field <input name="nameField" [required]="role() === 'hierarchy'" maxlength="255"></label>
-                <label>Code field <input name="codeField" maxlength="255"></label>
+            <hlm-field>
+              <label hlmFieldLabel for="layer-file">Layer file</label>
+              <input hlmInput id="layer-file" type="file" name="file" accept=".gpkg,.zip,.geojson,.kml,.kmz" required
+                class="h-auto py-1.5 file:me-3 file:rounded-control file:bg-secondary file:px-3 file:text-secondary-foreground">
+              <p hlmFieldDescription>GeoPackage, zipped Shapefile, GeoJSON, KML or KMZ. Up to 32 MiB.</p>
+            </hlm-field>
+            <fieldset hlmFieldSet class="min-w-0 gap-4 border-t border-border pt-4">
+              <legend hlmFieldLegend variant="label" class="mb-0">Field names in the file</legend>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <hlm-field><label hlmFieldLabel for="name-field">Name field</label>
+                  <input hlmInput id="name-field" name="nameField" [required]="role() === 'hierarchy'" maxlength="255"></hlm-field>
+                <hlm-field><label hlmFieldLabel for="code-field">Code field</label>
+                  <input hlmInput id="code-field" name="codeField" maxlength="255"></hlm-field>
                 @if (role() === 'hierarchy') {
-                  <label>Parent code field <input name="parentCodeField" maxlength="255"></label>
+                  <hlm-field><label hlmFieldLabel for="parent-code-field">Parent code field</label>
+                    <input hlmInput id="parent-code-field" name="parentCodeField" maxlength="255"></hlm-field>
                 }
-                <label>Source layer (optional) <input name="sourceLayer" maxlength="255"></label>
+                <hlm-field><label hlmFieldLabel for="source-layer">Source layer (optional)</label>
+                  <input hlmInput id="source-layer" name="sourceLayer" maxlength="255"></hlm-field>
               </div>
             </fieldset>
-            <button brnButton type="submit" class="layer-primary">Upload for review</button>
+            <button hlmBtn type="submit" class="justify-self-start">Upload for review</button>
           </fieldset>
         </form>
       </section>
 
-      <div class="layer-review">
-        <section class="layer-card" aria-labelledby="review-heading">
-          <h3 id="review-heading">Review a layer version</h3>
-          @if (catalog.uploads.length) {
-            <label>Recent uploads
-              <select #uploadPicker [disabled]="busy()" (change)="open(uploadPicker.value)">
-                <option value="" disabled [selected]="!version()">Choose an upload</option>
-                @for (upload of catalog.uploads; track upload.versionId) {
-                  <option [value]="upload.versionId" [selected]="version() === upload.versionId">
-                    {{ upload.layerName }} · Version {{ upload.version }} · {{ statusLabels[upload.status] }}
-                  </option>
-                }
-              </select>
-            </label>
-          } @else {
-            <p>No layer files uploaded yet.</p>
-          }
-          @if (loadingDraft()) { <p role="status">Loading layer version…</p> }
-          @if (draft(); as draft) {
-            <div role="status">
-              <strong>{{ statusLabels[draft.status] }}</strong>
-              @if (draft.status !== 'pending') {
-                <p>@if (draft.role === 'hierarchy') {
-                  {{ draft.unitCount }} {{ draft.unitCount === 1 ? 'unit' : 'units' }}
-                } @else {
-                  {{ draft.featureCount }} {{ draft.featureCount === 1 ? 'feature' : 'features' }}
-                }
-                  @if (draft.sourceCrs) { · Coordinates: {{ draft.sourceCrs }} }
-                </p>
-              }
-              @if (draft.rematch; as replay) {
-                @switch (replay.status) {
-                  @case ('pending') { <p>Re-match queued.</p> }
-                  @case ('running') { <p>Re-matching detections. {{ replay.processed }} checked so far.</p> }
-                  @case ('completed') {
-                    <p>Re-match complete. {{ replay.processed }} {{ replay.processed === 1 ? 'detection' : 'detections' }} checked.
-                    {{ replay.alertsCreated }} new {{ replay.alertsCreated === 1 ? 'alert' : 'alerts' }}.</p>
+      <div class="grid gap-4">
+        <section hlmCard aria-labelledby="review-heading">
+          <hlm-card-header><h3 hlmCardTitle id="review-heading" class="text-subhead">Review a layer version</h3></hlm-card-header>
+          <div hlmCardContent class="grid gap-4">
+            @if (catalog.uploads.length) {
+              <hlm-field>
+                <label hlmFieldLabel for="upload-choice">Recent uploads</label>
+                <hlm-select [value]="version() || null" (valueChange)="$event && open($event)" [disabled]="busy()" [itemToString]="uploadLabel">
+                  <hlm-select-trigger buttonId="upload-choice" class="w-full"><hlm-select-value placeholder="Choose an upload" /></hlm-select-trigger>
+                  <hlm-select-content *hlmSelectPortal>
+                    @for (upload of catalog.uploads; track upload.versionId) {
+                      <hlm-select-item [value]="upload.versionId">{{ uploadLabel(upload.versionId) }}</hlm-select-item>
+                    }
+                  </hlm-select-content>
+                </hlm-select>
+              </hlm-field>
+            } @else {
+              <fimra-empty-state heading="No uploads yet" detail="No layer files uploaded yet. Upload a file to review it here." />
+            }
+            @if (loadingDraft()) {
+              <div role="status" class="grid gap-2"><span class="sr-only">Loading layer version…</span>
+                <hlm-skeleton class="h-5 w-40" aria-hidden="true" /><hlm-skeleton class="h-4 w-64" aria-hidden="true" /></div>
+            }
+            @if (draft(); as draft) {
+              <div role="status" class="draft-status grid gap-2">
+                <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <fimra-status-badge class="mx-0!" [icon]="statusIcons[draft.status]" [label]="statusLabels[draft.status]" />
+                  @if (draft.status !== 'pending') {
+                    <span class="text-muted-foreground">
+                      @if (draft.role === 'hierarchy') {
+                        {{ draft.unitCount }} {{ draft.unitCount === 1 ? 'unit' : 'units' }}
+                      } @else {
+                        {{ draft.featureCount }} {{ draft.featureCount === 1 ? 'feature' : 'features' }}
+                      }
+                      @if (draft.sourceCrs) { · Coordinates: {{ draft.sourceCrs }} }
+                    </span>
                   }
-                  @case ('failed') { <p>Re-match failed after {{ replay.processed }} detections. Contact the system operator.</p> }
+                </p>
+                @if (draft.rematch; as replay) {
+                  <p class="rematch flex items-start gap-2 rounded-control bg-background px-3 py-2">
+                    @switch (replay.status) {
+                      @case ('pending') {
+                        <svg lucideLoaderCircle aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
+                        <span>Re-match queued.</span>
+                      }
+                      @case ('running') {
+                        <svg lucideLoaderCircle aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
+                        <span>Re-matching detections. <span class="tabular-nums">{{ replay.processed }}</span> checked so far.</span>
+                      }
+                      @case ('completed') {
+                        <svg lucideCircleCheck aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                        <span>Re-match complete. {{ replay.processed }} {{ replay.processed === 1 ? 'detection' : 'detections' }} checked.
+                        {{ replay.alertsCreated }} new {{ replay.alertsCreated === 1 ? 'alert' : 'alerts' }}.</span>
+                      }
+                      @case ('failed') {
+                        <svg lucideCircleAlert aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-danger"></svg>
+                        <span>Re-match failed after {{ replay.processed }} detections. Contact the system operator.</span>
+                      }
+                    }
+                  </p>
                 }
+              </div>
+              @if (draft.problems.length) {
+                @let blocking = blockingCount();
+                <div class="grid gap-2">
+                  <h4 class="font-semibold" id="problems-heading">Problems found</h4>
+                  <p class="text-muted-foreground">
+                    @if (blocking) {
+                      {{ blocking }} {{ blocking === 1 ? 'problem blocks' : 'problems block' }} publishing. Correct the file and upload it again.
+                    } @else {
+                      Review these items. They do not block publishing.
+                    }
+                  </p>
+                  <div hlmTableContainer class="max-h-72 overflow-y-auto rounded-control border border-border" tabindex="0" aria-labelledby="problems-heading">
+                    <table hlmTable class="problems">
+                      <caption class="sr-only">Problems found in this layer version</caption>
+                      <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Effect</th><th hlmTh scope="col">Feature</th><th hlmTh scope="col">Problem</th></tr></thead>
+                      <tbody hlmTBody>
+                        @for (problem of sortedProblems(); track $index) {
+                          <tr hlmTr [attr.data-blocking]="problem.blocksPublish || null">
+                            <td hlmTd>
+                              @if (problem.blocksPublish) {
+                                <span hlmBadge variant="destructive"><svg lucideCircleX aria-hidden="true" class="size-3.5"></svg>Blocks publishing</span>
+                              } @else {
+                                <span hlmBadge variant="outline"><svg lucideInfo aria-hidden="true" class="size-3.5"></svg>Review</span>
+                              }
+                            </td>
+                            <td hlmTd class="text-muted-foreground">{{ problem.featureRef || '—' }}</td>
+                            <td hlmTd class="min-w-48 whitespace-normal">{{ problem.message }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               }
-            </div>
-            @if (draft.problems.length) {
-              <ul class="review-items">
-                @for (problem of draft.problems; track $index) {
-                  <li>
-                    <strong>{{ problem.blocksPublish ? 'Blocks publishing' : 'Review' }}</strong>
-                    @if (problem.featureRef) { <small>{{ problem.featureRef }}</small> }
-                    <p>{{ problem.message }}</p>
-                  </li>
-                }
-              </ul>
+              @if (draft.status === 'ready') {
+                <form class="window-form flex flex-wrap items-end gap-3" (submit)="$event.preventDefault(); previewDraft()">
+                  <hlm-field class="w-36">
+                    <label hlmFieldLabel for="preview-days">Days to re-match</label>
+                    <input hlmInput #windowInput id="preview-days" type="number" min="1" max="90" [value]="days()" required
+                      [disabled]="busy()" (input)="changeDays(windowInput.valueAsNumber)">
+                  </hlm-field>
+                  <button hlmBtn variant="outline" type="submit" [disabled]="busy()">Run preview</button>
+                </form>
+              }
             }
-            @if (draft.status === 'ready') {
-              <form class="window-form" (submit)="$event.preventDefault(); previewDraft()">
-                <label>Days to re-match
-                  <input #windowInput type="number" min="1" max="90" [value]="days()" required
-                    [disabled]="busy()" (input)="changeDays(windowInput.valueAsNumber)">
-                </label>
-                <button brnButton class="layer-secondary" type="submit" [disabled]="busy()">Run preview</button>
-              </form>
-            }
-          }
+          </div>
         </section>
         @if (preview(); as preview) {
-          <section class="layer-card" aria-labelledby="preview-heading">
-            <h3 id="preview-heading">Preview results</h3>
-            <p role="status">{{ preview.scanned }} detections checked over {{ preview.days }} days. A detection can appear in several groups.</p>
-            <dl class="preview-counts">
+          <section hlmCard aria-labelledby="preview-heading">
+            <hlm-card-header><h3 hlmCardTitle id="preview-heading" class="text-subhead">Preview results</h3>
+              <p hlmCardDescription role="status">{{ preview.scanned }} detections checked over {{ preview.days }} days. A detection can appear in several groups.</p></hlm-card-header>
+            <div hlmCardContent class="grid gap-4">
+              <dl class="preview-counts grid grid-cols-2 gap-3 sm:grid-cols-4">
+                @for (category of categories; track category.key) {
+                  <div hlmCard size="sm" class="gap-1 px-4 py-3"><dt class="text-muted-foreground">{{ category.label }}</dt>
+                    <dd class="text-title tabular-nums">{{ preview.changes[category.key]?.count ?? 0 }}</dd></div>
+                }
+              </dl>
               @for (category of categories; track category.key) {
-                <div><dt>{{ category.label }}</dt><dd>{{ preview.changes[category.key]?.count ?? 0 }}</dd></div>
+                @if (preview.changes[category.key]; as group) {
+                  <details class="group rounded-control border border-border">
+                    <summary class="flex min-h-(--target-web) cursor-pointer items-center gap-2 px-3 font-medium text-primary">
+                      <svg lucideChevronRight aria-hidden="true" class="size-4 transition-transform group-open:rotate-90"></svg>
+                      {{ category.label }} (showing {{ group.items.length }} of {{ group.count }})</summary>
+                    <ul class="max-h-60 overflow-auto border-t border-border px-3">
+                      @for (item of group.items; track item.detectionId) {
+                        <li class="border-b border-border py-2 last:border-0 [overflow-wrap:anywhere]">
+                          <strong>#{{ item.detectionId }}</strong> · <time>{{ item.observedAt | date:'medium':'UTC' }} UTC</time>
+                          <p class="text-muted-foreground">{{ changeNote(item) }}</p>
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                }
               }
-            </dl>
-            @for (category of categories; track category.key) {
-              @if (preview.changes[category.key]; as group) {
-                <details class="preview-examples">
-                  <summary>{{ category.label }} (showing {{ group.items.length }} of {{ group.count }})</summary>
-                  <ul>
-                    @for (item of group.items; track item.detectionId) {
-                      <li>
-                        <strong>#{{ item.detectionId }}</strong> · {{ item.observedAt | date:'medium':'UTC' }} UTC
-                        <p>{{ changeNote(item) }}</p>
-                      </li>
+              @if (preview.brokenGrants.length) {
+                <div class="grid gap-2 rounded-control border border-border border-s-4 border-s-warning px-4 py-3" aria-labelledby="grants-heading">
+                  <h4 id="grants-heading" class="flex items-center gap-2 font-semibold">
+                    <svg lucideTriangleAlert aria-hidden="true" class="size-4"></svg>Grants that would be removed</h4>
+                  <ul class="list-disc ps-5 [overflow-wrap:anywhere]">
+                    @for (grant of preview.brokenGrants; track $index) {
+                      <li>{{ grant.username }} · {{ grant.role }} · {{ grant.unitPath }}</li>
                     }
                   </ul>
-                </details>
-              }
-            }
-            @if (preview.brokenGrants.length) {
-              <div class="notice">
-                <h4>Grants that would be removed</h4>
-                <ul>
-                  @for (grant of preview.brokenGrants; track $index) {
-                    <li>{{ grant.username }} · {{ grant.role }} · {{ grant.unitPath }}</li>
-                  }
-                </ul>
-              </div>
-            }
-            @if (preview.blocked || hasBlockingProblems()) {
-              <p class="notice">{{ preview.blocked || 'Fix blocking problems before publishing.' }}</p>
-            } @else if (confirming()) {
-              <div class="notice" aria-labelledby="confirm-heading">
-                <h4 id="confirm-heading">Confirm publication</h4>
-                <p>This version will go live and the past {{ preview.days }} days of detections will be checked again.</p>
-                @if (preview.brokenGrants.length) {
-                  <label class="grant-check">
-                    <input #grantCheckbox type="checkbox" [checked]="removeGrants()"
-                      (change)="removeGrants.set(grantCheckbox.checked)">
-                    Remove the {{ preview.brokenGrants.length }} listed grants
-                  </label>
-                }
-                <div class="publish-actions">
-                  <button brnButton class="layer-primary" [disabled]="busy() || (!!preview.brokenGrants.length && !removeGrants())"
-                    (click)="publish()">Confirm and publish</button>
-                  <button brnButton class="layer-secondary" [disabled]="busy()"
-                    (click)="confirming.set(false); removeGrants.set(false)">Cancel</button>
                 </div>
-              </div>
-            } @else {
-              <button brnButton class="layer-primary" [disabled]="busy()" (click)="confirming.set(true)">Publish layer</button>
-            }
+              }
+              @if (preview.blocked || hasBlockingProblems()) {
+                <div hlmAlert variant="destructive">
+                  <svg lucideCircleX aria-hidden="true" class="size-4"></svg>
+                  <h4 hlmAlertTitle>Cannot publish yet</h4>
+                  <p hlmAlertDescription>{{ preview.blocked || 'Fix blocking problems before publishing.' }}</p>
+                </div>
+              } @else {
+                <button hlmBtn class="justify-self-start" [disabled]="busy()" (click)="confirming.set(true)">Publish layer</button>
+              }
+            </div>
           </section>
         }
       </div>
     </div>
   } @else if (!error()) {
-    <p role="status">Loading layers…</p>
+    <div role="status" class="grid gap-4 lg:grid-cols-[2fr_3fr]"><span class="sr-only">Loading layers…</span>
+      <div hlmCard class="px-6" aria-hidden="true"><hlm-skeleton class="h-5 w-40" /><hlm-skeleton class="h-9 w-full" /><hlm-skeleton class="h-9 w-full" /></div>
+      <div hlmCard class="px-6" aria-hidden="true"><hlm-skeleton class="h-5 w-48" /><hlm-skeleton class="h-9 w-full" /></div>
+    </div>
   } @else {
-    <button brnButton class="layer-secondary" (click)="error.set(''); loadCatalog()">Retry</button>
+    <button hlmBtn variant="outline" class="justify-self-start" (click)="error.set(''); loadCatalog()">Retry</button>
   }
 </div>
+
+<hlm-dialog [role]="'alertdialog'" [state]="confirming() ? 'open' : 'closed'" (closed)="cancelPublish()">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+    @if (preview(); as preview) {
+      <hlm-dialog-header>
+        <h3 hlmDialogTitle class="text-title">Confirm publication</h3>
+        <p hlmDialogDescription>This version will go live and the past {{ preview.days }} days of detections will be checked again.</p>
+      </hlm-dialog-header>
+      @if (preview.brokenGrants.length) {
+        <label hlmLabel class="grant-check items-start font-normal leading-normal">
+          <hlm-checkbox [checked]="removeGrants()" (checkedChange)="removeGrants.set($event)" />
+          Remove the {{ preview.brokenGrants.length }} listed grants
+        </label>
+      }
+      <hlm-dialog-footer>
+        <button hlmBtn variant="outline" [disabled]="busy()" (click)="cancelPublish()">Cancel</button>
+        <button hlmBtn [disabled]="busy() || (!!preview.brokenGrants.length && !removeGrants())" (click)="publish()">Confirm and publish</button>
+      </hlm-dialog-footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

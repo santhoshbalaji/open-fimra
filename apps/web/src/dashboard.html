@@ -1,48 +1,128 @@
-<section class="dashboard" aria-labelledby="dashboard-title">
-<h2 id="dashboard-title">Control-room dashboard</h2>
-@if (message()) { <p role="status">{{ message() }}</p> }
+<section class="mx-auto grid max-w-[1440px] gap-4 p-4 sm:p-6 lg:p-8" aria-labelledby="dashboard-title">
+<h2 id="dashboard-title" class="text-display">Control-room dashboard</h2>
+@if (message()) {
+  <p role="status" class="flex items-start gap-2 rounded-control border border-border border-s-4 border-s-danger bg-card px-4 py-3">
+    <svg lucideTriangleAlert aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-danger"></svg>{{ message() }}
+  </p>
+}
 @if (summary(); as data) {
-  <div class="metric-grid">
-    <section><h3>Detections today</h3><small>Since midnight in India</small>
-      <dl>@for (key of classKeys; track key) {
-        <dt>{{ classes[key] }}</dt><dd>{{ data.today[key] || 0 }}</dd>
-      }</dl>
+  <div class="stat-grid grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <section hlmCard size="sm" class="col-span-2 lg:col-span-1" aria-labelledby="today-title">
+      <hlm-card-header><h3 hlmCardTitle id="today-title">Detections today</h3>
+        <p hlmCardDescription>Since midnight in India</p></hlm-card-header>
+      <div hlmCardContent><dl class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">@for (key of classKeys; track key) {
+        <dt class="text-muted-foreground">{{ classes[key] }}</dt><dd class="text-end font-semibold tabular-nums">{{ data.today[key] || 0 }}</dd>
+      }</dl></div>
     </section>
-    <section><h3>Active alerts</h3><strong>{{ data.active }}</strong></section>
-    <section><h3>Overdue alerts</h3><strong>{{ data.overdue }}</strong></section>
-    <section><h3>Pending reports</h3><strong>{{ data.pendingReports }}</strong></section>
-  </div>
-  <div class="report-grid">
-    <section><h3>Detections by forest class</h3><small>Past {{ filters.hours() }} hours</small>
-      @if (!filters.lowBandwidth()) {
-        @defer (on immediate) { <fimra-class-chart [counts]="data.detections" /> }
-      }
-      <table tabindex="0"><caption class="sr-only">Detections in the selected window</caption>
-        <thead><tr><th scope="col">Forest class</th><th scope="col">Detections</th></tr></thead>
-        <tbody>@for (key of classKeys; track key) {
-          <tr><th scope="row">{{ classes[key] }}</th><td>{{ data.detections[key] || 0 }}</td></tr>
-        }</tbody>
-      </table>
-    </section>
-    <section><h3>Routed alerts</h3><dl>
-      @for (key of queueKeys; track key) { <dt>{{ queues[key] }}</dt><dd>{{ data.queues[key] || 0 }}</dd> }
-    </dl><h4>Current step</h4><dl>@for (row of data.steps | keyvalue; track row.key) {
-      <dt class="step-name">{{ row.key.replaceAll('_', ' ') }}</dt><dd>{{ row.value }}</dd>
-    } @empty { <dt>No alerts in this window.</dt> }</dl></section>
-    <section><h3>Response times</h3><table>
-      <caption class="sr-only">Time from routing to first reaching each step</caption>
-      <thead><tr><th scope="col">Step</th><th scope="col">Median</th><th scope="col">90th percentile</th></tr></thead>
-      <tbody>@for (step of milestones | keyvalue: null; track step.key) {
-        <tr><th scope="row">{{ step.value }}</th><td>{{ duration(data.responseSeconds[step.key].median) }}</td>
-          <td>{{ duration(data.responseSeconds[step.key].p90) }}</td></tr>
-      }</tbody></table></section>
-    @if (data.feedHealth; as feeds) {
-      <section><h3 #feedHeading tabindex="-1">Feed health</h3><ul>@for (feed of feeds; track feed.source + '/' + feed.product) {
-        <li><span class="feed-status" [style.border-color]="'var(--color-' + feedStates[feed.status].color + ')'">
-          <b aria-hidden="true">{{ feedStates[feed.status].icon }}</b> {{ feedStates[feed.status].label }}</span>
-          {{ feed.source }} · {{ feed.product }}</li>
-      } @empty { <li>No feeds have polled yet.</li> }</ul></section>
+    @for (tile of tiles; track tile.key) {
+      <section hlmCard size="sm" [attr.aria-labelledby]="'tile-' + tile.key">
+        <hlm-card-header><h3 hlmCardTitle [id]="'tile-' + tile.key">{{ tile.label }}</h3></hlm-card-header>
+        <div hlmCardContent class="flex items-end justify-between gap-2">
+          <strong class="stat-value text-[2.25rem] leading-none font-semibold tabular-nums">{{ data[tile.key] }}</strong>
+          @if (tile.key === 'overdue' && data.overdue) { <fimra-status-badge icon="overdue" label="Needs action" /> }
+        </div>
+      </section>
     }
   </div>
-} @else if (!message()) { <p role="status">Loading dashboard…</p> }
+  <div class="grid gap-4 lg:grid-cols-2">
+    <section hlmCard aria-labelledby="classes-title">
+      <hlm-card-header><h3 hlmCardTitle id="classes-title">Detections by forest class</h3>
+        <p hlmCardDescription>Past {{ filters.hours() }} hours</p></hlm-card-header>
+      <div hlmCardContent class="grid gap-4">
+        @if (detectionTotal(data)) {
+          @if (!filters.lowBandwidth()) {
+            @defer (on immediate) { <fimra-class-chart [counts]="data.detections" /> }
+            @placeholder { <hlm-skeleton class="h-44 w-full" /> }
+          }
+          <div hlmTableContainer tabindex="0" aria-labelledby="classes-title">
+            <table hlmTable><caption class="sr-only">Detections in the selected window</caption>
+              <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Forest class</th><th hlmTh scope="col" class="text-end">Detections</th></tr></thead>
+              <tbody hlmTBody>@for (key of classKeys; track key) {
+                <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ classes[key] }}</th>
+                  <td hlmTd class="text-end">{{ data.detections[key] || 0 }}</td></tr>
+              }</tbody>
+            </table>
+          </div>
+        } @else {
+          <fimra-empty-state heading="No detections" detail="Nothing was detected in this window. Choose a longer time window." />
+        }
+      </div>
+    </section>
+    <section hlmCard aria-labelledby="routed-title">
+      <hlm-card-header><h3 hlmCardTitle id="routed-title">Routed alerts</h3>
+        <p hlmCardDescription>Active alerts by queue and current step</p></hlm-card-header>
+      <div hlmCardContent class="grid gap-4">
+        <dl class="grid grid-cols-3 gap-2">@for (key of queueKeys; track key) {
+          <div class="rounded-control bg-background p-3"><dt class="text-muted-foreground">{{ queues[key] }}</dt>
+            <dd class="text-title tabular-nums">{{ data.queues[key] || 0 }}</dd></div>
+        }</dl>
+        <div>
+          <h4 class="mb-2 font-semibold" id="steps-title">Current step</h4>
+          @let rows = stepRows(data);
+          @if (rows.length) {
+            <ul class="grid gap-1" aria-labelledby="steps-title">@for (row of rows; track row.key) {
+              <li class="flex items-center justify-between gap-2 border-b border-border py-1 last:border-0">
+                <fimra-status-badge class="mx-0!" [icon]="row.icon" [label]="row.label" />
+                <span class="font-semibold tabular-nums">{{ row.count }}</span>
+              </li>
+            }</ul>
+          } @else {
+            <fimra-empty-state heading="No alerts" detail="No alerts in this window." />
+          }
+        </div>
+      </div>
+    </section>
+    <section hlmCard aria-labelledby="response-title">
+      <hlm-card-header><h3 hlmCardTitle id="response-title">Response times</h3>
+        <p hlmCardDescription>From routing to first reaching each step</p></hlm-card-header>
+      <div hlmCardContent>
+        <div hlmTableContainer>
+          <table hlmTable><caption class="sr-only">Time from routing to first reaching each step</caption>
+            <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Step</th><th hlmTh scope="col" class="text-end">Median</th>
+              <th hlmTh scope="col" class="text-end">90th percentile</th></tr></thead>
+            <tbody hlmTBody>@for (step of milestones | keyvalue: null; track step.key) {
+              <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ step.value }}</th>
+                <td hlmTd class="text-end">{{ duration(data.responseSeconds[step.key].median) }}</td>
+                <td hlmTd class="text-end">{{ duration(data.responseSeconds[step.key].p90) }}</td></tr>
+            }</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    @if (data.feedHealth; as feeds) {
+      <section hlmCard aria-labelledby="feeds-title">
+        <hlm-card-header><h3 hlmCardTitle id="feeds-title" #feedHeading tabindex="-1">Feed health</h3>
+          <p hlmCardDescription>Satellite feeds polled by this server</p></hlm-card-header>
+        <div hlmCardContent>
+          @if (feeds.length) {
+            <ul class="grid gap-1" aria-labelledby="feeds-title">@for (feed of feeds; track feed.source + '/' + feed.product) {
+              <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border py-1 last:border-0">
+                <span>{{ feed.source }} · {{ feed.product }}</span>
+                <fimra-status-badge class="mx-0!" [icon]="feedStates[feed.status].icon" [label]="feedStates[feed.status].label" />
+              </li>
+            }</ul>
+          } @else {
+            <fimra-empty-state heading="No feeds yet" detail="No feeds have polled yet." />
+          }
+        </div>
+      </section>
+    }
+  </div>
+} @else if (!message()) {
+  <div role="status" class="grid gap-4">
+    <span class="sr-only">Loading dashboard…</span>
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-hidden="true">
+      @for (tile of [1, 2, 3, 4]; track tile) {
+        <div hlmCard size="sm" [class]="tile === 1 ? 'col-span-2 px-4 lg:col-span-1' : 'px-4'">
+          <hlm-skeleton class="h-4 w-32" /><hlm-skeleton class="h-9 w-16" />
+        </div>
+      }
+    </div>
+    <div class="grid gap-4 lg:grid-cols-2" aria-hidden="true">
+      @for (card of [1, 2, 3, 4]; track card) {
+        <div hlmCard class="px-6"><hlm-skeleton class="h-5 w-48" /><hlm-skeleton class="h-40 w-full" /></div>
+      }
+    </div>
+  </div>
+}
 </section>

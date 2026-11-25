@@ -9,13 +9,22 @@ import { WorkspaceService } from './workspace';
 import { ClassChart } from './class-chart';
 import { DashboardFilters } from './dashboard-filters';
 import { queueLabels } from './alert-queue';
+import { LucideTriangleAlert } from '@lucide/angular';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
+import { HlmTableImports } from '@spartan-ng/helm/table';
+import { EmptyState } from './ui/empty-state';
+import { StatusBadge } from './ui/status-badge';
 
-const feedStates = {
-  healthy: {icon: '✓', label: 'Healthy', color: 'good'},
-  delayed: {icon: '◷', label: 'Delayed', color: 'warning'},
-  quiet: {icon: '◌', label: 'Quiet', color: 'serious'},
-  failing: {icon: '!', label: 'Failing', color: 'critical'}
+type BadgeIcon = 'step' | 'complete' | 'overdue';
+// The badge always pairs its icon with the visible label.
+const feedStates: Record<string, {icon: BadgeIcon; label: string}> = {
+  healthy: {icon: 'complete', label: 'Healthy'},
+  delayed: {icon: 'step', label: 'Delayed'},
+  quiet: {icon: 'step', label: 'Quiet'},
+  failing: {icon: 'overdue', label: 'Failing'}
 };
+const finishedSteps = new Set(['closed', 'false_alarm', 'verified']);
 interface Summary {
   detections: Partial<Record<ForestClass, number>>;
   today: Partial<Record<ForestClass, number>>;
@@ -25,10 +34,14 @@ interface Summary {
   overdue: number;
   pendingReports: number;
   responseSeconds: Record<string, {median: number | null; p90: number | null}>;
-  feedHealth: {source: string; product: string; status: keyof typeof feedStates}[] | null;
+  feedHealth: {source: string; product: string; status: 'healthy' | 'delayed' | 'quiet' | 'failing'}[] | null;
 }
 
-@Component({selector: 'fimra-dashboard', imports: [KeyValuePipe, ClassChart], templateUrl: './dashboard.html'})
+@Component({
+  selector: 'fimra-dashboard',
+  imports: [KeyValuePipe, ClassChart, LucideTriangleAlert, HlmCardImports, HlmSkeleton, HlmTableImports, EmptyState, StatusBadge],
+  templateUrl: './dashboard.html'
+})
 export class Dashboard {
   readonly focusFeedHealth = input(false);
   private readonly feedHeading = viewChild<ElementRef<HTMLElement>>('feedHeading');
@@ -40,6 +53,10 @@ export class Dashboard {
   readonly queues = queueLabels;
   readonly queueKeys = Object.keys(queueLabels) as (keyof typeof queueLabels)[];
   readonly feedStates = feedStates;
+  readonly tiles = [
+    {key: 'active', label: 'Active alerts'}, {key: 'overdue', label: 'Overdue alerts'},
+    {key: 'pendingReports', label: 'Pending reports'}
+  ] as const;
   readonly milestones = {acknowledged: 'Acknowledged', reached_site: 'Reached site', controlled: 'Controlled'};
   private readonly http = inject(HttpClient);
   private readonly workspace = inject(WorkspaceService);
@@ -66,6 +83,18 @@ export class Dashboard {
         }))
       )).subscribe(data => { this.message.set(''); this.summary.set(data); });
       onCleanup(() => request.unsubscribe());
+    });
+  }
+
+  detectionTotal(data: Summary): number {
+    return this.classKeys.reduce((total, key) => total + (data.detections[key] ?? 0), 0);
+  }
+
+  stepRows(data: Summary): {key: string; label: string; count: number; icon: BadgeIcon}[] {
+    return Object.entries(data.steps).sort(([a], [b]) => a.localeCompare(b)).map(([key, count]) => {
+      const words = key.replaceAll('_', ' ');
+      return {key, count, label: words.charAt(0).toUpperCase() + words.slice(1),
+        icon: finishedSteps.has(key) ? 'complete' : 'step'};
     });
   }
 
