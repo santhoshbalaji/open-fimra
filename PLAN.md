@@ -151,7 +151,7 @@ The interface is deliberately calm so that colour is reserved for data.
 - **Map symbols.** Colour shows time since detection. Shape shows forest class (inside, near the edge, outside, fixed heat source), so the map stays readable for colour-blind users.
 - **Status.** Always an icon and a label, never colour alone.
 - **Charts.** Eight colours used in a fixed order, so a data source keeps its colour on every screen.
-- **Type.** Noto Sans, hosted with the app, covering Indian scripts.
+- **Type.** The user chose Inter only, bundled with the app. Hindi and other Indian scripts use the device’s own fonts.
 - **Field use.** Touch targets of at least 48 px on the phone app.
 
 Tokens are in [docs/design-system/tokens.json](docs/design-system/tokens.json), with a visual reference in [docs/design-system/preview.html](docs/design-system/preview.html).

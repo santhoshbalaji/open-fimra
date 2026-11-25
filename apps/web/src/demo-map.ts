@@ -1,3 +1,4 @@
+import tokens from '../../../docs/design-system/tokens.json';
 import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BrnButton } from '@spartan-ng/brain/button';
@@ -142,6 +143,13 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         if (id !== 'state' && map.getSource(id)) map.removeSource(id);
       }
     }
+    if (changed && map.getLayer('linked-alert')) {
+      map.setPaintProperty('linked-alert', 'circle-color', tokens.color[theme].brand);
+      map.setPaintProperty('linked-alert', 'circle-stroke-color', tokens.color[theme].brand);
+    }
+    if (changed && map.getLayer('selected-detection')) {
+      map.setPaintProperty('selected-detection', 'circle-stroke-color', tokens.color[theme].brand);
+    }
     this.appliedTheme = theme;
     if (url !== this.appliedUrl) {
       this.removeDetections(map);
@@ -165,7 +173,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       map.addLayer(layer);
       map.addLayer({ id: 'selected-detection', type: 'circle', source: 'detections', 'source-layer': 'detections',
         filter: ['==', ['to-string', ['get', 'id']], String(this.selected()?.id ?? '')],
-        paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': '#277ea3' }
+        paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[theme].brand }
       });
       if (map.getLayer('linked-alert')) map.moveLayer('linked-alert');
     } else if (changed) {
@@ -231,8 +239,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           this.fit();
           map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
           map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
-            paint: { 'circle-radius': 9, 'circle-color': '#277ea3', 'circle-opacity': 0.2,
-              'circle-stroke-width': 3, 'circle-stroke-color': '#277ea3' }
+            paint: { 'circle-radius': 9, 'circle-color': tokens.color[this.appearance.theme()].brand, 'circle-opacity': 0.2,
+              'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
           });
           this.ready.set(true);
           this.timer = setInterval(() => {

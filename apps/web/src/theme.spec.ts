@@ -29,6 +29,12 @@ describe('ThemeService', () => {
     expect(document.documentElement.dataset['theme']).toBe('light');
   });
 
+  it('ignores an unknown saved theme', () => {
+    localStorage.setItem('fimra.theme', 'sepia');
+    system.matches = true;
+    expect(TestBed.inject(ThemeService).theme()).toBe('dark');
+  });
+
   it('restores a saved choice over the system setting', () => {
     localStorage.setItem('fimra.theme', 'dark');
     expect(TestBed.inject(ThemeService).theme()).toBe('dark');

@@ -1,4 +1,4 @@
-/* Values from docs/design-system/tokens.json. */
+/* Generated from tokens.json by scripts/theme.mjs. */
 @theme static {
   --color-background: #f5f6f4;
   --color-card: #ffffff;
@@ -8,6 +8,8 @@
   --color-brand: #1f5a70;
   --color-brand-foreground: #ffffff;
   --color-brand-soft: #e2ebee;
+  --color-danger: #9d2626;
+  --color-scrim: rgb(0 0 0 / 35%);
   --color-map-background: #e9ece8;
   --color-map-line: #cfd5d0;
   --color-neutral-mark: #7a857f;
@@ -27,16 +29,43 @@
   --color-warning: #fab219;
   --color-serious: #ec835a;
   --color-critical: #d03b3b;
-  --font-sans: "Noto Sans Variable", sans-serif;
-  --spacing: 4px;
+  --color-logo-flame: #d46838;
+  --color-logo-terrain-light: #0c2d39;
+  --color-logo-terrain-dark: #97b5c1;
+  --color-logo-ink-light: #19343f;
+  --color-logo-paper: #f7f3ea;
+  --color-logo-night: #0a1a23;
+  --shadow-panel: 0 2px 9px rgb(0 0 0 / 10%);
+  --shadow-dialog: 0 8px 28px rgb(0 0 0 / 22%);
+  --shadow-menu: 0 10px 24px rgb(0 0 0 / 18%);
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
   --text-label: 12px;
   --text-body: 14px;
   --text-subhead: 16px;
   --text-title: 20px;
   --text-display: 24px;
+  --text-label--line-height: 16px;
+  --text-label--font-weight: 500;
+  --text-label--letter-spacing: 0.012em;
+  --text-body--line-height: 20px;
+  --text-body--font-weight: 400;
+  --text-body--letter-spacing: 0em;
+  --text-subhead--line-height: 24px;
+  --text-subhead--font-weight: 600;
+  --text-subhead--letter-spacing: -0.01em;
+  --text-title--line-height: 28px;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.02em;
+  --text-display--line-height: 32px;
+  --text-display--font-weight: 650;
+  --text-display--letter-spacing: -0.025em;
+  --spacing: 4px;
   --radius-control: 6px;
   --radius-card: 8px;
   --radius-pill: 999px;
+  --spacing-target-web: 32px;
+  --spacing-target-mobile: 48px;
 }
 :root[data-theme=dark] {
   --color-background: #121413;
@@ -47,6 +76,8 @@
   --color-brand: #97b5c1;
   --color-brand-foreground: #0a1a23;
   --color-brand-soft: #1c2b31;
+  --color-danger: #ffa5a5;
+  --color-scrim: rgb(0 0 0 / 52%);
   --color-map-background: #1f2422;
   --color-map-line: #2f3632;
   --color-neutral-mark: #8b958f;
@@ -63,5 +94,3 @@
   --color-chart-7: #9085e9;
   --color-chart-8: #e66767;
 }
-:root { --target-web: 32px; color-scheme: light; }
-:root[data-theme=dark] { color-scheme: dark; }

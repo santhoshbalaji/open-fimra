@@ -1,0 +1,13 @@
+:host { display: block; height: auto; }
+.guide, .guide-header { max-width: 72rem; margin-inline: auto; padding: 1.5rem clamp(1rem, 4vw, 3rem); }
+.guide-header, .group-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.guide-header { justify-content: space-between; }
+section { margin-block: 1.5rem; padding: 1.5rem; border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-card); }
+h2 { font-size: var(--text-title); font-weight: 600; margin-bottom: .75rem; }
+.group-row { margin-block: .75rem; }
+.group-row h3 { min-width: 5rem; }
+.swatches, .fields { display: grid; gap: 1rem; margin-block: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
+.swatches > div { display: flex; align-items: center; gap: .5rem; }
+.swatches i { width: 1.25rem; height: 1.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+small { margin-inline-start: auto; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.measure { display: block; height: .5rem; background: var(--color-brand); }
