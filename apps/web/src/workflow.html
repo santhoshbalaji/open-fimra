@@ -2,7 +2,8 @@
   @if (chosen(); as move) {
     <form (submit)="$event.preventDefault(); save(note.value, reason.value)">
       <h3>{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
-      @if (move.terminal) { <p>This ends the workflow for this alert.</p> }
+      @if (move.terminal) { <p>This ends the workflow for this {{ subject() }}.</p> }
+      @if (subject() === 'incident') { <p>Member alerts you can act on move with the incident.</p> }
       <hlm-field><label hlmFieldLabel for="step-note">Note (optional)</label>
         <textarea hlmTextarea id="step-note" #note maxlength="2000"></textarea>
       </hlm-field>
@@ -25,7 +26,7 @@
         <button hlmBtn [variant]="first ? 'primary' : 'outline'" (click)="choose(move)">{{ move.label }}</button>
       }
       @if (outcomes().length) {
-        <button hlmBtn variant="outline" [hlmDropdownMenuTrigger]="menu">Close alert…</button>
+        <button hlmBtn variant="outline" [hlmDropdownMenuTrigger]="menu">Close {{ subject() }}…</button>
         <ng-template #menu><hlm-dropdown-menu>
           @for (move of outcomes(); track move.step) {
             <button hlmDropdownMenuItem (triggered)="choose(move)">{{ move.label }}</button>
@@ -43,6 +44,8 @@
         @if (entry.note) { <small>{{ entry.note }}</small> }
         @if (entry.reason) { <small>Location exception · {{ entry.reason }}</small> }
         @if (entry.reportPending) { <small>Report pending</small> }
+        @if (entry.alertsMoved) { <small>Moved {{ entry.alertsMoved }} {{ entry.alertsMoved === 1 ? 'alert' : 'alerts' }}</small> }
+        @if (entry.incidentId) { <small>Recorded on incident #{{ entry.incidentId }}</small> }
       </li>
     }
   </ol>

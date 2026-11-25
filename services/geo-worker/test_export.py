@@ -38,9 +38,11 @@ def rows(kind):
              "confidence": None, "longitude": 86.5, "latitude": 16.5}
     if kind == "alerts":
         full |= {"alert_id": 23_456_789_012, "queue": "unit", "alert_created_at": SEEN,
-                 "step": "acknowledged", "step_label": "Acknowledged", "step_entered_at": SEEN}
+                 "step": "acknowledged", "step_label": "Acknowledged", "step_entered_at": SEEN,
+                 "incident_id": 34_567_890_123}
         empty |= {"alert_id": 23_456_789_013, "queue": "triage", "alert_created_at": SEEN,
-                  "step": "new", "step_label": "New", "step_entered_at": SEEN}
+                  "step": "new", "step_label": "New", "step_entered_at": SEEN,
+                  "incident_id": None}
     return [full, empty]
 
 
@@ -114,6 +116,7 @@ class ExportFormatTests(unittest.TestCase):
                 self.assertEqual(values["divisio_cd" if short else "division_code"], "D1")
                 self.assertEqual(values["divisio_nm" if short else "division_name"], "Hill Division")
                 self.assertEqual(values["step_label"], "Acknowledged")
+                self.assertEqual(values["incident" if short else "incident_id"], 34_567_890_123)
                 observed = values["obs_time" if short else "observed_at"]
                 self.assertIn(observed, ("2026-01-07T09:45:00Z", "2026/01/07 09:45:00+00"))
                 self.assertAlmostEqual(values["longitude"], 86.457995, places=6)

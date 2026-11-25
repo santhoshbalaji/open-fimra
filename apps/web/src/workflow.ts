@@ -15,8 +15,12 @@ interface Move { step: string; label: string; location_required: boolean; can_ov
 interface Entry {
   step: string; label: string; at: string; actor: string | null; note: string; reason: string;
   latitude: number | null; longitude: number | null; reportPending: boolean;
+  /** Incident entries: how many of the member alerts you can see moved with this step. */
+  alertsMoved?: number;
+  /** Alert entries: the incident whose step moved this alert. */
+  incidentId?: string | null;
 }
-interface History { entries: Entry[]; moves: Move[] }
+interface History { entries: Entry[]; moves: Move[]; mergedInto?: string | null }
 
 @Component({
   selector: 'fimra-workflow',
@@ -26,6 +30,8 @@ interface History { entries: Entry[]; moves: Move[] }
 export class Workflow {
   readonly url = input.required<string>();
   readonly stepTime = input.required<string>();
+  /** What the workflow belongs to, for its wording. */
+  readonly subject = input<'alert' | 'incident'>('alert');
   readonly changed = output<void>();
   readonly history = signal<History | null>(null);
   readonly steps = computed(() => this.history()?.moves.filter(move => !move.terminal) ?? []);

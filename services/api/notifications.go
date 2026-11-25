@@ -62,9 +62,10 @@ SELECT jsonb_build_object('unreadCount',(SELECT count(*) FROM inbox WHERE read_a
     'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',page.id::text,'event',event,
         'createdAt',page.created_at,'readAt',read_at,'workspace',workspace,'alertId',page.alert_id::text,
         'forestClass',a.forest_class,'beatName',line.levels #>> '{beat,name}',
-        'divisionName',line.levels #>> '{division,name}')
+        'divisionName',line.levels #>> '{division,name}','incidentId',im.incident_id::text)
         ORDER BY read_at IS NOT NULL,page.id DESC) FROM page
         LEFT JOIN alerts a ON a.id=page.alert_id
+        LEFT JOIN incident_members im ON im.alert_id=page.alert_id
         LEFT JOIN hierarchies h ON h.id=a.hierarchy_id
         LEFT JOIN LATERAL (SELECT value AS levels FROM jsonb_each(a.hierarchy)
             ORDER BY (key=h.slug) DESC,key LIMIT 1) line ON true),'[]'))`, subject, offset).Scan(&result)

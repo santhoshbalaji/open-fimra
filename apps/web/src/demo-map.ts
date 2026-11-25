@@ -18,6 +18,7 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
+import { Incidents, type IncidentFocus } from './incidents';
 import type { NotificationLink } from './notifications';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
@@ -29,7 +30,7 @@ import { Icon } from './ui/icon';
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, Icon],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, Incidents, Icon],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -63,6 +64,9 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly queueLabels = queueLabels;
   readonly hours = this.queue.hours;
   readonly mobileQueue = signal(false);
+  /** The panel beside the map lists alerts one by one, or grouped into incidents. */
+  readonly queueView = signal<'alerts' | 'incidents'>('alerts');
+  private readonly incidentFocus = signal<IncidentFocus | null>(null);
   private fromQueue = false;
   readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
@@ -147,7 +151,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }
       map.setPaintProperty('background', 'background-color', tokens.color[theme].mapBackground);
       if (geography) {
-        const before = map.getLayer('detections') ? 'detections' : 'linked-alert';
+        const before = map.getLayer('detections') ? 'detections' : 'incident-members';
         for (const layer of referenceLayers(geography.info, theme, low)) {
           map.addLayer(layer, before);
           this.referenceIds.push(layer.id);
@@ -202,6 +206,14 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       onCleanup(() => request.unsubscribe());
     });
     effect(() => {
+      const focus = this.incidentFocus();
+      if (!this.ready() || !this.map) return;
+      this.map.getSource<GeoJSONSource>('incident-members')?.setData({
+        type: 'FeatureCollection',
+        features: (focus?.points ?? []).map(coordinates => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates } }))
+      });
+    });
+    effect(() => {
       const row = this.queue.linked();
       if (!this.ready() || !this.map) return;
       const source = this.map.getSource<GeoJSONSource>('linked-alert');
@@ -218,6 +230,9 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
     const changed = theme !== this.appliedTheme;
+    if (changed && map.getLayer('incident-members')) {
+      map.setPaintProperty('incident-members', 'circle-stroke-color', tokens.color[theme].brand);
+    }
     if (changed && map.getLayer('linked-alert')) {
       map.setPaintProperty('linked-alert', 'circle-color', tokens.color[theme].brand);
       map.setPaintProperty('linked-alert', 'circle-stroke-color', tokens.color[theme].brand);
@@ -250,7 +265,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         filter: ['==', ['to-string', ['get', 'id']], String(this.selected()?.id ?? '')],
         paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[theme].brand }
       });
-      if (map.getLayer('linked-alert')) map.moveLayer('linked-alert');
+      for (const id of ['incident-members', 'linked-alert']) if (map.getLayer(id)) map.moveLayer(id);
     } else if (changed) {
       map.setLayoutProperty(layer.id, 'icon-image', layer.layout!['icon-image']);
     }
@@ -317,6 +332,10 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       });
       map.once('load', () => {
         map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addSource('incident-members', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ id: 'incident-members', type: 'circle', source: 'incident-members',
+          paint: { 'circle-radius': 13, 'circle-opacity': 0, 'circle-stroke-width': 2, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
+        });
         map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
           paint: { 'circle-radius': 9, 'circle-color': tokens.color[this.appearance.theme()].brand, 'circle-opacity': 0.2,
             'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
@@ -357,6 +376,29 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     this.queue.selectRow(row);
 
     this.detailTitle()?.nativeElement.focus();
+  }
+
+  showView(view: 'alerts' | 'incidents'): void {
+    if (view === this.queueView()) return;
+    this.queueView.set(view);
+    if (view === 'alerts') this.incidentFocus.set(null);
+  }
+
+  /** Draws an incident's visible member alerts and fits the map to them. */
+  showIncident(focus: IncidentFocus | null): void {
+    const previous = this.incidentFocus();
+    this.incidentFocus.set(focus);
+    if (!focus || previous?.id === focus.id) return;
+    const [west, south, east, north] = focus.bounds;
+    const padding = Math.min(80, this.container().nativeElement.clientWidth * 0.1);
+    this.map?.fitBounds([[west, south], [east, north]], { padding, maxZoom: 13, duration: 0 });
+  }
+
+  openMember(row: AlertRow): void {
+    this.fromQueue = true;
+    this.selectionTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    this.mobileQueue.set(false);
+    this.queue.selectLinked(row);
   }
 
   closeDetails(): void {

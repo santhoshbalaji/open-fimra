@@ -14,7 +14,7 @@ make demo-detections
 make api-run
 ```
 
-The integration tests check sign-in with all four demo users. They also exercise reference matching, replay a synthetic feed across two months and decode detection tiles to check access and filters. They run a backfill three times, make a feed go silent on a fake clock and check the feed health endpoint. Run them before starting the API, so the test worker can pick up its scheduled heartbeat. `make api-test` and `make api-lint` run without the development stack.
+The integration tests check sign-in with all four demo users. They also exercise reference matching, replay a synthetic feed across two months and decode detection tiles to check access and filters. They group synthetic reference clusters into incidents and check what each demo user sees and may do. They run a backfill three times, make a feed go silent on a fake clock and check the feed health endpoint. Run them before starting the API, so the test worker can pick up its scheduled heartbeat. `make api-test` and `make api-lint` run without the development stack.
 
 | Variable | Development default |
 |---|---|
@@ -268,10 +268,11 @@ Use a bearer token with `GET /api/v1/workspaces/{slug}/alerts`. Results are newe
 | `class` | A detection forest class |
 | `unitPath` | A whole path prefix, such as `ds.c1.d1` |
 | `detection` | A detection ID, for selecting a point from the map |
+| `incident` | An incident ID, for listing its members. The time window does not apply. |
 | `limit` | 1–200 rows, default 100 |
 | `cursor` | URL-encoded `nextCursor` from the previous page |
 
-Use the row's `id` with `GET /api/v1/workspaces/{slug}/alerts/{id}`. Details are available for older alerts outside the list's time window. The `detection_id` identifies the corresponding map point.
+Use the row's `id` with `GET /api/v1/workspaces/{slug}/alerts/{id}`. Details are available for older alerts outside the list's time window. The `detection_id` identifies the corresponding map point. Each row also has `incident_id`, the incident the alert belongs to, or null for an alert created before incidents. Add `incident={id}` to list an incident's member alerts that you can see, whatever their age.
 
 A grant covers the same matched paths as it does on the map. Sections 5.3 and 6 of the plan leave review with officers responsible for that area. For the review queues, the **covering grant itself** must be at division level or above in its own hierarchy. A root grant sees every queue in the workspace, including points without a path. In a hierarchy without a division level, only a root grant qualifies for review. A caller without a workspace grant gets 403. A hidden or missing alert detail returns 404.
 
@@ -306,6 +307,60 @@ Reached site, controlled and extinguished need a point within the workspace's `w
 The response contains the log ID, step and event time. An optional client ID identifies one request per alert. Retrying the same request as the same user returns its original receipt. Reusing the ID for different details returns 409. An optional client time needs a client ID and must fall between the preceding step and server time. The server keeps its own recording time as well. An unavailable move returns 409, a disallowed role returns 403, and a missing or distant required point returns 422.
 
 The earliest time limit on a current step's outgoing transitions determines when an alert is overdue. The default allows 30 minutes to acknowledge, an hour to send a team, two hours to reach the site, 24 hours for a first report, 72 hours for a final report and 24 hours each for verification and closure. Control and extinguishing have no default time limit. The SQL view `alert_response_times` measures time from alert creation to the first acknowledgment, arrival and control recorded in the log. Missing milestones stay null.
+
+## Incidents
+
+Alerts that lie close together in space and time join one incident (PLAN.md section 5.3). An incident has its own workflow, and its member alerts keep theirs.
+
+### Grouping rule
+
+A new alert joins an open incident when it lies within the workspace's distance of **any** member and its observation time is within the time window of that same member, before or after. An incident is open until it reaches a final step, such as Closed or False alarm, or until it is merged. A fire next to a closed incident starts a new incident.
+
+| Setting | Default | Accepted |
+|---|---|---|
+| `distanceMetres` | 1,500 metres: four VIIRS pixels, or one and a half MODIS pixels, so neighbouring pixels of one fire join while fires in separate valleys usually do not | 100 to 20,000 |
+| `windowHours` | 24 hours: a fire seen on one day's passes joins the same fire seen on the next day's passes | Whole hours from 1 to 168 |
+
+The rule lives in the workspace settings as `{"incidents": {"distanceMetres": 1500, "windowHours": 24}}`. A value outside the accepted range falls back to its default, so a typing mistake cannot switch grouping off. A state administrator at the workspace root can read it with `GET /api/v1/workspaces/{slug}/settings/incidents` and replace it with `PUT` and the same two fields. The answer also gives the `defaults`. Changes apply to alerts created afterwards and are audited. Existing incidents keep their members.
+
+### Merging
+
+An alert that is close to members of two or more open incidents merges them. The incident with the earliest member observation continues, with the lowest ID breaking a tie. The others get `merged_into` pointing to it and take no more steps or members. Their own timelines stay readable. Each member keeps the incident it first joined, and the merge is recorded in the audit log.
+
+### Deterministic and safe to repeat
+
+Grouping runs in the database transaction that creates the alerts, in a trigger after the alert insert, like the workflow and notifications. The alert and its incident are saved together or not at all, so no background job can miss an alert or group it twice. Within one statement, new alerts are grouped in order of observation time, then alert ID. Ingest, backfill and re-matching take a lock for each workspace first, so two transactions never group nearby alerts at the same moment.
+
+Only a new alert changes incidents. A replayed feed creates no alert, and a re-match keeps every existing alert, so neither changes any incident. The distance and time tests are symmetric and an alert that bridges incidents merges them, so membership does not depend on the order in which alerts arrive, except where an incident was closed in between. Alerts created before this change have no incident.
+
+### Who sees an incident
+
+You see an incident when you may see at least one of its member alerts under the alert queue's rules: the alert's saved paths and, for review queues, a covering grant at division level or above. Every count, time, place, map bound and member list in the answer covers only the members you can see. A merged incident is visible to the same people as the incident it merged into. The timeline is shared by everyone who can see the incident. The incident's New entry has no location, because its first member may be in a unit that some viewers cannot see. Detection tiles carry no incident data. Alert exports add `incident_id`.
+
+### Endpoints
+
+All need a bearer token and a role in the workspace. Without a role you get 403. An incident you cannot see, or one that does not exist, gets 404.
+
+- `GET /api/v1/workspaces/{slug}/incidents` lists incidents newest first by their latest visible member, then by ID. It accepts the alert queue's `hours`, `queue`, `class`, `unitPath`, `status`, `limit` and `cursor`. The time window keeps incidents with a visible member observed in it. Queue, class and unit path keep an incident when any visible member matches. Status is the incident's own step. The answer has `items`, `total` and, when there is another page, `nextCursor`.
+- `GET /api/v1/workspaces/{slug}/incidents/{id}` reads one incident, including a merged one, whatever its age.
+- `GET /api/v1/workspaces/{slug}/incidents/{id}/history` returns the incident's `entries`, your allowed `moves` and `mergedInto`. Each entry also has `alertsMoved`: how many of the alerts you can see moved with that step.
+- `POST /api/v1/workspaces/{slug}/incidents/{id}/steps` takes the same body as an alert step and answers with the log ID, step, time and `alertsMoved`.
+
+| Field | Meaning |
+|---|---|
+| `id`, `created_at` | Incident ID and when it opened |
+| `status`, `step_label`, `step_time`, `overdue`, `terminal` | The incident's current workflow step, as for alerts |
+| `merged_into`, `merged_at` | The incident this one merged into, and when. Null for an incident that continues. |
+| `alert_count`, `queues`, `classes` | Visible members, and their counts by queue and forest class |
+| `first_observed_at`, `last_observed_at` | Earliest and latest visible member observation, in Unix seconds. `last_observed_time` is the latest as text, for the cursor. |
+| `beat_names`, `division_names` | Distinct beat and division names of the visible members |
+| `bounds` | `[west, south, east, north]` of the visible members, in degrees |
+
+### Incident workflow
+
+An incident opens at New with the workspace's workflow template, the same one its alerts use. Moves on an incident use your roles on its visible members: a field grant that covers one member allows field steps, and an officer grant at division level or above on a member allows officer steps. A field step needs a location within `workflow_radius_metres` of one of the members you can see, or an officer's reason.
+
+Acting on the incident moves its members. Each member alert that you could move the same way, from its own current step, gets its own log entry with your user, time, location, note and reason, and a link to the incident's entry. Other members stay where they are: alerts you cannot see, alerts already at a final step, and alerts that are behind or ahead of the incident. Those can be moved on their own, as before, until they catch up. Moving an alert on its own never moves its incident. A member's alert history shows `incidentId` on the entries its incident recorded. Response times, the dashboard and overdue checks keep using each alert's own log. A client ID identifies one request per incident, as for alerts. A merged incident refuses new steps with 409.
 
 ## File exports
 
@@ -343,7 +398,7 @@ The values in a file, such as an alert's workflow step, are read when the file i
 
 ### Contents
 
-Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or alert, newest first. The fields are the detection ID, observation time in UTC, source, product, satellite, forest class and triage reason. Then come the code and name of every level of the main territorial hierarchy (`state_code`, `division_name` and so on), the forest feature code, fire radiative power, confidence, longitude and latitude. Alert exports add the alert ID, queue, creation time and the current workflow step with its label and time. Alerts keep the class, reason and units they were routed with.
+Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or alert, newest first. The fields are the detection ID, observation time in UTC, source, product, satellite, forest class and triage reason. Then come the code and name of every level of the main territorial hierarchy (`state_code`, `division_name` and so on), the forest feature code, fire radiative power, confidence, longitude and latitude. Alert exports add the alert ID, queue, creation time, the current workflow step with its label and time, and the incident ID. Alerts keep the class, reason and units they were routed with.
 
 Every export carries a note of its source, filters, time window, coordinate system, request and generation times, row count and the requesting role. It never names the people involved. GeoPackage and Excel files hold it in the `export_note` and `export_fields` tables. Every other format is a zip file with the note in `README.txt` beside the data. Shapefile field names are limited to 10 characters. The note lists each field's short name, such as `divisio_cd` for `division_code`. Each export, and each download, is recorded in the audit log with its filters and row count.
 
@@ -499,7 +554,11 @@ Each workspace starts with these rules for both in-app notifications and email.
 | Feed-health alert opens | People with a role at the root of a workspace hierarchy |
 
 The alert or feed-health insert records its notifications in the same database
-transaction. A background check records an overdue event once for each step
+transaction. For a new alert this happens after it joins its incident. A
+recipient gets one new-alert notification per incident and channel: the first
+member alert they can see notifies them, and later members that they can also
+see do not. A member they could not see before, such as one in another unit,
+still notifies them. Merged incidents count as one. A background check records an overdue event once for each step
 entry, including when an alert returns to a step it has visited before. Each
 event, recipient and channel has one database row, even when multiple grants
 or rules match. Replaying a feed or re-matching an existing alert leaves that
@@ -512,7 +571,8 @@ All endpoints require a bearer token.
 - `GET /api/v1/notifications` returns `items`, `unreadCount` and `hasMore`.
   The result starts with unread items and includes up to 50 per page. Use
   `offset=50` for the next page. Alert items include `forestClass`, `beatName`
-  and `divisionName` from their routing snapshot. Missing values are null.
+  and `divisionName` from their routing snapshot, and the alert's
+  `incidentId`. Missing values are null.
 - `POST /api/v1/notifications/{id}/read` marks one of the caller's
   notifications read and returns `204`. It is safe to repeat.
 - Use `GET /api/v1/notifications/preferences` to read preferences. Use
