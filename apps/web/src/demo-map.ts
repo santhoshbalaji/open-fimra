@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inje
 import { BrnButton } from '@spartan-ng/brain/button';
 import { LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
+import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
@@ -33,7 +34,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly hours = this.queue.hours;
   readonly mobileQueue = signal(false);
   private rowButton?: HTMLButtonElement;
-  readonly outside = signal(false);
+  readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
   readonly selected = this.queue.selected;
   readonly now = this.queue.now;
@@ -48,7 +49,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl;
   private readonly url = computed(() => {
     const workspace = this.workspace.current();
-    return workspace && tileUrl(this.base, workspace.slug, this.hours(), this.outside());
+    return workspace && tileUrl(this.base, workspace.slug, this.hours(), this.filters.tileClasses(), this.filters.unitPath());
   });
   private map?: LibreMap;
   private bounds?: LngLatBounds;
@@ -60,7 +61,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     effect(() => {
       const theme = this.appearance.theme();
       const url = this.url();
-      if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url));
+      const low = this.filters.lowBandwidth();
+      if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url, low));
     });
     effect(() => {
       const id = String(this.selected()?.id ?? '');
@@ -71,18 +73,29 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     effect(() => this.detailTitle()?.nativeElement.focus());
   }
 
-  private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
+  private updateLayers(map: LibreMap, theme: Theme, url: string | null, low = this.filters.lowBandwidth()): void {
     const changed = theme !== this.appliedTheme;
-    if (changed) {
-      for (const layer of demoStyle(theme).layers) {
-        if (!('paint' in layer)) continue;
+    const style = demoStyle(theme);
+    for (const [id, source] of Object.entries(style.sources)) {
+      if (!low && !map.getSource(id)) map.addSource(id, source);
+    }
+    for (const layer of style.layers) {
+      if (low && layer.id !== 'background') {
+        if (map.getLayer(layer.id)) map.removeLayer(layer.id);
+      } else if (!map.getLayer(layer.id)) {
+        map.addLayer(layer, map.getLayer('detections') ? 'detections' : undefined);
+      } else if (changed && 'paint' in layer) {
         for (const [name, value] of Object.entries(layer.paint ?? {})) {
-          const property = name as Parameters<LibreMap['setPaintProperty']>[1];
-          map.setPaintProperty(layer.id, property, value);
+          map.setPaintProperty(layer.id, name as Parameters<LibreMap['setPaintProperty']>[1], value);
         }
       }
-      this.appliedTheme = theme;
     }
+    if (low) {
+      for (const id of Object.keys(style.sources)) {
+        if (id !== 'state' && map.getSource(id)) map.removeSource(id);
+      }
+    }
+    this.appliedTheme = theme;
     if (url !== this.appliedUrl) {
       this.removeDetections(map);
       this.visible.set([]);
@@ -122,9 +135,15 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     this.appliedTheme = this.appearance.theme();
     try {
       setWorkerUrl(new URL('map/maplibre-gl-worker.mjs', document.baseURI).href);
+      const style = demoStyle(this.appliedTheme);
+      if (this.filters.lowBandwidth()) {
+        // Keep only the state extent for the fit control.
+        style.sources = { state: style.sources['state'] };
+        style.layers = style.layers.filter(layer => layer.id === 'background');
+      }
       const map = new LibreMap({
         container: this.container().nativeElement,
-        style: demoStyle(this.appliedTheme),
+        style,
         transformRequest: url => mapRequest(url, this.base, document.baseURI, () => {
           const user = this.auth.user();
           if (user?.expired) { this.auth.sessionEnded(); return; }

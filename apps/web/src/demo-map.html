@@ -4,11 +4,6 @@
       <button [attr.aria-pressed]="!mobileQueue()" (click)="mobileQueue.set(false)">Map</button>
       <button [attr.aria-pressed]="mobileQueue()" (click)="mobileQueue.set(true)">Alert queue</button>
     </div>
-    <label>Show the past
-      <select #windowSelect [value]="hours()" (change)="hours.set(+windowSelect.value)">
-        <option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option>
-      </select>
-    </label>
   </div>
 }
 <div class="workspace-panes" [class.show-queue]="mobileQueue() && workspace.current()">
@@ -22,7 +17,6 @@
 <div class="fire-controls">
   @if (workspace.current()) {
     <div class="filter-card">
-      <label><input #outsideCheck type="checkbox" [checked]="outside()" (change)="outside.set(outsideCheck.checked)"> Show outside forest</label>
       <label>Detections in view
         <select #picker [disabled]="!visible().length" (change)="choose(picker.value)">
           <option value="" [selected]="!selected()">{{ visible().length ? 'Select a detection' : 'None in view' }}</option>
@@ -54,13 +48,13 @@
         }
       </ul></div>
     }
-    <div><h2>Reference layers</h2><ul>
+    @if (!filters.lowBandwidth()) { <div><h2>Reference layers</h2><ul>
     @for (item of boundaries; track item.id) {
       <li><i class="key-line" [class]="item.id" [style.border-top-width.px]="item.width"></i>{{ item.label }}</li>
     }
     <li><i class="key-forest"></i>Forest</li>
     <li><i class="key-kiln"></i>Brick kiln</li>
-    </ul></div>
+    </ul></div> }
   </div>
 </section>
 @if (selected(); as point) {

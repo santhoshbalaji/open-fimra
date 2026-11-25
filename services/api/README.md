@@ -37,6 +37,21 @@ When run through Make, the database URL defaults to `DATABASE_URL` and the issue
 
 The service finds the signing keys through OpenID Connect discovery and caches them. It checks the issuer, audience and token times. It allows 30 seconds for differences between clocks.
 
+## Control-room summary
+
+`GET /api/v1/workspaces/{slug}/summary` accepts the alert queue's `hours` (1–720, default 168), `class` and `unitPath`. A workspace grant is required. Counts cover all matching records, including those on later queue pages.
+
+| Field | Meaning |
+|---|---|
+| `detections`, `today` | Counts by forest class. Both use observation time and the same grants as detection tiles. The first uses the selected window. Today runs from midnight in India Standard Time (`Asia/Kolkata`) through the current time, independently of the window. Both apply the class and unit filters. |
+| `queues`, `steps` | Routed alerts by queue and current workflow step. Grants and filters use the routing snapshot saved with each alert, including after a layer is published. Review and triage require a covering review grant. A missing count means zero. |
+| `active`, `pendingReports` | Counts of alerts at a nonterminal step and alerts whose current step has the report-pending flag, respectively. |
+| `overdue` | An alert counts once if the time since it entered its current step is strictly greater than the shortest non-null limit on an outgoing transition. At the deadline it is still on time. A step with no limit cannot be overdue. |
+| `responseSeconds` | Median and 90th percentile of seconds from alert creation to first acknowledgment, arrival at site and control. Each milestone includes only alerts that reached it. An empty sample gives null for both values. |
+| `feedHealth` | Current source, product and status from the same feed facts and thresholds as the feeds endpoint. Root grants get the workspace-wide list (empty before the first poll). Other grants get null. |
+
+The demo budget is 500 ms at the 95th percentile. The integration suite times 20 signed summary requests per granted demo account against the local database. This includes token verification and response encoding. The handler runs one counts query and one additional feed query for a root grant. With 11 demo detections and seven routed alerts, a local run measured 5.73 ms at the 95th percentile for the state administrator, 2.35 ms for the division officer and 2.79 ms for the beat guard. CI reports fresh measurements for each run.
+
 ## Detection tiles
 
 `GET /api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}.mvt` takes a bearer token. It returns a Mapbox vector tile with content type `application/vnd.mapbox-vector-tile` and one layer named `detections`. An allowed request with no features returns HTTP 204. A missing or invalid token gets 401. A signed-in caller without a role in the workspace gets 403.
@@ -44,6 +59,7 @@ The service finds the signing keys through OpenID Connect discovery and caches t
 A grant covers matched paths at or below the granted unit in that hierarchy. A grant at a hierarchy root covers every match in the workspace, including matches with no unit.
 
 - `hours` is the number of hours to look back from the current time. It defaults to 168 and accepts integers from 1 through 720.
+- `unitPath` limits matches to a whole unit path prefix, such as `ds.c1.d1`.
 - `classes` is a comma-separated list. By default the tile includes `inside`, `near_edge` and `fixed_heat_source`. Add `outside` to the list to show those points too.
 - The cross-origin allowlist accepts a comma-separated list of origins in `FIMRA_CORS_ORIGINS`. Allowed origins can send the `Authorization` header after a browser preflight.
 

@@ -33,6 +33,7 @@ points AS (
     WHERE d.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.forest_class = ANY($7::text[])
+      AND ($8::ltree IS NULL OR m.unit_paths <@ $8)
       AND EXISTS (
           SELECT 1 FROM grants g WHERE g.workspace_id = m.workspace_id AND
               match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)

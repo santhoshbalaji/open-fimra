@@ -24,10 +24,9 @@ describe('Detection identity', () => {
 describe('Tile requests', () => {
   const base = 'https://api.example.test/core/';
   const page = 'https://web.example.test';
-  const url = tileUrl(base, 'demo state', 72, false);
-  it('sends the window and opts in to outside points only when requested', () => {
-    expect(url).toBe(base + 'api/v1/workspaces/demo%20state/tiles/detections/{z}/{x}/{y}.mvt?hours=72');
-    expect(tileUrl(base, 'demo state', 72, true)).toBe(url + '&classes=inside,near_edge,fixed_heat_source,outside');
+  const url = tileUrl(base, 'demo state', 72, 'inside', 'ds.c1');
+  it('sends the shared window, forest class and unit path', () => {
+    expect(url).toBe(base + 'api/v1/workspaces/demo%20state/tiles/detections/{z}/{x}/{y}.mvt?hours=72&classes=inside&unitPath=ds.c1');
   });
   it('recognises rejected tile responses across the worker boundary', () => {
     expect(tileErrorStatus({ status: 403, message: 'Forbidden' })).toBe(403);

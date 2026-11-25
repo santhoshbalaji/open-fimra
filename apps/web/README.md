@@ -1,11 +1,15 @@
-# Control-room map
+# Control room
 
-Sign in to see detections in your first assigned workspace. The map starts with the past seven days and refreshes every minute. Choose a shorter window or turn on **Show outside forest**. The map key explains the age colours and forest shapes.
+Sign in to see detections in your first assigned workspace. The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. The map key explains the age colours and forest shapes.
 
 Click a point or use the **Detections in view** menu to open its details. Times use your local time zone. Press Escape to close the details and return to the menu. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit state to map** to return to the whole state.
 
 
 The **Alert queue** sits beside the map. On a small screen, switch between **Map** and **Alert queue**. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
+
+Choose **Dashboard** to see detections by forest class, routed alerts by queue and step, and times to acknowledgment, arrival and control. The map, queue and dashboard keep the same filters when you switch views. Today's detections start at midnight in India. A root grant also shows each feed's health.
+
+The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. It skips the chart and hides reference layers. The browser remembers your choice when storage is available.
 
 ## Layers
 

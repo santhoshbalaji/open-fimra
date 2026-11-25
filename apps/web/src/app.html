@@ -13,22 +13,44 @@
         @if (appearance.theme() === 'dark') { <svg lucideSun></svg> } @else { <svg lucideMoon></svg> }
       </button>
       <button brnButton [cdkMenuTriggerFor]="account" class="user-trigger flex items-center gap-2"
-              [attr.aria-label]="'Account for ' + (user.profile.name || user.profile.preferred_username || 'User')">
+              [attr.aria-label]="dashboard() ? 'Account menu' : 'Account for ' + (user.profile.name || user.profile.preferred_username || 'User')">
         <svg lucideCircleUserRound></svg>
-        <span class="user-name">{{ user.profile.name || user.profile.preferred_username || 'User' }}</span>
+        <span class="user-name">{{ dashboard() ? 'Account' : (user.profile.name || user.profile.preferred_username || 'User') }}</span>
         <svg lucideChevronDown class="chevron"></svg>
       </button>
       <ng-template #account>
         <div cdkMenu class="account-menu">
-          <p>{{ user.profile.name || user.profile.preferred_username || 'User' }}</p>
+          @if (!dashboard()) { <p>{{ user.profile.name || user.profile.preferred_username || 'User' }}</p> }
           <button brnButton cdkMenuItem (cdkMenuItemTriggered)="auth.signOut()"><svg lucideLogOut></svg> Sign out</button>
         </div>
       </ng-template>
     </div>
   </header>
+  @if (workspace.current() && !(showLayers() && workspace.canManageLayers())) {
+    <div class="workspace-controls">
+      <nav aria-label="Control room views">
+        <button [attr.aria-pressed]="!dashboard()" (click)="dashboard.set(false)">Map and queue</button>
+        <button [attr.aria-pressed]="dashboard()" (click)="dashboard.set(true)">Dashboard</button>
+      </nav>
+      <label>Past {{ filters.hours() }} hours
+        <input #hours type="range" min="1" max="720" [value]="filters.hours()" (change)="filters.hours.set(+hours.value)">
+      </label>
+      <label>Forest class
+        <select #forest [value]="filters.forestClass()" (change)="filters.forestClass.set($any(forest.value))">
+          <option value="">All classes</option>
+          @for (key of classKeys; track key) { <option [value]="key">{{ classes[key] }}</option> }
+        </select>
+      </label>
+      <label>Unit path <input #path placeholder="All units" pattern="[a-zA-Z0-9_\-]+(\.[a-zA-Z0-9_\-]+)*"
+        [value]="filters.unitPath()" (change)="path.reportValidity() && filters.unitPath.set(path.value)"></label>
+      <label><input #low type="checkbox" [checked]="filters.lowBandwidth()" (change)="filters.setLowBandwidth(low.checked)"> Low bandwidth</label>
+    </div>
+  }
   <main>
     @if (showLayers() && workspace.canManageLayers()) {
       <fimra-layers />
+    } @else if (dashboard() && workspace.current()) {
+      @defer (on immediate) { <fimra-dashboard /> }
     } @else {
       @defer (on immediate) { <fimra-demo-map /> }
     }
