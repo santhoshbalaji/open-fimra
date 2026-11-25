@@ -63,6 +63,24 @@ The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to
 
 The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. The report steps record a pending report until report forms are available.
 
+## First-run setup
+
+On a fresh install, the first signed-in user sees **Set up Open FIMRA**. Enter the setup code from the core API's log, the workspace name and address, and the state code used in your state boundary file. The person who does this becomes the state administrator. National mode is shown but not available yet.
+
+The wizard then opens for root administrators until it is finished. Its steps are listed on the left, or across the top on a phone:
+
+1. **Mode** and 2. **Workspace** show the choices made when setup started.
+3. **Hierarchy**: choose a preset, such as State → Circle → Division → Range → Beat, and edit the English and Hindi labels.
+4. **Layers**: upload one file per level from the state down, then the forest layer and, optionally, known heat sources. Each row shows the import status and any blocking problems. Publish each one when it is ready. The **Layers screen** has the full review and preview.
+5. **NASA FIRMS**: paste the map key. It is saved encrypted and tested. The page shows only when it was set and its last four characters. Skipping asks you to confirm, because the map then gets no new detections.
+6. **Starter forms**: coming later, switched off.
+7. **Invite officers**: enter an email, role and unit for each officer. Officers claim the role the first time they sign in with that verified address.
+8. **Finish** shows a summary and opens the alert map.
+
+**Leave setup for now** returns to the control room. **Finish setup** in the top bar opens the wizard again. After it is finished, reopen it from the account menu with **Settings: first-run setup**.
+
+`make wizard-walkthrough` drives these screens in headless Chromium on a fresh database, with a fake FIRMS server, and saves screenshots to `~/open-fimra-screenshots/first-run-wizard`. It uses rootless Docker, port 4200 and your stack's ports from `.env`.
+
 ## Notifications
 
 The bell in the top bar shows the unread count. Open it to see unread

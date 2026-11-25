@@ -241,7 +241,7 @@ export class SetupWizard implements OnInit {
       })
     ), () => {
       this.drafts.update(drafts => { const copy = { ...drafts }; delete copy[layer.key]; return copy; });
-      this.setLayerMessage(layer, 'Published.');
+      this.setLayerMessage(layer, '');
       this.load();
     }, layer);
   }

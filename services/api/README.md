@@ -27,6 +27,9 @@ The integration tests check sign-in with all four demo users. They also exercise
 | `FIMRA_EXPORT_DIR` | `.geo-exports` (at the repository root when using Make). The geo worker writes export files here. |
 | `FIMRA_EXPORT_TTL` | `24h`. How long a finished export can be downloaded, as a Go duration of at least one minute. |
 | `FIMRA_CORS_ORIGINS` | `http://127.0.0.1:4200,http://localhost:4200` |
+| `FIMRA_SETUP_CODE` | Empty. On a fresh install the API then prints a one-time setup code in its log. See [First-run setup](#first-run-setup). |
+| `FIMRA_SETTINGS_KEY` | Empty, which turns encrypted settings off. A base64-encoded 32-byte key, for example from `openssl rand -base64 32`. |
+| `FIMRA_SETTINGS_OLD_KEYS` | Empty. Earlier settings keys, separated by commas, during a key rotation. |
 
 When run through Make, the database URL defaults to `DATABASE_URL` and the issuer uses `FIMRA_KEYCLOAK_PORT`. Use these defaults with the local stack.
 
@@ -83,9 +86,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## FIRMS ingestion
 
-With a map key, a River job starts polling on service startup and runs every 15 minutes. It requests two UTC calendar days for each of the four products and each workspace with a boundary. The database keeps one detection per feed observation and matches each new detection to every workspace in range. Each poll, backfill chunk or import records its kind, time window, counts and outcome in `ingest_runs`.
+A River job starts polling on service startup and runs every 15 minutes. It requests two UTC calendar days for each of the four products and each workspace with a boundary and a map key. Each poll reads the workspace's key from its encrypted settings, so a key saved in the wizard is used at the next poll without a restart. A workspace without a saved key uses `FIMRA_FIRMS_MAP_KEY`, so installations from before the wizard keep working. A workspace with neither is skipped. A saved key that cannot be decrypted fails each feed's run with the reason, which feed health then shows. The database keeps one detection per feed observation and matches each new detection to every workspace in range. Each poll, backfill chunk or import records its kind, time window, counts and outcome in `ingest_runs`.
 
-The poller and backfill share one rate limiter for the key. NASA allows 5,000 transactions in each 10 minutes per key, and says a larger request may count as more than one. The limiter counts one transaction for each day a request asks for, which overestimates on purpose. It counts only the requests of its own process, so a backfill run from the command line has its own share.
+The poller, backfill and connection test share one rate limiter for each key. NASA allows 5,000 transactions in each 10 minutes per key, and says a larger request may count as more than one. The limiter counts one transaction for each day a request asks for, which overestimates on purpose. It counts only the requests of its own process, so a backfill run from the command line has its own share.
 
 Use `make ingest-fixture FILE=path/to/file.csv PRODUCT=MODIS_NRT` to import a file without calling FIRMS. The product defaults to `VIIRS_SNPP_NRT`. `make demo-detections` uses the synthetic demo file and shifts its observation times to the current hour.
 
@@ -185,7 +188,7 @@ Backfill fetches FIRMS standard-processing products, such as `VIIRS_SNPP_SP` and
 - It is safe to repeat. A run skips every day that a successful backfill run of the same workspace, source and product already covers, so it continues where an earlier run stopped. Records that are fetched again are duplicates and change nothing.
 
 ```sh
-make backfill-firms FROM=2024-01-01 TO=2024-06-30                 # run here, needs FIMRA_FIRMS_MAP_KEY
+make backfill-firms FROM=2024-01-01 TO=2024-06-30                 # run here, with the saved key or FIMRA_FIRMS_MAP_KEY
 make backfill-queue FROM=2024-01-01 TO=2024-06-30 WORKSPACE=demo  # queue a job for the running API
 make backfill-demo                                                 # synthetic fixtures, no network
 ```
@@ -416,3 +419,58 @@ The delivery interface includes disabled stubs for text messages and mobile
 push. A text message deployment needs the agency's gateway and templates
 registered under India's DLT rules. Mobile push needs a configured provider
 and device registration.
+
+## First-run setup
+
+A fresh install has no workspaces. The wizard in the web app takes the first administrator from there to a working alert map (PLAN.md section 7).
+
+### Claiming the install
+
+The first signed-in user who sends the one-time setup code becomes the state administrator at the root of the new workspace. The code guards the install, so a visitor who reaches the sign-in page first cannot claim it.
+
+- Without `FIMRA_SETUP_CODE`, the API makes a random code at start-up, about 79 bits in four groups such as `ABCD-EFGH-JKMN-PQRS`, and prints it once in its log as `setupCode`. Only someone who can read the server's log can use it. A restart prints a new code.
+- With `FIMRA_SETUP_CODE`, of at least 12 letters and digits, the API uses that code and does not print it. This suits automated installs.
+- Codes compare in constant time and ignore case, spaces and dashes. After 10 wrong codes in 15 minutes, every attempt is refused until the window passes.
+- The claim works exactly once. It runs in one transaction under an advisory lock and adds the only row `install_setup` can hold. Once any workspace exists, every claim gets HTTP 409, even with the right code.
+- The claim is audited as `setup.bootstrap`, with the administrator's subject.
+
+The claim creates the workspace, a `territorial` hierarchy with a `state` level, and a root unit with the chosen state code but no shape yet. The administrator's grant is on that root unit. Publishing the state boundary later replaces the unit at the same path, so the grant stays valid. A state file with a different code is blocked from publishing.
+
+### Wizard endpoints
+
+All except the first two need a state administrator grant at the workspace root.
+
+- `GET /api/v1/setup` returns `bootstrapAvailable`.
+- `POST /api/v1/setup/bootstrap` takes `setupCode`, `mode`, `workspaceName`, `workspaceSlug` and `stateCode`. Only `state` mode is available in phase 1; `national` gets HTTP 400 with that reason.
+- `GET /api/v1/workspaces/{slug}/setup` returns the wizard state: mode, preset, levels with labels, the layer checklist, each step's status, the FIRMS key status, whether email is on, the finish time and the hierarchy presets. A workspace made before the wizard gets a setup record on first use.
+- `POST .../setup/hierarchy` takes a `preset` and the full list of `levels`, each with a `slug` and `labels` such as `{"en": "Beat", "hi": "बीट"}`. Levels that already have units keep their identifier; only their labels can change.
+- `POST .../setup/steps/{step}` marks `layers`, `firms`, `forms` or `invitations` as `done` or `skipped`. Layers cannot be skipped and need every level and the forest layer published. FIRMS can be done only with a key. Starter forms can only be skipped for now.
+- `POST .../setup/finish` closes the wizard once every step is done or skipped. `POST .../setup/reopen` opens it again.
+- `GET .../setup/units` lists current units for the invitation form.
+
+`GET /api/v1/me` also returns `setup`: `bootstrapAvailable`, the `unfinished` workspaces whose wizard the caller should see, and `claimedInvitations`.
+
+Layers use the [layer import endpoints](#layer-imports). The wizard names its layers after the levels, such as `territorial-beat`. Publishing the top level of the wizard's hierarchy sets the workspace boundary to the published state shape.
+
+### Encrypted settings
+
+Workspace secrets are stored in `workspace_settings_secrets`, sealed with AES-256-GCM. The key comes from `FIMRA_SETTINGS_KEY` and never reaches the database. Each value has its own random nonce. The workspace and setting name are bound to the ciphertext, so a value copied to another row does not open. Each row records the ID of the key that sealed it, a short hash that does not reveal the key.
+
+- `GET`, `PUT` and `DELETE /api/v1/workspaces/{slug}/settings/firms` read, save and remove the FIRMS map key. `PUT` takes `{"mapKey": "..."}`. Every answer gives only `set`, `setAt`, the last four characters as `hint`, the `source` (`settings`, `environment` or `none`) and whether encryption is on. The key itself is never returned.
+- `POST .../settings/firms/test` asks FIRMS for the data availability of `VIIRS_SNPP_NRT` with the key the poller would use. The answer says whether it worked and why not, with the key removed.
+- Saving, removing and testing are audited without the value. The key is never logged: FIRMS errors pass through the client that removes it from URLs.
+
+To rotate the settings key, set the new key in `FIMRA_SETTINGS_KEY` and list the old one in `FIMRA_SETTINGS_OLD_KEYS`. Restart the API, which can then open both. Run `make rotate-settings-key` to seal every saved secret with the new key, then remove the old key.
+
+### Invitations
+
+Officers' accounts live in the agency's identity provider, so the wizard does not create them. An invitation is a pending grant keyed by email address.
+
+- `GET`, `POST` and `DELETE /api/v1/workspaces/{slug}/invitations[/{id}]` list, create and revoke invitations. `POST` takes `email`, `role` (`state_admin`, `division_officer` or `field_staff`) and `unitPath`. The list shows addresses masked, such as `d…@example.invalid`.
+- Invitations expire after 14 days.
+- On each `GET /api/v1/me`, a token with a **verified** email claim matching an invitation turns it into a role grant. Unverified addresses claim nothing.
+- An invited address is personal data. The invitation is deleted when it is claimed or expires; an hourly job and each list request remove expired ones. Audit entries name the invitation, role and unit, never the address. The address is not logged and not stored in the job queue.
+- With email on, a River job sends one invitation email. It reads the address from the invitation when it sends, so a revoked or claimed invitation sends nothing.
+
+`make wizard-test-integration` checks all of this on a fresh database with only migrations applied. It claims the install, picks a preset, uploads the demo source files through the import and publish endpoints, saves a FIRMS key, invites the demo officers, polls a fake FIRMS server and checks what each officer's alert queue shows. It also checks that a second claim fails, that expired and unverified invitations grant nothing, and that no key or address reaches the logs, API answers, audit log or job queue.
+
