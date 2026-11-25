@@ -1,3 +1,9 @@
+-- Layer import (PLAN.md section 5.2): jobs for the geo worker, the review list
+-- of problems found in an upload, and draft hierarchy units.
+--
+-- Drafts are kept apart from current units, so an import never changes
+-- matching or role grants. Publishing them is a separate step.
+
 -- +goose Up
 -- The worker claims a row and saves the result in the same transaction.
 CREATE TABLE geo_jobs (
