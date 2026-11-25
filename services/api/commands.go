@@ -31,6 +31,8 @@ func runCommand(ctx context.Context, cfg config, args []string) error {
 		return backfillCommand(ctx, cfg, args)
 	case "feed-health":
 		return feedHealthCommand(ctx, cfg, args)
+	case "rotate-settings-key":
+		return rotateCommand(ctx, cfg, args)
 	}
 	return fmt.Errorf("unknown command %q", args[0])
 }
@@ -194,11 +196,14 @@ func backfillCommand(ctx context.Context, cfg config, args []string) error {
 
 	fetch, available := fixtureRange(*fixtures), availableDays(nil)
 	if *fixtures == "" {
-		if cfg.firmsMapKey == "" {
-			return errors.New("set FIMRA_FIRMS_MAP_KEY, or use -fixtures to read files")
+		secrets, err := readSettingsCipher()
+		if err != nil {
+			return err
 		}
-		area := firms.NewArea(cfg.firmsMapKey, nil)
-		fetch, available = area.FetchRange, area.Availability
+		fetch, available, err = newFIRMSKeys(pool, secrets, cfg.firmsMapKey, nil).backfillClient(ctx, job.WorkspaceID)
+		if err != nil {
+			return fmt.Errorf("%w; save a key in the wizard, set FIMRA_FIRMS_MAP_KEY, or use -fixtures to read files", err)
+		}
 	}
 	req, _ := job.request()
 	if *fixtures != "" {
@@ -252,5 +257,29 @@ func feedHealthCommand(ctx context.Context, cfg config, args []string) error {
 			f.Product, feedStatus(f, settings.Thresholds, now), latest, f.FailuresLast24h)
 	}
 	fmt.Printf("Checked %d feeds, opened %d alerts and resolved %d.\n", result.Feeds, result.Opened, result.Resolved)
+	return nil
+}
+
+// rotateCommand seals every saved secret with the current FIMRA_SETTINGS_KEY.
+// List the previous keys in FIMRA_SETTINGS_OLD_KEYS while it runs.
+func rotateCommand(ctx context.Context, cfg config, args []string) error {
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return errors.Join(errors.New("rotate-settings-key takes no arguments"), err)
+	}
+	secrets, err := readSettingsCipher()
+	if err != nil {
+		return err
+	}
+	pool, err := pgxpool.New(ctx, cfg.databaseURL)
+	if err != nil {
+		return fmt.Errorf("configure rotation database: %w", err)
+	}
+	defer pool.Close()
+	rotated, err := rotateSecrets(ctx, pool, secrets)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Sealed %d secrets with settings key %s.\n", rotated, secrets.currentID)
 	return nil
 }

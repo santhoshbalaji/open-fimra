@@ -25,6 +25,7 @@ type config struct {
 	uploadDir   string
 	exportDir   string
 	exportTTL   time.Duration
+	setupCode   string
 }
 
 func loadConfig() config {
@@ -38,7 +39,35 @@ func loadConfig() config {
 		uploadDir:   envOr("FIMRA_UPLOAD_DIR", ".geo-uploads"),
 		exportDir:   envOr("FIMRA_EXPORT_DIR", ".geo-exports"),
 		exportTTL:   defaultExportTTL,
+		setupCode:   strings.TrimSpace(os.Getenv("FIMRA_SETUP_CODE")),
 	}
+}
+
+// openSetup prepares the one-time setup code while the install has no
+// workspaces. It returns nil once the install is set up.
+func openSetup(ctx context.Context, pool *pgxpool.Pool, code string, logger *slog.Logger) (*setupGuard, error) {
+	open, err := installOpen(ctx, pool)
+	if err != nil {
+		return nil, fmt.Errorf("could not check first-run setup: %w", err)
+	}
+	if !open {
+		return nil, nil
+	}
+	if code != "" {
+		if len(normalSetupCode(code)) < 12 {
+			return nil, fmt.Errorf("FIMRA_SETUP_CODE must have at least 12 letters and digits")
+		}
+		logger.Warn("First-run setup is open. Sign in to the web app and enter the setup code from FIMRA_SETUP_CODE.")
+		return newSetupGuard(code), nil
+	}
+	code, err = generateSetupCode()
+	if err != nil {
+		return nil, fmt.Errorf("could not create a setup code: %w", err)
+	}
+	// Printing this one-time code is deliberate: only someone who can read
+	// the server's log can claim the install. It stops working once used.
+	logger.Warn("First-run setup is open. Sign in to the web app and enter this one-time setup code.", "setupCode", code)
+	return newSetupGuard(code), nil
 }
 
 func envOr(name, fallback string) string {
@@ -105,9 +134,21 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	if smtp != nil {
 		email = smtp
 	}
+	secrets, err := readSettingsCipher()
+	if err != nil {
+		return err
+	}
+	if secrets == nil {
+		logger.Info("Encrypted settings are off because FIMRA_SETTINGS_KEY is empty. FIRMS keys cannot be saved in the wizard.")
+	}
+	setup, err := openSetup(startup, pool, cfg.setupCode, logger)
+	if err != nil {
+		return err
+	}
+	keys := newFIRMSKeys(pool, secrets, cfg.firmsMapKey, nil)
 	auth := newAuthenticator(provider, cfg.issuer, cfg.audience)
 	auth.emailEnabled = email != nil
-	jobs, err := newJobClient(pool, logger, cfg.firmsMapKey, email)
+	jobs, err := newJobClient(pool, logger, keys, email)
 	if err != nil {
 		return fmt.Errorf("could not configure the job queue: %w", err)
 	}
@@ -125,12 +166,12 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	go runExportCleanup(ctx, pool, cfg.exportDir, logger)
 
 	if cfg.firmsMapKey == "" {
-		logger.Info("FIRMS polling is disabled because FIMRA_FIRMS_MAP_KEY is empty")
+		logger.Info("FIMRA_FIRMS_MAP_KEY is empty, so only workspaces with a FIRMS key saved in settings are polled")
 	}
 
 	server := &http.Server{
 		Handler: newHandler(pool, auth, logger, cfg.corsOrigins, cfg.uploadDir, jobs,
-			withExports(cfg.exportDir, cfg.exportTTL)),
+			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,

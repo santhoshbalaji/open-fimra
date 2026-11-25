@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
 )
 
 // feedCheckInterval is how often feed health is checked.
@@ -27,7 +26,10 @@ func (*heartbeatWorker) Work(context.Context, *river.Job[heartbeatArgs]) error {
 	return nil
 }
 
-func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string, email notificationChannel) (*river.Client[pgx.Tx], error) {
+// newJobClient starts the FIRMS poller and backfill workers when keys is not
+// nil. Each poll reads every workspace's key from its settings, so a key
+// saved in the wizard takes effect at the next poll without a restart.
+func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, email notificationChannel) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &heartbeatWorker{})
 	river.AddWorker(workers, &rematchWorker{pool: pool})
@@ -71,16 +73,31 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string, e
 		&river.PeriodicJobOpts{RunOnStart: true},
 	))
 
-	if firmsMapKey != "" {
+	if sender, ok := email.(invitationSender); ok {
+		queues[invitationEmailQueue] = river.QueueConfig{MaxWorkers: 1}
+		river.AddWorker(workers, &invitationEmailWorker{db: pool, sender: sender})
+	}
+	queues[invitationCleanup] = river.QueueConfig{MaxWorkers: 1}
+	river.AddWorker(workers, &invitationCleanupWorker{db: pool})
+	periodic = append(periodic, river.NewPeriodicJob(
+		river.PeriodicInterval(time.Hour),
+		func() (river.JobArgs, *river.InsertOpts) {
+			return invitationCleanupArgs{}, &river.InsertOpts{
+				Queue: invitationCleanup, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByPeriod: time.Hour},
+			}
+		},
+		&river.PeriodicJobOpts{RunOnStart: true},
+	))
+
+	if keys != nil {
 		const queue = "firms"
 		interval := 15 * time.Minute
-		// The poller and backfill share one area client, and so one rate limiter.
-		area := firms.NewArea(firmsMapKey, nil)
+		// The poller and backfill share one client, and so one rate limiter, per key.
 		queues[queue] = river.QueueConfig{MaxWorkers: 1}
-		river.AddWorker(workers, &firmsPollWorker{pool: pool, area: area})
+		river.AddWorker(workers, &firmsPollWorker{pool: pool, keys: keys})
 		// Backfill has its own queue so that a long backfill never delays a poll.
 		queues[backfillQueue] = river.QueueConfig{MaxWorkers: 1}
-		river.AddWorker(workers, &firmsBackfillWorker{db: pool, fetch: area.FetchRange, available: area.Availability})
+		river.AddWorker(workers, &firmsBackfillWorker{db: pool, keys: keys})
 		periodic = append(periodic, river.NewPeriodicJob(
 			river.PeriodicInterval(interval),
 			func() (river.JobArgs, *river.InsertOpts) {

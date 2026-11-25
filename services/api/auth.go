@@ -17,6 +17,9 @@ type identity struct {
 	Username string
 	Name     string
 	Email    *string
+	// VerifiedEmail is the lower-case email claim when the token marks it
+	// verified. Invitations are claimed with it, even when email is off.
+	VerifiedEmail string
 }
 
 type authenticator struct {
@@ -92,13 +95,14 @@ func (a authenticator) verify(ctx context.Context, rawToken string) (identity, b
 		claims.Name = claims.Username
 	}
 	caller := identity{Subject: token.Subject, Username: claims.Username, Name: claims.Name}
-	if a.emailEnabled {
-		var contact struct {
-			Email    string `json:"email"`
-			Verified bool   `json:"email_verified"`
-		}
-		if token.Claims(&contact) == nil && contact.Verified {
-			if email := notificationAddress(contact.Email); email != "" {
+	var contact struct {
+		Email    string `json:"email"`
+		Verified bool   `json:"email_verified"`
+	}
+	if token.Claims(&contact) == nil && contact.Verified {
+		if email := notificationAddress(contact.Email); email != "" {
+			caller.VerifiedEmail = strings.ToLower(email)
+			if a.emailEnabled {
 				caller.Email = &email
 			}
 		}

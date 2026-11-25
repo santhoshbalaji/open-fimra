@@ -24,6 +24,9 @@ type api struct {
 	feedDB       feedDB
 	jobs         *river.Client[pgx.Tx]
 	emailEnabled bool
+	setup        *setupGuard
+	secrets      *settingsCipher
+	firms        *firmsKeys
 	// now is the clock for feed health. It is nil outside tests.
 	now func() time.Time
 }
@@ -44,6 +47,21 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	})
 	router.Get("/readyz", a.ready)
 	router.With(auth.require).Get("/api/v1/me", a.me)
+	router.With(auth.require).Get("/api/v1/setup", a.setupInfo)
+	router.With(auth.require).Post("/api/v1/setup/bootstrap", a.bootstrap)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/setup", a.setupState)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/setup/hierarchy", a.setupHierarchy)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/setup/steps/{step}", a.setupStepUpdate)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/setup/finish", a.setupFinish)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/setup/reopen", a.setupFinish)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/setup/units", a.setupUnits)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/settings/firms", a.firmsSettings)
+	router.With(auth.require).Put("/api/v1/workspaces/{slug}/settings/firms", a.firmsSettings)
+	router.With(auth.require).Delete("/api/v1/workspaces/{slug}/settings/firms", a.firmsSettings)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/settings/firms/test", a.firmsTest)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/invitations", a.invitations)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/invitations", a.invitations)
+	router.With(auth.require).Delete("/api/v1/workspaces/{slug}/invitations/{id}", a.invitations)
 	router.With(auth.require).Get("/api/v1/notifications", a.notifications)
 	router.With(auth.require).Post("/api/v1/notifications/{id}/read", a.notifications)
 	router.With(auth.require).Get("/api/v1/notifications/preferences", a.notificationPreferences)
@@ -102,6 +120,18 @@ type meResponse struct {
 	Subject         string           `json:"subject"`
 	Username        string           `json:"username"`
 	RoleAssignments []roleAssignment `json:"roleAssignments"`
+	Setup           meSetup          `json:"setup"`
+}
+
+// meSetup says which first-run screens the web app should offer the caller.
+type meSetup struct {
+	BootstrapAvailable bool     `json:"bootstrapAvailable"`
+	Unfinished         []string `json:"unfinished"`
+	Claimed            int      `json:"claimedInvitations"`
+}
+
+func withSetup(guard *setupGuard, secrets *settingsCipher, keys *firmsKeys) func(*api) {
+	return func(a *api) { a.setup, a.secrets, a.firms = guard, secrets, keys }
 }
 
 func (a api) me(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +157,21 @@ func (a api) me(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var setup meSetup
+	setup.Claimed, err = claimInvitations(ctx, a.reader, caller, userID)
+	if err == nil {
+		setup.Unfinished, err = unfinishedSetups(ctx, a.pool, caller.Subject)
+	}
+	if err == nil {
+		setup.BootstrapAvailable, err = installOpen(ctx, a.pool)
+		setup.BootstrapAvailable = setup.BootstrapAvailable && a.setup != nil
+	}
+	if err != nil {
+		a.logger.Error("Could not read first-run setup for the signed-in user", "error", err)
+		writeError(w, http.StatusInternalServerError, "Could not load the signed-in user.")
+		return
+	}
+
 	rows, err := a.queries.ListRoleAssignments(ctx, userID)
 	if err != nil {
 		a.logger.Error("Could not read the user's role assignments", "error", err)
@@ -147,7 +192,7 @@ func (a api) me(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, meResponse{
-		Subject: caller.Subject, Username: caller.Username, RoleAssignments: assignments,
+		Subject: caller.Subject, Username: caller.Username, RoleAssignments: assignments, Setup: setup,
 	})
 }
 

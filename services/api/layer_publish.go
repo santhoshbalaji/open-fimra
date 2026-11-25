@@ -81,6 +81,12 @@ func readLayerDraft(ctx context.Context, tx pgx.Tx, workspace, version pgtype.UU
 			WHEN d.hierarchy_id IS NULL THEN ''
 			WHEN d.depth IS NULL OR NOT EXISTS (SELECT 1 FROM draft_units WHERE layer_version_id = $1)
 				THEN 'The hierarchy draft must contain units at one level.'
+			WHEN d.depth = 0 AND EXISTS (
+				SELECT 1 FROM units root WHERE root.hierarchy_id = d.hierarchy_id AND root.depth = 0
+					AND root.valid_to IS NULL AND root.layer_version_id IS NULL AND root.geom IS NULL
+					AND EXISTS (SELECT 1 FROM draft_units u WHERE u.layer_version_id = $1
+						AND u.path IS DISTINCT FROM root.current_path)
+			) THEN 'The state code in this file must match the state code chosen during setup. Correct the code and upload again.'
 			WHEN EXISTS (SELECT 1 FROM previous p WHERE p.import_settings ? 'depth'
 				AND (p.import_settings->>'depth')::smallint <> d.depth)
 				THEN 'Use this layer for the same hierarchy level as the published version.'
@@ -321,6 +327,18 @@ func (a api) commitLayerPublish(ctx context.Context, tx pgx.Tx, workspace, versi
 		`, version, draft.hierarchyID, effective)
 		if err != nil {
 			return fmt.Errorf("open new units: %w", err)
+		}
+		// The top level of the hierarchy the wizard built is the workspace
+		// boundary, so detections are matched inside the published state.
+		_, err = tx.Exec(ctx, `
+			UPDATE workspaces w SET boundary = shape.geom, updated_at = now()
+			FROM (SELECT ST_Multi(ST_Union(geom)) AS geom FROM draft_units WHERE layer_version_id = $1) shape
+			WHERE w.id = $2 AND $4 = 0 AND shape.geom IS NOT NULL
+				AND ST_GeometryType(shape.geom) = 'ST_MultiPolygon'
+				AND EXISTS (SELECT 1 FROM workspace_setup s WHERE s.workspace_id = w.id AND s.hierarchy_id = $3)
+		`, version, workspace, draft.hierarchyID, draft.depth)
+		if err != nil {
+			return fmt.Errorf("set the workspace boundary: %w", err)
 		}
 	}
 	if _, err := tx.Exec(ctx, `

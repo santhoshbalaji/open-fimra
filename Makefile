@@ -35,9 +35,9 @@ PSQL := $(COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRE
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
 .PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections
-.PHONY: backfill-firms backfill-demo backfill-queue feed-health
+.PHONY: backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key wizard-test-integration
 
-api-run api-test-integration ingest-fixture demo-detections backfill-firms backfill-demo backfill-queue feed-health: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+api-run api-test-integration ingest-fixture demo-detections backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
@@ -50,6 +50,9 @@ api-run: export FIMRA_SMTP_USERNAME := $(FIMRA_SMTP_USERNAME)
 api-run: export FIMRA_SMTP_PASSWORD := $(FIMRA_SMTP_PASSWORD)
 api-run: export FIMRA_SMTP_SECURITY := $(FIMRA_SMTP_SECURITY)
 api-run: export FIMRA_WEB_URL := $(FIMRA_WEB_URL)
+api-run: export FIMRA_SETUP_CODE := $(FIMRA_SETUP_CODE)
+api-run backfill-firms rotate-settings-key: export FIMRA_SETTINGS_KEY := $(FIMRA_SETTINGS_KEY)
+api-run backfill-firms rotate-settings-key: export FIMRA_SETTINGS_OLD_KEYS := $(FIMRA_SETTINGS_OLD_KEYS)
 api-test-integration: export FIMRA_TEST_MAILPIT_URL := http://127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT)
 api-test-integration: export FIMRA_TEST_MAILPIT_SMTP := 127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT)
 ingest-fixture: export FIMRA_FIXTURE_FILE := $(if $(FILE),$(if $(filter /%,$(FILE)),$(FILE),$(CURDIR)/$(FILE)))
@@ -152,6 +155,27 @@ backfill-demo: ## Backfill the demo workspace from the synthetic standard-proces
 
 feed-health: ## Check every workspace's live feeds once, record feed-health alerts and print each feed's status
 	cd services/api && go run . feed-health
+
+rotate-settings-key: ## Seal every saved secret with FIMRA_SETTINGS_KEY; list the previous keys in FIMRA_SETTINGS_OLD_KEYS
+	cd services/api && go run . rotate-settings-key
+
+# The wizard test needs a database with only migrations applied. It makes a
+# fresh one beside the development database and runs a geo worker on it.
+WIZARD_DB := fimra_wizard_test
+WIZARD_DATABASE_URL := postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(WIZARD_DB)?sslmode=disable
+wizard-test-integration: export FIMRA_DATABASE_URL := $(WIZARD_DATABASE_URL)
+wizard-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
+wizard-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
+wizard-test-integration: export FIMRA_TEST_MAILPIT_URL := http://127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT)
+wizard-test-integration: export FIMRA_TEST_MAILPIT_SMTP := 127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT)
+wizard-test-integration: mail-up ## Take an empty, migrated database to a working alert map through the first-run wizard
+	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
+	$(COMPOSE) build geo-worker
+	$(COMPOSE) exec -T db sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists --force $(WIZARD_DB) && createdb -U "$$POSTGRES_USER" $(WIZARD_DB)'
+	go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(WIZARD_DATABASE_URL)" up
+	@set -e; worker=$$($(COMPOSE) run -d --rm -e PGDATABASE=$(WIZARD_DB) geo-worker); \
+		trap 'docker stop "$$worker" > /dev/null' EXIT; \
+		cd services/api && FIMRA_WIZARD_INTEGRATION=1 go test -run '^TestWizardIntegration$$' -count=1 -v .
 
 api-lint: ## Check core API formatting and run Go vet
 	cd services/api && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
