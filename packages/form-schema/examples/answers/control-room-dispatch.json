@@ -1,0 +1,67 @@
+{
+  "form": "control-room-dispatch",
+  "cases": [
+    {
+      "name": "the dispatch stage keeps no answers from a later stage",
+      "step": "team_sent",
+      "values": {
+        "team_name": "Demo Team A",
+        "team_leader": "Demo Leader",
+        "team_size": 5,
+        "vehicle": "jeep",
+        "dispatched_at": "2026-03-15T07:00:00Z",
+        "reached_at": "2026-03-15T09:00:00Z"
+      },
+      "expected": [],
+      "answers": {
+        "responsible_unit": "Beat 05",
+        "fire_power": 12.5,
+        "alert_id": "42",
+        "team_name": "Demo Team A"
+      },
+      "absent": [
+        "reached_at"
+      ]
+    },
+    {
+      "name": "the arrival stage needs its own answers",
+      "step": "reached_site",
+      "values": {
+        "team_name": "Demo Team A",
+        "team_leader": "Demo Leader",
+        "team_size": 5,
+        "vehicle": "jeep",
+        "dispatched_at": "2026-03-15T07:00:00Z",
+        "reached_at": "2026-03-15T09:00:00Z"
+      },
+      "expected": [
+        "Field \"site_location\" is required.",
+        "Field \"fire_found\" is required."
+      ]
+    },
+    {
+      "name": "the arrival stage with earlier answers",
+      "step": "reached_site",
+      "values": {
+        "team_name": "Demo Team A",
+        "team_leader": "Demo Leader",
+        "team_size": 5,
+        "vehicle": "jeep",
+        "dispatched_at": "2026-03-15T07:00:00Z",
+        "reached_at": "2026-03-15T09:00:00Z",
+        "site_location": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4
+          ]
+        },
+        "fire_found": "yes"
+      },
+      "expected": [],
+      "answers": {
+        "travel_hours": 2
+      }
+    }
+  ]
+}

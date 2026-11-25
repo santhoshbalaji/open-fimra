@@ -28,6 +28,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00023_form_conversions` | XLSForm import and export jobs, with the draft form, workbook and review report each one produces |
 | `00024_manual_fire_reports` | The workspace of a detection recorded by hand with the manual fire report, so re-matching keeps it to that workspace |
 | `00025_form_templates` | Form levels (national, state and division), the unit that owns a division form, each version's template rules and locks, and the checks on which versions may extend which |
+| `00026_submission_exports` | Exports of field reports, whose frozen rows each name a submission of their alert |
 
 ## Commands
 

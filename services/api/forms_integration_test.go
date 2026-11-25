@@ -326,6 +326,47 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 		call("GET", submissions, user, nil, map[int]int{200: 200, 404: 404}[status])
 	}
 
+	// The submissions list shares the alert queue's rules and filters. Only a
+	// supervising officer on the alert may approve.
+	type listedSubmission struct {
+		ID         string
+		AlertID    string `json:"alert_id"`
+		Form       string
+		Decision   string
+		CanApprove bool `json:"can_approve"`
+	}
+	listSubmissions := func(user, query string, want int) (map[string]int, []listedSubmission) {
+		t.Helper()
+		got := call("GET", "/submissions"+query, user, nil, want)
+		var page struct {
+			Counts map[string]int
+			Items  []listedSubmission
+		}
+		if want == 200 && json.Unmarshal(got.body, &page) != nil {
+			t.Fatalf("submissions list as %s: %s", user, got.body)
+		}
+		return page.Counts, page.Items
+	}
+	for user, approve := range map[string]bool{"state.admin": true, "division.officer": true, "beat.guard": false} {
+		counts, items := listSubmissions(user, "?form=first-report&decision=pending", 200)
+		if len(items) != 1 || items[0].ID != stored.ID || items[0].AlertID != alertA.id || items[0].CanApprove != approve || counts["pending"] != 1 {
+			t.Fatalf("submissions list as %s: %v %+v", user, counts, items)
+		}
+		got := call("GET", "/submissions/"+stored.ID, user, nil, 200)
+		if !has(got.body, fmt.Sprintf(`"canApprove":%v`, approve)) {
+			t.Fatalf("submission as %s: %s", user, got.body)
+		}
+		if _, items := listSubmissions(user, "?unitPath=ds.c2", 200); len(items) != 0 {
+			t.Fatalf("unit path filter as %s: %+v", user, items)
+		}
+	}
+	listSubmissions("no.role", "", 403)
+	listSubmissions("beat.guard", "?decision=maybe", 400)
+	listSubmissions("beat.guard", "?cursor=2026-01-01T00:00:00Z,12", 400)
+	if _, items := listSubmissions("division.officer", "?decision=approved", 200); len(items) != 0 {
+		t.Fatalf("approved before any decision: %+v", items)
+	}
+
 	// The first report moves the alert to the next step.
 	advance(alertA, "beat.guard", "final_report")
 
@@ -375,6 +416,10 @@ FROM form_views.`+pgx.Identifier{view}.Sanitize()+` WHERE _submission_id = $1`, 
 	}
 	call("POST", approval, "division.officer", map[string]string{"decision": "approved", "note": "Checked by radio."}, 200)
 	call("POST", approval, "state.admin", map[string]string{"decision": "returned", "note": "Recount the teams."}, 409)
+	if counts, items := listSubmissions("division.officer", "?decision=approved", 200); len(items) != 1 || items[0].Decision != "approved" ||
+		counts["approved"] != 1 || counts["pending"] != 0 {
+		t.Fatalf("approved list: %v %+v", counts, items)
+	}
 
 	// A returned report no longer counts: the step waits for a new one.
 	advance(alertB, "state.admin", append(toExtinguished, "first_report")...)

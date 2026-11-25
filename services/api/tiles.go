@@ -99,8 +99,12 @@ func allowOrigins(origins string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 			if allowed[origin] {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				if r.Method == http.MethodPost {
+				switch r.Method {
+				case http.MethodPost:
 					w.Header().Set("Access-Control-Expose-Headers", "Location")
+				case http.MethodGet:
+					// Attachment downloads name their file here.
+					w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 				}
 			}
 			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {

@@ -168,6 +168,8 @@ jobs:
       - run: make dev db-migrate geo-worker-up
       - name: Export as each demo user, compare with the queue and tiles, and read every download back with OGR
         run: make export-test-integration
+      - name: Approve a first report as the division officer, export field reports as each demo user and read them back
+        run: make submission-export-test-integration
       - if: failure()
         run: docker compose -f deploy/compose/compose.dev.yml --profile geo logs geo-worker
 

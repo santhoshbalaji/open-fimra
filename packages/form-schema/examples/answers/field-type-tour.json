@@ -1,0 +1,701 @@
+{
+  "form": "field-type-tour",
+  "cases": [
+    {
+      "name": "every field type",
+      "values": {
+        "short_code": "DEMO-AB12",
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [],
+      "answers": {
+        "average_crew": 2,
+        "spare_people": -6,
+        "patch_area": 1.23,
+        "path_length": 0.5,
+        "crews": [
+          {
+            "crew_size": 4,
+            "crew_hours": 14,
+            "shifts": [
+              {
+                "shift_hours": 2.5,
+                "shift_effort": 10
+              },
+              {
+                "shift_hours": 1,
+                "shift_effort": 4
+              }
+            ]
+          },
+          {
+            "crew_size": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "pattern",
+      "values": {
+        "short_code": "DEMO-ab12",
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"short_code\" does not match the expected pattern: DEMO-, two capital letters and two to four digits."
+      ]
+    },
+    {
+      "name": "open polygon",
+      "values": {
+        "short_code": "DEMO-AB12",
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"patch\" must be a GeoJSON Polygon with closed rings of at least four positions."
+      ]
+    },
+    {
+      "name": "point off the Earth",
+      "values": {
+        "short_code": "DEMO-AB12",
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            186.3,
+            16.4
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"spot\" must be a GeoJSON Point in longitude and latitude."
+      ]
+    },
+    {
+      "name": "track with one position",
+      "values": {
+        "short_code": "DEMO-AB12",
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"path\" must be a GeoJSON LineString in longitude and latitude."
+      ]
+    },
+    {
+      "name": "too many choices",
+      "values": {
+        "short_code": "DEMO-AB12",
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line",
+          "dry-grass",
+          "steep-slope"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"hazards\" can have at most 2 choices."
+      ]
+    },
+    {
+      "name": "a day that does not exist",
+      "values": {
+        "short_code": "DEMO-AB12",
+        "count_seen": 3,
+        "visit_date": "2026-02-30",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"visit_date\" must be a date such as 2026-03-15."
+      ]
+    },
+    {
+      "name": "text that is not text",
+      "values": {
+        "short_code": 12,
+        "count_seen": 3,
+        "visit_date": "2026-03-15",
+        "visit_time": "14:30",
+        "visit_moment": "2026-03-15T14:30+05:30",
+        "weather": "windy",
+        "hazards": [
+          "power-line"
+        ],
+        "spot": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4,
+            120
+          ]
+        },
+        "path": {
+          "type": "LineString",
+          "coordinates": [
+            [
+              86.3,
+              16.4
+            ],
+            [
+              86.31,
+              16.41
+            ]
+          ]
+        },
+        "patch": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                86.3,
+                16.4
+              ],
+              [
+                86.31,
+                16.4
+              ],
+              [
+                86.31,
+                16.41
+              ],
+              [
+                86.3,
+                16.4
+              ]
+            ]
+          ]
+        },
+        "attachment": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "crews": [
+          {
+            "crew_size": 4,
+            "shifts": [
+              {
+                "shift_hours": 2.5
+              },
+              {
+                "shift_hours": 1
+              }
+            ]
+          },
+          {
+            "crew_size": 0,
+            "shifts": [
+              {
+                "shift_hours": 3
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "Field \"short_code\" must be text."
+      ]
+    }
+  ]
+}

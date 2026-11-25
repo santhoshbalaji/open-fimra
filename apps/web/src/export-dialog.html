@@ -3,6 +3,7 @@
     <hlm-radio-group name="export-kind" aria-label="What to export" [value]="kind()" (valueChange)="choose($event)">
     <label hlmLabel><hlm-radio value="alerts" aria-label="Alerts"><hlm-radio-indicator /></hlm-radio> Alerts</label>
     <label hlmLabel><hlm-radio value="detections" aria-label="Detections on the map"><hlm-radio-indicator /></hlm-radio> Detections on the map</label>
+    <label hlmLabel><hlm-radio value="submissions" aria-label="Field reports"><hlm-radio-indicator /></hlm-radio> Field reports</label>
   </hlm-radio-group></fieldset>
   @if (kind() === 'alerts') {
     <fieldset><legend>Queues</legend>

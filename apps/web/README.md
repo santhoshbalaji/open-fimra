@@ -28,6 +28,14 @@ The designer has three views. **Design** shows the sections and questions. Choos
 
 The designer and its validator load only when you open **Forms**, so they add nothing to the first download. The read-only renderer in [`src/forms/form-preview.ts`](src/forms/form-preview.ts) takes a form and, optionally, a submission's answers, so other screens can show a report with the version it used.
 
+## Field reports
+
+When a workflow step has a report form, the alert's details list it under **Reports**. Choose **Fill in** once the alert has reached the step. The form opens in a dialog, a page at a time, in the language you choose when the form has translations. Questions appear and disappear with their conditions, cascading lists offer only the choices that go with the earlier answer, and calculated values and values from the alert fill in by themselves. Add or remove entries of a repeating group, such as teams. Type a position as longitude and latitude or add your own position; tracks and areas take one position per line. Photos and files upload to the alert as you add them, and a signature is drawn in the box and saved. **Send report** checks the answers with the server's rules first and lists what needs fixing beside each question. The server's own problems show the same way. A form filled in over several steps shows the earlier answers read-only.
+
+Choose **Reports** at the top of the queue panel to list field reports with the shared time window, forest class and unit path. The tabs show reports waiting for a decision, approved, returned or all, and you can pick one form. Open a report to read it with the form version it was filled in on. A supervising officer on the alert, a division officer at division level or above or a state administrator, can **Approve** it or **Return with a note**. A returned report no longer counts, so the alert waits for a new one. Decisions never change. **Export** beside the list exports the same reports; with one form chosen, the file has a column for each answer.
+
+The report screens load only when you open them, so they add nothing to the first download.
+
 ## Exports
 
 Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit path, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.
@@ -82,7 +90,7 @@ The first download should stay under 150 kB compressed, for slow mobile connecti
 
 **GIS link keys** in the account menu shows the workspace's read-only GIS link address and QGIS steps. Each person can make personal access keys for desktop GIS there, see when each was last used and revoke them. A new key is shown once. See the [GIS link](../../services/api/README.md#gis-link).
 
-The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. A step with an assigned form, such as the starter pack's first report, needs its submission before the alert can move on, and the timeline shows the reason when a move is refused. The web app cannot fill in forms yet: submissions go through the [core API](../../services/api/README.md#submissions).
+The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. A step with an assigned form, such as the starter pack's first report, needs its submission before the alert can move on, and the timeline shows the reason when a move is refused. See [Field reports](#field-reports).
 
 ## First-run setup
 

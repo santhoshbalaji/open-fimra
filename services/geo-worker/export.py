@@ -8,6 +8,7 @@ rows, by their keys, and writes them to a file.
 
 import logging
 import os
+import re
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
 from osgeo import gdal, ogr, osr
 
 gdal.UseExceptions()
@@ -35,6 +37,8 @@ INDEPENDENCE = ("Open FIMRA is independent open-source software. It is not an of
                 "India system and is not affiliated with NASA, the Forest Survey of India or the National "
                 "Remote Sensing Centre.")
 PERSONAL_DATA = "This file contains no names, phone numbers or other personal details of staff."
+REPORT_PERSONAL_DATA = ("This file names no staff accounts. Answers are as staff typed them, so free-text answers "
+                        "may mention people.")
 
 # Each format: driver, data file name in the download, download extension,
 # whether it stores date and time values natively, and whether it has geometry.
@@ -59,7 +63,7 @@ LAYER_OPTIONS = {
     "csv_lonlat": ["CREATE_CSVT=YES"],
 }
 
-OGR_TYPES = {"int64": ogr.OFTInteger64, "real": ogr.OFTReal, "string": ogr.OFTString, "datetime": ogr.OFTDateTime}
+OGR_TYPES = {"integer": ogr.OFTInteger, "int64": ogr.OFTInteger64, "real": ogr.OFTReal, "string": ogr.OFTString, "datetime": ogr.OFTDateTime}
 
 
 @dataclass(frozen=True)
@@ -102,6 +106,23 @@ ALERT_FIELDS = [
     _field("incident_id", "incident", "int64",
            "The incident the alert belongs to. Empty for alerts created before incidents."),
 ]
+SUBMISSION_FIELDS = [
+    _field("submission_id", "report_id", "string", "Open FIMRA field report (submission) ID."),
+    _field("form", "form", "string", "The form's ID, such as first-report."),
+    _field("form_version", "form_ver", "integer", "The version of the form the report was filled in on."),
+    _field("form_title", "form_title", "string", "The form's name, in English."),
+    _field("report_step", "rep_step", "string", "The workflow step the report was filled in at, such as first_report."),
+    _field("report_step_label", "rep_label", "string", "The report's workflow step as the workflow names it."),
+    _field("received_at", "received", "datetime", "When the server received the report, in UTC (ISO 8601)."),
+    _field("device_time", "device_tm", "datetime",
+           "When the report was saved on the device, in UTC (ISO 8601). Empty when the device did not send it."),
+    _field("decision", "decision", "string", "pending, approved or returned by a supervising officer."),
+    _field("decided_at", "decided", "datetime", "When the report was approved or returned, in UTC. Empty while pending."),
+    _field("report_longitude", "rep_lon", "real",
+           "Longitude where the report was sent from, in WGS 84. Empty when the device did not share it."),
+    _field("report_latitude", "rep_lat", "real",
+           "Latitude where the report was sent from, in WGS 84. Empty when the device did not share it."),
+]
 TAIL_FIELDS = [
     _field("forest_feature_code", "forest_cd", "string",
            "Code of the forest feature the point is in or nearest to. Empty when the forest has no code."),
@@ -127,15 +148,44 @@ def short_name(name, taken):
     return candidate
 
 
-def export_fields(kind, levels):
-    fields = DETECTION_FIELDS[:1] + (ALERT_FIELDS if kind == "alerts" else []) + DETECTION_FIELDS[1:]
+def answer_short_name(name, taken):
+    """A Shapefile name for an answer column: its first 10 characters, with a
+    number at the end when two would be the same."""
+    candidate = name[:10]
+    number = 2
+    while candidate in taken:
+        tag = str(number)
+        candidate = name[:10 - len(tag)] + tag
+        number += 1
+    taken.add(candidate)
+    return candidate
+
+
+@dataclass(frozen=True)
+class Answer:
+    """One answer column of a submission export: the column in the form's
+    flat view, and the name it has in the file."""
+    column: str
+    name: str
+    kind: str
+    description: str
+
+
+def export_fields(kind, levels, answers=()):
+    if kind == "submissions":
+        fields = SUBMISSION_FIELDS + ALERT_FIELDS + DETECTION_FIELDS
+    else:
+        fields = DETECTION_FIELDS[:1] + (ALERT_FIELDS if kind == "alerts" else []) + DETECTION_FIELDS[1:]
     taken = {f.short for f in fields + TAIL_FIELDS}
     for level in levels:
         for part, word in (("code", "code"), ("name", "name")):
             name = f"{level.prefix}{level.level}_{part}"
             fields.append(Field(name, short_name(name, taken), "string",
                                 f"{level.label} {word} when the detection was matched ({level.hierarchy} hierarchy)."))
-    return fields + TAIL_FIELDS
+    fields = fields + TAIL_FIELDS
+    for answer in answers:
+        fields.append(Field(answer.name, answer_short_name(answer.name, taken), answer.kind, answer.description))
+    return fields
 
 
 def iso(value):
@@ -157,21 +207,31 @@ def note_items(meta, fields, rows, generated_at):
     """The export note as (key, value) pairs: source, filters, coordinate
     system, time, row count and role. It names roles and units, never people."""
     filters = meta["filters"]
+    reports = meta["kind"] == "submissions"
     sources = sorted({f"{r['source']} ({r['product']})" for r in rows})
     roles = "; ".join(f"{r['role']} at {r['level']} {r['unitCode']} ({r['unitName']})"
                       for r in sorted(meta["requester_roles"] or [], key=lambda r: (r["role"], r["unitCode"])))
     items = [
         ("title", f"Open FIMRA {meta['kind']} export"),
         ("workspace", f"{meta['workspace_name']} ({meta['workspace_slug']})"),
-        ("source", "Satellite fire detections matched by Open FIMRA to the workspace's forest and unit layers. "
+        ("source", ("Field reports filed in Open FIMRA for alerts on " if reports else "") +
+                   "Satellite fire detections matched by Open FIMRA to the workspace's forest and unit layers. "
                    f"Sources in this file: {', '.join(sources) if sources else 'none'}."),
-        ("time_window", f"Observed from {filters['from']} to {filters['to']} "
+        ("time_window", f"{'Received' if reports else 'Observed'} from {filters['from']} to {filters['to']} "
                         f"(the past {filters['hours']} hours when the export was requested)."),
         ("forest_classes", ", ".join(filters["forestClasses"])),
     ]
-    if meta["kind"] == "alerts":
+    if meta["kind"] in ("alerts", "submissions"):
         items += [("queue", filters.get("queue") or "all queues the role may see"),
                   ("workflow_step", filters.get("step") or "any")]
+    if reports:
+        items += [("form", filters.get("form") or "all forms"),
+                  ("decision", filters.get("decision") or "any"),
+                  ("geometry", "Each point is the detection of the report's alert. report_longitude and "
+                               "report_latitude give where the report was sent from."),
+                  ("answers", "One column per answer of the form, from its flat view. Repeating groups are not "
+                              "included." if filters.get("form") else
+                              "Choose one form to add its answers as columns.")]
     items += [
         ("unit_path", filters.get("unitPath") or "all units the role may see"),
         ("coordinate_system", CRS_TEXT),
@@ -186,7 +246,7 @@ def note_items(meta, fields, rows, generated_at):
         ("requested_by_role", roles or "none"),
         ("access", "Only rows the requesting role could see when the export was requested. "
                    "Values such as the workflow step are as they were when the file was written."),
-        ("personal_data", PERSONAL_DATA),
+        ("personal_data", REPORT_PERSONAL_DATA if reports else PERSONAL_DATA),
         ("independence", INDEPENDENCE),
     ]
     return items
@@ -197,7 +257,7 @@ def readme_text(items, fields):
     lines += [f"{key.replace('_', ' ').capitalize()}: {value}" for key, value in items]
     lines += ["", "Fields", "------", "Name (Shapefile name, type): description", ""]
     for f in fields:
-        kind = {"int64": "integer", "real": "decimal", "string": "text", "datetime": "date and time"}[f.kind]
+        kind = {"integer": "integer", "int64": "integer", "real": "decimal", "string": "text", "datetime": "date and time"}[f.kind]
         lines.append(f"{f.name} ({f.short}, {kind}): {f.description}")
     lines += ["", "Shapefile field names are limited to 10 characters, so the Shapefile uses the short names above.",
               "Date and time fields are UTC text in ISO 8601 form, such as 2026-01-31T09:45:00Z, in formats "
@@ -206,6 +266,8 @@ def readme_text(items, fields):
 
 
 def placemark_name(values):
+    if values.get("submission_id") is not None:
+        return f"{values.get('form_title') or values['form']} for alert {values['alert_id']}"
     if values.get("alert_id") is not None:
         return f"Alert {values['alert_id']}"
     return f"Detection {values['detection_id']}"
@@ -231,7 +293,7 @@ def _set(feature, index, kind, value, native_time):
         feature.SetField(index, utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, 100)
     elif kind == "datetime":
         feature.SetField(index, iso(value))
-    elif kind == "int64":
+    elif kind in ("int64", "integer"):
         feature.SetField(index, int(value))
     elif kind == "real":
         feature.SetField(index, float(value))
@@ -301,14 +363,14 @@ def write_data(fmt, path, layer_name, fields, rows, levels, items):
     return count
 
 
-def write_export(work_dir, final_path, meta, levels, rows, generated_at):
+def write_export(work_dir, final_path, meta, levels, rows, generated_at, answers=()):
     """Writes the download for one export into final_path, through work_dir.
     Returns the number of features written."""
     fmt = meta["format"]
     _, data_name, extension, _, _ = FORMATS[fmt]
     if final_path.suffix != extension:
         raise ValueError(f"{fmt} exports end in {extension}, not {final_path.suffix}")
-    fields = export_fields(meta["kind"], levels)
+    fields = export_fields(meta["kind"], levels, answers)
     items = note_items(meta, fields, rows, generated_at)
     # The data file is named after its layer, so every format shows the same layer name.
     base = meta["kind"]
@@ -329,7 +391,12 @@ def write_export(work_dir, final_path, meta, levels, rows, generated_at):
 
 
 ROWS_SQL = """
-    SELECT r.ordinal, r.detection_id, r.alert_id, a.queue, a.created_at AS alert_created_at,
+    SELECT r.ordinal, r.detection_id, r.alert_id, r.submission_id::text AS submission_id,
+           fo.form_key AS form, fv.version AS form_version, fv.definition #>> '{title,en}' AS form_title,
+           sub.step AS report_step, rs.label AS report_step_label, sub.received_at, sub.device_time,
+           CASE WHEN sub.id IS NOT NULL THEN COALESCE(ap.decision, 'pending') END AS decision,
+           ap.decided_at, ST_X(sub.location) AS report_longitude, ST_Y(sub.location) AS report_latitude,
+           a.queue, a.created_at AS alert_created_at,
            r.observed_at, d.source, d.product, d.satellite,
            -- Alerts keep the class, reason and units they were routed with.
            COALESCE(a.forest_class, m.forest_class) AS forest_class,
@@ -348,9 +415,128 @@ ROWS_SQL = """
     LEFT JOIN workflow_instances i ON i.alert_id = r.alert_id
     LEFT JOIN workflow_steps s ON (s.template_id, s.slug) = (i.template_id, i.current_step)
     LEFT JOIN incident_members im ON im.alert_id = r.alert_id
+    LEFT JOIN submissions sub ON sub.id = r.submission_id
+    LEFT JOIN form_versions fv ON fv.id = sub.form_version_id
+    LEFT JOIN forms fo ON fo.id = fv.form_id
+    LEFT JOIN workflow_steps rs ON (rs.template_id, rs.slug) = (sub.template_id, sub.step)
+    LEFT JOIN approvals ap ON ap.submission_id = sub.id
     WHERE r.export_id = %s
     ORDER BY r.ordinal
 """
+
+# The published versions used by a submission export's rows, newest first,
+# with their columns and the name of their flat view.
+ANSWER_VERSIONS_SQL = """
+    SELECT DISTINCT v.version, v.columns, v.definition, fvv.view_name
+    FROM export_rows r
+    JOIN submissions s ON s.id = r.submission_id
+    JOIN form_versions v ON v.id = s.form_version_id
+    JOIN form_version_views fvv ON fvv.form_version_id = v.id AND fvv.repeat_key = ''
+    WHERE r.export_id = %s
+    ORDER BY v.version DESC
+"""
+
+VIEW_NAME = re.compile(r"^f[0-9]+$")
+COLUMN_NAME = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
+SHAPES = {"point", "line", "polygon"}
+
+
+def field_labels(definition):
+    """The English label of every item in a form, by key."""
+    labels = {}
+
+    def walk(items):
+        for item in items:
+            labels[item["key"]] = (item.get("label") or item.get("title") or {}).get("en", item["key"])
+            walk(item.get("items", []))
+    walk(definition.get("sections", []))
+    return labels
+
+
+def answer_kind(value_type):
+    return {"number": "real", "date-time": "datetime"}.get(value_type, "string")
+
+
+def answer_expression(column):
+    """How a flat view column is read for a file: shapes as well-known text,
+    lists as text joined by commas, numbers as decimals."""
+    name = sql.Identifier(column["name"])
+    value_type = column["valueType"]
+    if value_type in SHAPES:
+        return sql.SQL("ST_AsText(v.{})").format(name)
+    if value_type in ("choices", "attachments"):
+        return sql.SQL("array_to_string(v.{}, ', ')").format(name)
+    if value_type == "number":
+        return sql.SQL("v.{}::float8").format(name)
+    if value_type == "date-time":
+        return sql.SQL("v.{}").format(name)
+    return sql.SQL("v.{}::text").format(name)
+
+
+def plan_answers(versions, taken):
+    """The answer columns of a submission export: every column outside a
+    repeating group in any of the versions used, named after the newest
+    version. A column whose type changed between versions is written as text.
+    A name that clashes with another field starts with answer_."""
+    order, types, described = [], {}, {}
+    for version in versions:
+        labels = field_labels(version["definition"])
+        for column in version["columns"]:
+            if column.get("repeat") or not COLUMN_NAME.match(column["name"]):
+                continue
+            name = column["name"]
+            kind = answer_kind(column["valueType"])
+            if name not in types:
+                order.append(name)
+                types[name] = kind
+                unit = f" ({column['unit']})" if column.get("unit") else ""
+                label = labels.get(column["field"], column["field"])
+                if name != column["field"]:
+                    label += " (" + ("area" if name.endswith("_area_ha") else "length") + ")"
+                described[name] = f"Answer to \"{label}\"{unit}, field {column['field']}."
+            elif types[name] != kind:
+                types[name] = "string"
+    answers = []
+    for name in order:
+        out = name if name not in taken else "answer_" + name
+        answers.append(Answer(name, out, types[name], described[name]))
+    return answers
+
+
+def read_answers(conn, export_id, rows, levels):
+    """Reads the answers of a submission export from the flat views of the
+    versions its rows use. Returns the answer columns and adds the values to
+    the rows. The view and column names come from the database and are
+    checked again before they are quoted."""
+    versions = conn.execute(ANSWER_VERSIONS_SQL, (export_id,)).fetchall()
+    if any(not VIEW_NAME.match(v["view_name"]) for v in versions):
+        raise ValueError("A form view name is not valid.")
+    answers = plan_answers(versions, {f.name for f in export_fields("submissions", levels)})
+    by_name = {a.column: a for a in answers}
+    values = {}
+    for version in versions:
+        columns = [c for c in version["columns"] if not c.get("repeat") and c["name"] in by_name]
+        if not columns:
+            continue
+        query = sql.SQL("SELECT v._submission_id::text AS _submission_id, {} FROM form_views.{} v "
+                        "JOIN export_rows r ON r.submission_id = v._submission_id WHERE r.export_id = %s").format(
+            sql.SQL(", ").join(sql.SQL("{} AS {}").format(answer_expression(c), sql.Identifier(c["name"]))
+                               for c in columns),
+            sql.Identifier(version["view_name"]))
+        for found in conn.execute(query, (export_id,)).fetchall():
+            values[found["_submission_id"]] = {by_name[c["name"]].name: _answer_value(by_name[c["name"]], found[c["name"]])
+                                               for c in columns}
+    for row in rows:
+        row.update(values.get(row["submission_id"], {}))
+    return answers
+
+
+def _answer_value(answer, value):
+    if value is None or answer.kind != "string" or isinstance(value, str):
+        return value
+    if isinstance(value, datetime):
+        return iso(value)
+    return str(value)
 
 
 def read_levels(conn, workspace_id, rows):
@@ -389,7 +575,10 @@ def process_next_export(conn, export_dir):
             with conn.transaction():
                 rows = conn.execute(ROWS_SQL, (job["id"],)).fetchall()
                 levels = read_levels(conn, job["workspace_id"], rows)
-                count = write_export(work_dir, final_path, job, levels, rows, datetime.now(timezone.utc))
+                answers = []
+                if job["kind"] == "submissions" and (job["filters"] or {}).get("form"):
+                    answers = read_answers(conn, job["id"], rows, levels)
+                count = write_export(work_dir, final_path, job, levels, rows, datetime.now(timezone.utc), answers)
                 conn.execute("""
                     UPDATE exports SET status = 'ready', file_key = %s, file_bytes = %s, feature_count = %s,
                            finished_at = now() WHERE id = %s

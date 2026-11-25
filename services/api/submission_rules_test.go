@@ -269,3 +269,59 @@ func TestFormViewsAreSafe(t *testing.T) {
 		t.Fatal("literal quoting")
 	}
 }
+
+// TestSharedAnswerCases runs the answer cases in packages/form-schema/examples/answers.
+// The web app's TypeScript checker runs the same files and must give the
+// same messages, in the same order.
+func TestSharedAnswerCases(t *testing.T) {
+	files, _ := filepath.Glob(filepath.Join(formExamples, "answers", "*.json"))
+	if len(files) < 3 {
+		t.Fatalf("found %d answer case files", len(files))
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Form  string
+			Cases []struct {
+				Name     string
+				Step     string
+				Values   json.RawMessage
+				Expected []string
+				Answers  map[string]any
+				Absent   []string
+			}
+		}
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		tree, _ := exampleTree(t, doc.Form)
+		for _, tc := range doc.Cases {
+			t.Run(doc.Form+"/"+tc.Name, func(t *testing.T) {
+				stage, err := tree.stageAt(tc.Step)
+				if err != nil {
+					t.Fatal(err)
+				}
+				out, problems := checkAnswers(testCheck(tree, stage), tc.Values)
+				if !slices.Equal(problems, tc.Expected) && !(len(problems) == 0 && len(tc.Expected) == 0) {
+					t.Fatalf("got %q\nwant %q", problems, tc.Expected)
+				}
+				data, _ := json.Marshal(out)
+				var got map[string]any
+				_ = json.Unmarshal(data, &got)
+				for key, want := range tc.Answers {
+					if !reflect.DeepEqual(got[key], want) {
+						t.Errorf("%s = %v, want %v", key, got[key], want)
+					}
+				}
+				for _, key := range tc.Absent {
+					if _, kept := got[key]; kept {
+						t.Errorf("%s was kept", key)
+					}
+				}
+			})
+		}
+	}
+}

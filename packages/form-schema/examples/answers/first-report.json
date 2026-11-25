@@ -1,0 +1,900 @@
+{
+  "form": "first-report",
+  "cases": [
+    {
+      "name": "a complete first report",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [],
+      "answers": {
+        "total_staff": 10,
+        "team_count": 2,
+        "hours_to_reach": 2.5,
+        "observed_at": "2026-03-15T06:00:00Z",
+        "alert_location": {
+          "type": "Point",
+          "coordinates": [
+            86.3,
+            16.4
+          ]
+        },
+        "fire_status": "controlled"
+      },
+      "absent": [
+        "cause_notes",
+        "remarks"
+      ]
+    },
+    {
+      "name": "missing required",
+      "values": {
+        "reached_at": null,
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"reached_at\" is required."
+      ]
+    },
+    {
+      "name": "unknown field",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999,
+        "fire_tpye": "x"
+      },
+      "expected": [
+        "values has \"fire_tpye\", which is not a field of this form."
+      ]
+    },
+    {
+      "name": "field outside its repeat",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999,
+        "members": 3
+      },
+      "expected": [
+        "Field \"members\" belongs inside the repeating group \"teams\"."
+      ]
+    },
+    {
+      "name": "too many decimals",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.257,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"estimated_area\" can have at most 2 decimal places."
+      ]
+    },
+    {
+      "name": "below the minimum",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": -1,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"estimated_area\" must be at least 0."
+      ]
+    },
+    {
+      "name": "number as text",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": "3",
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"estimated_area\" must be a number."
+      ]
+    },
+    {
+      "name": "unknown choice",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "smouldering",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"fire_status\" has no choice \"smouldering\"."
+      ]
+    },
+    {
+      "name": "cascade mismatch",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "campfire",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"cause\": the choice \"campfire\" does not go with the answer to \"cause_group\"."
+      ]
+    },
+    {
+      "name": "shown and required",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "natural-other",
+        "cause_notes": "",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"cause_notes\" is required."
+      ]
+    },
+    {
+      "name": "future time",
+      "values": {
+        "reached_at": "2026-03-17T09:30:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"reached_at\" cannot be in the future."
+      ]
+    },
+    {
+      "name": "no offset",
+      "values": {
+        "reached_at": "2026-03-15T09:30:00",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"reached_at\" must be a date and time with its offset from universal time, such as 2026-03-15T14:30:00+05:30."
+      ]
+    },
+    {
+      "name": "an empty multiple choice is no answer",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": []
+    },
+    {
+      "name": "duplicate choice",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "grass"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"vegetation\" lists \"grass\" more than once."
+      ]
+    },
+    {
+      "name": "no entries",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Repeating group \"teams\" needs at least 1 entries."
+      ]
+    },
+    {
+      "name": "entry problem",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "members": 0
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "In entry 1 of \"teams\": Field \"members\" must be at least 1."
+      ]
+    },
+    {
+      "name": "entry missing",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "members": 2
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "In entry 1 of \"teams\": Field \"team_name\" is required."
+      ]
+    },
+    {
+      "name": "entry not an object",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          3
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Entry 1 of \"teams\" must be an object of answers."
+      ]
+    },
+    {
+      "name": "bad time",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "A",
+            "members": 2,
+            "team_arrived": "25:00"
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "In entry 1 of \"teams\": Field \"team_arrived\" must be a time such as 14:30."
+      ]
+    },
+    {
+      "name": "unknown attachment",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-0000000000ff"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"site_photos\" uses the attachment \"00000000-0000-4000-8000-0000000000ff\", which was not uploaded for this alert."
+      ]
+    },
+    {
+      "name": "pdf as a photo",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000003"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"site_photos\" needs an image, but the attachment \"00000000-0000-4000-8000-000000000003\" is application/pdf."
+      ]
+    },
+    {
+      "name": "not an ID",
+      "values": {
+        "reached_at": "2026-03-15T14:00:00+05:30",
+        "fire_status": "controlled",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "team_name": "Demo Team A",
+            "members": 6,
+            "team_arrived": "09:30"
+          },
+          {
+            "team_name": "Demo Team B",
+            "members": 4
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "signature.png",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"reporter_signature\" must give attachment IDs, as returned by the upload."
+      ]
+    },
+    {
+      "name": "answers that do not fit are reported before missing ones",
+      "values": {
+        "reached_at": null,
+        "fire_status": "smouldering",
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": -1,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "members": 2
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"estimated_area\" must be at least 0.",
+        "Field \"fire_status\" has no choice \"smouldering\"."
+      ]
+    },
+    {
+      "name": "missing answers in form order",
+      "values": {
+        "reached_at": null,
+        "fire_status": null,
+        "cause_group": "natural",
+        "cause": "lightning",
+        "cause_notes": "Not shown, so not kept",
+        "estimated_area": 1.25,
+        "vegetation": [
+          "grass",
+          "leaf-litter"
+        ],
+        "site_photos": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "teams": [
+          {
+            "members": 2
+          },
+          {
+            "team_name": "B"
+          }
+        ],
+        "equipment": [
+          "beaters"
+        ],
+        "remarks": "",
+        "reporter_signature": "00000000-0000-4000-8000-000000000002",
+        "total_staff": 999
+      },
+      "expected": [
+        "Field \"reached_at\" is required.",
+        "Field \"fire_status\" is required.",
+        "In entry 1 of \"teams\": Field \"team_name\" is required.",
+        "In entry 2 of \"teams\": Field \"members\" is required."
+      ]
+    },
+    {
+      "name": "values that are not an object",
+      "values": [
+        1
+      ],
+      "expected": [
+        "values must be a JSON object of answers by field key."
+      ]
+    }
+  ]
+}

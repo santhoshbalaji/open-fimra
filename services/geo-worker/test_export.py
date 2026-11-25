@@ -6,17 +6,27 @@ from pathlib import Path
 
 from osgeo import gdal
 
-from export import FORMATS, Level, export_fields, readme_text, note_items, short_name, write_export
+from export import (FORMATS, Answer, Level, export_fields, note_items, placemark_name, plan_answers, readme_text,
+                    short_name, write_export)
 from readback import describe, open_path
 
 LEVELS = [Level("territorial", slug, slug.title(), "") for slug in ("state", "circle", "division", "range", "beat")]
 SEEN = datetime(2026, 1, 7, 9, 45, tzinfo=timezone.utc)
 SUBJECT = "subject-that-must-not-appear"
+ANSWERS = [Answer("fire_status", "fire_status", "string", "Answer to \"Fire status\", field fire_status."),
+           Answer("observed_at", "answer_observed_at", "datetime", "Answer to \"Seen by the satellite at\"."),
+           Answer("estimated_area", "estimated_area", "real", "Answer to \"Estimated area\" (ha).")]
+
+
+def answers(kind):
+    return ANSWERS if kind == "submissions" else []
 
 
 def meta(kind, fmt):
     filters = {"hours": 168, "from": "2025-12-31T09:45:00Z", "to": "2026-01-07T09:45:00Z",
                "forestClasses": ["inside", "near_edge"], "queue": None, "unitPath": "ds.c1.d1", "step": None}
+    if kind == "submissions":
+        filters |= {"form": "first-report", "decision": None}
     return {"kind": kind, "format": fmt, "workspace_slug": "demo", "workspace_name": "Demo State",
             "filters": filters, "requested_by": SUBJECT, "row_count": 2, "created_at": SEEN,
             "requester_roles": [{"role": "division_officer", "level": "division",
@@ -36,7 +46,18 @@ def rows(kind):
     empty = {**full, "detection_id": 12_345_678_902, "forest_class": "near_edge", "triage_reason": "no_unit",
              "satellite": None, "forest_feature_code": None, "hierarchy": {"territorial": {}}, "frp_mw": None,
              "confidence": None, "longitude": 86.5, "latitude": 16.5}
-    if kind == "alerts":
+    if kind == "submissions":
+        full |= {"submission_id": "5ca1ab1e-0000-4000-8000-0000000000a1", "form": "first-report", "form_version": 1,
+                 "form_title": "First report", "report_step": "first_report", "report_step_label": "First report",
+                 "received_at": SEEN, "device_time": SEEN, "decision": "approved", "decided_at": SEEN,
+                 "report_longitude": 86.4581, "report_latitude": 16.4186,
+                 "fire_status": "controlled", "answer_observed_at": SEEN, "estimated_area": 1.25}
+        empty |= {"submission_id": "5ca1ab1e-0000-4000-8000-0000000000a2", "form": "first-report", "form_version": 2,
+                  "form_title": "First report", "report_step": "first_report", "report_step_label": "First report",
+                  "received_at": SEEN, "device_time": None, "decision": "pending", "decided_at": None,
+                  "report_longitude": None, "report_latitude": None,
+                  "fire_status": None, "answer_observed_at": None, "estimated_area": None}
+    if kind in ("alerts", "submissions"):
         full |= {"alert_id": 23_456_789_012, "queue": "unit", "alert_created_at": SEEN,
                  "step": "acknowledged", "step_label": "Acknowledged", "step_entered_at": SEEN,
                  "incident_id": 34_567_890_123}
@@ -56,7 +77,7 @@ NO_CRS = {"csv_lonlat", "xlsx"}
 def expected_type(fmt, kind):
     if kind == "datetime":
         return "DateTime" if fmt in NATIVE_TIME else "String"
-    return {"int64": "Integer64", "real": "Real", "string": "String"}[kind]
+    return {"integer": "Integer", "int64": "Integer64", "real": "Real", "string": "String"}[kind]
 
 
 class ExportFormatTests(unittest.TestCase):
@@ -67,13 +88,14 @@ class ExportFormatTests(unittest.TestCase):
 
     def export(self, kind, fmt):
         path = self.directory / f"{kind}-{fmt}{FORMATS[fmt][2]}"
-        count = write_export(self.directory / f"{kind}-{fmt}.part", path, meta(kind, fmt), LEVELS, rows(kind), SEEN)
+        count = write_export(self.directory / f"{kind}-{fmt}.part", path, meta(kind, fmt), LEVELS, rows(kind), SEEN,
+                             answers(kind))
         self.assertEqual(count, 2)
         return path
 
     def test_every_format_opens_with_the_expected_layer_and_fields(self):
-        for kind in ("detections", "alerts"):
-            fields = export_fields(kind, LEVELS)
+        for kind in ("detections", "alerts", "submissions"):
+            fields = export_fields(kind, LEVELS, answers(kind))
             for fmt in FORMATS:
                 with self.subTest(kind=kind, format=fmt):
                     info = describe(self.export(kind, fmt))
@@ -88,7 +110,7 @@ class ExportFormatTests(unittest.TestCase):
                         # This GDAL build has no LIBKML driver, so OGR reads the
                         # placemark name and description, and the schema lists the rest.
                         self.assertEqual(layer["fields"], [("Name", "String"), ("Description", "String")])
-                        types = {"int64": "string", "datetime": "string", "string": "string", "real": "float"}
+                        types = {"integer": "int", "int64": "string", "datetime": "string", "string": "string", "real": "float"}
                         self.assertEqual(info["kml_schema"], [(f.name, types[f.kind]) for f in fields])
                     else:
                         self.assertEqual(layer["fields"], want)
@@ -153,6 +175,67 @@ class ExportFormatTests(unittest.TestCase):
                     self.assertEqual(note["coordinate_system"], "WGS 84 (EPSG:4326). Longitude and latitude in decimal degrees.")
                     self.assertEqual(note["requested_by_role"], "division_officer at division D1 (Hill Division)")
                 self.assertNotIn(SUBJECT.encode(), content)
+
+    def test_submission_values_and_answers_survive_each_format(self):
+        for fmt in FORMATS:
+            with self.subTest(format=fmt):
+                path, options, _ = open_path(self.export("submissions", fmt))
+                data = gdal.OpenEx(path, gdal.OF_VECTOR, open_options=options)
+                layer = data.GetLayerByName("submissions") or data.GetLayer(0)
+                first, second = list(layer)
+                values = first.items()
+                if fmt == "kml":
+                    self.assertEqual(values["Name"], "First report for alert 23456789012")
+                    continue
+                short = fmt == "shapefile"
+                self.assertEqual(values["report_id" if short else "submission_id"], "5ca1ab1e-0000-4000-8000-0000000000a1")
+                self.assertEqual(values["decision"], "approved")
+                self.assertEqual(values["fire_statu" if short else "fire_status"], "controlled")
+                self.assertAlmostEqual(values["estimated_" if short else "estimated_area"], 1.25)
+                self.assertIn(values["answer_obs" if short else "answer_observed_at"],
+                              ("2026-01-07T09:45:00Z", "2026/01/07 09:45:00+00"))
+                self.assertAlmostEqual(values["rep_lon" if short else "report_longitude"], 86.4581)
+                empty = second.items()
+                blank = "" if fmt.startswith("csv") else None
+                self.assertEqual(empty["decision"], "pending")
+                self.assertEqual(empty["fire_statu" if short else "fire_status"], blank)
+                if fmt not in ("xlsx", "csv_lonlat"):
+                    # The point is the alert's detection, not where the report was sent from.
+                    self.assertEqual(first.GetGeometryRef().GetX(), 86.457995)
+
+    def test_submission_note_names_the_form_and_warns_about_free_text(self):
+        items = dict(note_items(meta("submissions", "gpkg"), [], rows("submissions"), SEEN))
+        self.assertTrue(items["time_window"].startswith("Received from 2025-12-31T09:45:00Z"))
+        self.assertEqual(items["form"], "first-report")
+        self.assertEqual(items["decision"], "any")
+        self.assertIn("may mention people", items["personal_data"])
+        self.assertIn("Repeating groups are not included", items["answers"])
+        self.assertEqual(placemark_name({"submission_id": "x", "form": "patrol-log", "form_title": None, "alert_id": 7}),
+                         "patrol-log for alert 7")
+
+    def test_answer_columns_follow_the_newest_version(self):
+        definition = {"sections": [{"key": "s", "title": {"en": "S"}, "items": [
+            {"key": "cause", "type": "single-choice", "label": {"en": "Likely cause"}},
+            {"key": "patch", "type": "polygon", "label": {"en": "Burnt patch"}},
+            {"key": "teams", "type": "repeat", "title": {"en": "Teams"}, "items": [
+                {"key": "members", "type": "number", "label": {"en": "Members"}}]}]}]}
+        newer = {"version": 2, "definition": definition, "view_name": "f12", "columns": [
+            {"name": "cause", "field": "cause", "valueType": "choice"},
+            {"name": "patch", "field": "patch", "valueType": "polygon"},
+            {"name": "patch_area_ha", "field": "patch", "valueType": "number", "unit": "ha"},
+            {"name": "members", "field": "members", "valueType": "number", "repeat": "teams"},
+            {"name": "source", "field": "source", "valueType": "text"}]}
+        older = {"version": 1, "definition": definition, "view_name": "f11", "columns": [
+            {"name": "cause", "field": "cause", "valueType": "number"},
+            {"name": "old_note", "field": "old_note", "valueType": "date-time"}]}
+        planned = plan_answers([newer, older], {f.name for f in export_fields("submissions", LEVELS)})
+        self.assertEqual([(a.column, a.name, a.kind) for a in planned], [
+            ("cause", "cause", "string"), ("patch", "patch", "string"), ("patch_area_ha", "patch_area_ha", "real"),
+            ("source", "answer_source", "string"), ("old_note", "old_note", "datetime")])
+        self.assertEqual(planned[2].description, 'Answer to "Burnt patch (area)" (ha), field patch.')
+        shorts = [f.short for f in export_fields("submissions", LEVELS, planned)]
+        self.assertEqual(len(shorts), len(set(shorts)))
+        self.assertTrue(all(len(name) <= 10 for name in shorts), shorts)
 
     def test_note_reports_rows_removed_after_the_request(self):
         items = dict(note_items(meta("detections", "gpkg"), [], rows("detections")[:1], SEEN))

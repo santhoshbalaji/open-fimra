@@ -4,7 +4,7 @@ import { HlmLabelImports } from '@spartan-ng/helm/label';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth';
 import { classes, ForestClass } from './detections';
@@ -20,7 +20,7 @@ export const exportFormats = {
   xlsx: 'Excel workbook'
 };
 export type ExportFormat = keyof typeof exportFormats;
-type Kind = 'alerts' | 'detections';
+type Kind = 'alerts' | 'detections' | 'submissions';
 export interface ExportStatus {
   id: string;
   status: 'pending' | 'ready' | 'failed' | 'expired';
@@ -49,11 +49,18 @@ export class ExportDialog {
   readonly unitPath = input.required<string>();
   readonly queue = input.required<string>();
   readonly queueLabel = input.required<string>();
+  /** What the dialog offers first: the panel beside the map decides. */
+  readonly initialKind = input<Kind>('alerts');
+  /** The reports list's own filters: one form, and a decision. */
+  readonly form = input('');
+  readonly formLabel = input('');
+  readonly decision = input('');
   readonly closed = output<void>();
 
   readonly formatLabels = exportFormats;
   readonly formats = Object.entries(exportFormats) as [ExportFormat, string][];
   readonly kind = signal<Kind>('alerts');
+  readonly decisionWords: Record<string, string> = { pending: 'waiting for a decision', approved: 'approved', returned: 'returned' };
   readonly format = signal<ExportFormat>('gpkg');
   readonly onlyQueue = signal(true);
   readonly status = signal<ExportStatus | null>(null);
@@ -66,10 +73,15 @@ export class ExportDialog {
   private readonly classList = computed<ForestClass[]>(() => this.forestClass() ? [this.forestClass() as ForestClass] : allClasses);
   readonly summary = computed(() => {
     const hours = this.hours();
-    const parts = ['observed in the past ' + (hours % 24 === 0 && hours > 24 ? `${hours / 24} days` : `${hours} hours`)];
+    const reports = this.kind() === 'submissions';
+    const parts = [(reports ? 'received' : 'observed') + ' in the past ' + (hours % 24 === 0 && hours > 24 ? `${hours / 24} days` : `${hours} hours`)];
     parts.push(this.forestClass() ? classes[this.forestClass() as ForestClass] : 'all forest classes');
     if (this.unitPath()) parts.push('units under ' + this.unitPath());
     if (this.kind() === 'alerts') parts.push(this.onlyQueue() ? this.queueLabel() + ' queue' : 'all queues you can see');
+    if (reports) {
+      parts.push(this.form() ? (this.formLabel() || this.form()) + ' reports, with a column for each answer' : 'reports on every form');
+      if (this.decision()) parts.push(this.decisionWords[this.decision()] ?? this.decision());
+    }
     return parts.join(' · ');
   });
   readonly progress = computed(() => {
@@ -86,6 +98,10 @@ export class ExportDialog {
 
   constructor() {
     this.lifetime.onDestroy(() => clearTimeout(this.timer));
+    effect(() => {
+      const kind = this.initialKind();
+      untracked(() => this.kind.set(kind));
+    });
   }
 
   choose(kind: Kind): void {
@@ -110,6 +126,10 @@ export class ExportDialog {
     body['forestClasses'] = this.classList();
     if (this.unitPath()) body['unitPath'] = this.unitPath();
     if (this.kind() === 'alerts' && this.onlyQueue()) body['queue'] = this.queue();
+    if (this.kind() === 'submissions') {
+      if (this.form()) body['form'] = this.form();
+      if (this.decision()) body['decision'] = this.decision();
+    }
     try {
       this.track(await firstValueFrom(this.http.post<ExportStatus>(this.endpoint() + '/exports', body)));
     } catch (error) {
