@@ -38,3 +38,5 @@ jobs:
         run: make db-up
       - name: Apply, roll back and reapply migrations, then run the schema tests
         run: make db-test
+      - name: Load the synthetic demo state and run the reference check
+        run: make seed-test

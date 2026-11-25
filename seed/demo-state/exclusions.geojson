@@ -1,0 +1,41 @@
+{
+ "type": "FeatureCollection",
+ "name": "exclusions",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "code": "E01",
+    "name": "Brick kiln",
+    "kind": "kiln"
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       86.410257,
+       16.478248
+      ],
+      [
+       86.414257,
+       16.478248
+      ],
+      [
+       86.414257,
+       16.482248
+      ],
+      [
+       86.410257,
+       16.482248
+      ],
+      [
+       86.410257,
+       16.478248
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}
