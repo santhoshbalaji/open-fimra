@@ -1,6 +1,6 @@
 import { Directive, ElementRef, effect, inject, input } from '@angular/core';
 import {
-  lucideBell, lucideBellOff, lucideCheck, lucideChevronDown, lucideChevronRight, lucideCircleAlert, lucideCircleCheck,
+  lucideArrowDown, lucideArrowUp, lucideGripVertical, lucideTrash2, lucideUndo2, lucideBell, lucideBellOff, lucideCheck, lucideChevronDown, lucideChevronRight, lucideCircleAlert, lucideCircleCheck,
   lucideCircleX, lucideClock, lucideDownload, lucideEye, lucideEyeOff, lucideInfo, lucideKeyRound, lucideLayers,
   lucideLoaderCircle, lucideLock, lucideLogOut, lucideMailCheck, lucideMailX, lucideMaximize, lucideMinus, lucideMoon,
   lucidePlus, lucideSettings, lucideSun, lucideTriangleAlert
@@ -8,7 +8,8 @@ import {
 
 // Only the icons listed here are bundled. Add one by importing it above.
 const icons = {
-  'bell': lucideBell, 'bell-off': lucideBellOff, 'check': lucideCheck, 'chevron-down': lucideChevronDown,
+  'arrow-down': lucideArrowDown, 'arrow-up': lucideArrowUp, 'grip-vertical': lucideGripVertical, 'trash-2': lucideTrash2,
+  'undo-2': lucideUndo2, 'bell': lucideBell, 'bell-off': lucideBellOff, 'check': lucideCheck, 'chevron-down': lucideChevronDown,
   'chevron-right': lucideChevronRight, 'circle-alert': lucideCircleAlert, 'circle-check': lucideCircleCheck,
   'circle-x': lucideCircleX, 'clock': lucideClock, 'download': lucideDownload, 'eye': lucideEye, 'eye-off': lucideEyeOff,
   'info': lucideInfo, 'key-round': lucideKeyRound, 'layers': lucideLayers, 'loader-circle': lucideLoaderCircle,

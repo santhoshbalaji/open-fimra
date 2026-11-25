@@ -13,7 +13,7 @@ describe('App shell', () => {
   function open() {
     const workspace = {
       current: signal<{slug: string; name: string} | null>({slug: 'demo', name: 'Demo'}),
-      loaded: signal(true), canManageLayers: signal(true), setupPending: signal(false),
+      loaded: signal(true), canManageLayers: signal(true), canDesignForms: signal(true), setupPending: signal(false),
       bootstrapAvailable: signal(false)
     };
     TestBed.configureTestingModule({
@@ -46,10 +46,10 @@ describe('App shell', () => {
     expect(localStorage.getItem('fimra.lowBandwidth')).toBe('false');
   });
 
-  it.each(['Layers', 'First-run setup', 'Set up Open FIMRA'])('loads %s on entry', async heading => {
+  it.each(['Layers', 'Forms', 'First-run setup', 'Set up Open FIMRA'])('loads %s on entry', async heading => {
     const {fixture, workspace, page} = open();
-    if (heading === 'Layers') {
-      Array.from(page.querySelectorAll('button')).find(button => button.textContent.trim() === 'Layers')!.click();
+    if (heading === 'Layers' || heading === 'Forms') {
+      Array.from(page.querySelectorAll('button')).find(button => button.textContent.trim() === heading)!.click();
     } else if (heading === 'First-run setup') {
       workspace.setupPending.set(true);
     } else {
