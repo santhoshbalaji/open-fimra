@@ -23,7 +23,9 @@ const css = [
   ]),
   `  --spacing: ${tokens.space.unitPx}px;`, ...vars('radius', tokens.radiusPx, 'px'),
   ...vars('spacing-target', tokens.touchTargetMinPx, 'px'), '}',
-  ':root[data-theme=dark] {', ...palette('dark'), '}', ''
+  ':root[data-theme=dark] {', ...palette('dark'), '}',
+  '/* Paper is light, so printed pages always use the light colours. */',
+  '@media print {', '  :root[data-theme=dark] {', ...palette('light').map(line => '  ' + line), '  }', '}', ''
 ].join('\n');
 const file = 'src/tokens.css';
 if (process.argv.includes('--check')) {

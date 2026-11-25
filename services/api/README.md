@@ -55,10 +55,53 @@ The service finds the signing keys through OpenID Connect discovery and caches t
 | `queues`, `steps` | Routed alerts by queue and current workflow step. Grants and filters use the routing snapshot saved with each alert, including after a layer is published. Review and triage require a covering review grant. A missing count means zero. |
 | `active`, `pendingReports` | Counts of alerts at a nonterminal step and alerts whose current step has the report-pending flag, respectively. |
 | `overdue` | An alert counts once if the time since it entered its current step is strictly greater than the shortest non-null limit on an outgoing transition. At the deadline it is still on time. A step with no limit cannot be overdue. |
-| `responseSeconds` | Median and 90th percentile of seconds from alert creation to first acknowledgment, arrival at site and control. Each milestone includes only alerts that reached it. An empty sample gives null for both values. |
+| `responseSeconds` | Median, 90th percentile and `count` of alerts for each milestone. `alerted` runs from the satellite observation to the alert being raised. `acknowledged`, `team_sent`, `reached_site`, `controlled` and `extinguished` run from the alert being raised to the first step-log entry for that step. Each milestone includes only alerts that reached it. An empty sample gives null for both values. |
 | `feedHealth` | Current source, product and status from the same feed facts and thresholds as the feeds endpoint. Root grants get the workspace-wide list (empty before the first poll). Other grants get null. |
 
+The counts come from [scope.sql](scope.sql), which chooses the detections and alerts a caller may see in a time window, followed by [summary.sql](summary.sql). Situation reports start with the same text, so the two always agree.
+
 The demo budget is 500 ms at the 95th percentile. The integration suite times 20 signed summary requests per granted demo account against the local database. This includes token verification and response encoding. The handler runs one counts query and one additional feed query for a root grant. With 11 demo detections and seven routed alerts, a local run measured 5.73 ms at the 95th percentile for the state administrator, 2.35 ms for the division officer and 2.79 ms for the beat guard. CI reports fresh measurements for each run.
+
+## Situation reports
+
+A situation report is a printable summary of one unit for one day, a range of days or the past hours. Anyone with a role in a workspace can make one for their own units and every unit below them. A report shows only what the dashboard and the alert queue show that person.
+
+| Request | What it does |
+|---|---|
+| `GET /api/v1/workspaces/{slug}/situation-report/units` | Lists the units the caller may report on, with each unit's hierarchy, path, name, depth and level label |
+| `GET /api/v1/workspaces/{slug}/situation-report` | Returns a report as JSON, for the web page |
+| `POST /api/v1/workspaces/{slug}/situation-reports` | Saves a report and queues its PDF. Returns 202 with the status and a `Location` header. |
+| `GET /api/v1/workspaces/{slug}/situation-reports/{id}` | Returns the status: `pending`, `ready`, `failed` or `expired`, with the page count, file size and file name |
+| `GET /api/v1/workspaces/{slug}/situation-reports/{id}/file` | Downloads a ready PDF |
+
+The GET takes query parameters and the POST takes a JSON object with the same names:
+
+| Field | Meaning |
+|---|---|
+| `from`, `to` | Days such as `2026-03-15`, in India Standard Time, both included. `to` defaults to `from`. A report covers at most 184 days and cannot end after today. A period that includes today ends when the report is made. |
+| `hours` | Instead of days: the hours before now, from 1 to 720, as on the dashboard |
+| `unitPath`, `hierarchy` | The unit, such as `ds.c1.d1` in `territorial`. The hierarchy defaults to the caller's own. Without a unit path the report is for the caller's highest granted unit, or for all their units when they have several at the same level. |
+
+A unit outside the caller's units gets 403 and an unknown unit 404. A caller without a role in the workspace gets 403.
+
+### What a report holds
+
+- `counts`: the dashboard's numbers for the same window and unit, from the same SQL. Detections by forest class, alerts by queue and current step, active, overdue and waiting for a report, and response times for every milestone. A report on a whole hierarchy, such as the state, also counts alerts that matched no unit, like the dashboard without a unit filter.
+- `alerts`: the total, active and closed alerts. Alerts are counted by observation time. Steps, active, closed, overdue and field reports are as of the moment the report is made, also for a period in the past.
+- `incidents`: incidents with at least one alert in the period, with how many were opened in the period (their first alert the caller can see was observed in it), are active, closed and overdue, and a list of up to 200. Counts, times and places use only the member alerts the caller may see, as in the incident view.
+- `fieldReports`: the forms submitted for the period's alerts, approved, returned and waiting for review, and the forms missing: an alert is at a step whose assigned form has no submission that counts. `forms` breaks these down by form.
+- `overdueAlerts`: up to 200 alerts past their time limit, with their step, when they entered it and by how much they are late.
+- `units`: alerts, active, overdue, waiting for a report and forms missing for each unit one level below the report's unit, labelled with the workspace's own level name in `unitLevel`.
+- `map`: the unit's outline, the units below it, published forest, the period's alerts (the latest 5,000) and boxes around their incidents, as GeoJSON geometry and points in WGS 84.
+- `labels` and `notes`: the words for each code, and how the numbers are worked out. The web page and the PDF print both as they are.
+
+Places are named with the levels below the report's unit, such as `Range 2 › Beat 05`, using the names saved with each alert.
+
+### PDF files
+
+The POST works out the report in the request's transaction and saves it in `situation_reports` with the requester's subject. The [geo worker](../geo-worker/README.md#how-situation-reports-are-drawn) draws the saved report as a PDF and stores it in the same row, so the file holds exactly what the requester saw and nothing the worker chose. Only the requester can read the status or download the PDF, and they still need a role in the workspace. A report and its file are kept until `FIMRA_EXPORT_TTL` (24 hours by default) has passed. After that the download returns 410 and the API clears the content and the file every ten minutes. The database refuses any change to a saved report's request or content.
+
+Making a report, preparing a PDF and downloading it are recorded in the audit log as `report.view`, `report.create` and `report.download`, with the period, unit and number of alerts.
 
 ## Detection tiles
 
@@ -308,7 +351,7 @@ Reached site, controlled and extinguished need a point within the workspace's `w
 
 The response contains the log ID, step and event time. An optional client ID identifies one request per alert. Retrying the same request as the same user returns its original receipt. Reusing the ID for different details returns 409. An optional client time needs a client ID and must fall between the preceding step and server time. The server keeps its own recording time as well. An unavailable move returns 409, a disallowed role returns 403, and a missing or distant required point returns 422.
 
-The earliest time limit on a current step's outgoing transitions determines when an alert is overdue. The default allows 30 minutes to acknowledge, an hour to send a team, two hours to reach the site, 24 hours for a first report, 72 hours for a final report and 24 hours each for verification and closure. Control and extinguishing have no default time limit. The SQL view `alert_response_times` measures time from alert creation to the first acknowledgment, arrival and control recorded in the log. Missing milestones stay null.
+The earliest time limit on a current step's outgoing transitions determines when an alert is overdue. The default allows 30 minutes to acknowledge, an hour to send a team, two hours to reach the site, 24 hours for a first report, 72 hours for a final report and 24 hours each for verification and closure. Control and extinguishing have no default time limit. The SQL view `alert_response_times` measures time from alert creation to the first acknowledgment, team sent, arrival, control and extinguishing recorded in the log, and from the satellite observation to alert creation. Missing milestones stay null.
 
 ## Incidents
 

@@ -1,7 +1,7 @@
 # Geo worker
 
-The worker imports layers, writes file exports and converts forms to and from
-XLSForm. It reads GeoPackage, zipped
+The worker imports layers, writes file exports, converts forms to and from
+XLSForm and draws situation reports as PDF files. It reads GeoPackage, zipped
 Shapefile, GeoJSON, KML and KMZ, and saves draft layers and review items. It
 writes exports in eight formats from rows the core API has already chosen. GDAL reads the files and transforms their
 coordinates. Shapely repairs geometry and checks how the shapes fit together.
@@ -92,6 +92,41 @@ the version and re-matches detections through the Go job queue. See the
 
 Run `python readback.py FILE` in the container to describe any export with
 OGR. `make export-test-integration` does this for every format it downloads.
+
+## How situation reports are drawn
+
+- The API works out each report with the requester's grants and saves it in
+  `situation_reports`, in the request's transaction. The worker claims a
+  pending report with `FOR UPDATE SKIP LOCKED`, draws the saved report with
+  [situation_report.py](situation_report.py) and stores the PDF and its page
+  count in the same row and transaction. It never reads alerts, detections or
+  grants, so it cannot add anything the requester may not see. A report that
+  cannot be drawn is marked failed with a plain-English reason.
+- [ReportLab](https://www.reportlab.com/opensource/) writes the PDF. It is
+  open source under the BSD licence, which can be combined with the AGPL, runs
+  inside the worker with no outside service, and is pinned in the lock file
+  with its two dependencies, Pillow and charset-normalizer. It draws tables
+  that continue across pages and vector shapes, so the map stays sharp when
+  printed. A browser-based renderer would need a headless browser in the
+  image, and an HTML renderer such as WeasyPrint needs system libraries for
+  text layout; both are much larger for the same result.
+- The map is drawn from the shapes saved in the report: the unit's outline,
+  the units one level down, published forest and the alerts. It uses a simple
+  projection with north up that keeps shapes true near the centre of the
+  unit, so no tile server or outside map service is needed. Shape shows the
+  forest class, as on the web map, and colour shows whether the alert is still
+  active. Labels that would cover each other are left out.
+- Pages are A4 with a footer naming the report and its page number. The text
+  uses Helvetica, a standard PDF font, so no font file is bundled. It covers
+  English text; names in other scripts need an embedded font in a later
+  change. The colours come from the light theme in
+  [tokens.json](../../docs/design-system/tokens.json), and `make geo-test`
+  checks them against that file.
+- `make geo-test` draws synthetic reports, reads them back with pypdf and
+  checks their text and page count. `make situation-report-test-integration`
+  makes a report as each demo user through the API, waits for this worker and
+  checks each PDF with [report_check.py](report_check.py). pypdf is in the
+  lock file for these checks only.
 
 ## How XLSForm conversion works
 

@@ -154,7 +154,7 @@ jobs:
         run: make xlsform-test-integration
 
   exports:
-    name: File exports
+    name: File exports and situation reports
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -170,6 +170,8 @@ jobs:
         run: make export-test-integration
       - name: Approve a first report as the division officer, export field reports as each demo user and read them back
         run: make submission-export-test-integration
+      - name: Make a situation report PDF as each demo user, compare it with the dashboard and read it back with pypdf
+        run: make situation-report-test-integration
       - if: failure()
         run: docker compose -f deploy/compose/compose.dev.yml --profile geo logs geo-worker
 

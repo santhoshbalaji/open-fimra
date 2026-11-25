@@ -77,7 +77,7 @@ func checkSummary(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix str
 					t.Fatal(err)
 				}
 				_, err = tx.Exec(ctx, `CREATE TEMP TABLE summary_alerts ON COMMIT DROP AS
-    SELECT a.id,a.queue,a.created_at,i.template_id,i.entered_at,i.current_step
+    SELECT a.id,a.queue,a.created_at,a.observed_at,i.template_id,i.entered_at,i.current_step
     FROM alerts a
     JOIN workflow_instances i ON i.alert_id=a.id WHERE a.workspace_id=$1
     AND a.observed_at BETWEEN now()-$2::integer*interval '1 hour' AND now() AND ($3 OR a.queue='unit')
@@ -128,12 +128,14 @@ func checkSummary(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix str
 				check("pending", got.PendingReports, count("SELECT count(*) FROM summary_alerts WHERE current_step IN ('first_report','final_report')"))
 				check("overdue", got.Overdue, count(`SELECT count(*) FROM summary_alerts a WHERE now()-entered_at >
    (SELECT min(time_limit) FROM workflow_transitions WHERE template_id=a.template_id AND from_step=a.current_step)`))
-				for _, step := range []string{"acknowledged", "reached_site", "controlled"} {
+				for _, step := range responseMilestones {
 					var expected responsePercentiles
 					err := tx.QueryRow(ctx, `SELECT percentile_cont(.5) WITHIN GROUP (ORDER BY duration),
-    percentile_cont(.9) WITHIN GROUP (ORDER BY duration) FROM (
+    percentile_cont(.9) WITHIN GROUP (ORDER BY duration), count(duration) FROM (
     SELECT extract(epoch FROM min(l.occurred_at)-a.created_at) duration FROM summary_alerts a
-    JOIN step_log l ON l.alert_id=a.id WHERE l.to_step=$1 GROUP BY a.id,a.created_at) milestones`, step).Scan(&expected.Median, &expected.P90)
+    JOIN step_log l ON l.alert_id=a.id WHERE l.to_step=$1 GROUP BY a.id,a.created_at
+    UNION ALL SELECT extract(epoch FROM created_at-observed_at) FROM summary_alerts WHERE $1='alerted') milestones`,
+						step).Scan(&expected.Median, &expected.P90, &expected.Count)
 					actual, ok := got.ResponseSeconds[step]
 					if err != nil || !ok || !reflect.DeepEqual(expected, actual) {
 						t.Fatalf("%s percentiles got %+v want %+v: %v", step, actual, expected, err)
