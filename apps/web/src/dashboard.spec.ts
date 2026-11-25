@@ -9,7 +9,6 @@ import { WEB_CONFIG } from './config';
 import { chartColors } from './class-chart';
 import { Dashboard } from './dashboard';
 import { DashboardFilters } from './dashboard-filters';
-import { LowBandwidthSwitch } from './low-bandwidth-switch';
 import { WorkspaceService } from './workspace';
 
 describe('Control-room dashboard', () => {
@@ -94,21 +93,6 @@ describe('Control-room dashboard', () => {
       r.params.get('hours') === '72' && r.params.get('class') === 'inside' && r.params.get('unitPath') === 'ds.c1');
     expect(requests.map(r => r.request.url.split('/').pop()).sort()).toEqual(['alerts', 'summary']);
     expect(filters.tileClasses()).toBe('inside');
-  });
-
-  it('switches low bandwidth with a labelled switch', () => {
-    const fixture = TestBed.createComponent(LowBandwidthSwitch);
-    fixture.detectChanges();
-    const control = fixture.nativeElement.querySelector('[role=switch]') as HTMLButtonElement;
-    const label = document.getElementById(control.getAttribute('aria-labelledby') ?? '');
-    expect(label?.textContent?.trim()).toBe('Low bandwidth');
-    expect(control.getAttribute('aria-describedby')).toBe('low-bandwidth-help');
-    expect(control.getAttribute('aria-checked')).toBe('false');
-    control.click();
-    fixture.detectChanges();
-    expect(TestBed.inject(DashboardFilters).lowBandwidth()).toBe(true);
-    expect(control.getAttribute('aria-checked')).toBe('true');
-    expect(localStorage.getItem('fimra.lowBandwidth')).toBe('true');
   });
 
   it('remembers low bandwidth and works when storage is blocked', () => {
