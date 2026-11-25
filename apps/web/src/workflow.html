@@ -1,0 +1,40 @@
+@if (history(); as data) {
+  <h3>Timeline</h3>
+  <ol class="step-timeline">
+    @for (entry of data.entries; track $index) {
+      <li><strong>{{ entry.label }}</strong> · <time [attr.datetime]="entry.at">{{ entry.at | date:'medium' }}</time>
+        <small>{{ entry.actor || 'Opened automatically' }}</small>
+        @if (entry.latitude !== null) { <small>{{ entry.latitude }}, {{ entry.longitude }}</small> }
+        @if (entry.note) { <small>{{ entry.note }}</small> }
+        @if (entry.reason) { <small>Location exception · {{ entry.reason }}</small> }
+        @if (entry.reportPending) { <small>Report pending</small> }
+      </li>
+    }
+  </ol>
+  @if (chosen(); as move) {
+    <form (submit)="$event.preventDefault(); save(note.value, reason.value)">
+      <h3>{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
+      @if (move.terminal) { <p>This ends the workflow for this alert.</p> }
+      <label>Note (optional)<textarea #note maxlength="2000"></textarea></label>
+      @if (move.location_required) {
+        <p>Your browser will ask to share your location.</p>
+        @if (move.can_override) {
+          <label><input type="checkbox" [checked]="exception()" (change)="exception.set(!exception())"> Enter a reason instead</label>
+        }
+      }
+      <label [hidden]="!exception()">Reason for the location exception
+        <textarea #reason [required]="exception()" maxlength="2000"></textarea>
+      </label>
+      <button type="submit" [disabled]="busy()">{{ move.terminal ? 'Confirm' : 'Save' }} {{ move.label }}</button>
+      <button type="button" [disabled]="busy()" (click)="choose(null)">Cancel</button>
+    </form>
+  } @else if (data.moves.length) {
+    <h3>Next step</h3>
+    <div class="workflow-moves">
+      @for (move of data.moves; track move.step) {
+        <button (click)="choose(move)">{{ move.label }}</button>
+      }
+    </div>
+  }
+}
+<p role="status">{{ message() }}</p>

@@ -38,3 +38,5 @@ make web-build
 ```
 
 The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to stop the dev server.
+
+The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. The report steps record a pending report until report forms are available.

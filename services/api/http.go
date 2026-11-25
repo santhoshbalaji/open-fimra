@@ -16,7 +16,7 @@ type api struct {
 	pool      *pgxpool.Pool
 	queries   *db.Queries
 	logger    *slog.Logger
-	reader    queryReader
+	reader    ingestDB
 	uploadDir string
 	feedDB    feedDB
 	// now is the clock for feed health. It is nil outside tests.
@@ -37,6 +37,8 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Get("/api/v1/me", a.me)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts", a.alerts)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}", a.alerts)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}/history", a.workflow)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/alerts/{id}/steps", a.workflow)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}", a.detectionTile)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/layer-imports", a.uploadLayer)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports/{version}", a.layerDraft)

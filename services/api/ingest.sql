@@ -144,6 +144,7 @@ matched AS (
     RETURNING detection_matches AS match
 ),
 routed AS (
+    -- The alert insert trigger opens its workflow in this transaction.
     INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path)
     SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*
     FROM matched CROSS JOIN LATERAL alert_route(match) route

@@ -10,6 +10,10 @@ type Queue = keyof typeof queueLabels;
 export interface AlertRow extends Detection {
   id: string;
   detection_id: string;
+  status: string;
+  step_label: string;
+  step_time: string;
+  overdue: boolean;
   queue: Queue;
   longitude: number;
   latitude: number;
@@ -29,14 +33,14 @@ export class AlertQueue {
   readonly cursor = signal('');
   readonly page = signal<Page | null>(null);
   readonly message = signal('');
-  private readonly pinned = signal<AlertRow | null>(null);
+  readonly pinned = signal<AlertRow | null>(null);
   readonly tabs = computed<Queue[]>(() => this.page()?.canReview ? ['unit', 'edge_review', 'triage'] : ['unit']);
   readonly rows = computed(() => {
     const rows = this.page()?.items ?? [];
     const pin = this.pinned();
     return pin && pin.queue === this.active() && !rows.some(row => row.id === pin.id) ? [pin, ...rows] : rows;
   });
-  private readonly endpoint = computed(() => {
+  readonly endpoint = computed(() => {
     const workspace = this.workspace.current();
     return workspace && this.base + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug) + '/alerts';
   });
@@ -95,6 +99,10 @@ export class AlertQueue {
       });
       onCleanup(() => request.unsubscribe());
     });
+  }
+
+  refresh(): void {
+    this.now.set(Date.now());
   }
 
   select(point: Detection | null): void {

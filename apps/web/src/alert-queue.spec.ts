@@ -9,7 +9,7 @@ import { WEB_CONFIG } from './config';
 import { WorkspaceService } from './workspace';
 
 describe('Alert queue', () => {
-  const edge: AlertRow = { detection_id: '17', id: '3', queue: 'edge_review', forest_class: 'near_edge',
+  const edge: AlertRow = { detection_id: '17', id: '3', queue: 'edge_review', status: 'new', step_label: 'New', step_time: '', overdue: false, forest_class: 'near_edge',
     observed_at: Math.floor(Date.now() / 1000), longitude: 86, latitude: 16 };
   const result = { counts: { unit: 0, edge_review: 1 }, canReview: true, items: [] as AlertRow[] };
   let queue: AlertQueue;

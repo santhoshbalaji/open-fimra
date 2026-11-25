@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inje
 import { BrnButton } from '@spartan-ng/brain/button';
 import { LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
+import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
@@ -12,7 +13,7 @@ import { unavailable, WorkspaceService } from './workspace';
 
 @Component({
   selector: 'fimra-demo-map',
-  imports: [BrnButton, LucideLayers, LucideMaximize, LucideMinus, LucidePlus],
+  imports: [Workflow, BrnButton, LucideLayers, LucideMaximize, LucideMinus, LucidePlus],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -37,6 +38,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly selected = this.queue.selected;
   readonly now = this.queue.now;
   readonly relativeAge = relativeAge;
+  readonly stepDate = Date.parse;
   readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'long' });
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
   private readonly picker = viewChild<ElementRef<HTMLSelectElement>>('picker');

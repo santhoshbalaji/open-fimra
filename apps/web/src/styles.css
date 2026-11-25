@@ -104,3 +104,14 @@ fimra-demo-map { display: flex; flex-direction: column; }
   .show-queue .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }
   .queue-toolbar { padding-inline: 6px; }
 }
+
+fimra-workflow { display: block; margin: 12px 0; }
+fimra-workflow h3 { font-weight: 600; margin: 8px 0; }
+.step-timeline { list-style: disc; padding-left: 20px; }
+.step-timeline li { margin-block: 6px; overflow-wrap: anywhere; }
+.step-timeline small { display: block; color: var(--color-text-secondary); }
+.workflow-moves { display: flex; flex-wrap: wrap; gap: 6px; }
+fimra-workflow button { border: 1px solid var(--color-border); border-radius: var(--radius-control); padding: 5px 9px; }
+fimra-workflow form label:not([hidden]), fimra-workflow textarea { display: block; margin-bottom: 6px; }
+fimra-workflow textarea { width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.overdue { border-bottom: 2px solid var(--color-warning); color: var(--color-text); }

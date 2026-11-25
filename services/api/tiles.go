@@ -9,17 +9,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 )
 
 //go:embed tiles.sql
 var tilesSQL string
 
 const tileType = "application/vnd.mapbox-vector-tile"
-
-type queryReader interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
 
 func (a api) detectionTile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")

@@ -199,7 +199,7 @@ Use a bearer token with `GET /api/v1/workspaces/{slug}/alerts`. Results are newe
 | Parameter | Accepted values |
 |---|---|
 | `queue` | `unit`, `edge_review`, `triage` |
-| `status` | `new` |
+| `status` | A step slug from the default or workspace template, such as `acknowledged` |
 | `hours` | Past 1–720 hours, default 168 |
 | `class` | A detection forest class |
 | `unitPath` | A whole path prefix, such as `ds.c1.d1` |
@@ -210,3 +210,35 @@ Use a bearer token with `GET /api/v1/workspaces/{slug}/alerts`. Results are newe
 Use the row's `id` with `GET /api/v1/workspaces/{slug}/alerts/{id}`. Details are available for older alerts outside the list's time window. The `detection_id` identifies the corresponding map point.
 
 A grant covers the same matched paths as it does on the map. Sections 5.3 and 6 of the plan leave review with officers responsible for that area. For the review queues, the **covering grant itself** must be at division level or above in its own hierarchy. A root grant sees every queue in the workspace, including points without a path. In a hierarchy without a division level, only a root grant qualifies for review. A caller without a workspace grant gets 403. A hidden or missing alert detail returns 404.
+
+## Alert workflow
+
+An alert has one workflow instance. Its current step and entry time live there so the queue and the detail panel read the same state. The list and detail return the step slug in `status`, its label in `step_label`, its time in `step_time`, and an `overdue` flag. The alert insert trigger opens the instance and records New in the same transaction, including for backfills. Existing alerts start at their original creation time. A workspace template takes precedence over the shared default for new alerts.
+
+| Covering grant | Default actions |
+|---|---|
+| Field staff | Acknowledge, send a team, record arrival, control and extinguish the fire, and record first and final report steps |
+| Division officer at division level or above | All field actions, location exceptions, verification, closure and other outcomes |
+| State admin | All moves in the template on visible alerts |
+
+Each move uses the alert's matched hierarchy paths and queue access rules. An officer grant outside those paths gives no extra rights. Closed, false alarm, duplicate, controlled burn and not reachable end the workflow. First report and final report record that the form is pending.
+
+Use `GET /api/v1/workspaces/{slug}/alerts/{id}/history` for ordered `entries` and the caller's allowed `moves`. Entries include the actor's display name, event time, location when available, note, any location exception and whether a report is pending. New is a system event at the detection point. Later entries identify the user by ID in storage. Staff names are only returned to a caller who can see the alert.
+
+Post to `/api/v1/workspaces/{slug}/alerts/{id}/steps` with a bearer token and a JSON body, for example:
+
+```json
+{
+  "step": "reached_site",
+  "location": {"latitude": 16.4187, "longitude": 86.2975},
+  "note": "Team is on site.",
+  "clientId": "field-phone-42",
+  "clientTime": "2026-11-25T10:15:00Z"
+}
+```
+
+Reached site, controlled and extinguished need a point within the workspace's `workflow_radius_metres` (default 1,000 metres). An eligible officer can supply a nonblank `reason` for a missing or distant location. Other steps accept an optional location. A missing point stays empty. Notes are optional. The log and audit row are written together.
+
+The response contains the log ID, step and event time. An optional client ID identifies one request per alert. Retrying the same request as the same user returns its original receipt. Reusing the ID for different details returns 409. An optional client time needs a client ID and must fall between the preceding step and server time. The server keeps its own recording time as well. An unavailable move returns 409, a disallowed role returns 403, and a missing or distant required point returns 422.
+
+The earliest time limit on a current step's outgoing transitions determines when an alert is overdue. The default allows 30 minutes to acknowledge, an hour to send a team, two hours to reach the site, 24 hours for a first report, 72 hours for a final report and 24 hours each for verification and closure. Control and extinguishing have no default time limit. The SQL view `alert_response_times` measures time from alert creation to the first acknowledgment, arrival and control recorded in the log. Missing milestones stay null.

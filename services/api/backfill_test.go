@@ -48,6 +48,13 @@ func TestBackfillIntegration(t *testing.T) {
 		}
 	}
 
+	// New alerts in the historical feed should pick this workspace template.
+	if _, err := tx.Exec(ctx, `WITH template AS (
+		INSERT INTO workflow_templates(workspace_id,name) VALUES ($1,'Demo custom workflow') RETURNING id)
+		INSERT INTO workflow_steps(template_id,slug,label) SELECT id,'new','New' FROM template`, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+
 	// 46 days: 10 chunks for VIIRS. FIRMS has MODIS only up to February 10,
 	// so MODIS gets 41 days in 9 chunks.
 	req := backfillRequest{
@@ -164,6 +171,17 @@ func TestBackfillIntegration(t *testing.T) {
 			"%d matches of linked records, %d matches of new records, %d near-real-time matches, %d alerts for linked records",
 			runs, failedRuns, partialDays, detections, links, linkedMatches, ownMatches, nrtMatches, linkedAlerts)
 	}
+	var alertCount, opened int
+	err = tx.QueryRow(ctx, `SELECT count(DISTINCT a.id),count(l.id) FILTER (WHERE t.workspace_id=a.workspace_id
+	    AND i.current_step='new' AND l.to_step='new' AND l.location IS NOT NULL)
+	    FROM alerts a JOIN detections d ON (d.id,d.observed_at)=(a.detection_id,a.observed_at)
+	    LEFT JOIN workflow_instances i ON i.alert_id=a.id LEFT JOIN workflow_templates t ON t.id=i.template_id
+	    LEFT JOIN step_log l ON l.alert_id=a.id
+	    WHERE a.workspace_id=$1 AND d.source=$2 AND d.product LIKE '%\_SP'`, workspaceID, source).Scan(&alertCount, &opened)
+	if err != nil || alertCount == 0 || opened != alertCount {
+		t.Fatalf("workspace workflow opened for %d of %d backfill alerts: %v", opened, alertCount, err)
+	}
+	t.Logf("%d backfill alerts opened with the workspace workflow", opened)
 	t.Log("9 standard-processing records stored once; 3 linked to near-real-time records with no second match or alert")
 }
 
