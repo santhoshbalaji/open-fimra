@@ -20,7 +20,7 @@ GOOSE_VERSION := v3.30.1
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(DATABASE_URL)"
 PSQL := $(COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
-.PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test check
+.PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
 
 help: ## Show this list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -62,7 +62,16 @@ db-test: ## Check that migrations apply, roll back and reapply, then run the sch
 	$(GOOSE) up
 	@for f in db/tests/*.sql; do echo "Running $$f"; $(PSQL) < "$$f" || exit 1; done
 
+seed: ## Regenerate the synthetic demo state in seed/demo-state
+	python3 seed/generate.py
+
+seed-test: ## Check the demo state is up to date, then load it and run the reference check
+	python3 seed/generate.py --check
+	$(GOOSE) up
+	@{ echo 'BEGIN;'; cat seed/demo-state/load.sql seed/demo-state/reference.sql seed/tests/reference-check.sql; echo 'ROLLBACK;'; } | $(PSQL)
+
 check: ## Run the repository checks that continuous integration runs
 	scripts/check-repo.sh
+	python3 seed/generate.py --check
 	$(COMPOSE) config --quiet
 	@echo "Compose file is valid."

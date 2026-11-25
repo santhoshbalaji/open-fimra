@@ -1,0 +1,224 @@
+{
+ "type": "FeatureCollection",
+ "name": "reference-detections",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "inside",
+    "description": "Inside forest F01, in one beat",
+    "expected_forest_class": "inside",
+    "expected_beats": [
+     "ds.c1.d1.r2.b05"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": "F01"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.297475,
+     16.418669
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "shared-boundary",
+    "description": "Inside forest F01, exactly on the boundary between two beats",
+    "expected_forest_class": "inside",
+    "expected_beats": [
+     "ds.c1.d1.r2.b05",
+     "ds.c1.d2.r3.b08"
+    ],
+    "expected_triage": "shared_boundary",
+    "expected_forest_code": "F01"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.315928,
+     16.419102
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "hole",
+    "description": "In the clearing inside forest F02, more than 500 m from the forest",
+    "expected_forest_class": "outside",
+    "expected_beats": [
+     "ds.c1.d2.r4.b11"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": null
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.416257,
+     16.412498
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "ring",
+    "description": "Inside forest F02, between its hole and its edge",
+    "expected_forest_class": "inside",
+    "expected_beats": [
+     "ds.c1.d2.r4.b11"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": "F02"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.380981,
+     16.418498
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "near-edge",
+    "description": "About 300 m outside forest F02, to the east",
+    "expected_forest_class": "near_edge",
+    "expected_beats": [
+     "ds.c2.d3.r5.b14"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": null
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.457995,
+     16.418498
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "outside",
+    "description": "Far from any forest",
+    "expected_forest_class": "outside",
+    "expected_beats": [
+     "ds.c1.d1.r1.b03"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": null
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.230369,
+     16.500157
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "overlap",
+    "description": "Inside forest F05, where two beats overlap",
+    "expected_forest_class": "inside",
+    "expected_beats": [
+     "ds.c2.d3.r6.b17",
+     "ds.c2.d4.r7.b20"
+    ],
+    "expected_triage": "overlapping_units",
+    "expected_forest_code": "F05"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.55884,
+     16.418379
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "no-unit",
+    "description": "Inside forest F03, east of the state edge where there is no beat",
+    "expected_forest_class": "inside",
+    "expected_beats": [],
+    "expected_triage": "no_unit",
+    "expected_forest_code": "F03"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.70034,
+     16.499825
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "kiln",
+    "description": "Inside the brick kiln exclusion",
+    "expected_forest_class": "fixed_heat_source",
+    "expected_beats": [
+     "ds.c1.d2.r4.b12"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": null
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.412257,
+     16.480248
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "uncoded-forest",
+    "description": "Inside the forest that has no code",
+    "expected_forest_class": "inside",
+    "expected_beats": [
+     "ds.c2.d4.r7.b19"
+    ],
+    "expected_triage": null,
+    "expected_forest_code": null
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     86.591907,
+     16.338721
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "far-away",
+    "description": "Far outside the workspace, so it is never matched",
+    "expected_forest_class": null,
+    "expected_beats": [],
+    "expected_triage": null,
+    "expected_forest_code": null
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     84.7,
+     15.3
+    ]
+   }
+  }
+ ]
+}
