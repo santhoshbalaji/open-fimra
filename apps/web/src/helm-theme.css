@@ -1,0 +1,78 @@
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+:root {
+  --background: var(--color-background);
+  --card: var(--color-card);
+  --border: var(--color-border);
+  color-scheme: light;
+  --target-web: var(--spacing-target-web);
+  --radius: var(--radius-card);
+  --foreground: var(--color-text);
+  --card-foreground: var(--color-text);
+  --popover: var(--color-card);
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-brand);
+  --primary-foreground: var(--color-brand-foreground);
+  --secondary: var(--color-brand-soft);
+  --secondary-foreground: var(--color-brand);
+  --accent: var(--color-brand-soft);
+  --accent-foreground: var(--color-brand);
+  --muted: var(--color-background);
+  --muted-foreground: var(--color-text-secondary);
+  --destructive: var(--color-danger);
+  --input: var(--color-neutral-mark);
+  --ring: var(--color-brand);
+}
+:root[data-theme=dark] { color-scheme: dark; }
+
+[data-slot]:focus-visible, [data-slot]:has(> input:focus-visible) {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+[data-slot]:is(button, a, input, select, textarea, [role=option], [role=menuitem]),
+label[data-slot]:has(input), [data-slot=field-label] { min-height: var(--target-web); min-width: var(--target-web); }
+[data-slot=table-cell], time { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* Keep compact controls legible while extending their pointer area. */
+button:is([role=checkbox], [role=switch]) { position: relative; }
+button:is([role=checkbox], [role=switch])::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  translate: -50% -50%;
+  width: max(100%, var(--target-web));
+  height: max(100%, var(--target-web));
+}
+brn-radio [data-slot=indicator] {
+  min-width: var(--target-web);
+  min-height: var(--target-web);
+  align-items: center;
+  justify-content: center;
+}
+brn-radio:has(input:focus-visible) [data-slot=radio-group-indicator],
+button:is([role=checkbox], [role=switch]):focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+label[data-slot=label]:has(hlm-checkbox, hlm-switch, hlm-radio) { min-height: var(--target-web); }
+@theme inline {
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-card);
+  --text-xs: var(--text-label);
+  --text-sm: var(--text-body);
+  --text-base: var(--text-subhead);
+  --text-lg: var(--text-title);
+  --text-xl: var(--text-display);
+}
+
+@layer base {
+  :where([data-slot]) { border-color: var(--color-border); }
+}

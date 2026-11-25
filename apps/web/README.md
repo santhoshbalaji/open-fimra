@@ -49,7 +49,7 @@ For a remote development host, forward the web, sign-in and API ports to your co
 
 The map loads [seed GeoJSON](../../seed/demo-state) directly through the linked asset directories in [angular.json](angular.json). It uses local fonts and a bundled map worker. It needs WebGL. The fictional reference layers stay available if you have no assigned workspace or the API is unavailable. Only the configured API receives your access token.
 
-The two palettes in [src/tokens.css](src/tokens.css) map the shared [design tokens](../../docs/design-system/tokens.json) to Tailwind. Update the mapping when the design tokens change.
+The two palettes in [src/tokens.css](src/tokens.css) map the shared [design tokens](../../docs/design-system/tokens.json) to Tailwind. Regenerate the mapping with `node scripts/theme.mjs` when the design tokens change.
 
 ## Checks
 
@@ -89,3 +89,38 @@ select the alert on the map and in its queue. Alert links also work after
 sign-in and can open older alerts. Feed notices open the feed health section
 of the dashboard. Press Escape to close the list and return
 focus to the bell.
+
+## How to use the design system
+
+Open `/design-system` on your development server. On a built copy, open
+`/design-system?preview`. The old HTML preview links to this page. It uses
+the same components, map key, colours and theme switch as the app.
+
+| When you need | Use |
+|---|---|
+| An action | A button with `hlmBtn`. Choose primary for the main action, destructive for removal, or outline, secondary or ghost for other actions. Give icon buttons an accessible name. |
+| Form controls | Group a label, control, help text and error in `hlm-field`. Use Helm input, textarea, select, checkbox, radio group or switch. Put a radio indicator inside each radio. |
+| Extra detail or actions | Dialog for a decision, sheet for a side panel, dropdown menu for actions, tooltip for a short hint. Give dialogs and sheets a title. |
+| Grouped data | Card, tabs, table and separator. Use tabular numbers for counts and times. |
+| Progress and feedback | Skeleton while loading, alert for a lasting message, toast for brief feedback, and `fimra-empty-state` for empty results. |
+| A workflow state | `<fimra-status-badge icon="step" label="Team sent" />`. Use `overdue` for a late step and `complete` for a finished step. Supply visible text with every icon. Use plain Helm badges for categories. |
+
+Import Helm controls from `@spartan-ng/helm/<component>`. Their source is in
+`src/ui`. Add new controls with `corepack pnpm exec ng g @spartan-ng/cli:ui <component>`
+from this directory. Check and pin any packages the generator adds.
+
+Use Tailwind utilities such as `bg-card`, `text-body` and `rounded-control`.
+Use petrol for interface actions and reserve copper for the logo. Keep web
+targets at least 32 px. The app bundles Inter only. Hindi and other Indian
+scripts use device fonts.
+
+Change colours, spacing and type in the shared design tokens. From this
+directory run `node scripts/theme.mjs` to rebuild the CSS variables.
+MapLibre and the charts read the same tokens. Web lint checks the generated
+file and reports colour literals in templates, styles and TypeScript.
+
+For a browser check, run `scripts/design-system-visual.mjs` in the Playwright
+container with Playwright 1.63.0 installed beside the script. Set `WEB` to
+your seeded development app and `SHOTS` to a mounted folder outside the
+checkout. The check opens the guide, uses the overlays and signs in as the
+demo division officer to capture the map.

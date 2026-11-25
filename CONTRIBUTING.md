@@ -30,7 +30,7 @@ On first start Keycloak imports the development realm `open-fimra` from [deploy/
 
 | Client | Use |
 |---|---|
-| `open-fimra-web` | The web app: public client, authorisation code with PKCE, redirects to `http://127.0.0.1:4200` and `http://localhost:4200` |
+| `open-fimra-web` | The web app: public client, authorisation code with PKCE, accepts sign-in and sign-out on ports 4200 through 4203 on both loopback names |
 | `open-fimra-api` | The core API, as the token audience |
 | `open-fimra-dev-cli` | Password sign-in for local tests only. A real installation never has this client. |
 
@@ -87,6 +87,8 @@ FIMRA_DB_PORT=15433
 FIMRA_KEYCLOAK_PORT=18181
 FIMRA_HTTP_ADDR=127.0.0.1:18091
 ```
+
+For parallel web work, use a free port from 4201 through 4203. Run `corepack pnpm run dev --port 4201` in `apps/web`. Set your API’s `FIMRA_CORS_ORIGINS` to the matching web origin. A fresh Keycloak stack imports these return addresses.
 
 Each stack has about 2.5 GB of memory available. The optional geo worker has a separate 1 GB limit.
 

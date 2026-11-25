@@ -1,0 +1,171 @@
+<header class="border-b border-border bg-card">
+  <div class="guide-header">
+    <img [src]="'/logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA" width="132">
+    <button hlmBtn variant="outline" (click)="appearance.toggle()">
+      {{ appearance.theme() === 'light' ? 'Use dark theme' : 'Use light theme' }}
+    </button>
+  </div>
+</header>
+<main class="guide">
+  <h1 class="text-display">Design system</h1>
+  <section><h2>Colour</h2>
+    <p>Contrast with the card surface in the {{ appearance.theme() }} theme.</p>
+    <div class="swatches">
+      @for (swatch of palette(); track swatch.name) {
+        <div><i [style.background]="swatch.color"></i><span>{{ swatch.name }}</span><small>{{ swatch.ratio }}:1</small></div>
+      }
+    </div>
+  </section>
+  <section><h2>Type</h2>
+    @for (size of sizes; track size[0]) {
+      <div [style.font-size.px]="size[1]" [style.font-weight]="'var(--text-' + size[0] + '--font-weight)'"
+        [style.line-height]="'var(--text-' + size[0] + '--line-height)'"
+        [style.letter-spacing]="'var(--text-' + size[0] + '--letter-spacing)'">{{ size[0] }} · {{ size[1] }} px · Demo forest</div>
+    }
+    <p>Inter is bundled. Indian scripts use device fonts. वन क्षेत्र</p>
+  </section>
+  <section><h2>Spacing and corners</h2>
+    <div class="group-row">@for (units of [1,2,3,4,6,8]; track units) {
+      <span><i class="measure" [style.width]="'calc(var(--spacing) * ' + units + ')'"></i>{{ units * 4 }} px</span>
+    }</div>
+    <div class="group-row">@for (item of radius; track item[0]) {
+      <span class="bg-brand-soft px-4 py-2" [style.border-radius.px]="item[1]">{{ item[0] }} · {{ item[1] }} px</span>
+    }</div>
+  </section>
+  <section><h2>Map key</h2>
+    <div class="group-row">@for (symbol of symbols; track symbol[0]) {
+      <span class="inline-flex items-center gap-2"><i [class]="'key-symbol ' + symbol[0]"></i>{{ symbol[1] }}</span>
+    }</div>
+    <div class="group-row">@for (age of ages; track age; let i = $index) {
+      <span class="inline-flex items-center gap-2"><i class="age-swatch" [style.background]="'var(--color-fire-age-' + (i+1) + ')'"></i>{{ age }}</span>
+    }</div>
+  </section>
+  <section><h2>Buttons</h2>
+    @for (variant of variants; track variant) {
+      <div class="group-row"><h3>{{ variant }}</h3>
+        @for (size of buttonSizes; track size) { <button hlmBtn [variant]="variant" [size]="size">{{ size }}</button> }
+        <button hlmBtn [variant]="variant" disabled>Disabled</button>
+      </div>
+    }
+    <div class="group-row"><h3>Icon</h3>@for (size of iconSizes; track size) {
+      <button hlmBtn variant="outline" [size]="size" [attr.aria-label]="'Add ' + size"><svg lucidePlus></svg></button>
+    }</div>
+  </section>
+  <section><h2>Fields</h2>
+    <div class="group-row" role="group" aria-label="Field state"><h3>Preview state</h3>
+      @for (state of fieldStates; track state) {
+        <button hlmBtn size="sm" [variant]="fieldState() === state ? 'primary' : 'outline'"
+          [attr.aria-pressed]="fieldState() === state" (click)="fieldState.set(state)">{{ state }}</button>
+      }
+    </div>
+    <div class="fields">
+      <hlm-field><label hlmFieldLabel for="unit">Unit name</label>
+        <input hlmInput [disabled]="disabled()" [forceInvalid]="invalid()" id="unit" placeholder="Demo range"><p hlmFieldDescription>Use the name shown on the map.</p>
+      </hlm-field>
+      <hlm-field forceInvalid><label hlmFieldLabel for="code">Unit code</label>
+        <input hlmInput id="code" required forceInvalid aria-invalid="true">
+        <hlm-field-error forceShow>Enter a unit code.</hlm-field-error>
+      </hlm-field>
+      <hlm-field><label hlmFieldLabel for="locked">Assigned unit</label><input hlmInput id="locked" disabled value="Demo range"></hlm-field>
+      <hlm-field><label hlmFieldLabel for="note">Field note</label><textarea [disabled]="disabled()" [forceInvalid]="invalid()" hlmTextarea id="note" rows="2"></textarea></hlm-field>
+      <div><label hlmLabel for="queue">Queue</label>
+        <hlm-select [disabled]="disabled()" value="Active"><hlm-select-trigger [forceInvalid]="invalid()" [size]="invalid() ? 'sm' : 'default'" buttonId="queue"><hlm-select-value /></hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal><hlm-select-item value="Active">Active</hlm-select-item>
+            <hlm-select-item value="Closed">Closed</hlm-select-item><hlm-select-item value="Archived" disabled>Archived</hlm-select-item>
+          </hlm-select-content>
+        </hlm-select>
+      </div>
+      <div><label hlmLabel for="groups">Map layers</label>
+        <hlm-select-multiple [value]="['Forest']" [disabled]="disabled()">
+          <hlm-select-trigger buttonId="groups" size="sm" [forceInvalid]="invalid()">
+            <hlm-select-placeholder>Choose layers</hlm-select-placeholder>
+            <span *hlmSelectValues="let values">{{ values.join(', ') }}</span>
+          </hlm-select-trigger>
+          <hlm-select-content *hlmSelectPortal>
+            @for (layer of ['Forest','Boundaries']; track layer) { <hlm-select-item [value]="layer">{{ layer }}</hlm-select-item> }
+          </hlm-select-content>
+        </hlm-select-multiple>
+      </div>
+    </div>
+    <div class="group-row">
+      @for (state of ['Unchecked','Checked','Mixed','Disabled']; track state) {
+        <label hlmLabel><hlm-checkbox [checked]="state === 'Checked'" [indeterminate]="state === 'Mixed'" [forceInvalid]="invalid()" [disabled]="disabled() || state === 'Disabled'" [aria-label]="state" />{{ state }}</label>
+      }
+    </div>
+    <hlm-radio-group [disabled]="disabled()" class="group-row" name="window" value="day" aria-label="Time window">
+      @for (window of ['day','week','month']; track window) {
+        <label hlmLabel><hlm-radio [value]="window" [disabled]="window === 'month'" [aria-label]="window"><hlm-radio-indicator /></hlm-radio>{{ window }}</label>
+      }
+    </hlm-radio-group>
+    <div class="group-row">@for (state of ['Off','On','Disabled']; track state) {
+      <label hlmLabel><hlm-switch [size]="state === 'Off' ? 'sm' : 'default'" [checked]="state === 'On'" [forceInvalid]="invalid()" [disabled]="disabled() || state === 'Disabled'" [aria-label]="state" />{{ state }}</label>
+    }</div>
+  </section>
+  <section><h2>Badges and workflow</h2>
+    <div class="group-row">@for (variant of badges; track variant) { <span hlmBadge [variant]="variant">{{ variant }}</span> }</div>
+    <div class="group-row"><fimra-status-badge icon="step" label="Team sent"/><fimra-status-badge icon="complete" label="Closed"/>
+      <span><time>14:05 UTC</time><fimra-status-badge icon="overdue" label="Overdue"/></span></div>
+  </section>
+  <section><h2>Dialogs and actions</h2>
+    <div class="group-row" role="group" aria-label="Sheet and tooltip placement"><h3>Placement</h3>
+      @for (position of sides; track position) {
+        <button hlmBtn size="sm" [variant]="side() === position ? 'secondary' : 'ghost'" [attr.aria-pressed]="side() === position"
+          (click)="side.set(position)">{{ position }}</button>
+      }
+    </div>
+    <div class="group-row">
+      <hlm-dialog><button hlmBtn variant="outline" hlmDialogTrigger>Open dialog</button>
+        <hlm-dialog-content *hlmDialogPortal><h3 hlmDialogTitle>Close this alert?</h3>
+          <p hlmDialogDescription>The officer can review the timeline before closing the alert.</p>
+          <button hlmBtn hlmDialogClose>Done</button>
+        </hlm-dialog-content>
+      </hlm-dialog>
+      <hlm-sheet><button hlmBtn variant="outline" hlmSheetTrigger [side]="side()">Open sheet</button>
+        <hlm-sheet-content *hlmSheetPortal><hlm-sheet-header><h3 hlmSheetTitle>Alert details</h3>
+          <p hlmSheetDescription>Last observed in Demo range.</p></hlm-sheet-header>
+        </hlm-sheet-content>
+      </hlm-sheet>
+      <button hlmBtn variant="outline" [hlmDropdownMenuTrigger]="actions">Open menu</button>
+      <ng-template #actions><hlm-dropdown-menu><button hlmDropdownMenuItem (click)="notify.info('Details requested')">View details</button>
+        <button hlmDropdownMenuCheckbox [checked]="marked()" (triggered)="marked.set(!marked())">Mark for review
+          <hlm-dropdown-menu-checkbox-indicator /></button>
+        <button hlmDropdownMenuItem variant="destructive" (click)="notify.info('Removed from this preview')">Remove</button>
+        <button hlmDropdownMenuItem disabled>Reassign</button></hlm-dropdown-menu></ng-template>
+      <button hlmBtn variant="outline" [position]="side()" hlmTooltip="Return to the whole state">Map tip</button>
+    </div>
+    <div class="group-row"><label hlmLabel for="toast-kind">Toast</label>
+      <hlm-select [value]="toastType()" (valueChange)="toastType.set($event ?? 'info')">
+        <hlm-select-trigger buttonId="toast-kind"><hlm-select-value /></hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal>@for (type of toastTypes; track type) {
+          <hlm-select-item [value]="type">{{ type }}</hlm-select-item>
+        }</hlm-select-content>
+      </hlm-select>
+      <button hlmBtn variant="outline" (click)="showToast()">Show toast</button>
+    </div>
+  </section>
+  <section><h2>Tabs and table</h2>
+    @for (style of tabStyles; track style) {
+    <hlm-tabs tab="open" [orientation]="style === 'line' ? 'vertical' : 'horizontal'"><hlm-tabs-list [variant]="style" [attr.aria-label]="'Alert status, ' + style">
+      <button hlmTabsTrigger="open">Open</button><button hlmTabsTrigger="closed">Closed</button><button hlmTabsTrigger="archive" disabled>Archive</button>
+    </hlm-tabs-list>
+    <div hlmTabsContent="open"><table hlmTable><caption hlmCaption>Demo alerts</caption>
+      <thead hlmTHead><tr hlmTr><th hlmTh>Unit</th><th hlmTh>Last seen</th></tr></thead>
+      <tbody hlmTBody><tr hlmTr><td hlmTd>Demo range</td><td hlmTd>14:05 UTC</td></tr>
+        <tr hlmTr data-state="selected"><td hlmTd>Demo beat · selected</td><td hlmTd>13:48 UTC</td></tr></tbody></table>
+    </div><div hlmTabsContent="closed"><fimra-empty-state heading="No closed alerts" detail="Closed alerts will appear here." /></div></hlm-tabs>
+    }
+  </section>
+  <section><h2>Cards and feedback</h2>
+    <div class="fields">@for (size of cardSizes; track size) { <article hlmCard [size]="size"><hlm-card-header><h3 hlmCardTitle>{{ size === 'sm' ? 'Demo beat' : 'Demo range' }}</h3><p hlmCardDescription>Latest observation</p></hlm-card-header>
+      <div hlmCardContent>14:05 UTC</div></article> }
+      <fimra-empty-state heading="No detections" detail="Choose a longer time window." /></div>
+    <hlm-separator class="my-4"/>
+    @for (variant of alertVariants; track variant) {
+      <div hlmAlert [variant]="variant"><h3 hlmAlertTitle class="flex items-center gap-2"><svg lucideTriangleAlert class="size-4"></svg>{{ variant === 'default' ? 'Import paused' : 'Import failed' }}</h3>
+        <p hlmAlertDescription>Review the file before trying again.</p></div>
+    }
+    <h3 class="my-3">Loading rows</h3><div aria-label="Loading" role="status" class="grid gap-2">
+      <hlm-skeleton class="h-4 w-48"/><hlm-skeleton class="h-4 w-32"/></div>
+  </section>
+  <hlm-toaster [theme]="appearance.theme()" />
+</main>

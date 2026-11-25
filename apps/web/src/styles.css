@@ -1,8 +1,9 @@
-@import 'tailwindcss';
-@import '@fontsource-variable/noto-sans/wght.css';
+@import 'tailwindcss' source('./');
+@import '@fontsource-variable/inter/wght.css';
 @import 'maplibre-gl/dist/maplibre-gl.css';
-@import '@angular/cdk/overlay-prebuilt.css';
+@import '@spartan-ng/brain/hlm-tailwind-preset.css';
 @import './tokens.css';
+@import './helm-theme.css';
 
 html, body, fimra-root { height: 100%; margin: 0; }
 body { font: var(--text-body)/1.5 var(--font-sans); color: var(--color-text); background: var(--color-background); }
@@ -11,16 +12,16 @@ main { flex: 1; min-height: 0; }
 .topbar { z-index: 1; padding: 12px clamp(12px, 2.5vw, 40px); border-bottom: 1px solid var(--color-border); }
 .logo { width: clamp(120px, 15vw, 174px); height: auto; }
 .workspace { padding-left: 16px; border-left: 1px solid var(--color-border); font-size: var(--text-subhead); }
-button { cursor: pointer; min-height: var(--target-web); min-width: var(--target-web); }
+button:not([role=checkbox], [role=switch]) { cursor: pointer; min-height: var(--target-web); min-width: var(--target-web); }
 button:disabled { cursor: wait; opacity: .55; }
 button:focus-visible, canvas:focus-visible { outline: 3px solid var(--color-brand); outline-offset: -3px; }
-button:hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
+button:not([data-slot], [role]):hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
 button svg { width: 18px; height: 18px; flex: none; }
 button .chevron { width: 14px; }
 .icon-button, .user-trigger { border-radius: var(--radius-control); padding: 8px; }
 .user-trigger { max-width: 32vw; }
 .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-menu, .map-actions, .map-key, .map-message { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 2px 9px rgb(0 0 0 / .10); }
+.account-menu, .map-actions, .map-key, .map-message { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: var(--shadow-panel); }
 .account-menu { padding: 6px; min-width: 180px; max-width: 90vw; }
 .account-menu p { padding: 8px; font-size: var(--text-label); color: var(--color-text-secondary); }
 .account-menu button, .map-key button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-control); }
@@ -51,7 +52,7 @@ fimra-demo-map { display: block; height: 100%; position: relative; background: v
 }
 
 .fire-controls { position: absolute; left: 16px; top: 16px; max-width: calc(100% - 84px); display: grid; gap: 6px; }
-.filter-card, .detail-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 2px 9px rgb(0 0 0 / .10); }
+.filter-card, .detail-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: var(--shadow-panel); }
 .filter-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 12px; }
 .filter-card label { display: flex; align-items: center; gap: 6px; min-height: 32px; }
 .filter-card select { max-width: 165px; min-height: 32px; padding: 2px 4px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-background); }
@@ -149,8 +150,8 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 @media (max-width: 480px) { .metric-grid section:first-child { grid-column: 1 / -1; } .workspace-controls { gap: 4px 12px; } }
 .queue-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .export-button { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
-.dialog-backdrop { position: fixed; inset: 0; z-index: 10; background: rgb(0 0 0 / .35); }
-.export-dialog { position: fixed; z-index: 11; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 20px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 8px 28px rgb(0 0 0 / .22); }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 10; background: var(--color-scrim); }
+.export-dialog { position: fixed; z-index: 11; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 20px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: var(--shadow-dialog); }
 .export-dialog h2 { font-size: var(--text-title); font-weight: 600; margin-bottom: 12px; }
 .export-dialog fieldset { margin-bottom: 12px; }
 .export-dialog legend { font-weight: 600; margin-bottom: 4px; }
