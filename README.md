@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/design-system/logo/lockup-dark.svg">
+  <img src="docs/design-system/logo/lockup-light.svg" alt="Open FIMRA" width="312" height="56">
+</picture>
+
 # Open FIMRA
 
 **Fire Information for Monitoring, Reporting and Analysis**
