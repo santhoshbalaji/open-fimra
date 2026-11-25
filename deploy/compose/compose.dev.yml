@@ -1,0 +1,56 @@
+# Development stack for Open FIMRA. Not for production use.
+#
+# Start it with `make dev` from the repository root. Every port binds to
+# 127.0.0.1 only. The passwords below are development defaults; override
+# them in a .env file at the repository root (see .env.example).
+
+name: open-fimra-dev
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: ${FIMRA_DB_NAME:-fimra}
+      POSTGRES_USER: ${FIMRA_DB_USER:-fimra}
+      POSTGRES_PASSWORD: ${FIMRA_DB_PASSWORD:-fimra-dev}
+    ports:
+      - "127.0.0.1:${FIMRA_DB_PORT:-15432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1g
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.0
+    command: ["start-dev", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${FIMRA_KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${FIMRA_KEYCLOAK_ADMIN_PASSWORD:-admin-dev}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${FIMRA_KEYCLOAK_PORT:-18180}:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+    healthcheck:
+      # The Keycloak image has no curl, so the check talks HTTP over bash's /dev/tcp.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    mem_limit: 1536m
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  keycloak-data:
