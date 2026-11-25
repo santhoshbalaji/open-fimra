@@ -1,0 +1,5 @@
+{
+  "issuer": "http://127.0.0.1:18180/realms/open-fimra",
+  "clientId": "open-fimra-web",
+  "apiBaseUrl": "http://127.0.0.1:18090"
+}

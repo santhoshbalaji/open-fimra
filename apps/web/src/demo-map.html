@@ -1,0 +1,19 @@
+<div #canvas class="map-canvas"></div>
+<div class="map-actions" role="group" aria-label="Map controls">
+  <button brnButton [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg lucidePlus></svg></button>
+  <button brnButton [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg lucideMinus></svg></button>
+  <button brnButton [disabled]="!ready()" (click)="fit()" title="Fit state to map" aria-label="Fit state to map"><svg lucideMaximize></svg></button>
+</div>
+<section class="map-key" aria-label="Map key">
+  <button brnButton (click)="legend.set(!legend())" [attr.aria-expanded]="legend()" aria-controls="map-key-items">
+    <svg lucideLayers></svg> Map key
+  </button>
+  <ul id="map-key-items" [hidden]="!legend()">
+    @for (item of boundaries; track item.id) {
+      <li><i class="key-line" [class]="item.id" [style.border-top-width.px]="item.width"></i>{{ item.label }}</li>
+    }
+    <li><i class="key-forest"></i>Forest</li>
+    <li><i class="key-kiln"></i>Brick kiln</li>
+  </ul>
+</section>
+@if (error()) { <p role="alert" class="map-message">{{ error() }}</p> }

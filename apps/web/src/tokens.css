@@ -1,0 +1,67 @@
+/* Values from docs/design-system/tokens.json. */
+@theme static {
+  --color-background: #f5f6f4;
+  --color-card: #ffffff;
+  --color-text: #141816;
+  --color-text-secondary: #56615b;
+  --color-border: #dde2de;
+  --color-brand: #1f5a70;
+  --color-brand-foreground: #ffffff;
+  --color-brand-soft: #e2ebee;
+  --color-map-background: #e9ece8;
+  --color-map-line: #cfd5d0;
+  --color-neutral-mark: #7a857f;
+  --color-fire-age-1: #8f1d14;
+  --color-fire-age-2: #c8401f;
+  --color-fire-age-3: #e3743a;
+  --color-fire-age-4: #e9a36f;
+  --color-chart-1: #2a78d6;
+  --color-chart-2: #eb6834;
+  --color-chart-3: #1baf7a;
+  --color-chart-4: #eda100;
+  --color-chart-5: #e87ba4;
+  --color-chart-6: #008300;
+  --color-chart-7: #6250d6;
+  --color-chart-8: #e34948;
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+  --font-sans: "Noto Sans Variable", sans-serif;
+  --spacing: 4px;
+  --text-label: 12px;
+  --text-body: 14px;
+  --text-subhead: 16px;
+  --text-title: 20px;
+  --text-display: 24px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-pill: 999px;
+}
+:root[data-theme=dark] {
+  --color-background: #121413;
+  --color-card: #1b1e1c;
+  --color-text: #eef1ef;
+  --color-text-secondary: #a7b1ab;
+  --color-border: #2d3430;
+  --color-brand: #97b5c1;
+  --color-brand-foreground: #0a1a23;
+  --color-brand-soft: #1c2b31;
+  --color-map-background: #1f2422;
+  --color-map-line: #2f3632;
+  --color-neutral-mark: #8b958f;
+  --color-fire-age-1: #ffb38a;
+  --color-fire-age-2: #f0834a;
+  --color-fire-age-3: #d1552a;
+  --color-fire-age-4: #9c3a20;
+  --color-chart-1: #3987e5;
+  --color-chart-2: #d95926;
+  --color-chart-3: #199e70;
+  --color-chart-4: #c98500;
+  --color-chart-5: #d55181;
+  --color-chart-6: #0ca30c;
+  --color-chart-7: #9085e9;
+  --color-chart-8: #e66767;
+}
+:root { --target-web: 32px; color-scheme: light; }
+:root[data-theme=dark] { color-scheme: dark; }

@@ -40,6 +40,10 @@ These defaults are for local development only. `make dev-down` stops the stack a
 
 Database migrations need Go (the version in CI is the current stable release). `make db-migrate` applies them, and `make db-test` checks that they roll back cleanly and runs the schema tests. See [db/migrations](db/migrations/README.md).
 
+## Running the web shell
+
+With the development stack running, use Node.js 24.15 or later in the 24.x series with Corepack. Run `make web-install`, then `make web-dev`. Open <http://127.0.0.1:4200> and sign in with a demo user. Before pushing web changes, run `make web-lint web-test web-build`. The [web app guide](apps/web/README.md) covers remote access and configuration.
+
 ## Making a change
 
 1. Branch from `main`.

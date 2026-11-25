@@ -1,0 +1,35 @@
+@if (auth.user(); as user) {
+  <header class="topbar flex items-center gap-4 bg-card">
+    <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+    <h1 class="workspace font-semibold">Demo State</h1>
+    <div class="ml-auto flex items-center gap-2">
+      <button brnButton class="icon-button" (click)="appearance.toggle()"
+              aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'" title="Toggle dark theme">
+        @if (appearance.theme() === 'dark') { <svg lucideSun></svg> } @else { <svg lucideMoon></svg> }
+      </button>
+      <button brnButton [cdkMenuTriggerFor]="account" class="user-trigger flex items-center gap-2"
+              [attr.aria-label]="'Account for ' + (user.profile.name || user.profile.preferred_username || 'User')">
+        <svg lucideCircleUserRound></svg>
+        <span class="user-name">{{ user.profile.name || user.profile.preferred_username || 'User' }}</span>
+        <svg lucideChevronDown class="chevron"></svg>
+      </button>
+      <ng-template #account>
+        <div cdkMenu class="account-menu">
+          <p>{{ user.profile.name || user.profile.preferred_username || 'User' }}</p>
+          <button brnButton cdkMenuItem (cdkMenuItemTriggered)="auth.signOut()"><svg lucideLogOut></svg> Sign out</button>
+        </div>
+      </ng-template>
+    </div>
+  </header>
+  <main>@defer (on immediate) { <fimra-demo-map /> }</main>
+} @else {
+  <main class="welcome">
+    <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+    @if (auth.error() || auth.signedOut()) {
+      <p role="status">{{ auth.error() || 'You have signed out.' }}</p>
+      <button brnButton class="sign-in" (click)="auth.signIn()">Sign in</button>
+    } @else {
+      <p role="status">Opening sign-in…</p>
+    }
+  </main>
+}
