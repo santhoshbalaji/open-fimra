@@ -34,7 +34,7 @@ api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENC
 api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
 
 help: ## Show this list
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-22s %s\n", $$1, $$2}'
 
 dev: ## Start the development stack (PostGIS and Keycloak) and wait until it is healthy
 	$(COMPOSE) up -d --wait
