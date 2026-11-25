@@ -1,0 +1,110 @@
+{
+  "realm": "open-fimra",
+  "displayName": "Open FIMRA (development)",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "accessTokenLifespan": 900,
+  "clients": [
+    {
+      "clientId": "open-fimra-web",
+      "name": "Open FIMRA web app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": ["http://127.0.0.1:4200/*", "http://localhost:4200/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://127.0.0.1:4200/*##http://localhost:4200/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "open-fimra-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "open-fimra-api",
+      "name": "Open FIMRA core API",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "open-fimra-dev-cli",
+      "name": "Development and test scripts only",
+      "description": "Allows password sign-in for local tests. Never create this client in a real installation.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "open-fimra-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "d0000000-0000-4000-8000-0000000000a1",
+      "username": "state.admin",
+      "enabled": true,
+      "email": "state.admin@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "State Administrator",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000a2",
+      "username": "division.officer",
+      "enabled": true,
+      "email": "division.officer@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Division Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000a3",
+      "username": "beat.guard",
+      "enabled": true,
+      "email": "beat.guard@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Beat Guard",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000a4",
+      "username": "no.role",
+      "enabled": true,
+      "email": "no.role@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "No Role",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    }
+  ]
+}
