@@ -27,6 +27,12 @@ Thumbs.db
 *.mbtiles
 !seed/**
 
+# Screenshots belong outside the repository, except the design-system images
+*.png
+*.jpg
+*.jpeg
+!docs/design-system/**
+
 # Build output
 dist/
 build/
