@@ -4,7 +4,7 @@ import { KeyValuePipe } from '@angular/common';
 import { timer, switchMap, catchError, EMPTY } from 'rxjs';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { classes, ForestClass } from './detections';
+import { classes, ForestClass, sourceLabel } from './detections';
 import { WorkspaceService } from './workspace';
 import { ClassChart } from './class-chart';
 import { DashboardFilters } from './dashboard-filters';
@@ -44,6 +44,7 @@ export class Dashboard {
   readonly summary = signal<Summary | null>(null);
   readonly message = signal('');
   readonly classes = classes;
+  readonly sourceLabel = sourceLabel;
   readonly classKeys = Object.keys(classes) as ForestClass[];
   readonly queues = queueLabels;
   readonly queueKeys = Object.keys(queueLabels) as (keyof typeof queueLabels)[];

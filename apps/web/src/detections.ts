@@ -56,6 +56,13 @@ export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'
   return rows.map(({ slug, label }) => ({ label, name: places[slug]?.name ?? '', code: places[slug]?.code ?? '' }));
 }
 
+const sourceNames: Record<string, string> = { firms: 'NASA FIRMS' };
+
+/** A readable name for a detection source code. */
+export function sourceLabel(value: string | null | undefined): string {
+  return value ? sourceNames[value] ?? value : 'Unknown';
+}
+
 const confidenceWords: Record<string, string> = { l: 'Low', low: 'Low', n: 'Nominal', nominal: 'Nominal', h: 'High', high: 'High' };
 
 /** VIIRS sends l, n or h; MODIS sends a percentage. */
