@@ -1,10 +1,10 @@
-import { HlmToasterImports } from '@spartan-ng/helm/sonner';
-import { HlmSelectImports } from '@spartan-ng/helm/select';
-import { HlmInputImports } from '@spartan-ng/helm/input';
-import { HlmFieldImports } from '@spartan-ng/helm/field';
-import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
-import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
-import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmToaster } from '@spartan-ng/helm/sonner';
+import { HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger } from '@spartan-ng/helm/select';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmField, HlmFieldLabel } from '@spartan-ng/helm/field';
+import { HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger } from '@spartan-ng/helm/dropdown-menu';
+import { HlmSwitch } from '@spartan-ng/helm/switch';
+import { HlmButton } from '@spartan-ng/helm/button';
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { LucideChevronDown, LucideLogOut, LucideMoon, LucideSettings, LucideSun } from '@lucide/angular';
@@ -23,7 +23,10 @@ import { WEB_CONFIG } from './config';
 
 @Component({
   selector: 'fimra-root',
-  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmSelectImports, HlmToasterImports, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard,
+  imports: [
+    HlmButton, HlmSwitch, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger,
+    HlmField, HlmFieldLabel, HlmInput, HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger,
+    HlmToaster, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard,
     LucideChevronDown, LucideLogOut, LucideMoon, LucideSettings, LucideSun],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }

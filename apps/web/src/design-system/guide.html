@@ -155,6 +155,14 @@
     </div><div hlmTabsContent="closed"><fimra-empty-state heading="No closed alerts" detail="Closed alerts will appear here." /></div></hlm-tabs>
     }
   </section>
+  <section><h2>Feed health</h2>
+    <div class="group-row">
+      <fimra-status-badge icon="healthy" label="Healthy" />
+      <fimra-status-badge icon="delayed" label="Delayed" />
+      <fimra-status-badge icon="quiet" label="Quiet" />
+      <fimra-status-badge icon="failing" label="Failing" />
+    </div>
+  </section>
   <section><h2>Cards and feedback</h2>
     <div class="fields">@for (size of cardSizes; track size) { <article hlmCard [size]="size"><hlm-card-header><h3 hlmCardTitle>{{ size === 'sm' ? 'Demo beat' : 'Demo range' }}</h3><p hlmCardDescription>Latest observation</p></hlm-card-header>
       <div hlmCardContent>14:05 UTC</div></article> }

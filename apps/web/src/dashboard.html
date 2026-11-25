@@ -98,7 +98,7 @@
             <ul class="grid gap-1" aria-labelledby="feeds-title">@for (feed of feeds; track feed.source + '/' + feed.product) {
               <li class="flex flex-wrap items-center justify-between gap-2 border-b border-border py-1 last:border-0">
                 <span>{{ feed.source }} · {{ feed.product }}</span>
-                <fimra-status-badge class="mx-0!" [icon]="feedStates[feed.status].icon" [label]="feedStates[feed.status].label" />
+                <fimra-status-badge class="mx-0!" [icon]="feed.status" [label]="feedLabels[feed.status]" />
               </li>
             }</ul>
           } @else {
