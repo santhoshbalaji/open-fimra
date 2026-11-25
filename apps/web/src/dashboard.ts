@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, effect, inject, input, signal, viewChild } from '@angular/core';
 import { KeyValuePipe } from '@angular/common';
 import { timer, switchMap, catchError, EMPTY } from 'rxjs';
 import { AuthService } from './auth';
@@ -30,6 +30,8 @@ interface Summary {
 
 @Component({selector: 'fimra-dashboard', imports: [KeyValuePipe, ClassChart], templateUrl: './dashboard.html'})
 export class Dashboard {
+  readonly focusFeedHealth = input(false);
+  private readonly feedHeading = viewChild<ElementRef<HTMLElement>>('feedHeading');
   readonly filters = inject(DashboardFilters);
   readonly summary = signal<Summary | null>(null);
   readonly message = signal('');
@@ -45,6 +47,9 @@ export class Dashboard {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
 
   constructor() {
+    effect(() => {
+      if (this.focusFeedHealth()) this.feedHeading()?.nativeElement.focus();
+    });
     effect(onCleanup => {
       const workspace = this.workspace.current();
       const params = this.filters.params();

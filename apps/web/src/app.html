@@ -12,6 +12,7 @@
               aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'" title="Toggle dark theme">
         @if (appearance.theme() === 'dark') { <svg lucideSun></svg> } @else { <svg lucideMoon></svg> }
       </button>
+      <fimra-notifications (openNotice)="openNotice($event)" />
       <button brnButton [cdkMenuTriggerFor]="account" class="user-trigger flex items-center gap-2"
               [attr.aria-label]="dashboard() ? 'Account menu' : 'Account for ' + (user.profile.name || user.profile.preferred_username || 'User')">
         <svg lucideCircleUserRound></svg>
@@ -29,7 +30,7 @@
   @if (workspace.current() && !(showLayers() && workspace.canManageLayers())) {
     <div class="workspace-controls">
       <nav aria-label="Control room views">
-        <button [attr.aria-pressed]="!dashboard()" (click)="dashboard.set(false)">Map and queue</button>
+        <button [attr.aria-pressed]="!dashboard()" (click)="dashboard.set(false); focusFeedHealth.set(false)">Map and queue</button>
         <button [attr.aria-pressed]="dashboard()" (click)="dashboard.set(true)">Dashboard</button>
       </nav>
       <label>Past {{ filters.hours() }} hours
@@ -47,12 +48,13 @@
     </div>
   }
   <main>
+    @if (linkMessage()) { <p role="status">{{ linkMessage() }}</p> }
     @if (showLayers() && workspace.canManageLayers()) {
       <fimra-layers />
     } @else if (dashboard() && workspace.current()) {
-      @defer (on immediate) { <fimra-dashboard /> }
+      @defer (on immediate) { <fimra-dashboard [focusFeedHealth]="focusFeedHealth()" /> }
     } @else {
-      @defer (on immediate) { <fimra-demo-map /> }
+      @defer (on immediate) { <fimra-demo-map [linkedAlert]="linkedAlert()" /> }
     }
   </main>
 } @else {

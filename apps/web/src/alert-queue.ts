@@ -37,6 +37,7 @@ export class AlertQueue {
   readonly page = signal<Page | null>(null);
   readonly message = signal('');
   readonly pinned = signal<AlertRow | null>(null);
+  readonly linked = signal<AlertRow | null>(null);
   readonly tabs = computed<Queue[]>(() => this.page()?.canReview ? ['unit', 'edge_review', 'triage'] : ['unit']);
   readonly rows = computed(() => {
     const rows = this.page()?.items ?? [];
@@ -60,6 +61,7 @@ export class AlertQueue {
       this.page.set(null);
       this.cursor.set('');
       this.selected.set(null);
+      this.linked.set(null);
       this.pinned.set(null);
     });
     effect(onCleanup => {
@@ -86,7 +88,7 @@ export class AlertQueue {
       const url = this.endpoint();
       const hours = this.hours();
       const now = this.now();
-      if (!point || !url) return;
+      if (this.linked() || !point || !url) return;
       if (point.observed_at * 1000 < now - hours * 3600_000) { this.select(null); return; }
       const request = this.http.get<Page>(url, { params: { ...this.filters.params(), detection: String(point.id) } }).subscribe({
         next: result => {
@@ -109,12 +111,21 @@ export class AlertQueue {
   }
 
   select(point: Detection | null): void {
+    this.linked.set(null);
     this.pinned.set(null);
     this.selected.set(point);
   }
 
   selectRow(row: AlertRow): void {
     this.select({ ...row, id: row.detection_id });
+  }
+
+  selectLinked(row: AlertRow): void {
+    this.changePage('');
+    this.active.set(row.queue);
+    this.linked.set(row);
+    this.pinned.set(row);
+    this.selected.set({ ...row, id: row.detection_id });
   }
 
   switchTo(queue: Queue): void {

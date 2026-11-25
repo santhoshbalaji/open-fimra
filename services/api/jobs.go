@@ -27,7 +27,7 @@ func (*heartbeatWorker) Work(context.Context, *river.Job[heartbeatArgs]) error {
 	return nil
 }
 
-func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string) (*river.Client[pgx.Tx], error) {
+func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string, email notificationChannel) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &heartbeatWorker{})
 	river.AddWorker(workers, &rematchWorker{pool: pool})
@@ -54,6 +54,18 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string) (
 		func() (river.JobArgs, *river.InsertOpts) {
 			return feedHealthArgs{}, &river.InsertOpts{
 				Queue: feedHealth, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByPeriod: feedCheckInterval},
+			}
+		},
+		&river.PeriodicJobOpts{RunOnStart: true},
+	))
+
+	queues[notificationQueue] = river.QueueConfig{MaxWorkers: 1}
+	river.AddWorker(workers, &notificationWorker{db: pool, email: email})
+	periodic = append(periodic, river.NewPeriodicJob(
+		river.PeriodicInterval(notificationInterval),
+		func() (river.JobArgs, *river.InsertOpts) {
+			return notificationArgs{}, &river.InsertOpts{
+				Queue: notificationQueue, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByPeriod: notificationInterval},
 			}
 		},
 		&river.PeriodicJobOpts{RunOnStart: true},

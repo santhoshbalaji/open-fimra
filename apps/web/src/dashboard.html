@@ -37,7 +37,7 @@
           <td>{{ duration(data.responseSeconds[step.key].p90) }}</td></tr>
       }</tbody></table></section>
     @if (data.feedHealth; as feeds) {
-      <section><h3>Feed health</h3><ul>@for (feed of feeds; track feed.source + '/' + feed.product) {
+      <section><h3 #feedHeading tabindex="-1">Feed health</h3><ul>@for (feed of feeds; track feed.source + '/' + feed.product) {
         <li><span class="feed-status" [style.border-color]="'var(--color-' + feedStates[feed.status].color + ')'">
           <b aria-hidden="true">{{ feedStates[feed.status].icon }}</b> {{ feedStates[feed.status].label }}</span>
           {{ feed.source }} · {{ feed.product }}</li>

@@ -62,3 +62,12 @@ make web-build
 The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to stop the dev server.
 
 The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. The report steps record a pending report until report forms are available.
+
+## Notifications
+
+The bell in the top bar shows the unread count. Open it to see unread
+notifications first. Choose an alert to mark the notification as read and
+select the alert on the map and in its queue. Alert links also work after
+sign-in and can open older alerts. Feed notices open the feed health section
+of the dashboard. Press Escape to close the list and return
+focus to the bell.

@@ -81,7 +81,7 @@ jobs:
           cache-dependency-path: services/api/go.sum
       - run: make dev
       - run: make db-migrate
-      - name: Test sign-in, ingestion, alert workflow, dashboard SQL parity, queues, tiles, backfill and feed health
+      - name: Test the core API, dashboard parity, notification replay and Mailpit delivery
         shell: bash
         run: |
           make api-test-integration | tee api-integration.log

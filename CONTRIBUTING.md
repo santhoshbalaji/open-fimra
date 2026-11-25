@@ -98,3 +98,22 @@ Each stack has about 2.5 GB of memory available. The optional geo worker has a s
 4. Describe what changed and how you tested it in the pull request.
 
 Write documentation and interface text in plain English: short sentences, everyday words, and no unexplained abbreviations.
+
+## Trying email notifications
+
+Run `make mail-up` to start the local mail catcher. Add these settings to your
+local `.env` and restart the API. Sign in as a demo user before ingesting new
+detections so the API has the verified address from that user's token.
+
+```bash
+FIMRA_SMTP_ADDR=127.0.0.1:11025
+FIMRA_SMTP_FROM=open-fimra@example.invalid
+FIMRA_SMTP_SECURITY=local
+FIMRA_WEB_URL=http://127.0.0.1:4200
+```
+
+Open the mail catcher at <http://127.0.0.1:18025>. For more than one stack,
+set different `FIMRA_MAILPIT_SMTP_PORT` and `FIMRA_MAILPIT_HTTP_PORT` values
+and use the matching port in `FIMRA_SMTP_ADDR`. The test target
+`make api-test-integration` starts the mail catcher and checks delivery,
+retry and replay using synthetic addresses.

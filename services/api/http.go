@@ -15,20 +15,21 @@ import (
 )
 
 type api struct {
-	pool      *pgxpool.Pool
-	queries   *db.Queries
-	logger    *slog.Logger
-	reader    ingestDB
-	uploadDir string
-	exports   exportSettings
-	feedDB    feedDB
-	jobs      *river.Client[pgx.Tx]
+	pool         *pgxpool.Pool
+	queries      *db.Queries
+	logger       *slog.Logger
+	reader       ingestDB
+	uploadDir    string
+	exports      exportSettings
+	feedDB       feedDB
+	jobs         *river.Client[pgx.Tx]
+	emailEnabled bool
 	// now is the clock for feed health. It is nil outside tests.
 	now func() time.Time
 }
 
 func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger, origins, uploadDir string, jobs *river.Client[pgx.Tx], options ...func(*api)) http.Handler {
-	a := api{pool: pool, queries: db.New(pool), logger: logger, reader: pool, uploadDir: uploadDir, feedDB: pool, jobs: jobs}
+	a := api{pool: pool, queries: db.New(pool), logger: logger, reader: pool, uploadDir: uploadDir, feedDB: pool, jobs: jobs, emailEnabled: auth.emailEnabled}
 	for _, option := range options {
 		option(&a)
 	}
@@ -43,6 +44,12 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	})
 	router.Get("/readyz", a.ready)
 	router.With(auth.require).Get("/api/v1/me", a.me)
+	router.With(auth.require).Get("/api/v1/notifications", a.notifications)
+	router.With(auth.require).Post("/api/v1/notifications/{id}/read", a.notifications)
+	router.With(auth.require).Get("/api/v1/notifications/preferences", a.notificationPreferences)
+	router.With(auth.require).Post("/api/v1/notifications/preferences", a.notificationPreferences)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/notification-rules", a.notificationRules)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/notification-rules", a.notificationRules)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts", a.alerts)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}", a.alerts)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}/history", a.workflow)
@@ -111,6 +118,13 @@ func (a api) me(w http.ResponseWriter, r *http.Request) {
 		a.logger.Error("Could not save the signed-in user", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load the signed-in user.")
 		return
+	}
+
+	if a.emailEnabled {
+		if err := saveNotificationEmail(ctx, a.reader, caller); err != nil {
+			a.notificationError(w, err)
+			return
+		}
 	}
 
 	rows, err := a.queries.ListRoleAssignments(ctx, userID)

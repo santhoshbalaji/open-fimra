@@ -343,3 +343,76 @@ Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or 
 Every export carries a note of its source, filters, time window, coordinate system, request and generation times, row count and the requesting role. It never names the people involved. GeoPackage and Excel files hold it in the `export_note` and `export_fields` tables. Every other format is a zip file with the note in `README.txt` beside the data. Shapefile field names are limited to 10 characters. The note lists each field's short name, such as `divisio_cd` for `division_code`. Each export, and each download, is recorded in the audit log with its filters and row count.
 
 Run `make export-test-integration` with the stack, Keycloak and geo worker running. It exports as each demo user and checks that the rows match what the same user sees in the alert queue and in detection tiles. It checks that `no.role` is refused, that one user cannot read another's export, that expiry removes the file and that the audit rows exist. It then opens every downloaded format with OGR in the geo worker container and prints its layers, geometry, coordinate system, fields and feature count.
+
+## Notifications
+
+The alert's saved paths decide who can receive a notification. Current grants
+are checked again before email delivery and when someone opens their inbox.
+Each workspace starts with these rules for both in-app notifications and email.
+
+| Event | Recipients |
+| --- | --- |
+| New unit alert | Field staff and division officers whose grants cover the alert |
+| New edge review or triage alert | People whose grants let them review that alert |
+| Alert overdue at its current step | Division officers whose grants let them see the alert |
+| Feed-health alert opens | People with a role at the root of a workspace hierarchy |
+
+The alert or feed-health insert records its notifications in the same database
+transaction. A background check records an overdue event once for each step
+entry, including when an alert returns to a step it has visited before. Each
+event, recipient and channel has one database row, even when multiple grants
+or rules match. Replaying a feed or re-matching an existing alert leaves that
+row alone. A re-match that opens a new alert can notify its officers.
+
+### Endpoints
+
+All endpoints require a bearer token.
+
+- `GET /api/v1/notifications` returns `items`, `unreadCount` and `hasMore`.
+  The result starts with unread items and includes up to 50 per page. Use
+  `offset=50` for the next page.
+- `POST /api/v1/notifications/{id}/read` marks one of the caller's
+  notifications read and returns `204`. It is safe to repeat.
+- Use `GET /api/v1/notifications/preferences` to read preferences. Use
+  `POST` with `{"emailMuted":true}` or `{"emailMuted":false}` to set them.
+  In-app notifications stay on when users mute email.
+- `GET /api/v1/workspaces/{slug}/notification-rules` lists the rules. A state
+  admin at the workspace root can replace them with a `POST` containing an
+  array, for example
+  `[{"event":"alert_new","recipients":"reviewers","channel":"in_app","queue":"triage"}]`.
+  Events are `alert_new`, `alert_overdue` and `feed_open`. Select recipients
+  with `field_staff`, `division_officer`, `reviewers` or `root`. Channels are
+  `in_app` and `email`. An alert rule can filter by `queue` or `forestClass`.
+  Forest classes supported here are `inside` and `near_edge`. Feed-health rules
+  use `root` without a filter. Changes apply to new events.
+
+### Email delivery
+
+Email is disabled unless `FIMRA_SMTP_ADDR` is set. The web app requests the
+OpenID Connect `email` scope. With email enabled, the API saves a verified
+address from the token on the user row when `/me` loads. Provision this claim
+and `email_verified` in your sign-in provider. A later `/me` request without a
+verified address clears the stored address. The address is personal data.
+Inbox and preferences responses omit it. The audit log records address
+changes and access for delivery without recording the address.
+
+| Setting | Value |
+| --- | --- |
+| `FIMRA_SMTP_ADDR` | Mail server host and port |
+| `FIMRA_SMTP_FROM` | Sender email address |
+| `FIMRA_SMTP_SECURITY` | `starttls` by default, `tls` for implicit TLS, or `local` for an unauthenticated loopback mail catcher |
+| `FIMRA_SMTP_USERNAME`, `FIMRA_SMTP_PASSWORD` | Optional mail server credentials, supplied together |
+| `FIMRA_WEB_URL` | Full URL of the web app for links in email |
+
+A River job checks the database outbox. Confirmed temporary failures retry
+with increasing delays and a maximum of five attempts. Permanent failures end
+the delivery. SMTP may accept a message and lose the connection before
+confirming it. The job records that outcome, or a worker crash during a send,
+as `uncertain` and leaves it for operator review. Messages are plain text and
+contain a link without detection coordinates. An email is queued only when
+the recipient has a verified address on file and has left email on.
+
+The delivery interface includes disabled stubs for text messages and mobile
+push. A text message deployment needs the agency's gateway and templates
+registered under India's DLT rules. Mobile push needs a configured provider
+and device registration.

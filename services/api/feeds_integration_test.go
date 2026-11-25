@@ -136,6 +136,15 @@ func checkSilentSource(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefi
 		if status != wantStatus || got != want {
 			t.Fatalf("at +%s the feed is %s with alerts %+v, want %s with %+v", d, status, got, wantStatus, want)
 		}
+		var recipients []string
+		err = tx.QueryRow(ctx, `
+SELECT ARRAY(SELECT u.username FROM notifications n JOIN users u ON u.id=n.recipient_id
+    JOIN feed_health_alerts a ON a.id=n.feed_alert_id
+    WHERE a.workspace_id=$1 AND a.source=$2 AND n.event='feed_open' AND n.channel='in_app'
+    ORDER BY u.username)`, workspaceID, source).Scan(&recipients)
+		if err != nil || len(recipients) != want.total || (want.total == 1 && recipients[0] != "state.admin") {
+			t.Fatalf("feed-health notification recipients = %v: %v", recipients, err)
+		}
 		t.Logf("+%s: %s, %d open of %d alerts", d, status, got.open, got.total)
 	}
 

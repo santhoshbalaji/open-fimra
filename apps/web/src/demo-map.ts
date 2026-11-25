@@ -1,4 +1,5 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { BrnButton } from '@spartan-ng/brain/button';
 import { LucideDownload, LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
 import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
@@ -9,6 +10,7 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, Detection, detectionLayer, ForestClass, iconName, mapRequest, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
+import type { NotificationLink } from './notifications';
 import { boundaries, demoStyle } from './map-style';
 import { ThemeService, type Theme } from './theme';
 import { unavailable, WorkspaceService } from './workspace';
@@ -20,6 +22,8 @@ import { unavailable, WorkspaceService } from './workspace';
   templateUrl: './demo-map.html'
 })
 export class DemoMap implements AfterViewInit, OnDestroy {
+  readonly linkedAlert = input<NotificationLink | null>(null);
+  readonly linkedMessage = signal('');
   readonly boundaries = boundaries;
   readonly workspace = inject(WorkspaceService);
   readonly classes = classes;
@@ -47,6 +51,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
   private readonly picker = viewChild<ElementRef<HTMLSelectElement>>('picker');
   private readonly detailTitle = viewChild<ElementRef<HTMLHeadingElement>>('detailTitle');
+  private readonly http = inject(HttpClient);
   private readonly appearance = inject(ThemeService);
   private readonly auth = inject(AuthService);
   private readonly base = inject(WEB_CONFIG).apiBaseUrl;
@@ -78,6 +83,41 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }
     });
     effect(() => this.detailTitle()?.nativeElement.focus());
+    effect(onCleanup => {
+      const link = this.linkedAlert();
+      const endpoint = this.queue.endpoint();
+      this.linkedMessage.set('');
+      if (!link?.alert || !endpoint || this.workspace.current()?.slug !== link.workspace) {
+        if (untracked(this.queue.linked)) this.queue.select(null);
+        return;
+      }
+      const request = this.http.get<AlertRow>(endpoint + '/' + link.alert).subscribe({
+        next: row => {
+          this.rowButton = undefined;
+          this.mobileQueue.set(false);
+          this.queue.selectLinked(row);
+        },
+        error: err => {
+          if (err.status === 401) this.auth.sessionEnded();
+          this.linkedMessage.set('This alert could not be opened.');
+        }
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+    effect(() => {
+      const row = this.queue.linked();
+      if (!this.ready() || !this.map) return;
+      const source = this.map.getSource<GeoJSONSource>('linked-alert');
+      if (!source) return;
+      source.setData({
+        type: 'FeatureCollection',
+        features: row ? [{
+          type: 'Feature', properties: {},
+          geometry: { type: 'Point', coordinates: [row.longitude, row.latitude] }
+        }] : []
+      });
+      if (row) this.map.jumpTo({ center: [row.longitude, row.latitude] });
+    });
   }
 
   private updateLayers(map: LibreMap, theme: Theme, url: string | null, low = this.filters.lowBandwidth()): void {
@@ -127,6 +167,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         filter: ['==', ['to-string', ['get', 'id']], String(this.selected()?.id ?? '')],
         paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': '#277ea3' }
       });
+      if (map.getLayer('linked-alert')) map.moveLayer('linked-alert');
     } else if (changed) {
       map.setLayoutProperty(layer.id, 'icon-image', layer.layout!['icon-image']);
     }
@@ -188,6 +229,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           this.bounds = await map.getSource<GeoJSONSource>('state')?.getBounds();
           if (!this.map) return;
           this.fit();
+          map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+          map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
+            paint: { 'circle-radius': 9, 'circle-color': '#277ea3', 'circle-opacity': 0.2,
+              'circle-stroke-width': 3, 'circle-stroke-color': '#277ea3' }
+          });
           this.ready.set(true);
           this.timer = setInterval(() => {
             if (map.getSource('detections')) {

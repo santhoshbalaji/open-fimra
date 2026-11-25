@@ -27,8 +27,8 @@
       </label>
     </div>
   }
-  @if (workspace.message() || tileError() || error()) {
-    <p class="map-message" role="status">{{ workspace.message() || tileError() || error() }}</p>
+  @if (workspace.message() || linkedMessage() || tileError() || error()) {
+    <p class="map-message" role="status">{{ workspace.message() || linkedMessage() || tileError() || error() }}</p>
   }
 </div>
 <section class="map-key" aria-label="Map key">

@@ -21,6 +21,8 @@ FIMRA_OIDC_ISSUER ?= http://127.0.0.1:$(FIMRA_KEYCLOAK_PORT)/realms/open-fimra
 FIMRA_OIDC_AUDIENCE ?= open-fimra-api
 FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
 FIMRA_UPLOAD_DIR ?= .geo-uploads
+FIMRA_MAILPIT_HTTP_PORT ?= 18025
+FIMRA_MAILPIT_SMTP_PORT ?= 11025
 export FIMRA_UPLOAD_DIR := $(abspath $(FIMRA_UPLOAD_DIR))
 FIMRA_EXPORT_DIR ?= .geo-exports
 export FIMRA_EXPORT_DIR := $(abspath $(FIMRA_EXPORT_DIR))
@@ -42,6 +44,14 @@ api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
 api-run: export FIMRA_EXPORT_TTL := $(FIMRA_EXPORT_TTL)
 api-run backfill-firms: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
 api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
+api-run: export FIMRA_SMTP_ADDR := $(FIMRA_SMTP_ADDR)
+api-run: export FIMRA_SMTP_FROM := $(FIMRA_SMTP_FROM)
+api-run: export FIMRA_SMTP_USERNAME := $(FIMRA_SMTP_USERNAME)
+api-run: export FIMRA_SMTP_PASSWORD := $(FIMRA_SMTP_PASSWORD)
+api-run: export FIMRA_SMTP_SECURITY := $(FIMRA_SMTP_SECURITY)
+api-run: export FIMRA_WEB_URL := $(FIMRA_WEB_URL)
+api-test-integration: export FIMRA_TEST_MAILPIT_URL := http://127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT)
+api-test-integration: export FIMRA_TEST_MAILPIT_SMTP := 127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT)
 ingest-fixture: export FIMRA_FIXTURE_FILE := $(if $(FILE),$(if $(filter /%,$(FILE)),$(FILE),$(CURDIR)/$(FILE)))
 ingest-fixture: export FIMRA_FIXTURE_PRODUCT := $(or $(PRODUCT),VIIRS_SNPP_NRT)
 
@@ -58,10 +68,14 @@ dev: ## Start the development stack (PostGIS and Keycloak) and wait until it is 
 	@$(COMPOSE) ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
 dev-down: ## Stop the development stack, keeping its data
-	$(COMPOSE) --profile geo down
+	$(COMPOSE) --profile geo --profile mail down
 
 dev-reset: ## Stop the development stack and delete its data
-	$(COMPOSE) --profile geo down --volumes
+	$(COMPOSE) --profile geo --profile mail down --volumes
+
+.PHONY: mail-up
+mail-up: ## Start the local mail catcher
+	$(COMPOSE) up -d --wait mailpit
 
 dev-logs: ## Follow the development stack's logs
 	$(COMPOSE) --profile geo logs -f
@@ -114,8 +128,8 @@ api-run: ## Run the core API on the development stack
 api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
-api-test-integration: ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration)$$' -count=1 -v .
+api-test-integration: mail-up ## Test the core API against the migrated development stack
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
