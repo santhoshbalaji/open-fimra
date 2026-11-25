@@ -13,6 +13,7 @@ Thumbs.db
 /.geo-exports/
 /.geo-exports-check/
 /.form-attachments/
+/.xlsforms/
 
 # Agency data must never be committed
 *.gpkg
@@ -27,6 +28,10 @@ Thumbs.db
 *.pmtiles
 *.mbtiles
 !seed/**
+
+# Spreadsheets such as XLSForm files are written by tests and commands
+*.xlsx
+*.xls
 
 # Screenshots belong outside the repository, except the design-system images
 *.png

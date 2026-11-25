@@ -68,7 +68,11 @@ services:
 
   geo-worker:
     profiles: [geo]
-    build: ../../services/geo-worker
+    build:
+      context: ../../services/geo-worker
+      # The worker image builds the form validator from this folder.
+      additional_contexts:
+        form-schema: ../../packages/form-schema
     environment:
       PGHOST: db
       PGDATABASE: ${FIMRA_DB_NAME:-fimra}

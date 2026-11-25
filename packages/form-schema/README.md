@@ -11,6 +11,7 @@ The published form format and its validators, shared by the web form designer, t
 | [examples/](examples) | Valid example forms, including drafts of the five starter-pack forms for the fictional Demo State. |
 | [examples/columns/](examples/columns) | The columns each valid example produces. |
 | [examples/invalid/](examples/invalid) | Forms broken in one way each, with the message both validators must give. |
+| [cmd/formcheck](cmd/formcheck/main.go) | A small command that runs the Go validator, for programs in other languages. |
 
 ## Testing
 
@@ -36,6 +37,15 @@ columns, _ := formschema.Columns(data) // nil when the form is not valid
 ```
 
 The package embeds `form.schema.json` with `go:embed`. Go can embed only files at or below the package folder, which is why the Go files sit here beside the schema rather than in `services/api`. There is no second copy to keep in step.
+
+## Using the validator from another language
+
+`cmd/formcheck` reads a form, or a JSON array of forms, from a file or standard input, and writes `{"problems": [...], "columns": [...]}` for each. The geo worker builds it into its image and uses it to check forms it converts from XLSForm, so that Python has no validator of its own.
+
+```bash
+cd packages/form-schema
+go run ./cmd/formcheck examples/first-report.json
+```
 
 ## Using the TypeScript module
 

@@ -1,10 +1,13 @@
 # Geo worker
 
-The worker imports layers and writes file exports. It reads GeoPackage, zipped
+The worker imports layers, writes file exports and converts forms to and from
+XLSForm. It reads GeoPackage, zipped
 Shapefile, GeoJSON, KML and KMZ, and saves draft layers and review items. It
 writes exports in eight formats from rows the core API has already chosen. GDAL reads the files and transforms their
 coordinates. Shapely repairs geometry and checks how the shapes fit together.
 The container supplies GDAL and the Python lock file pins the other libraries.
+The image also holds `formcheck`, the form validator built from
+[packages/form-schema](../../packages/form-schema/README.md).
 
 ## Run and test
 
@@ -89,3 +92,166 @@ the version and re-matches detections through the Go job queue. See the
 
 Run `python readback.py FILE` in the container to describe any export with
 OGR. `make export-test-integration` does this for every format it downloads.
+
+## How XLSForm conversion works
+
+XLSForm is the spreadsheet form format of ODK, which many departments already
+know. The worker converts an XLSForm workbook into a draft form in the
+[Open FIMRA form format](../../packages/form-schema/SPEC.md), and writes a form
+back out as a workbook. [xlsform.py](xlsform.py) maps the sheets and
+[xlsform_expr.py](xlsform_expr.py) translates the expressions.
+
+### Commands
+
+```sh
+make xlsform-import FILE=path/to/form.xlsx          # draft form and review report in .xlsforms/
+make xlsform-export FILE=packages/form-schema/examples/first-report.json
+make xlsform-import FILE=form.xlsx OUT=some/folder  # write somewhere else
+make xlsform-odk-check                              # export every example and convert it with pyxform
+make db-up db-migrate xlsform-test-integration      # run conversion jobs on the database
+```
+
+Both conversions write a `.report.txt` file beside their output and print it.
+`.xlsforms/` is ignored by Git, and so are all `.xlsx` files: spreadsheets are
+written by commands and tests, never committed. `make geo-test` runs the unit
+tests, including the round trip of every example form.
+
+### Reading the workbook
+
+- Only `.xlsx` workbooks are read. Save an `.xls` file or a Google Sheet as an
+  Excel Workbook first.
+- [openpyxl](https://openpyxl.readthedocs.io/) reads and writes the workbook,
+  with [defusedxml](https://github.com/tiran/defusedxml) so that a crafted file
+  cannot use XML entity tricks. Both are small, pure Python and under permissive
+  licences (MIT and the Python licence), and openpyxl needs only `et-xmlfile`.
+  GDAL's spreadsheet driver is not used here: it reads each sheet as a table
+  of features with guessed column types, while the converter needs every cell
+  as written and its sheet row for the review report.
+- A workbook may be up to 10 MB, unpack to at most 64 MB in 512 parts, and have
+  at most 10,000 rows on a sheet.
+
+### One validator
+
+Every draft is checked with the Go validator from `packages/form-schema`,
+built into the image as the small `formcheck` command
+([cmd/formcheck](../../packages/form-schema/cmd/formcheck/main.go)). Compose
+passes that folder to the image build as a second build context. The worker
+sends the draft as JSON on standard input and reads back the same problems
+the core API and the web app would report. There is no Python copy of the
+rules to drift from the others. The importer also asks the validator about
+each pattern on its own, so a pattern that the form format does not allow is
+left out with the validator's own message instead of failing the whole form.
+
+A draft that the validator refuses is never saved: the job fails and the
+problems go into its review report.
+
+### The review report
+
+Each entry names the sheet, the row, the column and the question's key where
+they apply, and says in plain English what was changed or left out and why.
+For example:
+
+```
+- survey sheet, row 5 (staff_count): “2” in the default column was not imported, because the form format has no default answers.
+- survey sheet, row 13 (cause_other): The relevant expression “${cause} = 'other' and ${patrol_date} = today()” was not imported, because it compares “patrol_date” with today(), and the form format compares answers only with fixed values. It is always shown now.
+```
+
+Nothing is dropped without an entry. This includes question types the format
+does not have, such as notes, barcodes, audio and the automatic `start` and
+`end` values. It also covers columns such as `default`, `required_message`,
+media and `bind::` columns, `or_other` lists, lists from files, unknown
+appearances and sheets, settings, and every expression or part of a
+constraint that cannot be translated exactly. Renamed keys and choices are
+listed too. A
+question shown only when a question that was left out is answered keeps the
+question and loses the condition, with an entry saying so.
+
+An export also gives notes, such as which Open FIMRA columns ODK ignores and
+that ODK cannot fill in values from the alert.
+
+### What maps to what
+
+| Form format | XLSForm |
+|---|---|
+| `id`, `version`, English title | settings `form_id`, `version`, `form_title` |
+| Section, group | top-level `begin_group`, nested `begin_group`. Questions outside any group go into a section called “Questions”. |
+| Repeating group | `begin_repeat` |
+| Description of a section or group | `hint` on the group row |
+| `text`, `number`, `date`, `time`, `date-time` | `text`, `integer` (no decimal places) or `decimal`, `date`, `time`, `dateTime` |
+| `single-choice`, `multiple-choice` | `select_one list`, `select_multiple list` and the choices sheet |
+| `point`, `track`, `polygon` | `geopoint`, `geotrace`, `geoshape` |
+| `photo`, `signature`, `file` | `image`, `image` with appearance `signature`, `file` |
+| `calculated` | `calculate` with a `calculation` |
+| `alert-value` | a read-only question of the matching type, with `fimra_alert_value` |
+| `required`, `requireWhen` | `required` as `yes` or as an expression |
+| `showWhen` | `relevant` |
+| Limits, patterns, `notInFuture` | `constraint`, such as `. >= 0 and . <= 100`, `string-length(.) <= 80`, `regex(., '^[0-9]{10}$')`, `. <= today()`, `count-selected(.) >= 1` |
+| `patternHint` | `constraint_message` on a text question |
+| Cascading `parent` | `choice_filter` written as `column = ${parent}`, with the parent's choice in that column of the choices sheet |
+| Translated texts | `label::Hindi (hi)` style columns, with `default_language` in settings |
+| Widgets | appearances `multiline`, `counter`, `minimal` and `columns-pack` for paragraph, stepper, dropdown and buttons |
+
+Conditions and calculations use the same parts of XPath both ways: `${name}`,
+`=`, `<` and the other comparisons, `and`, `or`, `not()`, `selected()`,
+`date()`, `date-time()`, `decimal-time()`, `+`, `-`, `*`, `div`, `sum()`,
+`count()`, `round()` around a whole calculation for its decimal places,
+`area(…) div 10000` for hectares, `distance(…) div 1000` for kilometres and
+`(decimal-date-time(end) - decimal-date-time(start)) * 24` for hours. A plain
+`area()` or `distance()` keeps its ODK meaning of square metres or metres.
+Two details keep meanings exact:
+
+- In XLSForm, `${f} != 'x'` is true when `f` is unanswered, and the form
+  format's `not-equals` is not. So `!=` imports as `not` around `equals`, and
+  `not-equals` exports as `(${f} != '' and ${f} != 'x')`.
+- ODK finds a `regex()` pattern anywhere in the answer, while the form format
+  matches the whole answer. Only patterns written between `^` and `$` import,
+  and exports add them.
+
+What XLSForm has no column for goes in extra survey columns, which ODK tools
+ignore: `fimra_stage`, `fimra_unit`, `fimra_decimals`, `fimra_min_count`,
+`fimra_max_count` (fewest and most entries, photos or files),
+`fimra_max_size_mb`, `fimra_accept`, `fimra_max_accuracy`, `fimra_alert_value`,
+`fimra_widget`, `fimra_width`, `fimra_collapsed` and `fimra_item_label`. When a
+workbook has no `fimra_max_count` column, an `image` or `file` question takes
+one photo or file, as in ODK. The `open_fimra` sheet holds the title's
+translations, the description, the languages, the stages and the pages, one
+row each.
+
+### Round trips
+
+Every example form in `packages/form-schema/examples`, including the five
+starter-pack drafts, is exported, imported again and compared. The test passes
+when the result is equivalent to the original, which means equal in every
+property and order except:
+
+- `$schema`, which only helps editors;
+- the order of `layout.items`, which hold one display setting per item;
+- a shared list used by only one question, which is the same as that question
+  holding the choices itself. A list named after its only question imports as
+  the question's own choices.
+
+The round trip also gives an empty review report. Numbers are compared by
+value, so `1` and `1.0` are equal.
+
+### Conversion jobs
+
+The API saves a request in `form_conversions` (migration 22). An import row
+holds the uploaded workbook and its file name, and an export row holds a form
+definition. The worker claims a pending row with `FOR UPDATE SKIP LOCKED`,
+converts it and saves the result in the same transaction: the draft form, or
+the workbook, and the review report. A failed job keeps its reason in
+`error_message` and the details in `report`. Files are small, so both
+workbooks live in the row rather than in the upload or export folders.
+
+The forms tables and endpoints come with the forms slice, so no endpoint uses
+these jobs yet. Wiring them in takes a few steps:
+
+1. An upload endpoint saves the workbook in a new `form_conversions` row, with
+   the workspace and the requester's subject, in the same transaction as its
+   audit entry.
+2. A status endpoint returns the row's status, report and error to the same
+   requester. When it is ready, the forms service copies `draft_form` into a
+   new draft form version and may then delete the row.
+3. A download endpoint inserts an export row from a form version and, when it
+   is ready, serves `result_file` as
+   `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
