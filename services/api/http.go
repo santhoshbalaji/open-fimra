@@ -72,6 +72,8 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}", a.alerts)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}/history", a.workflow)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/alerts/{id}/steps", a.workflow)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}", a.workspaceMap)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/reference/{z}/{x}/{y}", a.referenceTile)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}", a.detectionTile)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/layer-imports", a.layerCatalog)
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/layer-imports", a.uploadLayer)

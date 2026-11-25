@@ -53,7 +53,7 @@ export function tileUrl(base: string, slug: string, hours: number, forestClasses
 export function mapRequest(url: string, base: string, page: string, token: () => string | undefined): RequestParameters {
   if (!isApiRequest(url, base, page)) return { url };
   const bearer = token();
-  return bearer ? { url, headers: { Authorization: 'Bearer ' + bearer }, cache: 'no-store' } : { url };
+  return bearer ? { url, headers: { Authorization: 'Bearer ' + bearer } } : { url };
 }
 
 export function symbolStyle(cls: ForestClass, age: number, theme: Theme) {

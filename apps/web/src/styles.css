@@ -30,9 +30,6 @@ button .chevron { width: 14px; }
 .map-key ul { padding: 4px 8px; }
 .map-key li { display: flex; align-items: center; gap: 8px; line-height: 1.5; font-size: var(--text-label); }
 .key-line { width: 23px; border-top-style: solid; border-color: var(--color-text-secondary); }
-.key-line.beats { border-top-style: dashed; }
-.key-line.circles, .key-line.divisions { border-color: var(--color-brand); }
-.key-line.state { border-color: var(--color-text); }
 .key-forest { border: 1px solid var(--color-text-secondary); width: 23px; height: 10px; background: color-mix(in srgb, var(--color-chart-3) 34%, var(--color-card)); }
 .key-kiln { width: 10px; height: 10px; margin-inline: 6.5px; background: var(--color-neutral-mark); border: 2px solid var(--color-text); }
 .map-message { position: absolute; top: 16px; left: 16px; max-width: 65%; padding: 12px; }

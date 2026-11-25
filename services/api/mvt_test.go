@@ -9,15 +9,28 @@ import (
 // Read just the MVT layer and property fields needed to check the HTTP response.
 func tileFeatures(t *testing.T, tile []byte) []map[string]any {
 	t.Helper()
-	var layer []byte
+	layers := decodeTileLayers(t, tile)
+	features, ok := layers["detections"]
+	if !ok || len(layers) != 1 {
+		t.Fatalf("expected a detection layer, got %v", layers)
+	}
+	return features
+}
+
+func decodeTileLayers(t *testing.T, tile []byte) map[string][]map[string]any {
+	t.Helper()
+	layers := make(map[string][]map[string]any)
 	readMVTFields(t, tile, func(n uint64, b []byte, _ uint64) {
 		if n == 3 {
-			if layer != nil {
-				t.Fatal("unexpected extra tile layer")
-			}
-			layer = b
+			name, features := decodeTileLayer(t, b)
+			layers[name] = features
 		}
 	})
+	return layers
+}
+
+func decodeTileLayer(t *testing.T, layer []byte) (string, []map[string]any) {
+	t.Helper()
 	var name string
 	var keys []string
 	var values []any
@@ -51,9 +64,6 @@ func tileFeatures(t *testing.T, tile []byte) []map[string]any {
 			})
 		}
 	})
-	if name != "detections" {
-		t.Fatalf("got tile layer %q, want detections", name)
-	}
 
 	features := make([]map[string]any, 0, len(tags))
 	for _, b := range tags {
@@ -69,7 +79,7 @@ func tileFeatures(t *testing.T, tile []byte) []map[string]any {
 		}
 		features = append(features, properties)
 	}
-	return features
+	return name, features
 }
 
 func readMVTFields(t *testing.T, b []byte, field func(uint64, []byte, uint64)) {

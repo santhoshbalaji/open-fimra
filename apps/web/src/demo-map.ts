@@ -7,10 +7,11 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import tokens from '../../../docs/design-system/tokens.json';
 import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { catchError, EMPTY, exhaustMap, timer } from 'rxjs';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
 import { LucideDownload, LucideLayers, LucideMaximize, LucideMinus, LucidePlus } from '@lucide/angular';
-import { GeoJSONSource, LngLatBounds, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
+import { GeoJSONSource, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
@@ -19,7 +20,7 @@ import { WEB_CONFIG } from './config';
 import { ageLabels, classes, Detection, detectionLayer, ForestClass, iconName, mapRequest, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import type { NotificationLink } from './notifications';
-import { boundaries, demoStyle } from './map-style';
+import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
 import { unavailable, WorkspaceService } from './workspace';
 
@@ -32,13 +33,17 @@ import { unavailable, WorkspaceService } from './workspace';
 export class DemoMap implements AfterViewInit, OnDestroy {
   readonly linkedAlert = input<NotificationLink | null>(null);
   readonly linkedMessage = signal('');
-  readonly boundaries = boundaries;
+  private readonly geography = signal<{ endpoint: string; info: WorkspaceMap } | null>(null);
+  readonly boundaries = computed(() => boundaryKey(this.geography()?.info.levels ?? [], this.appearance.theme())
+    .filter(row => !this.filters.lowBandwidth() || row.depth === 0));
   readonly workspace = inject(WorkspaceService);
   readonly classes = classes;
   readonly forestClasses = Object.keys(classes) as ForestClass[];
   readonly ageLabels = ageLabels;
   readonly reasons = triageReasons;
   readonly error = signal('');
+  readonly geographyError = signal('');
+  readonly boundary = computed(() => this.geography()?.info.boundary);
   readonly tileError = signal('');
   readonly ready = signal(false);
   readonly legend = signal(false);
@@ -74,17 +79,73 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     return workspace && this.base.replace(/\/$/, '') + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug);
   });
   private map?: LibreMap;
-  private bounds?: LngLatBounds;
+  private fittedWorkspace?: string;
+  private referenceIds: string[] = [];
+  private referenceUrl?: string;
   private appliedTheme?: Theme;
   private appliedUrl: string | null = null;
   private timer?: ReturnType<typeof setInterval>;
 
   constructor() {
+    effect(onCleanup => {
+      const endpoint = this.exportEndpoint();
+      this.geography.set(null);
+      this.geographyError.set('');
+      if (!endpoint) return;
+      const request = timer(0, 60_000).pipe(exhaustMap(() =>
+        this.http.get<WorkspaceMap>(endpoint).pipe(catchError(err => {
+          if (err.status === 401) this.auth.sessionEnded();
+          else if (err.status === 403) this.workspace.deny();
+          else this.geographyError.set('Could not load workspace geography. Trying again in a minute.');
+          return EMPTY;
+        }))
+      )).subscribe(info => {
+        this.geographyError.set('');
+        const current = this.geography();
+        if (!current || current.info.version !== info.version ||
+            JSON.stringify(current.info.levels) !== JSON.stringify(info.levels) ||
+            JSON.stringify(current.info.boundary) !== JSON.stringify(info.boundary)) {
+          this.geography.set({ endpoint, info });
+        }
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+    effect(() => {
+      const geography = this.geography();
+      if (!geography) this.fittedWorkspace = undefined;
+      if (this.ready() && geography?.info.boundary && this.fittedWorkspace !== geography.endpoint) {
+        untracked(() => this.fitBoundary());
+        this.fittedWorkspace = geography.endpoint;
+      }
+    });
+    effect(() => {
+      const geography = this.geography();
+      const low = this.filters.lowBandwidth();
+      const theme = this.appearance.theme();
+      if (!this.ready() || !this.map) return;
+      const map = this.map;
+      for (const id of this.referenceIds) map.removeLayer(id);
+      this.referenceIds = [];
+      const url = geography ? geography.endpoint + '/tiles/reference/{z}/{x}/{y}.mvt?v=' +
+        encodeURIComponent(geography.info.version) + (low ? '&outline=1' : '') : undefined;
+      if (this.referenceUrl !== url) {
+        if (map.getSource('reference')) map.removeSource('reference');
+        if (url) map.addSource('reference', { type: 'vector', tiles: [url] });
+        this.referenceUrl = url;
+      }
+      map.setPaintProperty('background', 'background-color', tokens.color[theme].mapBackground);
+      if (geography) {
+        const before = map.getLayer('detections') ? 'detections' : 'linked-alert';
+        for (const layer of referenceLayers(geography.info, theme, low)) {
+          map.addLayer(layer, before);
+          this.referenceIds.push(layer.id);
+        }
+      }
+    });
     effect(() => {
       const theme = this.appearance.theme();
       const url = this.url();
-      const low = this.filters.lowBandwidth();
-      if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url, low));
+      if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url));
     });
     effect(() => {
       const id = String(this.selected()?.id ?? '');
@@ -143,28 +204,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     });
   }
 
-  private updateLayers(map: LibreMap, theme: Theme, url: string | null, low = this.filters.lowBandwidth()): void {
+  private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
     const changed = theme !== this.appliedTheme;
-    const style = demoStyle(theme);
-    for (const [id, source] of Object.entries(style.sources)) {
-      if (!low && !map.getSource(id)) map.addSource(id, source);
-    }
-    for (const layer of style.layers) {
-      if (low && layer.id !== 'background') {
-        if (map.getLayer(layer.id)) map.removeLayer(layer.id);
-      } else if (!map.getLayer(layer.id)) {
-        map.addLayer(layer, map.getLayer('detections') ? 'detections' : undefined);
-      } else if (changed && 'paint' in layer) {
-        for (const [name, value] of Object.entries(layer.paint ?? {})) {
-          map.setPaintProperty(layer.id, name as Parameters<LibreMap['setPaintProperty']>[1], value);
-        }
-      }
-    }
-    if (low) {
-      for (const id of Object.keys(style.sources)) {
-        if (id !== 'state' && map.getSource(id)) map.removeSource(id);
-      }
-    }
     if (changed && map.getLayer('linked-alert')) {
       map.setPaintProperty('linked-alert', 'circle-color', tokens.color[theme].brand);
       map.setPaintProperty('linked-alert', 'circle-stroke-color', tokens.color[theme].brand);
@@ -213,15 +254,10 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     this.appliedTheme = this.appearance.theme();
     try {
       setWorkerUrl(new URL('map/maplibre-gl-worker.mjs', document.baseURI).href);
-      const style = demoStyle(this.appliedTheme);
-      if (this.filters.lowBandwidth()) {
-        // Keep only the state extent for the fit control.
-        style.sources = { state: style.sources['state'] };
-        style.layers = style.layers.filter(layer => layer.id === 'background');
-      }
       const map = new LibreMap({
         container: this.container().nativeElement,
-        style,
+        style: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background',
+          paint: { 'background-color': tokens.color[this.appliedTheme].mapBackground } }] },
         transformRequest: url => mapRequest(url, this.base, document.baseURI, () => {
           const user = this.auth.user();
           if (user?.expired) { this.auth.sessionEnded(); return; }
@@ -241,10 +277,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       this.resize.observe(this.container().nativeElement);
       map.getCanvas().setAttribute('aria-label', 'Workspace map. Use arrow keys to pan and plus or minus to zoom.');
       map.on('error', event => {
-        if ('sourceId' in event && event.sourceId === 'detections') {
+        if ('sourceId' in event && (event.sourceId === 'detections' || event.sourceId === 'reference')) {
           const status = tileErrorStatus(event.error);
           if (status === 401) this.auth.sessionEnded();
           else if (status === 403) this.workspace.deny();
+          else if (event.sourceId === 'reference') this.error.set('Could not load reference tiles. Reload to try again.');
           else this.tileError.set(unavailable);
         } else this.error.set('Some map data could not load. Reload to try again.');
       });
@@ -266,29 +303,22 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         }
         this.visible.set([...points.values()].sort((a, b) => b.observed_at - a.observed_at));
       });
-      map.once('load', async () => {
-        try {
-          this.bounds = await map.getSource<GeoJSONSource>('state')?.getBounds();
-          if (!this.map) return;
-          this.fitState();
-          map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-          map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
-            paint: { 'circle-radius': 9, 'circle-color': tokens.color[this.appearance.theme()].brand, 'circle-opacity': 0.2,
-              'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
-          });
-          this.ready.set(true);
-          this.timer = setInterval(() => {
-            if (map.getSource('detections')) {
-              if (this.tileError()) {
-                this.removeDetections(map);
-                this.tileError.set('');
-                this.updateLayers(map, this.appearance.theme(), this.url());
-              } else map.refreshTiles('detections');
-            }
-          }, 60_000);
-        } catch {
-          this.error.set('Could not find the state boundary. Reload to try again.');
-        }
+      map.once('load', () => {
+        map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
+          paint: { 'circle-radius': 9, 'circle-color': tokens.color[this.appearance.theme()].brand, 'circle-opacity': 0.2,
+            'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
+        });
+        this.ready.set(true);
+        this.timer = setInterval(() => {
+          if (map.getSource('detections')) {
+            if (this.tileError()) {
+              this.removeDetections(map);
+              this.tileError.set('');
+              this.updateLayers(map, this.appearance.theme(), this.url());
+            } else map.refreshTiles('detections');
+          }
+        }, 60_000);
       });
     } catch {
       this.error.set('The map needs WebGL. Turn on graphics acceleration in your browser and reload.');
@@ -329,11 +359,12 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   fit(): void {
     if (this.selected()) this.movedInDetails = true;
-    this.fitState();
+    this.fitBoundary();
   }
 
-  private fitState(): void {
-    if (this.bounds && !this.bounds.isEmpty()) this.map?.fitBounds(this.bounds, { padding: Math.min(80, this.container().nativeElement.clientWidth * 0.1), duration: 0 });
+  private fitBoundary(): void {
+    const bounds = this.boundary();
+    if (bounds) this.map?.fitBounds(bounds, { padding: Math.min(80, this.container().nativeElement.clientWidth * 0.1), duration: 0 });
   }
 
   zoom(inward: boolean): void {

@@ -12,7 +12,7 @@
 <div class="map-actions" role="group" aria-label="Map controls">
   <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg lucidePlus></svg></button>
   <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg lucideMinus></svg></button>
-  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="fit()" title="Fit state to map" aria-label="Fit state to map"><svg lucideMaximize></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready() || !boundary()" (click)="fit()" title="Fit workspace to map" aria-label="Fit workspace to map"><svg lucideMaximize></svg></button>
 </div>
 <div class="fire-controls">
   @if (workspace.current()) {
@@ -30,8 +30,8 @@
       </hlm-select>
     </hlm-field>
   }
-  @if (workspace.message() || linkedMessage() || tileError() || error()) {
-    <p class="map-message" role="status">{{ workspace.message() || linkedMessage() || tileError() || error() }}</p>
+  @if (workspace.message() || linkedMessage() || tileError() || geographyError() || error()) {
+    <p class="map-message" role="status">{{ workspace.message() || linkedMessage() || tileError() || geographyError() || error() }}</p>
   }
 </div>
 <section class="map-key" aria-label="Map key">
@@ -51,12 +51,12 @@
         }
       </ul></div>
     }
-    @if (!filters.lowBandwidth()) { <div><h2>Reference layers</h2><ul>
-    @for (item of boundaries; track item.id) {
-      <li><i class="key-line" [class]="item.id" [style.border-top-width.px]="item.width"></i>{{ item.label }}</li>
+    @if (boundaries().length) { <div><h2>Reference layers</h2><ul>
+    @for (item of boundaries(); track item.id) {
+      <li><i class="key-line" [style.border-color]="item.color" [style.opacity]="item.opacity" [style.border-top-style]="item.depth ? 'dashed' : 'solid'" [style.border-top-width.px]="item.width"></i>{{ item.labels.en }}</li>
     }
-    <li><i class="key-forest"></i>Forest</li>
-    <li><i class="key-kiln"></i>Brick kiln</li>
+    @if (!filters.lowBandwidth()) { <li><i class="key-forest"></i>Forest</li>
+    <li><i class="key-kiln"></i>Exclusions</li> }
     </ul></div> }
   </div>
 </section>

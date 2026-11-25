@@ -1,42 +1,56 @@
-import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
+import type { FilterSpecification, LayerSpecification } from 'maplibre-gl';
 import tokens from '../../../docs/design-system/tokens.json';
 import type { Theme } from './theme';
 
-export const boundaries = [
-  { id: 'beats', label: 'Beat', width: 1, color: 'textSecondary' },
-  { id: 'ranges', label: 'Range', width: 1.6, color: 'textSecondary' },
-  { id: 'divisions', label: 'Division', width: 2.2, color: 'brand' },
-  { id: 'circles', label: 'Circle', width: 3, color: 'brand' },
-  { id: 'state', label: 'State', width: 4, color: 'text' },
-] as const;
+interface Level {
+  hierarchy: string;
+  depth: number;
+  slug: string;
+  labels: { en: string; hi?: string };
+}
+export interface WorkspaceMap {
+  version: string;
+  boundary: [number, number, number, number] | null;
+  levels: Level[];
+}
 
-export function demoStyle(theme: Theme): StyleSpecification {
+export function boundaryKey(levels: Level[], theme: Theme) {
   const color = tokens.color[theme];
-  const ids = ['forest', 'exclusions', ...boundaries.map(row => row.id)];
-  const layers: LayerSpecification[] = boundaries.map(row => ({
-    id: row.id, type: 'line', source: row.id,
-    paint: {
-      'line-color': color[row.color], 'line-width': row.width,
-      ...(row.id === 'beats' ? { 'line-dasharray': [3, 3] } : {})
-    }
+  return levels.map(level => ({
+    ...level, id: level.hierarchy + '-' + level.depth,
+    width: 4 / (1 + level.depth * 0.65),
+    color: level.depth === 0 ? color.text : level.depth === 1 ? color.brand : color.textSecondary,
+    opacity: 1 / (1 + level.depth * 0.13)
   }));
-  return {
-    version: 8,
-    sources: Object.fromEntries(ids.map(id => [id, {
-      type: 'geojson' as const, data: '/demo-state/' + id + '.geojson'
-    }])),
-    layers: [
-      { id: 'background', type: 'background', paint: { 'background-color': color.mapBackground } },
-      { id: 'land', type: 'fill', source: 'state', paint: { 'fill-color': color.card } },
-      { id: 'forest', type: 'fill', source: 'forest', paint: {
-        'fill-color': tokens.color.chart[theme][2], 'fill-opacity': 0.34
-      } },
-      { id: 'forest-edge', type: 'line', source: 'forest', paint: {
-        'line-color': color.textSecondary, 'line-width': 1
-      } },
-      ...layers,
-      { id: 'kiln', type: 'fill', source: 'exclusions', paint: { 'fill-color': color.neutralMark } },
-      { id: 'kiln-outline', type: 'line', source: 'exclusions', paint: { 'line-color': color.text, 'line-width': 2 } }
-    ]
-  };
+}
+
+export function referenceLayers(info: WorkspaceMap, theme: Theme, outline: boolean): LayerSpecification[] {
+  const color = tokens.color[theme];
+  const units = { source: 'reference', 'source-layer': 'units' };
+  const forest = { source: 'reference', 'source-layer': 'forest' };
+  const exclusions = { source: 'reference', 'source-layer': 'exclusions' };
+  const layers: LayerSpecification[] = outline ? [] : [
+    { id: 'land', type: 'fill', ...units, filter: ['==', ['get', 'depth'], 0], paint: { 'fill-color': color.card } },
+    { id: 'forest', type: 'fill', ...forest, paint: { 'fill-color': tokens.color.chart[theme][2], 'fill-opacity': 0.34 } },
+    { id: 'forest-edge', type: 'line', ...forest, paint: { 'line-color': color.textSecondary, 'line-width': 1 } },
+    { id: 'exclusions', type: 'fill', ...exclusions, paint: { 'fill-color': color.neutralMark } },
+    { id: 'exclusion-edge', type: 'line', ...exclusions, paint: { 'line-color': color.text, 'line-width': 2 } }
+  ];
+  for (const row of boundaryKey(info.levels, theme).sort((a, b) => b.depth - a.depth)) {
+    if (outline && row.depth !== 0) continue;
+    const filter: FilterSpecification = ['all', ['==', ['get', 'hierarchy'], row.hierarchy], ['==', ['get', 'depth'], row.depth]];
+    layers.push({
+      id: 'unit-' + row.id, type: 'line', ...units, filter,
+      paint: { 'line-color': row.color, 'line-width': row.width, 'line-opacity': row.opacity,
+        ...(row.depth > 0 ? { 'line-dasharray': [Math.max(2, 9 - row.depth * 2), 2] } : {}) }
+    });
+    if (!outline && !info.levels.some(other => other.hierarchy === row.hierarchy && other.depth > row.depth)) {
+      layers.push({
+        id: 'label-' + row.id, type: 'symbol', ...units, filter, minzoom: 11,
+        layout: { 'text-field': ['get', 'name'], 'text-font': ['sans-serif'], 'text-size': 12 },
+        paint: { 'text-color': color.text, 'text-halo-color': color.card, 'text-halo-width': 1 }
+      });
+    }
+  }
+  return layers;
 }

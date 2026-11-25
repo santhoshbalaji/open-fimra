@@ -18,11 +18,8 @@ const tileType = "application/vnd.mapbox-vector-tile"
 
 func (a api) detectionTile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
-	z, errZ := strconv.ParseUint(chi.URLParam(r, "z"), 10, 5)
-	x, errX := strconv.ParseUint(chi.URLParam(r, "x"), 10, 31)
-	y, errY := strconv.ParseUint(strings.TrimSuffix(chi.URLParam(r, "y"), ".mvt"), 10, 31)
-	if errZ != nil || errX != nil || errY != nil || z > 30 || x >= 1<<z || y >= 1<<z ||
-		!strings.HasSuffix(chi.URLParam(r, "y"), ".mvt") {
+	z, x, y, ok := tileCoordinates(r)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "Invalid tile coordinates.")
 		return
 	}
@@ -66,7 +63,7 @@ func (a api) detectionTile(w http.ResponseWriter, r *http.Request) {
 	var allowed bool
 	var tile []byte
 	err := a.reader.QueryRow(ctx, tilesSQL, caller.Subject, chi.URLParam(r, "slug"),
-		int32(z), int32(x), int32(y), hours, classes, path).Scan(&allowed, &tile)
+		z, x, y, hours, classes, path).Scan(&allowed, &tile)
 	if err != nil {
 		a.logger.Error("Could not read the detection tile", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load the detection tile.")
@@ -131,4 +128,16 @@ func allowOrigins(origins string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func tileCoordinates(r *http.Request) (int32, int32, int32, bool) {
+	z, errZ := strconv.ParseUint(chi.URLParam(r, "z"), 10, 5)
+	x, errX := strconv.ParseUint(chi.URLParam(r, "x"), 10, 31)
+	y, errY := strconv.ParseUint(strings.TrimSuffix(chi.URLParam(r, "y"), ".mvt"), 10, 31)
+	if errZ != nil || errX != nil || errY != nil || z > 30 || x >= 1<<z || y >= 1<<z ||
+		!strings.HasSuffix(chi.URLParam(r, "y"), ".mvt") {
+		return 0, 0, 0, false
+	}
+
+	return int32(z), int32(x), int32(y), true
 }

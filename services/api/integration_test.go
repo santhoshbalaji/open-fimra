@@ -142,6 +142,10 @@ func TestIntegration(t *testing.T) {
 		})
 	}
 
+	t.Run("workspace geography", func(t *testing.T) {
+		testWorkspaceGeography(t, server.URL, client, provider.Endpoint().TokenURL)
+	})
+
 	t.Run("periodic heartbeat", func(t *testing.T) {
 		// Other periodic jobs, such as the feed health check, also complete.
 		for {
