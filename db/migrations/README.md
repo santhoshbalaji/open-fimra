@@ -21,6 +21,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00016_exports` | File exports and their frozen rows, which only the request transaction can add |
 | `00017_notifications` | Notification rules, a replay-safe inbox and the email delivery outbox |
 | `00018_first_run_setup` | The one-time install claim, wizard progress, encrypted workspace secrets and pending invitations |
+| `00019_indexed_forest_matching` | Forest matching through the spatial index, with the same geodesic results |
 
 ## Commands
 
