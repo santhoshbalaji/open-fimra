@@ -437,5 +437,29 @@ Alongside the build:
 
 - Request a FIRMS key on a department mailbox and start access conversations with FSI and NRSC.
 - Confirm the facts in section 14.
-- Write the form format specification, using the starter-pack forms as the first examples.
+- Write the form format specification, using the starter-pack forms as the first examples (slice 16 in phase 2).
 - Agree with a pilot state how the side-by-side comparison with its current system will be run, since that is the condition for finishing phase 1.
+
+### Phase 2: field reporting (planned)
+
+These slices build roadmap phase 2 (section 10). They run in four waves. Slices in the same wave are independent of each other. Phase 2 itself ends only when its condition in section 10 is met: field staff in two or three divisions file reports offline through a full fire season.
+
+| # | Wave | Slice | Delivers | Done when |
+|---|---|---|---|---|
+| 16 | A | Form format | The published form format in `packages/form-schema`: a JSON Schema for the form itself, a layout description, the field types and conditions from section 5.4, translated labels, and validators in Go (for the core API) and TypeScript (for the web app), with shared test cases | Every example form passes both validators, every broken example fails both with the same plain-English message, and the specification is written |
+| 17 | A | Incident grouping | Incidents and incident members: alerts close together in space and time join one incident, which keeps its own workflow and links its alerts; an incident view beside the alert queue | The reference clusters group as expected, a replayed feed changes no incident, and permissions follow the incident's units |
+| 18 | A | Live GIS link | Read-only OGC API – Features from the core API for detections, alerts, incidents and published layers, filtered by the caller's grants, with personal access keys for desktop GIS | QGIS and `ogrinfo` read the collections with a personal key, and a user sees only what the web app shows them |
+| 19 | A | Field app shell | The Flutter app in `apps/mobile`, Android first: sign-in with PKCE, the caller's workspaces, assigned alerts on a list and a map of their jurisdiction, alert details and workflow steps online. It builds and tests in a container, so no Flutter install is needed | A demo beat guard signs in on an emulator or a test build, sees only their alerts, and can acknowledge one |
+| 20 | B | Forms on the server | Forms, versions, assignments to workflow steps and parts of the hierarchy, submissions, attachments on local disk or S3-compatible storage, approvals, and a flat database view per published version. Report steps of the workflow need their assigned form | A first report submitted for an alert moves it to the next step, the flat view returns its fields, and attachment access passes the permission tests |
+| 21 | B | XLSForm import and export | Conversion between the form format and XLSForm in the geo worker, for departments that know ODK | The starter-pack forms survive a round trip, and unsupported XLSForm features are listed in a review report |
+| 22 | B | Field phone notifications | Device registration, push notifications for new assigned alerts through a self-hosted service, with Google's service optional, and a remote wipe flag | A new alert reaches the responsible guard's phone once, and a wiped phone removes its offline data on its next contact |
+| 23 | C | Starter pack | Control-room dispatch, first report, final report, patrol log and manual fire report forms in `packages/starter-pack`, switched on from the first-run wizard | A fresh install turns on the starter pack from the wizard and can take an alert through the full default workflow with its forms |
+| 24 | C | Form designer | Drag-and-drop form designer in the web app with sections, repeating groups, conditions, preview and publishing; national, state and division templates that extend each other where allowed | A state extends a national template, publishes it, and an earlier submission still shows with the version it used |
+| 25 | C | Forms in the web app | Filling forms on workflow steps, viewing and approving submissions, and listing submissions with the same filters and exports as alerts | A division officer approves a first report, and an export of submissions contains only what the officer may see |
+| 26 | C | Offline field reporting | Forms, assigned alerts and jurisdiction layers stored on the phone; submissions and photos queued separately and synced when a signal returns, with server-decided workflow state and attachments that are never overwritten | An offline submission interrupted mid-sync arrives as one report with all its photos, which is a release gate in section 10 |
+| 27 | D | Situation reports | Printable daily and period reports for any unit: counts, incidents, response times, report status and a map, as PDF and as a web page | A report's numbers match the dashboard and the database for each demo user |
+| 28 | D | FSI and Bhuvan connectors | Connectors for the FSI and Bhuvan fire products in their confirmed formats, with de-duplication against FIRMS through detection links | Recorded responses in each confirmed format ingest, link to the matching FIRMS records, and a replay creates no duplicates |
+
+Wave A starts together. Wave B needs slice 16 for slices 20 and 21, and slice 19 for slice 22. Wave C needs slice 20, and slice 26 also needs slices 19 and 22. Wave D needs slices 17 and 20. Slice 28 also waits for the FSI and NRSC access and formats in section 14. Until then, staff can record a fire reported by another source with the manual fire report form. Migrations keep the rule from phase 1: a new migration always takes the next number after the highest on `main`.
+
+All form, field and report data in the repository, including the starter pack, the tests and screenshots, stays synthetic.
