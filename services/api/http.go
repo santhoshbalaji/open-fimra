@@ -76,14 +76,14 @@ func (a api) me(w http.ResponseWriter, r *http.Request) {
 		DisplayName: caller.Name,
 	})
 	if err != nil {
-		a.logger.Error("Could not save the signed-in user")
+		a.logger.Error("Could not save the signed-in user", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load the signed-in user.")
 		return
 	}
 
 	rows, err := a.queries.ListRoleAssignments(ctx, userID)
 	if err != nil {
-		a.logger.Error("Could not read the user's role assignments")
+		a.logger.Error("Could not read the user's role assignments", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load the signed-in user.")
 		return
 	}

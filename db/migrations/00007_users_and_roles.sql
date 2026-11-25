@@ -1,3 +1,9 @@
+-- Users and roles granted at a place in a hierarchy (PLAN.md section 6).
+--
+-- A user is known by their OpenID Connect subject. A role assignment gives a
+-- user a role at one current unit, such as a division; the role covers every
+-- unit under that path.
+
 -- +goose Up
 CREATE TABLE users (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
