@@ -85,6 +85,7 @@ export class SetupWizard implements OnInit {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '') + '/api/v1/workspaces/' +
     encodeURIComponent(this.workspaces.current()?.slug ?? '');
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private watches = new Map<string, Subscription>();
   readonly finished = output<void>();
   readonly openLayers = output<void>();
@@ -172,7 +173,12 @@ export class SetupWizard implements OnInit {
     this.error.set('');
     this.notice.set('');
     if (key === 'invitations') this.loadInvitations();
-    if (focus) setTimeout(() => this.heading()?.nativeElement.focus());
+    setTimeout(() => {
+      // On a phone the steps scroll sideways, so keep the current one in view.
+      this.host.nativeElement.querySelector('.setup-steps [aria-current=step]')
+        ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      if (focus) this.heading()?.nativeElement.focus();
+    });
   }
 
   next(): void {
@@ -208,6 +214,7 @@ export class SetupWizard implements OnInit {
   // Layers
 
   layerStatus(layer: SetupLayer): string {
+    if (this.blocking(layer).length) return (layer.published ? 'Published. New upload: ' : '') + 'Needs a corrected file';
     if (layer.published && (!layer.latest || layer.latest.status === 'published')) return 'Published';
     const draft = this.drafts()[layer.key];
     const status = draft?.status ?? layer.latest?.status;
@@ -217,7 +224,7 @@ export class SetupWizard implements OnInit {
 
   layerIcon(layer: SetupLayer): 'step' | 'complete' | 'overdue' {
     const status = this.drafts()[layer.key]?.status ?? layer.latest?.status;
-    if (status === 'failed') return 'overdue';
+    if (status === 'failed' || this.blocking(layer).length) return 'overdue';
     return layer.published && (!layer.latest || layer.latest.status === 'published') ? 'complete' : 'step';
   }
 
@@ -317,7 +324,7 @@ export class SetupWizard implements OnInit {
 
   unitLabel(unit: Unit): string {
     const level = this.state()?.levels[unit.depth]?.labels['en'] ?? '';
-    return ' '.repeat(unit.depth) + unit.name + ' (' + level + ' ' + unit.code + ')';
+    return unit.name + ' (' + level + ' ' + unit.code + ')';
   }
 
   invite(form: HTMLFormElement): void {

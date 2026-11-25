@@ -87,7 +87,8 @@ try {
     }
     await row.getByRole('button', { name: 'Publish' }).waitFor({ timeout: 60_000 });
     await row.getByRole('button', { name: 'Publish' }).click();
-    await row.locator('.layer-state.is-done').waitFor({ timeout: 30_000 });
+    await page.locator('.layer-checklist > li[data-published]').filter({ has: page.locator(`[id="file-${key}"]`) })
+      .waitFor({ timeout: 30_000 });
   }
   await save(page, 'layers-published');
   await page.getByRole('button', { name: 'Continue' }).click();
@@ -105,14 +106,17 @@ try {
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await step('Invite officers');
-  await page.locator('[name=unitPath] option').nth(2).waitFor({ state: 'attached' });
+  const choose = async (label, option) => {
+    await page.getByLabel(label, { exact: true }).click();
+    await page.getByRole('option', { name: option, exact: true }).click();
+  };
   for (const [email, role, unit] of [
-    ['division.officer@example.invalid', 'division_officer', 'ds.c1.d1'],
-    ['beat.guard@example.invalid', 'field_staff', 'ds.c1.d1.r2.b05']
+    ['division.officer@example.invalid', 'Division officer', 'Hill Division (Division D1)'],
+    ['beat.guard@example.invalid', 'Field staff', 'Beat 05 (Beat B05)']
   ]) {
     await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Role').selectOption(role);
-    await page.getByLabel('Unit').selectOption(unit);
+    await choose('Role', role);
+    await choose('Unit', unit);
     await page.getByRole('button', { name: 'Invite', exact: true }).click();
     await page.getByText('Invitation saved.').waitFor();
   }

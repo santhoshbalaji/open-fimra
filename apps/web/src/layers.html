@@ -7,16 +7,16 @@
     </div>
   }
   @if (catalog(); as catalog) {
-    <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+    <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <section hlmCard aria-labelledby="upload-heading">
         <hlm-card-header><h3 hlmCardTitle id="upload-heading" class="text-subhead">Upload a layer</h3>
           <p hlmCardDescription>The file is checked in the background before you publish it.</p></hlm-card-header>
         <form hlmCardContent #uploadForm class="upload-form" (submit)="$event.preventDefault(); upload(uploadForm)">
-          <fieldset class="grid min-w-0 gap-5" [disabled]="busy()">
+          <fieldset class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5" [disabled]="busy()">
             <hlm-field>
               <label hlmFieldLabel for="layer-choice">Layer</label>
               <hlm-select [value]="chosenLayer()" (valueChange)="chosenLayer.set($event ?? '')" [itemToString]="layerLabel">
-                <hlm-select-trigger buttonId="layer-choice" class="w-full"><hlm-select-value placeholder="New layer" /></hlm-select-trigger>
+                <hlm-select-trigger buttonId="layer-choice" class="w-full min-w-0 justify-start text-start"><hlm-select-value placeholder="New layer" /></hlm-select-trigger>
                 <hlm-select-content *hlmSelectPortal>
                   <hlm-select-item value="">New layer</hlm-select-item>
                   @for (item of catalog.layers; track item.slug) {
@@ -40,7 +40,7 @@
               <hlm-field>
                 <label hlmFieldLabel for="layer-role">Layer role</label>
                 <hlm-select [value]="chosenRole()" (valueChange)="selectRole($event ?? '')" [itemToString]="roleLabel">
-                  <hlm-select-trigger buttonId="layer-role" class="w-full"><hlm-select-value /></hlm-select-trigger>
+                  <hlm-select-trigger buttonId="layer-role" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (role of roles; track role) { <hlm-select-item [value]="role">{{ roleLabels[role] }}</hlm-select-item> }
                   </hlm-select-content>
@@ -56,7 +56,7 @@
                   <hlm-field>
                     <label hlmFieldLabel for="layer-hierarchy">Hierarchy</label>
                     <hlm-select [value]="chosenHierarchy() || null" (valueChange)="chooseHierarchy($event ?? '')" [itemToString]="hierarchyLabel">
-                      <hlm-select-trigger buttonId="layer-hierarchy" class="w-full" [forceInvalid]="missing().hierarchy"
+                      <hlm-select-trigger buttonId="layer-hierarchy" class="w-full min-w-0 justify-start text-start" [forceInvalid]="missing().hierarchy"
                         [aria-invalid]="missing().hierarchy"><hlm-select-value placeholder="Choose a hierarchy" /></hlm-select-trigger>
                       <hlm-select-content *hlmSelectPortal>
                         @for (item of catalog.hierarchies; track item.slug) {
@@ -71,7 +71,7 @@
                   <label hlmFieldLabel for="layer-depth">Hierarchy level</label>
                   <hlm-select [value]="depth()" (valueChange)="chosenDepth.set($event ?? null)" [itemToString]="levelLabel"
                     [disabled]="layer() !== undefined && layer()?.depth !== null">
-                    <hlm-select-trigger buttonId="layer-depth" class="w-full" [forceInvalid]="missing().depth"
+                    <hlm-select-trigger buttonId="layer-depth" class="w-full min-w-0 justify-start text-start" [forceInvalid]="missing().depth"
                       [aria-invalid]="missing().depth"><hlm-select-value placeholder="Choose a level" /></hlm-select-trigger>
                     <hlm-select-content *hlmSelectPortal>
                       @for (level of hierarchy()?.levels ?? []; track level.depth) {
@@ -111,15 +111,15 @@
         </form>
       </section>
 
-      <div class="grid gap-4">
+      <div class="grid grid-cols-[minmax(0,1fr)] gap-4">
         <section hlmCard aria-labelledby="review-heading">
           <hlm-card-header><h3 hlmCardTitle id="review-heading" class="text-subhead">Review a layer version</h3></hlm-card-header>
-          <div hlmCardContent class="grid gap-4">
+          <div hlmCardContent class="grid grid-cols-[minmax(0,1fr)] gap-4">
             @if (catalog.uploads.length) {
               <hlm-field>
                 <label hlmFieldLabel for="upload-choice">Recent uploads</label>
                 <hlm-select [value]="version() || null" (valueChange)="$event && open($event)" [disabled]="busy()" [itemToString]="uploadLabel">
-                  <hlm-select-trigger buttonId="upload-choice" class="w-full"><hlm-select-value placeholder="Choose an upload" /></hlm-select-trigger>
+                  <hlm-select-trigger buttonId="upload-choice" class="w-full min-w-0 justify-start text-start"><hlm-select-value placeholder="Choose an upload" /></hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (upload of catalog.uploads; track upload.versionId) {
                       <hlm-select-item [value]="upload.versionId">{{ uploadLabel(upload.versionId) }}</hlm-select-item>
@@ -224,7 +224,7 @@
           <section hlmCard aria-labelledby="preview-heading">
             <hlm-card-header><h3 hlmCardTitle id="preview-heading" class="text-subhead">Preview results</h3>
               <p hlmCardDescription role="status">{{ preview.scanned }} detections checked over {{ preview.days }} days. A detection can appear in several groups.</p></hlm-card-header>
-            <div hlmCardContent class="grid gap-4">
+            <div hlmCardContent class="grid grid-cols-[minmax(0,1fr)] gap-4">
               <dl class="preview-counts grid grid-cols-2 gap-3 sm:grid-cols-4">
                 @for (category of categories; track category.key) {
                   <div hlmCard size="sm" class="gap-1 px-4 py-3"><dt class="text-muted-foreground">{{ category.label }}</dt>

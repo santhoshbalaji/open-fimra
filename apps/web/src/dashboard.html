@@ -6,8 +6,8 @@
   </p>
 }
 @if (summary(); as data) {
-  <div class="stat-grid grid grid-cols-2 gap-4 lg:grid-cols-4">
-    <section hlmCard size="sm" class="col-span-2 lg:col-span-1" aria-labelledby="today-title">
+  <div class="stat-grid grid grid-cols-3 gap-3 sm:gap-4 lg:grid-cols-4">
+    <section hlmCard size="sm" class="col-span-3 lg:col-span-1" aria-labelledby="today-title">
       <hlm-card-header><h3 hlmCardTitle id="today-title">Detections today</h3>
         <p hlmCardDescription>Since midnight in India</p></hlm-card-header>
       <div hlmCardContent><dl class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">@for (key of classKeys; track key) {
@@ -17,7 +17,7 @@
     @for (tile of tiles; track tile.key) {
       <section hlmCard size="sm" [attr.aria-labelledby]="'tile-' + tile.key">
         <hlm-card-header><h3 hlmCardTitle [id]="'tile-' + tile.key">{{ tile.label }}</h3></hlm-card-header>
-        <div hlmCardContent class="flex items-end justify-between gap-2">
+        <div hlmCardContent class="flex flex-wrap items-end justify-between gap-2">
           <strong class="stat-value text-[2.25rem] leading-none font-semibold tabular-nums">{{ data[tile.key] }}</strong>
           @if (tile.key === 'overdue' && data.overdue) { <fimra-status-badge icon="overdue" label="Needs action" /> }
         </div>
@@ -111,9 +111,9 @@
 } @else if (!message()) {
   <div role="status" class="grid gap-4">
     <span class="sr-only">Loading dashboard…</span>
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-hidden="true">
+    <div class="grid grid-cols-3 gap-3 sm:gap-4 lg:grid-cols-4" aria-hidden="true">
       @for (tile of [1, 2, 3, 4]; track tile) {
-        <div hlmCard size="sm" [class]="tile === 1 ? 'col-span-2 px-4 lg:col-span-1' : 'px-4'">
+        <div hlmCard size="sm" [class]="tile === 1 ? 'col-span-3 px-4 lg:col-span-1' : 'px-4'">
           <hlm-skeleton class="h-4 w-32" /><hlm-skeleton class="h-9 w-16" />
         </div>
       }

@@ -79,7 +79,7 @@ The wizard then opens for root administrators until it is finished. Its steps ar
 
 **Leave setup for now** returns to the control room. **Finish setup** in the top bar opens the wizard again. After it is finished, reopen it from the account menu with **Settings: first-run setup**.
 
-`make wizard-walkthrough` drives these screens in headless Chromium on a fresh database, with a fake FIRMS server, and saves screenshots to `~/open-fimra-screenshots/first-run-wizard`. It uses rootless Docker, port 4200 and your stack's ports from `.env`.
+`make wizard-walkthrough` drives these screens in headless Chromium on a fresh database, with a fake FIRMS server, and saves screenshots to `~/open-fimra-screenshots/first-run-wizard`. It uses rootless Docker, port 4200 and your stack's ports from `.env`. Set `WEB_PORT` to use another web port that your sign-in realm allows, such as `make wizard-walkthrough WEB_PORT=4203`.
 
 ## Notifications
 
