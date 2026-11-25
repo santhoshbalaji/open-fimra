@@ -54,11 +54,19 @@ func checkAlertAccess(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix
 	for {
 		for _, row := range page.Items {
 			var alert struct {
-				ID    string `json:"id"`
-				Queue string `json:"queue"`
+				ID       string `json:"id"`
+				Queue    string `json:"queue"`
+				BeatCode string `json:"beat_code"`
+				Division string `json:"division_name"`
+				Line     string `json:"place_hierarchy"`
+				Places   map[string]struct{ Code, Name string }
 			}
 			if err := json.Unmarshal(row, &alert); err != nil {
 				t.Fatal(err)
+			}
+			if alert.BeatCode != "" && (alert.Line != "territorial" || alert.Places["beat"].Code != alert.BeatCode ||
+				alert.Places["division"].Name != alert.Division) {
+				t.Fatalf("alert places do not match the levels: %s", row)
 			}
 			if seen[alert.ID] {
 				t.Fatal("duplicate cursor row", alert.ID)

@@ -29,6 +29,42 @@ export interface Detection {
   frp_mw?: number;
   confidence?: string | number;
   triage?: string;
+  place_hierarchy?: string;
+  /** Unit names by level slug. Map tiles send this as JSON text. */
+  places?: Places | string;
+}
+
+export type Places = Record<string, { code?: string; name?: string } | undefined>;
+export interface PlaceLevel { hierarchy: string; depth: number; slug: string; labels: { en: string } }
+export interface Place { label: string; name: string; code: string }
+
+const fallbackLevels = ['beat', 'range', 'division', 'circle'];
+
+/**
+ * The places a detection falls in, from the smallest unit to the largest below the workspace itself,
+ * labelled with the workspace's own level names.
+ */
+export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'>, levels: readonly PlaceLevel[]): Place[] {
+  let places: Places = {};
+  if (typeof detection.places === 'string') {
+    try { places = detection.places ? JSON.parse(detection.places) as Places : {}; } catch { places = {}; }
+  } else if (detection.places) places = detection.places;
+  const own = levels.filter(level => level.hierarchy === detection.place_hierarchy && level.depth > 0);
+  const rows = own.length
+    ? [...own].sort((a, b) => b.depth - a.depth).map(level => ({ slug: level.slug, label: level.labels.en || level.slug }))
+    : fallbackLevels.filter(slug => places[slug]).map(slug => ({ slug, label: slug[0].toUpperCase() + slug.slice(1) }));
+  return rows.map(({ slug, label }) => ({ label, name: places[slug]?.name ?? '', code: places[slug]?.code ?? '' }));
+}
+
+const confidenceWords: Record<string, string> = { l: 'Low', low: 'Low', n: 'Nominal', nominal: 'Nominal', h: 'High', high: 'High' };
+
+/** VIIRS sends l, n or h; MODIS sends a percentage. */
+export function confidenceLabel(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return 'Unknown';
+  const text = String(value).trim();
+  const word = confidenceWords[text.toLowerCase()];
+  if (word) return word;
+  return /^\d+(\.\d+)?$/.test(text) ? text + '%' : text;
 }
 
 export function readDetection(feature: Pick<MapGeoJSONFeature, 'id' | 'properties'> & Partial<Pick<MapGeoJSONFeature, 'geometry'>>): Detection {

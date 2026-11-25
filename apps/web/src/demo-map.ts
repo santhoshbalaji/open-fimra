@@ -17,7 +17,7 @@ import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { ageLabels, classes, Detection, detectionLayer, ForestClass, iconName, mapRequest, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
+import { ageLabels, classes, confidenceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import type { NotificationLink } from './notifications';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
@@ -41,6 +41,14 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly forestClasses = Object.keys(classes) as ForestClass[];
   readonly ageLabels = ageLabels;
   readonly reasons = triageReasons;
+  readonly confidenceLabel = confidenceLabel;
+  private readonly placeLevels = computed(() => this.geography()?.info.levels ?? []);
+  /** The smallest place first, then the rest from smaller to larger. */
+  places(detection: Detection) {
+    const [first, ...rest] = placesOf(detection, this.placeLevels());
+    const named = (place: { label: string; name: string }) => place.name || 'Unknown ' + place.label.toLowerCase();
+    return { first, firstName: first ? named(first) : 'Unknown place', rest: rest.map(named).join(' · '), all: [first, ...rest].filter(Boolean) };
+  }
   readonly error = signal('');
   readonly geographyError = signal('');
   readonly boundary = computed(() => this.geography()?.info.boundary);
