@@ -25,6 +25,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00020_personal_access_keys` | Hashed personal access keys for the GIS link, with expiry, last use and revocation |
 | `00021_incidents` | Incidents and their members, grouping of new alerts in the alert transaction, workflows and step history shared by alerts and incidents, and one new-alert notification per incident and recipient |
 | `00022_forms` | Forms, frozen published versions, assignments to workflow steps, write-once attachments, append-only submissions and approvals, the `form_views` schema for flat views, and the forms an alert needs at each step |
+| `00023_form_conversions` | XLSForm import and export jobs, with the draft form, workbook and review report each one produces |
 
 ## Commands
 

@@ -70,6 +70,17 @@ only. Attachments are kept in the ignored `.form-attachments/` directory. If
 you set `FIMRA_ATTACHMENT_DIR` in `.env`, use a separate directory for each
 stack. See the [forms endpoints](services/api/README.md#forms-and-field-reports).
 
+## Converting forms to and from XLSForm
+
+The geo worker converts forms between the form format and XLSForm, the
+spreadsheet format of ODK. Run `make geo-test` for the unit tests, including a
+round trip of every example form, and `make xlsform-odk-check` to convert the
+exported examples with pyxform. With `make db-up db-migrate`, run
+`make xlsform-test-integration` for the conversion jobs. Try a file with
+`make xlsform-import FILE=form.xlsx` or `make xlsform-export FILE=form.json`.
+Test workbooks are written by the tests, so no spreadsheet is committed. See
+the [worker guide](services/geo-worker/README.md#how-xlsform-conversion-works).
+
 ## Running layer imports and publishing
 
 Run `make dev db-migrate geo-worker-up` to start the layer import worker with

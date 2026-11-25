@@ -257,6 +257,8 @@ web-lint: ## Lint the web app and its templates
 	cd apps/web && $(PNPM) run lint
 
 .PHONY: geo-worker-up geo-test geo-test-integration export-test-integration
+# The XLSForm tests round-trip the example forms from packages/form-schema.
+FORM_EXAMPLES_MOUNT = -v "$(CURDIR)/packages/form-schema/examples:/form-examples:ro"
 
 geo-worker-up: ## Build and start the geo worker for layer imports and exports
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
@@ -265,7 +267,7 @@ geo-worker-up: ## Build and start the geo worker for layer imports and exports
 geo-test: ## Run the geo worker unit tests in the GDAL container
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
 	$(COMPOSE) build geo-worker
-	$(COMPOSE) run --rm --no-deps geo-worker python -m unittest discover -v
+	$(COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) geo-worker python -m unittest discover -v
 
 geo-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 geo-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
@@ -281,3 +283,34 @@ export-test-integration: ## Export as each demo user on the running stack, then 
 	cd services/api && FIMRA_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
 		go test -run '^TestExportIntegration$$' -count=1 -v .
 	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
+
+# XLSForm conversion (PLAN.md section 5.4). Output goes to the ignored .xlsforms/ folder unless OUT is given.
+.PHONY: xlsform-import xlsform-export xlsform-test-integration xlsform-odk-check
+XLSFORM_OUT = $(abspath $(or $(OUT),.xlsforms))
+XLSFORM_RUN = install -d -m 700 "$(XLSFORM_OUT)" && $(COMPOSE) run --rm --no-deps \
+	-v "$(abspath $(FILE)):/in/$(notdir $(FILE)):ro" -v "$(XLSFORM_OUT):/out" geo-worker python xlsform_cli.py
+PYXFORM_VERSION := 3.1.0
+PYTHON_IMAGE := python:3.12.12-slim
+
+xlsform-import: ## Convert an XLSForm given FILE to a draft form and a review report in OUT (default .xlsforms/)
+	@test -f "$(FILE)" || { echo "Give the workbook as FILE=path/to/form.xlsx"; exit 2; }
+	$(COMPOSE) build geo-worker
+	$(XLSFORM_RUN) import "/in/$(notdir $(FILE))" /out
+
+xlsform-export: ## Convert a form file given FILE to an XLSForm in OUT (default .xlsforms/)
+	@test -f "$(FILE)" || { echo "Give the form as FILE=path/to/form.json"; exit 2; }
+	$(COMPOSE) build geo-worker
+	$(XLSFORM_RUN) export "/in/$(notdir $(FILE))" /out
+
+xlsform-test-integration: ## Run XLSForm conversion jobs through the worker on the running, migrated database
+	$(COMPOSE) build geo-worker
+	$(COMPOSE) run --rm -e FIMRA_FORM_JOB_TEST=1 $(FORM_EXAMPLES_MOUNT) geo-worker python -m unittest -v test_form_jobs
+
+xlsform-odk-check: ## Export every example form and convert it with pyxform, the converter ODK uses
+	$(COMPOSE) build geo-worker
+	install -d -m 700 "$(CURDIR)/.xlsforms/odk-check"
+	$(COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) -v "$(CURDIR)/.xlsforms/odk-check:/out" geo-worker \
+		sh -c 'for f in /form-examples/*.json; do python xlsform_cli.py export "$$f" /out > /dev/null || exit 1; done'
+	docker run --rm -v "$(CURDIR)/.xlsforms/odk-check:/xls:ro" $(PYTHON_IMAGE) sh -c \
+		'pip install --quiet --disable-pip-version-check --root-user-action=ignore pyxform==$(PYXFORM_VERSION) && \
+		for f in /xls/*.xlsx; do echo "$$f"; xls2xform --skip_validate "$$f" /tmp/form.xml || exit 1; done'
