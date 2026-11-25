@@ -13,7 +13,38 @@ import (
 
 const Source = "firms"
 
+// Products are the near-real-time products polled every 15 minutes.
 var Products = [...]string{"VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"}
+
+// StandardProducts are the standard-processing products used for backfill.
+// FIRMS publishes them some weeks after the near-real-time products, with
+// better calibration and geolocation.
+var StandardProducts = [...]string{"VIIRS_SNPP_SP", "VIIRS_NOAA20_SP", "VIIRS_NOAA21_SP", "MODIS_SP"}
+
+// IsStandard reports whether product is a standard-processing product.
+func IsStandard(product string) bool {
+	for _, p := range StandardProducts {
+		if p == product {
+			return true
+		}
+	}
+	return false
+}
+
+// Counterpart returns the product that reports the same satellite
+// observations: the near-real-time product for a standard-processing one, and
+// the other way round. It returns "" for an unknown product.
+func Counterpart(product string) string {
+	for i, p := range Products {
+		if p == product {
+			return StandardProducts[i]
+		}
+		if StandardProducts[i] == product {
+			return p
+		}
+	}
+	return ""
+}
 
 type Observation struct {
 	Latitude    float64           `json:"latitude"`
@@ -33,8 +64,9 @@ type Observation struct {
 func Parse(input io.Reader, product string) ([]Observation, error) {
 	instrument, brightness := "VIIRS", "bright_ti4"
 	switch product {
-	case "VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT":
-	case "MODIS_NRT":
+	case "VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT",
+		"VIIRS_SNPP_SP", "VIIRS_NOAA20_SP", "VIIRS_NOAA21_SP":
+	case "MODIS_NRT", "MODIS_SP":
 		instrument, brightness = "MODIS", "brightness"
 	default:
 		return nil, errors.New("unknown FIRMS product")
