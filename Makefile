@@ -15,12 +15,23 @@ FIMRA_DB_USER ?= fimra
 FIMRA_DB_PASSWORD ?= fimra-dev
 FIMRA_DB_PORT ?= 15432
 DATABASE_URL ?= postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(FIMRA_DB_NAME)?sslmode=disable
+FIMRA_DATABASE_URL ?= $(DATABASE_URL)
+FIMRA_KEYCLOAK_PORT ?= 18180
+FIMRA_OIDC_ISSUER ?= http://127.0.0.1:$(FIMRA_KEYCLOAK_PORT)/realms/open-fimra
+FIMRA_OIDC_AUDIENCE ?= open-fimra-api
+FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
 
 GOOSE_VERSION := v3.30.1
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(DATABASE_URL)"
 PSQL := $(COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
+.PHONY: api-run api-test api-test-integration api-lint
+
+api-run api-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
+api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
+api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
 
 help: ## Show this list
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -68,7 +79,30 @@ seed: ## Regenerate the synthetic demo state in seed/demo-state
 seed-test: ## Check the demo state is up to date, then load it and run the reference check
 	python3 seed/generate.py --check
 	$(GOOSE) up
-	@{ echo 'BEGIN;'; cat seed/demo-state/load.sql seed/demo-state/reference.sql seed/tests/reference-check.sql; echo 'ROLLBACK;'; } | $(PSQL)
+	@set -o pipefail; { \
+		echo 'BEGIN;'; \
+		echo "SELECT pg_advisory_xact_lock(hashtext('open-fimra:demo-seed'));"; \
+		echo "SELECT NOT EXISTS (SELECT 1 FROM workspaces WHERE slug = 'demo') AS demo_missing"; \
+		printf '%s\n' '\gset' '\if :demo_missing'; \
+		cat seed/demo-state/load.sql; \
+		printf '%s\n' '\endif'; \
+		cat seed/demo-state/roles.sql seed/demo-state/reference.sql seed/tests/reference-check.sql; \
+		echo 'SET CONSTRAINTS ALL IMMEDIATE;'; \
+		echo 'ROLLBACK;'; \
+	} | $(PSQL)
+
+api-run: ## Run the core API on the development stack
+	cd services/api && go run .
+
+api-test: ## Run the core API unit tests
+	cd services/api && go test ./...
+
+api-test-integration: ## Test the core API against the migrated development stack
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestIntegration$$' -count=1 -v .
+
+api-lint: ## Check core API formatting and run Go vet
+	cd services/api && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
+	cd services/api && go vet ./...
 
 check: ## Run the repository checks that continuous integration runs
 	scripts/check-repo.sh

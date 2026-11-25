@@ -10,6 +10,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00004_detections` | Detections partitioned by UTC month, `ensure_detection_partition()`, and per-workspace detection matches |
 | `00005_job_queue` | River's job queue tables, exported from River's own migrations |
 | `00006_audit_log` | The append-only audit log |
+| `00007_users_and_roles` | User records, roles and grants at current unit paths |
 
 ## Commands
 
