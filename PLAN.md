@@ -142,6 +142,7 @@ A default single-server install is about seven containers: proxy, web, core API,
 | Developer commands | One `Makefile` at the repository root | One entry point for every part of the repository, with no extra tool to install |
 | Web package manager | pnpm | Fast, strict about dependencies |
 | Continuous integration | GitHub Actions | Free for public repositories; every check can also run locally through `make` |
+| Mobile push | UnifiedPush with a self-hosted push server (ntfy in development); Google's Firebase Cloud Messaging optional | Works without Google services, on the agency's own server; messages are encrypted for the phone and carry no fire details |
 
 ### 4.4 Design system
 

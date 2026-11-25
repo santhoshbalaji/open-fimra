@@ -53,7 +53,7 @@ func TestWizardWalkthroughServer(t *testing.T) {
 	if smtp != nil {
 		email = smtp
 	}
-	jobs, err := newJobClient(pool, logger, nil, email)
+	jobs, err := newJobClient(pool, logger, nil, email, pushSettings{})
 	if err != nil {
 		t.Fatal(err)
 	}

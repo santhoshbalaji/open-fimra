@@ -204,7 +204,8 @@ func TestFormsIntegration(t *testing.T) {
 		var a alertRow
 		err := tx.QueryRow(ctx, `SELECT a.id::text, ST_X(d.geom), ST_Y(d.geom) FROM alerts a
 JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at)
-WHERE d.source = $1 AND a.queue = 'unit' AND `+where+` ORDER BY a.id LIMIT 1`, source).Scan(&a.id, &a.lon, &a.lat)
+WHERE d.source = $1 AND a.workspace_id = 'd0000000-0000-4000-8000-000000000001' AND a.queue = 'unit' AND `+where+`
+ORDER BY a.id LIMIT 1`, source).Scan(&a.id, &a.lon, &a.lat)
 		if err != nil {
 			t.Fatalf("pick alert %s: %v", where, err)
 		}

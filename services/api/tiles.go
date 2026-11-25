@@ -121,7 +121,8 @@ func allowOrigins(origins string) func(http.Handler) http.Handler {
 					return
 				}
 				w.Header().Set("Access-Control-Allow-Methods", method)
-				headers := "Authorization"
+				// The field app names its device on every call.
+				headers := "Authorization, " + deviceHeader
 				if method == http.MethodPost || method == http.MethodPut {
 					headers += ", Content-Type"
 				}

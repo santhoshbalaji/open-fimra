@@ -40,6 +40,7 @@ When run through Make, the database URL defaults to `DATABASE_URL` and the issue
 - `GET /readyz` returns 200 when PostgreSQL responds and 503 when it cannot be reached.
 - `GET /api/v1/workspaces/{slug}/feeds` returns feed health for workspace administrators. See [Feed health](#feed-health).
 - `/api/v1/workspaces/{slug}/forms` and the alert's `submissions` and `attachments` hold forms and field reports. See [Forms and field reports](#forms-and-field-reports).
+- `/api/v1/devices` registers field phones, and `/api/v1/workspaces/{slug}/devices` lets administrators see and wipe them. See [Field phones and push](#field-phones-and-push).
 - `/ogc/workspaces/{slug}` is the read-only GIS link, and `/api/v1/access-keys` manages the personal access keys it accepts. See [GIS link](#gis-link).
 - `GET /api/v1/me` takes an access token in the `Authorization: Bearer` header. It returns the caller's `subject`, `username` and `roleAssignments`. Each assignment includes the workspace slug and name, hierarchy slug, role, unit code and name, level slug, path, the unit's `bounds` as `[west, south, east, north]` in degrees (null for a unit without a shape) and beat count. The field app fits its map to these bounds. A grant to one beat counts that beat. A signed-in user without grants gets an empty list. A missing or rejected token gets a JSON error and a bearer challenge with HTTP 401.
 
@@ -765,11 +766,12 @@ with the `X-API-Key` header, and the test compares each count with the API.
 
 The alert's saved paths decide who can receive a notification. Current grants
 are checked again before email delivery and when someone opens their inbox.
-Each workspace starts with these rules for both in-app notifications and email.
+Each workspace starts with these rules for both in-app notifications and email,
+and pushes new unit alerts to the field staff's phones.
 
 | Event | Recipients |
 | --- | --- |
-| New unit alert | Field staff and division officers whose grants cover the alert |
+| New unit alert | Field staff and division officers whose grants cover the alert; field staff also by push |
 | New edge review or triage alert | People whose grants let them review that alert |
 | Alert overdue at its current step | Division officers whose grants let them see the alert |
 | Feed-health alert opens | People with a role at the root of a workspace hierarchy |
@@ -805,7 +807,7 @@ All endpoints require a bearer token.
   `[{"event":"alert_new","recipients":"reviewers","channel":"in_app","queue":"triage"}]`.
   Events are `alert_new`, `alert_overdue` and `feed_open`. Select recipients
   with `field_staff`, `division_officer`, `reviewers` or `root`. Channels are
-  `in_app` and `email`. An alert rule can filter by `queue` or `forestClass`.
+  `in_app`, `email` and `push`. Feed-health rules cannot use `push`. An alert rule can filter by `queue` or `forestClass`.
   Forest classes supported here are `inside` and `near_edge`. Feed-health rules
   use `root` without a filter. Changes apply to new events.
 
@@ -835,10 +837,124 @@ as `uncertain` and leaves it for operator review. Messages are plain text and
 contain a link without detection coordinates. An email is queued only when
 the recipient has a verified address on file and has left email on.
 
-The delivery interface includes disabled stubs for text messages and mobile
-push. A text message deployment needs the agency's gateway and templates
-registered under India's DLT rules. Mobile push needs a configured provider
-and device registration.
+The delivery interface includes a disabled stub for text messages. A text
+message deployment needs the agency's gateway and templates registered under
+India's DLT rules.
+
+## Field phones and push
+
+The field app registers each sign-in on a phone as a device. New alerts reach
+the phone as push notifications, and an administrator can ask a lost phone to
+delete its field data.
+
+### Why UnifiedPush and ntfy
+
+Push goes through [UnifiedPush](https://unifiedpush.org), an open standard
+for push on Android that does not need Google's services. The user installs a
+push app (a "distributor"), such as ntfy, and connects it to a push server
+the agency runs itself. The field app gets an address on that server, and the
+API sends each message to it as Web Push ([RFC 8030](https://www.rfc-editor.org/rfc/rfc8030)),
+encrypted for the phone ([RFC 8291](https://www.rfc-editor.org/rfc/rfc8291)),
+so the push server cannot read it.
+
+The development stack runs [ntfy](https://ntfy.sh) as the push server. It is
+small, self-hosted, and widely used as a UnifiedPush server and app. Its
+licence (Apache 2.0, or GPLv2) and the UnifiedPush connector's (Apache 2.0)
+can be combined with the AGPL. Google's Firebase Cloud Messaging is optional
+and off by default. The field app built from this repository uses UnifiedPush
+only.
+
+Push messages carry no detail about a fire. A message holds the notification,
+alert and workspace IDs and a generic title such as "New fire alert". The app
+fetches the alert over the signed-in API, which applies the user's grants.
+
+### Settings
+
+| Setting | Value |
+| --- | --- |
+| `FIMRA_PUSH_SERVERS` | Comma-separated origins of the push servers phones may use, such as `https://push.example.org`. Plain HTTP is allowed only on a loopback address, for development. Empty turns UnifiedPush off. |
+| `FIMRA_PUSH_FCM_CREDENTIALS_FILE` | Optional path to a Firebase service account key file. Empty turns Firebase Cloud Messaging off. |
+
+The API only sends to endpoints on the listed servers and never follows a
+redirect, so a registration cannot make it call other addresses. A phone
+whose push app uses another server is registered without push, and the app
+shows the reason.
+
+### Delivery
+
+The `push` channel follows the same rules as the other channels: one
+notification per event or incident and recipient. When the notification is
+recorded, it gets one message for each of the recipient's phones that can
+receive push then. A phone registered later, a replayed feed or a re-match
+never sends it again. The notification job sends due messages every 15
+seconds. Temporary failures (HTTP 429 or 5xx, or no connection) retry with
+increasing delays, up to five attempts. A 404 or 410 means the phone's push
+app dropped the address, so the API stops using it until the app registers a
+new one. A message a stopped worker left half-sent is sent again; the app
+shows each notification once by its ID, so a repeat replaces the first.
+
+A message is skipped when the phone has signed out, been removed or wiped, or
+the recipient can no longer see the alert.
+
+### Device endpoints
+
+All of these need a bearer token. The field app also sends its device ID in
+the `Fimra-Device` header on every call.
+
+- `PUT /api/v1/devices/{id}` registers the caller's phone, or records its
+  latest contact and push address. The ID is a UUID the app makes at sign-in.
+  Send `platform` (`android`, `ios` or `web`), `appVersion` and `push`, which
+  is null or `{"provider":"unifiedpush","endpoint":"…","publicKey":"…","auth":"…"}`
+  with the phone's Web Push keys in unpadded base64url, or
+  `{"provider":"fcm","endpoint":"<token>"}`. The answer has the `device`,
+  the `pushProviders` the server uses and, when push cannot be used, a
+  plain-English `pushProblem`. An ID that belongs to another user is not
+  found. A user has at most ten active phones; registering another removes
+  the one unused for longest.
+- `GET /api/v1/devices` lists the caller's phones, newest contact first, with
+  `current` set on the calling phone.
+- `DELETE /api/v1/devices/{id}` removes one of the caller's phones. The field
+  app adds `?reason=sign_out` when it signs out. A removed phone gets no more
+  pushes and is told to sign in again at its next call.
+- `POST /api/v1/devices/{id}/wipe` lets owners wipe their own phone.
+- `GET /api/v1/workspaces/{slug}/devices` lists the phones of people with a
+  role at or below the caller's units, with each owner's name. It needs a
+  state administrator role, or a division officer role at division level or
+  above. A state administrator at the root sees the whole workspace.
+- `POST /api/v1/workspaces/{slug}/devices/{id}/wipe` sets the wipe flag on a
+  phone the caller manages. It cannot be undone. The API also sends the phone
+  a push message asking it to call in.
+- `POST /api/v1/devices/{id}/wiped` is the phone's report that it deleted its
+  data. It is the only call a wiped phone may still make.
+
+Each device shows `status` as `active`, `signed_out`, `removed`,
+`wipe_pending` or `wiped`, with `push` true when it can receive alerts now.
+
+### Remote wipe
+
+A wiped phone is refused on its next signed-in call, whichever endpoint it
+calls, including registration. The API recognises it by the `Fimra-Device`
+header or by the sign-in session in the token (the `sid` claim), so a call
+without the header is caught too. The answer is HTTP 401 with
+`{"code":"device_wiped","error":"…"}`; the field app then deletes its data and
+returns to sign-in (see the [field app guide](../../apps/mobile/README.md#remote-wipe)).
+A removed phone gets `"code":"device_revoked"`. Other sessions of the same
+user carry on.
+
+The audit log records `device.register`, `device.revoke`,
+`device.wipe_request` (with the workspace), `device.wipe_signal` the first
+time the phone is told, and `device.wipe_confirm` when it reports back.
+
+### Trying push locally
+
+`make push-up` starts ntfy on `127.0.0.1:18110` (`FIMRA_NTFY_PORT`). Set
+`FIMRA_PUSH_SERVERS=http://127.0.0.1:18110` and run the API. To watch
+messages without a phone, register a device with an endpoint such as
+`http://127.0.0.1:18110/upMyTest?up=1` and read
+`http://127.0.0.1:18110/upMyTest/json?poll=1`. The message body is encrypted
+for the phone's key. `make api-test-integration` starts ntfy and checks
+registration, delivery through ntfy and a fake second server, a replayed
+feed, removal and wipe with synthetic phones.
 
 ## First-run setup
 

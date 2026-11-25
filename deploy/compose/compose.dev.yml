@@ -66,6 +66,27 @@ services:
       retries: 10
     mem_limit: 128m
 
+  # Self-hosted push server for field app notifications (UnifiedPush).
+  # ntfy is open source under the Apache 2.0 and GPLv2 licences.
+  ntfy:
+    profiles: [push]
+    image: binwiederhier/ntfy:v2.37.2@sha256:1875ddcf815c8a3c981d6d78c67a93452d0abba79b1ab9520b1f5f5238902bd7
+    command: ["serve"]
+    environment:
+      NTFY_BASE_URL: http://127.0.0.1:${FIMRA_NTFY_PORT:-18110}
+      NTFY_LISTEN_HTTP: ":8080"
+      # Messages are kept in memory for a short time, which is enough for tests.
+      NTFY_CACHE_DURATION: 1h
+    ports:
+      - "127.0.0.1:${FIMRA_NTFY_PORT:-18110}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 -O - http://127.0.0.1:8080/v1/health | grep -q true"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 128m
+    read_only: true
+
   geo-worker:
     profiles: [geo]
     build:

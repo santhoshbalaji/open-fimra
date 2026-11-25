@@ -224,7 +224,7 @@ func TestPreflightAllowsWizardMethods(t *testing.T) {
 		if w.Code != want || (want == 204 && w.Header().Get("Access-Control-Allow-Methods") != method) {
 			t.Errorf("%s preflight got HTTP %d, methods %q", method, w.Code, w.Header().Get("Access-Control-Allow-Methods"))
 		}
-		if method == "PUT" && w.Header().Get("Access-Control-Allow-Headers") != "Authorization, Content-Type" {
+		if method == "PUT" && w.Header().Get("Access-Control-Allow-Headers") != "Authorization, Fimra-Device, Content-Type" {
 			t.Errorf("PUT preflight must allow Content-Type, got %q", w.Header().Get("Access-Control-Allow-Headers"))
 		}
 	}

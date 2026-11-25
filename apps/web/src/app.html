@@ -32,12 +32,13 @@
             <button hlmDropdownMenuItem (triggered)="openSetup()"><svg fimraIcon="settings"></svg> First-run setup</button>
           }
           <button hlmDropdownMenuItem (triggered)="openKeys()"><svg fimraIcon="key-round"></svg> GIS link keys</button>
+          <button hlmDropdownMenuItem (triggered)="openPhones()"><svg fimraIcon="bell"></svg> Field phones</button>
           <button hlmDropdownMenuItem (triggered)="auth.signOut()"><svg fimraIcon="log-out"></svg> Sign out</button>
         </hlm-dropdown-menu>
       </ng-template>
     </div>
   </header>
-  @if (workspace.current() && !showSetup() && !showKeys() && !showForms() && !(showLayers() && workspace.canManageLayers())) {
+  @if (workspace.current() && !showSetup() && !showKeys() && !showForms() && !showPhones() && !(showLayers() && workspace.canManageLayers())) {
     <div class="workspace-controls" [class.filters-open]="filtersOpen()">
       <nav aria-label="Control room views">
         <button hlmBtn variant="ghost" [attr.aria-pressed]="!dashboard() && !report()" (click)="dashboard.set(false); report.set(false); focusFeedHealth.set(false)">Map and queue</button>
@@ -58,6 +59,8 @@
       @defer (on immediate) { <fimra-access-keys (closed)="showKeys.set(false)" /> }
     } @else if (showForms() && workspace.canDesignForms()) {
       @defer (on immediate) { <fimra-forms-screen (closed)="showForms.set(false)" /> }
+    } @else if (showPhones()) {
+      @defer (on immediate) { <fimra-devices (closed)="showPhones.set(false)" /> }
     } @else if (showSetup()) {
       @defer (on immediate) { <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" /> }
     } @else if (showLayers() && workspace.canManageLayers()) {

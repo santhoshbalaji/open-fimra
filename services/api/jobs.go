@@ -29,7 +29,7 @@ func (*heartbeatWorker) Work(context.Context, *river.Job[heartbeatArgs]) error {
 // newJobClient starts the FIRMS poller and backfill workers when keys is not
 // nil. Each poll reads every workspace's key from its settings, so a key
 // saved in the wizard takes effect at the next poll without a restart.
-func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, email notificationChannel) (*river.Client[pgx.Tx], error) {
+func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, email notificationChannel, push pushSettings) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &heartbeatWorker{})
 	river.AddWorker(workers, &rematchWorker{pool: pool})
@@ -62,7 +62,7 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, emai
 	))
 
 	queues[notificationQueue] = river.QueueConfig{MaxWorkers: 1}
-	river.AddWorker(workers, &notificationWorker{db: pool, email: email})
+	river.AddWorker(workers, &notificationWorker{db: pool, email: email, push: push})
 	periodic = append(periodic, river.NewPeriodicJob(
 		river.PeriodicInterval(notificationInterval),
 		func() (river.JobArgs, *river.InsertOpts) {

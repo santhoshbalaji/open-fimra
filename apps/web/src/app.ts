@@ -18,10 +18,11 @@ import { FilterFields } from './filter-fields';
 import { AccessKeys } from './access-keys';
 import { FormsScreen } from './forms/forms-screen';
 import { SituationReportView } from './situation-report';
+import { Devices } from './devices';
 
 @Component({
   selector: 'fimra-root',
-  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, FormsScreen, SituationReportView, Icon],
+  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, FormsScreen, SituationReportView, Devices, Icon],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }
 })
@@ -32,6 +33,7 @@ export class App implements OnInit {
   readonly showLayers = signal(false);
   readonly showKeys = signal(false);
   readonly showForms = signal(false);
+  readonly showPhones = signal(false);
   private readonly http = inject(HttpClient);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   /** null follows the setup state: the wizard opens until it is finished. */
@@ -64,6 +66,7 @@ export class App implements OnInit {
       this.showLayers.set(false);
       this.showKeys.set(false);
       this.showForms.set(false);
+      this.showPhones.set(false);
       this.setupChoice.set(false);
       this.dashboard.set(target.alert === null);
       this.report.set(false);
@@ -88,6 +91,7 @@ export class App implements OnInit {
     this.setupChoice.set(false);
     this.showKeys.set(false);
     this.showForms.set(false);
+    this.showPhones.set(false);
     this.showLayers.set(!this.showLayers());
   }
 
@@ -95,6 +99,7 @@ export class App implements OnInit {
     this.setupChoice.set(false);
     this.showKeys.set(false);
     this.showLayers.set(false);
+    this.showPhones.set(false);
     this.showForms.set(!this.showForms());
   }
 
@@ -102,7 +107,16 @@ export class App implements OnInit {
     this.setupChoice.set(false);
     this.showLayers.set(false);
     this.showForms.set(false);
+    this.showPhones.set(false);
     this.showKeys.set(true);
+  }
+
+  openPhones(): void {
+    this.setupChoice.set(false);
+    this.showLayers.set(false);
+    this.showKeys.set(false);
+    this.showForms.set(false);
+    this.showPhones.set(true);
   }
 
   openSetup(): void {
@@ -111,6 +125,7 @@ export class App implements OnInit {
     this.showLayers.set(false);
     this.showKeys.set(false);
     this.showForms.set(false);
+    this.showPhones.set(false);
     if (this.workspace.setupPending()) {
       this.setupChoice.set(true);
       return;

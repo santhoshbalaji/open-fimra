@@ -105,6 +105,17 @@ The Flutter field app builds and tests in a container, so you need only Docker. 
 
 A Keycloak stack that was imported before the field app client existed does not have it. Run `make dev-reset dev` to import the realm again, or add the client in the admin console.
 
+## Trying push notifications
+
+The field app gets alert notifications through UnifiedPush and a push server
+the agency runs. Run `make push-up` to start the local push server (ntfy) on
+<http://127.0.0.1:18110>, and set `FIMRA_PUSH_SERVERS=http://127.0.0.1:18110`
+in `.env` before `make api-run`. For more than one stack, set a different
+`FIMRA_NTFY_PORT`. `make api-test-integration` starts ntfy and checks
+registration, delivery, a replayed feed and remote wipe with synthetic phones.
+Google's Firebase Cloud Messaging is optional and never needed to build or
+test. See [field phones and push](services/api/README.md#field-phones-and-push).
+
 ## Running layer imports and publishing
 
 Run `make dev db-migrate geo-worker-up` to start the layer import worker with

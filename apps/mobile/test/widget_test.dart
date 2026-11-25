@@ -1,9 +1,15 @@
+import 'dart:convert';
+
+import 'package:fimra_field/src/api/api_client.dart';
 import 'package:fimra_field/src/api/models.dart';
 import 'package:fimra_field/src/app.dart';
 import 'package:fimra_field/src/auth/oidc.dart';
 import 'package:fimra_field/src/auth/session.dart';
 import 'package:fimra_field/src/auth/tokens.dart';
 import 'package:fimra_field/src/config.dart';
+import 'package:fimra_field/src/device/device_manager.dart';
+import 'package:fimra_field/src/device/device_store.dart';
+import 'package:fimra_field/src/device/local_data.dart';
 import 'package:fimra_field/src/theme/app_theme.dart';
 import 'package:fimra_field/src/ui/alert_map.dart';
 import 'package:fimra_field/src/ui/widgets.dart';
@@ -22,6 +28,11 @@ class Harness {
   final FakeRepository repository;
   final store = MemoryTokenStore();
   final configs = <AppConfig>[];
+  final deviceApi = FakeDeviceApi();
+  final push = FakePush();
+  final notifier = FakeNotifier();
+  final ids = MemoryDeviceStore();
+  DeviceManager? devices;
 
   Widget app({ThemeMode themeMode = ThemeMode.light}) => FimraApp(
     configStore: ConfigStore(testConfig),
@@ -29,15 +40,28 @@ class Harness {
     themeMode: themeMode,
     servicesFactory: (config) {
       configs.add(config);
-      return AppServices(
-        config: config,
-        session: Session(
-          oidc: OidcClient(config: config, httpClient: server.client),
-          store: store,
-          browser: FakeBrowser(server),
-        ),
-        repository: repository,
+      final session = Session(
+        oidc: OidcClient(config: config, httpClient: server.client),
+        store: store,
+        browser: FakeBrowser(server),
       );
+      final manager = devices = DeviceManager(
+        api: deviceApi,
+        session: session,
+        store: ids,
+        push: push,
+        notifier: notifier,
+        platform: 'android',
+        localData: fieldDataOnPhone(
+          notifications: notifier.clear,
+          pushRegistration: push.stop,
+          offlineMaps: () async {},
+          deviceId: ids.clear,
+          signInTokens: store.clear,
+        ),
+      );
+      repository.onDeviceAction = manager.handleAction;
+      return AppServices(config: config, session: session, repository: repository, devices: manager);
     },
     mapBuilder: (context, view, open) => Center(child: Text('Map of ${view.workspace.name}')),
   );
@@ -192,6 +216,118 @@ void main() {
       handle.dispose();
     });
   }
+
+  testWidgets('tapping an alert notification opens the alert from the API', (tester) async {
+    final harness = Harness();
+    await signIn(tester, harness);
+    expect(harness.deviceApi.registrations, hasLength(1));
+    harness.notifier.onOpen!(PushNotice.parse(utf8.encode(jsonEncode(alertPush())))!);
+    await tester.pumpAndSettle();
+    expect(find.text('Hill Division (D1)'), findsOneWidget);
+    expect(harness.devices!.openRequest.value, isNull);
+  });
+
+  testWidgets('a notification that started the app opens its alert after sign-in', (tester) async {
+    final harness = Harness();
+    harness.notifier.launch = PushNotice.parse(utf8.encode(jsonEncode(alertPush())));
+    await signIn(tester, harness);
+    expect(find.text('Hill Division (D1)'), findsOneWidget);
+  });
+
+  testWidgets('a phone wiped while in use deletes its data and returns to sign-in', (tester) async {
+    final harness = Harness();
+    await signIn(tester, harness);
+    harness.push.onAddress!(testAddress);
+    harness.push.deliver(alertPush());
+    await tester.pumpAndSettle();
+    expect(harness.notifier.shown, hasLength(1));
+    final id = harness.ids.id;
+
+    harness.repository.refuseWith = DeviceAction.wipe;
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 400));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    expect(find.textContaining('An administrator asked this phone to delete its field data'), findsOneWidget);
+    expect(harness.deviceApi.confirmed, [id]);
+    expect(harness.store.tokens, isNull);
+    expect(harness.ids.id, isNull);
+    expect(harness.notifier.shown, isEmpty);
+    expect(harness.push.stops, 1);
+  });
+
+  testWidgets('the phones screen shows notifications and removes another phone', (tester) async {
+    final handle = tester.ensureSemantics();
+    final harness = Harness();
+    await signIn(tester, harness);
+    harness.push.onAddress!(testAddress);
+    await tester.pumpAndSettle();
+    final id = harness.ids.id!;
+    harness.deviceApi.listed = [
+      Device(
+        id: id,
+        platform: 'android',
+        appVersion: fieldAppVersion,
+        push: true,
+        status: DeviceStatus.active,
+        registeredAt: DateTime.utc(2026, 11, 25, 8),
+        lastSeenAt: DateTime.utc(2026, 11, 25, 9),
+        current: true,
+      ),
+      Device(
+        id: newDeviceId(),
+        platform: 'android',
+        appVersion: '0.1.0+1',
+        push: false,
+        status: DeviceStatus.active,
+        registeredAt: DateTime.utc(2026, 11, 20, 8),
+        lastSeenAt: DateTime.utc(2026, 11, 21, 9),
+      ),
+      Device(
+        id: newDeviceId(),
+        platform: 'android',
+        appVersion: '0.1.0+1',
+        push: false,
+        status: DeviceStatus.wiped,
+        registeredAt: DateTime.utc(2026, 11, 1, 8),
+        lastSeenAt: DateTime.utc(2026, 11, 2, 9),
+      ),
+    ];
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Notifications and phones'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notifications are on'), findsOneWidget);
+    expect(find.text('Android phone (this phone)'), findsOneWidget);
+    expect(find.text('Data deleted'), findsOneWidget);
+    expect(find.text('No notifications'), findsOneWidget);
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    // Only the other signed-in phone can be removed here.
+    expect(find.widgetWithText(TextButton, 'Remove'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(harness.deviceApi.revoked, [(harness.deviceApi.listed[1].id, false)]);
+    expect(find.text('The phone was removed.'), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('signing out tells the API this phone signed out', (tester) async {
+    final harness = Harness();
+    await signIn(tester, harness);
+    final id = harness.ids.id!;
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign out'));
+    await tester.pumpAndSettle();
+    expect(harness.deviceApi.revoked, [(id, true)]);
+    expect(harness.ids.id, isNull);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+  });
 
   testWidgets('the map key explains shape and colour in words', (tester) async {
     await tester.pumpWidget(

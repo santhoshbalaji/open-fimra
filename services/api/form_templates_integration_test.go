@@ -160,7 +160,7 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 	var lon, lat float64
 	if err := tx.QueryRow(ctx, `SELECT a.id::text, ST_X(d.geom), ST_Y(d.geom) FROM alerts a
 JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at)
-WHERE d.source = $1 AND a.queue = 'unit' AND a.unit_path = 'ds.c1.d1.r2.b05' ORDER BY a.id LIMIT 1`, source).Scan(&alertID, &lon, &lat); err != nil {
+WHERE d.source = $1 AND a.workspace_id = 'd0000000-0000-4000-8000-000000000001' AND a.queue = 'unit' AND a.unit_path = 'ds.c1.d1.r2.b05' ORDER BY a.id LIMIT 1`, source).Scan(&alertID, &lon, &lat); err != nil {
 		t.Fatal(err)
 	}
 	call("PUT", "/forms/national-fire-report/assignments/first_report", "state.admin", map[string]any{"version": 1}, 200)

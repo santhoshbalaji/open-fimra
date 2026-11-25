@@ -117,11 +117,11 @@ type notificationRule struct {
 func (r notificationRule) valid() bool {
 	return slices.Contains([]string{"alert_new", "alert_overdue", "feed_open"}, r.Event) &&
 		slices.Contains([]string{"field_staff", "division_officer", "reviewers", "root"}, r.Recipients) &&
-		slices.Contains([]string{"in_app", "email"}, r.Channel) &&
+		slices.Contains([]string{"in_app", "email", "push"}, r.Channel) &&
 		slices.Contains([]string{"", "unit", "edge_review", "triage"}, r.Queue) &&
 		slices.Contains([]string{"", "inside", "near_edge"}, r.ForestClass) &&
 		(r.Queue == "" || r.ForestClass == "") &&
-		(r.Event != "feed_open" || (r.Recipients == "root" && r.Queue == "" && r.ForestClass == ""))
+		(r.Event != "feed_open" || (r.Recipients == "root" && r.Queue == "" && r.ForestClass == "" && r.Channel != "push"))
 }
 
 func (a api) notificationRules(w http.ResponseWriter, r *http.Request) {

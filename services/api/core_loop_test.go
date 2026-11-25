@@ -289,7 +289,7 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 
 	if w := request(http.MethodOptions, path, ""); w.Code != http.StatusNoContent ||
 		w.Header().Get("Access-Control-Allow-Origin") != origin ||
-		w.Header().Get("Access-Control-Allow-Headers") != "Authorization" {
+		w.Header().Get("Access-Control-Allow-Headers") != "Authorization, Fimra-Device" {
 		t.Fatalf("preflight got HTTP %d, headers %v", w.Code, w.Header())
 	}
 	assertUnauthorized(t, request(http.MethodGet, path, ""), "Bearer")

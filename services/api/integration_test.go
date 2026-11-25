@@ -39,7 +39,7 @@ func TestIntegration(t *testing.T) {
 		t.Fatal("could not discover the development sign-in server")
 	}
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	jobs, err := newJobClient(pool, logger, nil, nil)
+	jobs, err := newJobClient(pool, logger, nil, nil, pushSettings{})
 	if err != nil {
 		t.Fatal(err)
 	}

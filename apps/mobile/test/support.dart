@@ -1,10 +1,13 @@
 // Fakes shared by the unit and widget tests. All data is synthetic.
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:fimra_field/src/api/api_client.dart';
 import 'package:fimra_field/src/api/models.dart';
 import 'package:fimra_field/src/auth/oidc.dart';
 import 'package:fimra_field/src/config.dart';
 import 'package:fimra_field/src/data/alert_repository.dart';
+import 'package:fimra_field/src/device/push.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -157,6 +160,11 @@ class FakeRepository implements AlertRepository {
   final List<Alert> items;
   final recorded = <StepRequest>[];
 
+  /// When set, the next alert list answers as the API does for a wiped or
+  /// removed phone: it tells [onDeviceAction], then refuses.
+  DeviceAction? refuseWith;
+  DeviceActionHandler? onDeviceAction;
+
   @override
   Future<Profile> profile() async => profileValue;
 
@@ -164,8 +172,15 @@ class FakeRepository implements AlertRepository {
   Future<WorkspaceMap> workspace(String slug) async => sampleMap;
 
   @override
-  Future<AlertPage> alerts(String slug, {AlertQueue? queue, String? cursor}) async =>
-      AlertPage(items: List.of(items), counts: {'unit': items.length}, canReview: false);
+  Future<AlertPage> alerts(String slug, {AlertQueue? queue, String? cursor}) async {
+    final action = refuseWith;
+    if (action != null) {
+      const message = 'An administrator asked this phone to delete its field data. Sign in again to keep working.';
+      await onDeviceAction?.call(action, message);
+      throw const DeviceActionException(DeviceAction.wipe, message);
+    }
+    return AlertPage(items: List.of(items), counts: {'unit': items.length}, canReview: false);
+  }
 
   @override
   Future<Alert?> alertForDetection(String slug, String detectionId) async =>
@@ -226,3 +241,115 @@ class FakeRepository implements AlertRepository {
   String detectionTiles(String slug) =>
       'https://api.example.test/api/v1/workspaces/$slug/tiles/detections/{z}/{x}/{y}.mvt?hours=168';
 }
+
+/// A stand-in for the core API's device calls.
+class FakeDeviceApi implements DeviceApi {
+  final registrations = <(String, DeviceRegistration)>[];
+  final revoked = <(String, bool)>[];
+  final confirmed = <String>[];
+  var pushAccepted = true;
+  String? pushProblem;
+  List<Device> listed = const [];
+
+  @override
+  Future<DeviceReceipt> registerDevice(String id, DeviceRegistration registration) async {
+    registrations.add((id, registration));
+    final push = registration.push != null && pushAccepted;
+    return DeviceReceipt(
+      device: Device(
+        id: id,
+        platform: registration.platform,
+        appVersion: registration.appVersion,
+        push: push,
+        status: DeviceStatus.active,
+        registeredAt: DateTime.utc(2026, 11, 25, 8),
+        lastSeenAt: DateTime.utc(2026, 11, 25, 9),
+        current: true,
+      ),
+      pushProviders: const ['unifiedpush'],
+      pushProblem: registration.push != null && !pushAccepted ? pushProblem : null,
+    );
+  }
+
+  @override
+  Future<List<Device>> devices() async => listed;
+
+  @override
+  Future<void> revokeDevice(String id, {bool signOut = false}) async => revoked.add((id, signOut));
+
+  @override
+  Future<void> confirmWiped(String id) async => confirmed.add(id);
+}
+
+/// A push app that the test drives by hand.
+class FakePush implements PushService {
+  FakePush({this.hasPushApp = true, this.supported = true});
+  bool hasPushApp;
+  @override
+  final bool supported;
+  void Function(PushAddress?)? onAddress;
+  void Function(Uint8List)? onMessage;
+  var starts = 0;
+  var stops = 0;
+
+  @override
+  Future<bool> start({
+    required void Function(PushAddress? address) onAddress,
+    required void Function(Uint8List message) onMessage,
+  }) async {
+    starts++;
+    this.onAddress = onAddress;
+    this.onMessage = onMessage;
+    return hasPushApp;
+  }
+
+  @override
+  Future<void> stop() async => stops++;
+
+  void deliver(Map<String, Object?> json) => onMessage!(Uint8List.fromList(utf8.encode(jsonEncode(json))));
+}
+
+/// Records the notifications the app would show.
+class FakeNotifier implements AlertNotifier {
+  final shown = <int, PushNotice>{};
+  var shows = 0;
+  var clears = 0;
+  void Function(PushNotice)? onOpen;
+  PushNotice? launch;
+
+  @override
+  Future<void> init(void Function(PushNotice notice) onOpen, {bool askPermission = true}) async => this.onOpen = onOpen;
+
+  @override
+  Future<void> show(PushNotice notice) async {
+    shows++;
+    shown[notice.id] = notice;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
+    shown.clear();
+  }
+
+  @override
+  Future<PushNotice?> launchNotice() async => launch;
+}
+
+const testAddress = PushAddress(
+  provider: 'unifiedpush',
+  endpoint: 'https://push.example.test/upTest?up=1',
+  publicKey: 'BKey',
+  auth: 'Auth',
+);
+
+Map<String, Object?> alertPush({String notification = '12', String alert = '41'}) => {
+  'v': 1,
+  'type': 'notification',
+  'notification': notification,
+  'event': 'alert_new',
+  'workspace': 'demo',
+  'alert': alert,
+  'title': 'New fire alert',
+  'body': 'Open the field app to see it.',
+};
