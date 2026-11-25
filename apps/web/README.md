@@ -11,6 +11,10 @@ Choose **Dashboard** to see detections by forest class, routed alerts by queue a
 
 The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. The map shows only the top-level reference outline, and the dashboard skips the chart. The browser remembers your choice when storage is available.
 
+## Incidents
+
+Choose **Incidents** at the top of the queue panel to see alerts grouped into incidents: fires close together in place and time. **Alerts** returns to the alert queue. The list uses the same time window, forest class and unit path. Each row shows how many alerts you can see, their places, when the fire was last seen and the incident's own step. Open an incident to draw its alerts on the map, read its timeline and record a step. A step on the incident also moves each member alert that you could move the same way. Choose a member alert to open its own details. A merged incident links to the incident that now holds its alerts. The incident screen loads only when you open it, so it adds nothing to the first download.
+
 ## Exports
 
 Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit path, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.

@@ -92,9 +92,13 @@
 }
 @if (workspace.current()) {
   <aside class="alert-panel" aria-labelledby="queue-title">
+    <div class="view-switch" role="group" aria-label="Group the queue">
+      <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'alerts'" (click)="showView('alerts')">Alerts</button>
+      <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'incidents'" (click)="showView('incidents')">Incidents</button>
+    </div>
     <div class="queue-heading">
-      <h2 id="queue-title">Alert queue</h2>
-      @if (exportEndpoint(); as endpoint) {
+      <h2 id="queue-title">{{ queueView() === 'incidents' ? 'Incidents' : 'Alert queue' }}</h2>
+      @if (queueView() === 'alerts' && exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
@@ -108,6 +112,13 @@
         </hlm-dialog>
       }
     </div>
+    @if (queueView() === 'incidents') {
+      @defer (on immediate) {
+        <fimra-incidents [endpoint]="exportEndpoint()!" [now]="now()" (openAlert)="openMember($event)" (showOnMap)="showIncident($event)" />
+      } @placeholder {
+        <div role="status" aria-label="Loading incidents" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
+      }
+    } @else {
     <div class="queue-tabs" role="group" aria-label="Alert queues">
       @for (tab of queue.tabs(); track tab) {
         <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
@@ -150,6 +161,7 @@
     @if (queue.cursor()) { <button hlmBtn variant="outline" (click)="queue.changePage('')">Newest alerts</button> }
     @if (queue.page()?.nextCursor; as cursor) {
       <button hlmBtn variant="outline" (click)="queue.changePage(cursor)">Older alerts</button>
+    }
     }
   </aside>
 }

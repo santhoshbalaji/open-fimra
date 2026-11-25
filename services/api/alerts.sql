@@ -9,7 +9,11 @@ visible AS (
           AND alert_path_visible(a.queue, a.hierarchy_unit_paths, g.can_review, g.hierarchy_id, g.unit_path, g.depth)
     )
       AND ($3::bigint IS NULL OR a.id = $3)
-      AND ($3 IS NOT NULL OR a.observed_at BETWEEN now() - make_interval(hours => $4) AND now())
+      -- An incident's members are listed whatever their age, like a detail.
+      AND ($13::bigint IS NULL OR a.id IN (
+          SELECT m.alert_id FROM incidents i JOIN incident_members m ON m.incident_id = COALESCE(i.merged_into, i.id)
+          WHERE i.id = $13))
+      AND ($3 IS NOT NULL OR $13 IS NOT NULL OR a.observed_at BETWEEN now() - make_interval(hours => $4) AND now())
       AND ($6 = '' OR i.current_step = $6)
       AND ($7 = '' OR a.forest_class = $7)
       AND ($8::ltree IS NULL OR a.unit_paths <@ $8)
@@ -32,8 +36,9 @@ details AS (
            d.source, d.product, d.confidence, d.frp_mw,
            line.levels #>> '{beat,name}' AS beat_name, line.levels #>> '{beat,code}' AS beat_code,
            line.levels #>> '{range,name}' AS range_name, line.levels #>> '{division,name}' AS division_name,
-           line.hierarchy AS place_hierarchy, line.levels AS places
+           line.hierarchy AS place_hierarchy, line.levels AS places, m.incident_id::text AS incident_id
     FROM page p JOIN alerts a ON a.id = p.id
+    LEFT JOIN incident_members m ON m.alert_id = a.id
     JOIN workflow_instances i ON i.alert_id=a.id
     JOIN workflow_steps s ON (s.template_id,s.slug)=(i.template_id,i.current_step)
     JOIN detections d ON (d.id, d.observed_at) = (p.detection_id, p.observed_at)

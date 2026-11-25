@@ -93,7 +93,7 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 		}
 		id = &n
 	}
-	var detectionID *int64
+	var detectionID, incidentID *int64
 	if r.URL.Query().Has("detection") {
 		n, err := strconv.ParseInt(r.URL.Query().Get("detection"), 10, 64)
 		if err != nil || n < 1 {
@@ -102,13 +102,21 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 		}
 		detectionID = &n
 	}
+	if r.URL.Query().Has("incident") {
+		n, err := strconv.ParseInt(r.URL.Query().Get("incident"), 10, 64)
+		if err != nil || n < 1 {
+			writeError(w, 400, "Invalid incident ID.")
+			return
+		}
+		incidentID = &n
+	}
 	caller := r.Context().Value(identityKey{}).(identity)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	var allowed, knownStatus bool
 	var page alertPage
 	err = a.reader.QueryRow(ctx, alertsSQL, caller.Subject, chi.URLParam(r, "slug"), id, f.hours,
-		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
+		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read alerts", "error", err)
 		writeError(w, 500, "Could not load alerts.")

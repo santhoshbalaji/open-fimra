@@ -31,7 +31,8 @@ SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER B
  FROM alert_moves($1,$2,$3) m),'[]'),'entries',(
  SELECT jsonb_agg(jsonb_build_object('from',l.from_step,'step',l.to_step,'label',s.label,
   'at',l.occurred_at,'actor',u.display_name,'note',l.note,'reason',l.override_reason,
-  'longitude',ST_X(l.location),'latitude',ST_Y(l.location),'reportPending',l.report_pending) ORDER BY l.id)
+  'longitude',ST_X(l.location),'latitude',ST_Y(l.location),'reportPending',l.report_pending,
+  'incidentId',(SELECT x.incident_id::text FROM step_log x WHERE x.id=l.incident_step_id)) ORDER BY l.id)
  FROM step_log l JOIN workflow_steps s ON (s.template_id,s.slug)=(l.template_id,l.to_step)
  LEFT JOIN users u ON u.id=l.user_id WHERE l.alert_id=$3))
 WHERE EXISTS (SELECT FROM alert_roles($1,$2,$3))`

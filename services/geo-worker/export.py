@@ -99,6 +99,8 @@ ALERT_FIELDS = [
     _field("step", "step", "string", "The alert's current workflow step, such as new or acknowledged."),
     _field("step_label", "step_label", "string", "The current workflow step as the workflow names it."),
     _field("step_entered_at", "step_time", "datetime", "When the alert reached its current step, in UTC (ISO 8601)."),
+    _field("incident_id", "incident", "int64",
+           "The incident the alert belongs to. Empty for alerts created before incidents."),
 ]
 TAIL_FIELDS = [
     _field("forest_feature_code", "forest_cd", "string",
@@ -335,7 +337,8 @@ ROWS_SQL = """
                 ELSE COALESCE(a.triage_reason, CASE WHEN a.queue = 'triage' THEN 'no_unit' END) END AS triage_reason,
            COALESCE(a.hierarchy, m.hierarchy) AS hierarchy, f.code AS forest_feature_code,
            d.frp_mw, d.confidence, ST_X(d.geom) AS longitude, ST_Y(d.geom) AS latitude,
-           i.current_step AS step, s.label AS step_label, i.entered_at AS step_entered_at
+           i.current_step AS step, s.label AS step_label, i.entered_at AS step_entered_at,
+           im.incident_id
     FROM export_rows r
     JOIN detection_matches m ON (m.workspace_id, m.detection_id, m.observed_at)
                               = (r.workspace_id, r.detection_id, r.observed_at)
@@ -344,6 +347,7 @@ ROWS_SQL = """
     LEFT JOIN layer_features f ON f.id = m.forest_feature_id
     LEFT JOIN workflow_instances i ON i.alert_id = r.alert_id
     LEFT JOIN workflow_steps s ON (s.template_id, s.slug) = (i.template_id, i.current_step)
+    LEFT JOIN incident_members im ON im.alert_id = r.alert_id
     WHERE r.export_id = %s
     ORDER BY r.ordinal
 """
