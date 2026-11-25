@@ -233,12 +233,14 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
  WHERE m.incident_id=$1 ORDER BY wi.alert_id FOR UPDATE OF wi`, id); err != nil {
 		return err
 	}
-	// Members follow when the caller may make the same move on them. The
-	// incident's location check stands for the members it moves.
+	// Members follow when the caller may make the same move on them and they
+	// have the forms their current step needs. The incident's location check
+	// stands for the members it moves.
 	if _, err = tx.Exec(ctx, `WITH targets AS (
     SELECT wi.alert_id,wi.template_id,wi.current_step,wi.entered_at
     FROM incident_members m JOIN workflow_instances wi ON wi.alert_id=m.alert_id
     WHERE m.incident_id=$1 AND EXISTS (SELECT FROM alert_moves($2,$3,m.alert_id) mv WHERE mv.step=$4)
+      AND NOT EXISTS (SELECT FROM alert_missing_forms(m.alert_id,$4))
 ), logged AS (
     INSERT INTO step_log(alert_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,report_pending,incident_step_id)
     SELECT t.alert_id,t.template_id,t.current_step,$4,$5,GREATEST($6::timestamptz,t.entered_at),

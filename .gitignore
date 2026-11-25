@@ -12,6 +12,7 @@ Thumbs.db
 /.geo-uploads/
 /.geo-exports/
 /.geo-exports-check/
+/.form-attachments/
 
 # Agency data must never be committed
 *.gpkg

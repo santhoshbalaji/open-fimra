@@ -21,6 +21,7 @@ type api struct {
 	reader       ingestDB
 	uploadDir    string
 	exports      exportSettings
+	attachments  attachmentSettings
 	feedDB       feedDB
 	jobs         *river.Client[pgx.Tx]
 	emailEnabled bool
@@ -78,6 +79,20 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/incidents/{id}/steps", a.incidentWorkflow)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/settings/incidents", a.incidentSettings)
 	router.With(auth.require).Put("/api/v1/workspaces/{slug}/settings/incidents", a.incidentSettings)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}/forms", a.alertForms)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/alerts/{id}/submissions", a.submissions)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/alerts/{id}/submissions", a.submissions)
+	router.With(auth.require).Put("/api/v1/workspaces/{slug}/alerts/{id}/attachments/{attachment}", a.uploadAttachment)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/attachments/{attachment}", a.downloadAttachment)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/submissions/{submission}", a.submission)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/submissions/{submission}/approval", a.approve)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/forms", a.forms)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/forms", a.forms)
+	router.With(auth.require).Get("/api/v1/workspaces/{slug}/forms/{form}/versions/{version}", a.forms)
+	router.With(auth.require).Put("/api/v1/workspaces/{slug}/forms/{form}/versions/{version}", a.forms)
+	router.With(auth.require).Post("/api/v1/workspaces/{slug}/forms/{form}/versions/{version}/publish", a.publishForm)
+	router.With(auth.require).Put("/api/v1/workspaces/{slug}/forms/{form}/assignments/{step}", a.formAssignment)
+	router.With(auth.require).Delete("/api/v1/workspaces/{slug}/forms/{form}/assignments/{step}", a.formAssignment)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}", a.workspaceMap)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/reference/{z}/{x}/{y}", a.referenceTile)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}", a.detectionTile)

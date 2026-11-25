@@ -26,6 +26,7 @@ The integration tests check sign-in with all four demo users. They also exercise
 | `FIMRA_UPLOAD_DIR` | `.geo-uploads` (at the repository root when using Make) |
 | `FIMRA_EXPORT_DIR` | `.geo-exports` (at the repository root when using Make). The geo worker writes export files here. |
 | `FIMRA_EXPORT_TTL` | `24h`. How long a finished export can be downloaded, as a Go duration of at least one minute. |
+| `FIMRA_ATTACHMENT_DIR` | `.form-attachments` (at the repository root when using Make). Photos and files from field reports. See [Attachments](#attachments) for the other attachment settings. |
 | `FIMRA_CORS_ORIGINS` | `http://127.0.0.1:4200,http://localhost:4200` |
 | `FIMRA_SETUP_CODE` | Empty. On a fresh install the API then prints a one-time setup code in its log. See [First-run setup](#first-run-setup). |
 | `FIMRA_SETTINGS_KEY` | Empty, which turns encrypted settings off. A base64-encoded 32-byte key, for example from `openssl rand -base64 32`. |
@@ -38,6 +39,7 @@ When run through Make, the database URL defaults to `DATABASE_URL` and the issue
 - `GET /healthz` returns 200 while the service is running.
 - `GET /readyz` returns 200 when PostgreSQL responds and 503 when it cannot be reached.
 - `GET /api/v1/workspaces/{slug}/feeds` returns feed health for workspace administrators. See [Feed health](#feed-health).
+- `/api/v1/workspaces/{slug}/forms` and the alert's `submissions` and `attachments` hold forms and field reports. See [Forms and field reports](#forms-and-field-reports).
 - `/ogc/workspaces/{slug}` is the read-only GIS link, and `/api/v1/access-keys` manages the personal access keys it accepts. See [GIS link](#gis-link).
 - `GET /api/v1/me` takes an access token in the `Authorization: Bearer` header. It returns the caller's `subject`, `username` and `roleAssignments`. Each assignment includes the workspace slug and name, hierarchy slug, role, unit code and name, level slug, path and beat count. A grant to one beat counts that beat. A signed-in user without grants gets an empty list. A missing or rejected token gets a JSON error and a bearer challenge with HTTP 401.
 
@@ -286,7 +288,7 @@ An alert has one workflow instance. Its current step and entry time live there s
 | Division officer at division level or above | All field actions, location exceptions, verification, closure and other outcomes |
 | State admin | All moves in the template on visible alerts |
 
-Each move uses the alert's matched hierarchy paths and queue access rules. An officer grant outside those paths gives no extra rights. Closed, false alarm, duplicate, controlled burn and not reachable end the workflow. First report and final report record that the form is pending.
+Each move uses the alert's matched hierarchy paths and queue access rules. An officer grant outside those paths gives no extra rights. Closed, false alarm, duplicate, controlled burn and not reachable end the workflow. First report and final report record that the form is pending. A step with an assigned form needs its submission before the alert moves on. See [Forms and field reports](#forms-and-field-reports).
 
 Use `GET /api/v1/workspaces/{slug}/alerts/{id}/history` for ordered `entries` and the caller's allowed `moves`. Entries include the actor's display name, event time, location when available, note, any location exception and whether a report is pending. New is a system event at the detection point. Later entries identify the user by ID in storage. Staff names are only returned to a caller who can see the alert.
 
@@ -361,6 +363,88 @@ All need a bearer token and a role in the workspace. Without a role you get 403.
 An incident opens at New with the workspace's workflow template, the same one its alerts use. Moves on an incident use your roles on its visible members: a field grant that covers one member allows field steps, and an officer grant at division level or above on a member allows officer steps. A field step needs a location within `workflow_radius_metres` of one of the members you can see, or an officer's reason.
 
 Acting on the incident moves its members. Each member alert that you could move the same way, from its own current step, gets its own log entry with your user, time, location, note and reason, and a link to the incident's entry. Other members stay where they are: alerts you cannot see, alerts already at a final step, and alerts that are behind or ahead of the incident. Those can be moved on their own, as before, until they catch up. Moving an alert on its own never moves its incident. A member's alert history shows `incidentId` on the entries its incident recorded. Response times, the dashboard and overdue checks keep using each alert's own log. A client ID identifies one request per incident, as for alerts. A merged incident refuses new steps with 409.
+
+## Forms and field reports
+
+Forms use the [form format](../../packages/form-schema/SPEC.md). The API checks every form file with the Go validator in `packages/form-schema`, so it accepts exactly what the web designer and the phone accept.
+
+A form belongs to a workspace. Each version is a draft until it is published. A published version never changes: the database refuses any change to it or its deletion, and keeps the exact text that was published. To change a published form, add a version with a higher number. Each version can record the version it extends (`extendsVersionId`). National, state and division templates that extend each other use this later; for now it is always empty.
+
+A workspace administrator at the root of the hierarchy manages forms. Anyone with a role in the workspace can read published versions. Drafts are hidden from everyone else.
+
+| Request | What it does |
+|---|---|
+| `GET /api/v1/workspaces/{slug}/forms` | Lists forms with their versions and assignments |
+| `POST /api/v1/workspaces/{slug}/forms` | Adds a draft from a form file in the body. Its `id` names the form and its `version` must be higher than every existing version. Returns 201 and a `Location` header. |
+| `GET /api/v1/workspaces/{slug}/forms/{form}/versions/{version}` | Returns a version with its `definition`, `columns`, `status` and flat `views` |
+| `PUT /api/v1/workspaces/{slug}/forms/{form}/versions/{version}` | Replaces a draft. A published version gets 409. |
+| `POST /api/v1/workspaces/{slug}/forms/{form}/versions/{version}/publish` | Publishes a draft and creates its flat views. Publishing again returns the same version. |
+| `PUT /api/v1/workspaces/{slug}/forms/{form}/assignments/{step}` | Assigns a published version to a workflow step, with `{"version": 1}`. Add `"hierarchy": "territorial"` and `"unitPaths": ["ds.c1.d1"]` to use the form only under those units. |
+| `DELETE /api/v1/workspaces/{slug}/forms/{form}/assignments/{step}` | Takes the form off the step |
+
+A form that does not pass the validator gets 422 with the validator's messages in `problems`. Each form has at most one version at each step; assigning another version replaces it. The step belongs to the workflow template that new alerts in the workspace use. A form with stages can be assigned only at the workflow step of one of its stages, and is filled in there up to that stage.
+
+### Reports on workflow steps
+
+A step with an assigned form needs a submission of that form before the alert can leave the step. Moving on without one gets 422, for example "Submit the First report form before leaving this step." A submission counts until an officer returns it. A move to a final step, such as false alarm or duplicate, never needs a form. A step without an assigned form works as before, so the default workflow needs no forms. An incident's move takes along only the member alerts that have the forms their current step needs.
+
+`GET /api/v1/workspaces/{slug}/alerts/{id}/forms` lists the forms assigned to the alert's workflow, with `submitted` and `requiredNow` for each, and the alert's current `step`. An assignment limited to unit paths applies when the alert's matched units lie under one of them.
+
+### Submissions
+
+Post to `/api/v1/workspaces/{slug}/alerts/{id}/submissions`:
+
+```json
+{
+  "id": "5ca1ab1e-0000-4000-8000-0000000000a1",
+  "form": "first-report",
+  "version": 1,
+  "step": "first_report",
+  "values": {"reached_at": "2026-03-15T14:30:00+05:30", "fire_status": "controlled"},
+  "deviceTime": "2026-03-15T14:45:00+05:30",
+  "location": {"longitude": 86.2975, "latitude": 16.4187}
+}
+```
+
+The phone makes the `id`, a UUID in small letters, so it can retry safely. The same request from the same user returns the first receipt with 200; another request with that ID gets 409. `step` can be left out when the form is assigned to one step only. The alert must have reached the step. Any published version of the assigned form is accepted, because a phone that was offline may still have an earlier one. The submission records the version, the alert, the incident the alert belongs to at the time, the user, the device time, the server time and the location.
+
+The server checks the values against the form version (form format, sections 8 to 13): types, required questions, `requireWhen`, conditions, text lengths and patterns, number limits and decimal places, dates in the future, choices and cascading lists, the number of choices, files and entries in repeating groups, and GeoJSON shapes. Photos, signatures and files must be attachments uploaded for the same alert; photos and signatures must be images, and files must match `accept` and `maxSizeMegabytes`. Problems come back with 422 in `problems`, one plain-English sentence each. Answers to hidden questions and later stages are not kept. The server works out calculated fields and fills in values from the alert itself, ignoring what was sent for them.
+
+`GET /api/v1/workspaces/{slug}/alerts/{id}/submissions` lists an alert's submissions and `GET /api/v1/workspaces/{slug}/submissions/{id}` returns one. Anyone who can see the alert can read and submit, using the same grants and queue rules as the alert queue. Others get 404.
+
+### Approvals
+
+A supervising officer on the alert (a division officer at division level or above, or a state administrator) posts `{"decision": "approved"}` or `{"decision": "returned", "note": "Recount the teams."}` to `/api/v1/workspaces/{slug}/submissions/{id}/approval`. A returned submission needs a note. Each submission has one decision, which never changes: repeating it returns the same answer, and a different decision gets 409. A field user gets 403. The decision records who, when and why.
+
+### Attachments
+
+Upload each photo, signature or file before the submission, with an ID the phone makes:
+
+```sh
+curl -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: image/jpeg" \
+  --data-binary @site.jpg \
+  "http://127.0.0.1:18090/api/v1/workspaces/demo/alerts/26/attachments/5ca1ab1e-0000-4000-8000-000000000001?name=site.jpg"
+```
+
+The API accepts JPEG, PNG and WebP images, PDF, ZIP, plain text and CSV, up to `FIMRA_ATTACHMENT_MAX_MB` (25 MB by default). Images, PDF and ZIP files must look like the type they claim. The first upload gets 201, a retry of the same file gets 200, and another file with the same ID gets 409. `GET /api/v1/workspaces/{slug}/attachments/{id}` downloads a file as an attachment, never shown inline.
+
+Attachments are never overwritten. Each file is stored once under its SHA-256 hash, and its record cannot change. Uploads and downloads need the same access to the alert as its detail view, and both are recorded in the audit log. Photos are stored exactly as taken, including any location in their EXIF data. [PLAN.md section 6](../../PLAN.md#6-permissions-security-and-compliance) requires that location data is removed from photos before any public release, so a public view of attachments must strip it first.
+
+| Variable | Default |
+|---|---|
+| `FIMRA_ATTACHMENT_STORE` | `local`: files on the API server's disk. `s3` uses an S3-compatible object store. |
+| `FIMRA_ATTACHMENT_DIR` | `.form-attachments` (at the repository root when using Make). Local files, and uploads while they are checked. Use a separate directory for each stack. |
+| `FIMRA_ATTACHMENT_MAX_MB` | `25` |
+| `FIMRA_S3_ENDPOINT`, `FIMRA_S3_REGION`, `FIMRA_S3_BUCKET`, `FIMRA_S3_PREFIX` | For `s3`: the store's address, region (default `us-east-1`), bucket and an optional key prefix. Objects are addressed by path. |
+| `FIMRA_S3_ACCESS_KEY`, `FIMRA_S3_SECRET_KEY` | For `s3`: the store's keys. Keep them in `.env`. |
+
+The project does not yet bundle an S3-compatible store; which one is an open question in [PLAN.md section 14](../../PLAN.md#14-facts-and-access-to-confirm). `make attachments-s3-test` checks the S3 path against a small S3-compatible server that runs for the test only.
+
+### Flat views
+
+Publishing a version creates views in the `form_views` schema whose columns are the form's columns, so fields can be charted and exported like ordinary columns. `f{id}` has one row per submission, where `{id}` is the version's database ID. `f{id}_{group}` has one row per entry of each repeating group, with `_entry` (such as `2` or `2.1`) and `_parent_entry` for entries inside another group. The table `form_version_views` and the version's `views` field list the names.
+
+Columns from the form use the field keys and suitable types: numbers, dates, times, times with zones, text arrays for multiple choice, UUIDs for attachments and geometries in WGS 84 for shapes, with `<key>_area_ha` and `<key>_length_km` worked out from the shape. Columns added by the server start with an underscore, which no field key can: `_submission_id`, `_alert_id`, `_incident_id`, `_workspace_id`, `_submitted_by`, `_step`, `_device_time`, `_received_at` and `_location`. The validator allows only small letters, digits and underscores in keys, and the API checks names again and quotes them before it writes the view, so a form cannot inject SQL. The views are not filtered by permissions: anything that shows their rows to a user must join `_alert_id` to the user's alert access, as the API does.
 
 ## File exports
 
