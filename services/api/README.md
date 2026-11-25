@@ -23,6 +23,7 @@ The integration tests check sign-in with all four demo users. They also exercise
 | `FIMRA_OIDC_AUDIENCE` | `open-fimra-api` |
 | `FIMRA_HTTP_ADDR` | `127.0.0.1:18090` |
 | `FIMRA_FIRMS_MAP_KEY` | Empty, which disables live polling |
+| `FIMRA_UPLOAD_DIR` | `.geo-uploads` (at the repository root when using Make) |
 | `FIMRA_CORS_ORIGINS` | `http://127.0.0.1:4200,http://localhost:4200` |
 
 When run through Make, the database URL defaults to `DATABASE_URL` and the issuer uses `FIMRA_KEYCLOAK_PORT`. Use these defaults with the local stack.
@@ -66,6 +67,51 @@ curl -H "Authorization: Bearer $TOKEN" \
 With a map key, a River job starts polling on service startup and runs every 15 minutes. It requests two UTC calendar days for each of the four products and each workspace with a boundary. The database keeps one detection per feed observation and matches each new detection to every workspace in range. Each poll or import records its time window, counts and outcome in `ingest_runs`.
 
 Use `make ingest-fixture FILE=path/to/file.csv PRODUCT=MODIS_NRT` to import a file without calling FIRMS. The product defaults to `VIIRS_SNPP_NRT`. `make demo-detections` uses the synthetic demo file and shifts its observation times to the current hour.
+
+## Layer imports
+
+Use a bearer token for an account with the `state_admin` role at a workspace
+root. Start the [geo worker](../geo-worker/README.md) to process uploads.
+
+Send `POST /api/v1/workspaces/{slug}/layer-imports` as a multipart form.
+The file may be up to 32 MiB.
+
+| Part | What to send |
+|---|---|
+| `file` | One `.gpkg`, `.zip` containing a Shapefile, `.geojson`, `.kml` or `.kmz` file |
+| `layerSlug` | Lowercase letters, digits and hyphens. Reuse a slug to make a new version of the same layer. |
+| `layerName` | The display name for a new layer |
+| `role` | `hierarchy`, `forest`, `exclusion` or `analysis` |
+| `hierarchy` | The workspace hierarchy slug, required for the hierarchy role |
+| `settings` | A JSON object with any of the settings below |
+
+| Setting | What it does |
+|---|---|
+| `nameField`, `codeField` | Read a feature name or code from the chosen source field. A hierarchy requires `nameField`. |
+| `parentCodeField` | Read a hierarchy unit's parent code from the chosen field |
+| `sourceLayer` | Select a named source layer if the file contains more than one |
+| `depth` | The existing level number, required for a hierarchy. The root level is 0. |
+| `parentVersionId` | Optional ID of a ready hierarchy draft from the preceding level. The worker otherwise uses current published parent units. |
+| `coverageVersionId` | Optional ID of a ready hierarchy draft in the same workspace, used to review forest coverage |
+
+For example, this uses the synthetic forest file from the repository root:
+
+```sh
+curl -H "Authorization: Bearer $TOKEN" \
+  -F 'file=@seed/demo-state/forest.geojson' \
+  -F 'role=forest' -F 'layerSlug=forest' -F 'layerName=Forest' \
+  -F 'settings={"nameField":"name","codeField":"code"}' \
+  http://127.0.0.1:18090/api/v1/workspaces/demo/layer-imports
+```
+
+The API returns HTTP 202 with a `versionId` and a `Location` header. Use
+`GET /api/v1/workspaces/{slug}/layer-imports/{versionId}` to read the draft.
+Its import status is `pending`, `ready` or `failed`. The response includes
+`sourceCrs` (the source coordinate system, if known), `featureCount`,
+`unitCount` and `problems`. A ready draft can still have review items that
+must be resolved before publishing. Each item has a `kind`, `message`,
+`blocksPublish` flag and, where available, a `featureRef`. A reference like
+`feature:3` means the third feature read from the selected source layer.
 
 ## Database queries
 

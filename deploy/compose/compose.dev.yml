@@ -53,6 +53,28 @@ services:
     mem_limit: 1536m
     restart: unless-stopped
 
+  geo-worker:
+    profiles: [geo]
+    build: ../../services/geo-worker
+    environment:
+      PGHOST: db
+      PGDATABASE: ${FIMRA_DB_NAME:-fimra}
+      PGUSER: ${FIMRA_DB_USER:-fimra}
+      PGPASSWORD: ${FIMRA_DB_PASSWORD:-fimra-dev}
+    volumes:
+      - type: bind
+        source: ${FIMRA_UPLOAD_DIR:-../../.geo-uploads}
+        target: /uploads
+        read_only: true
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 1g
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    restart: unless-stopped
+
 volumes:
   db-data:
   keycloak-data:

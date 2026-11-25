@@ -20,6 +20,8 @@ FIMRA_KEYCLOAK_PORT ?= 18180
 FIMRA_OIDC_ISSUER ?= http://127.0.0.1:$(FIMRA_KEYCLOAK_PORT)/realms/open-fimra
 FIMRA_OIDC_AUDIENCE ?= open-fimra-api
 FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
+FIMRA_UPLOAD_DIR ?= .geo-uploads
+export FIMRA_UPLOAD_DIR := $(abspath $(FIMRA_UPLOAD_DIR))
 
 GOOSE_VERSION := v3.30.1
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(DATABASE_URL)"
@@ -45,16 +47,16 @@ dev: ## Start the development stack (PostGIS and Keycloak) and wait until it is 
 	@$(COMPOSE) ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
 dev-down: ## Stop the development stack, keeping its data
-	$(COMPOSE) down
+	$(COMPOSE) --profile geo down
 
 dev-reset: ## Stop the development stack and delete its data
-	$(COMPOSE) down --volumes
+	$(COMPOSE) --profile geo down --volumes
 
 dev-logs: ## Follow the development stack's logs
-	$(COMPOSE) logs -f
+	$(COMPOSE) --profile geo logs -f
 
 dev-ps: ## Show the development stack's containers
-	$(COMPOSE) ps
+	$(COMPOSE) --profile geo ps
 
 db-up: ## Start only the development database and wait until it is healthy
 	$(COMPOSE) up -d --wait db
@@ -139,3 +141,20 @@ web-test: ## Run the web unit tests
 
 web-lint: ## Lint the web app and its templates
 	cd apps/web && $(PNPM) run lint
+
+.PHONY: geo-worker-up geo-test geo-test-integration
+
+geo-worker-up: ## Build and start the layer import worker
+	install -d -m 700 "$(FIMRA_UPLOAD_DIR)"
+	$(COMPOSE) up -d --build geo-worker
+
+geo-test: ## Run the geo worker unit tests in the GDAL container
+	install -d -m 700 "$(FIMRA_UPLOAD_DIR)"
+	$(COMPOSE) build geo-worker
+	$(COMPOSE) run --rm --no-deps geo-worker python -m unittest discover -v
+
+geo-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+geo-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
+geo-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
+geo-test-integration: ## Compare demo uploads with the seed on the running, migrated stack
+	cd services/api && FIMRA_GEO_INTEGRATION=1 go test -run '^TestLayerImportIntegration$$' -count=1 -v .

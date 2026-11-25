@@ -22,6 +22,7 @@ type config struct {
 	httpAddr    string
 	firmsMapKey string
 	corsOrigins string
+	uploadDir   string
 }
 
 func loadConfig() config {
@@ -32,6 +33,7 @@ func loadConfig() config {
 		httpAddr:    envOr("FIMRA_HTTP_ADDR", "127.0.0.1:18090"),
 		firmsMapKey: strings.TrimSpace(os.Getenv("FIMRA_FIRMS_MAP_KEY")),
 		corsOrigins: envOr("FIMRA_CORS_ORIGINS", devOrigins),
+		uploadDir:   envOr("FIMRA_UPLOAD_DIR", ".geo-uploads"),
 	}
 }
 
@@ -104,7 +106,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	}
 
 	server := &http.Server{
-		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins),
+		Handler:           newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience), logger, cfg.corsOrigins, cfg.uploadDir),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,
