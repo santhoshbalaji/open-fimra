@@ -1,6 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { LucideCircleAlert, LucideEye, LucideEyeOff, LucideLock } from '@lucide/angular';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -12,6 +11,7 @@ import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { WorkspaceService } from './workspace';
+import { Icon } from './ui/icon';
 
 /** Turns a workspace name into a web address part, such as "demo-state". */
 export function slugFrom(name: string): string {
@@ -25,8 +25,7 @@ export function slugFrom(name: string): string {
  */
 @Component({
   selector: 'fimra-bootstrap',
-  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports,
-    LucideCircleAlert, LucideEye, LucideEyeOff, LucideLock],
+  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, Icon],
   templateUrl: './bootstrap.html',
   host: { class: 'block h-full overflow-auto' }
 })

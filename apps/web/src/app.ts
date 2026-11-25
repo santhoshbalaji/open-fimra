@@ -1,13 +1,8 @@
 import { HlmToaster } from '@spartan-ng/helm/sonner';
-import { HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger } from '@spartan-ng/helm/select';
-import { HlmInput } from '@spartan-ng/helm/input';
-import { HlmField, HlmFieldLabel } from '@spartan-ng/helm/field';
 import { HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger } from '@spartan-ng/helm/dropdown-menu';
-import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { LucideChevronDown, LucideLogOut, LucideMoon, LucideSettings, LucideSun } from '@lucide/angular';
 import { AuthService } from './auth';
 import { ThemeService } from './theme';
 import { WorkspaceService } from './workspace';
@@ -15,19 +10,15 @@ import { DemoMap } from './demo-map';
 import { Layers } from './layers';
 import { NotificationLink, Notifications, notificationURL } from './notifications';
 import { Dashboard } from './dashboard';
-import { DashboardFilters } from './dashboard-filters';
-import { classes, ForestClass } from './detections';
 import { Bootstrap } from './bootstrap';
 import { SetupWizard } from './setup-wizard';
 import { WEB_CONFIG } from './config';
+import { Icon } from './ui/icon';
+import { FilterFields } from './filter-fields';
 
 @Component({
   selector: 'fimra-root',
-  imports: [
-    HlmButton, HlmSwitch, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger,
-    HlmField, HlmFieldLabel, HlmInput, HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger,
-    HlmToaster, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard,
-    LucideChevronDown, LucideLogOut, LucideMoon, LucideSettings, LucideSun],
+  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, Icon],
   templateUrl: './app.html',
   host: { '(window:popstate)': 'loadLink()' }
 })
@@ -46,13 +37,6 @@ export class App implements OnInit {
 
   readonly filtersOpen = signal(false);
   readonly dashboard = signal(false);
-  readonly filters = inject(DashboardFilters);
-  readonly forestLabel = computed(() => {
-    const key = this.filters.forestClass();
-    return key ? classes[key] : 'All classes';
-  });
-  readonly classes = classes;
-  readonly classKeys = Object.keys(classes) as ForestClass[];
   readonly linkedAlert = signal<NotificationLink | null>(null);
   readonly linkMessage = signal('');
   readonly focusFeedHealth = signal(false);
@@ -93,10 +77,6 @@ export class App implements OnInit {
   toggleLayers(): void {
     this.setupChoice.set(false);
     this.showLayers.set(!this.showLayers());
-  }
-
-  selectForest(value: string | null | undefined): void {
-    this.filters.forestClass.set(this.classKeys.find(key => key === value) ?? '');
   }
 
   openSetup(): void {

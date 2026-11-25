@@ -2,9 +2,6 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  LucideChevronRight, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideLoaderCircle, LucideTriangleAlert
-} from '@lucide/angular';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -23,6 +20,7 @@ import { WEB_CONFIG } from './config';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
+import { Icon } from './ui/icon';
 
 type Role = 'hierarchy' | 'forest' | 'exclusion' | 'analysis';
 type Status = 'pending' | 'ready' | 'failed' | 'published' | 'retired';
@@ -54,9 +52,7 @@ interface Preview {
 
 @Component({
   selector: 'fimra-layers',
-  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmCheckbox,
-    HlmDialogImports, HlmFieldImports, HlmInput, HlmLabel, HlmSelectImports, HlmSkeleton, HlmTableImports,
-    LucideChevronRight, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideLoaderCircle, LucideTriangleAlert],
+  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmCheckbox, HlmDialogImports, HlmFieldImports, HlmInput, HlmLabel, HlmSelectImports, HlmSkeleton, HlmTableImports, Icon],
   templateUrl: './layers.html',
   host: { class: 'block h-full overflow-auto' }
 })

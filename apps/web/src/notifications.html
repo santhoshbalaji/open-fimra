@@ -2,7 +2,7 @@
   <button #bell hlmBtn variant="ghost" size="icon" class="icon-button" (click)="toggle()"
           [attr.aria-label]="'Notifications, ' + (inbox()?.unreadCount ?? 0) + ' unread'"
           [attr.aria-expanded]="open()" aria-controls="notification-inbox">
-    <svg lucideBell aria-hidden="true"></svg>
+    <svg fimraIcon="bell" aria-hidden="true"></svg>
     @if (inbox()?.unreadCount; as count) {
       <span class="unread-count" aria-hidden="true">{{ count > 99 ? '99+' : count }}</span>
     }

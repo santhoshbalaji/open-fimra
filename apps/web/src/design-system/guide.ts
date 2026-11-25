@@ -2,7 +2,6 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
-import { LucidePlus, LucideTriangleAlert } from '@lucide/angular';
 import tokens from '../../../../docs/design-system/tokens.json';
 import { classes } from '../detections';
 import { ThemeService } from '../theme';
@@ -29,6 +28,7 @@ import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
+import { Icon } from '../ui/icon';
 
 // WCAG relative luminance for an opaque sRGB swatch.
 function luminance(hex: string): number {
@@ -43,13 +43,7 @@ function luminance(hex: string): number {
   selector: 'fimra-root',
   templateUrl: './guide.html',
   styleUrl: './guide.css',
-  imports: [EmptyState, StatusBadge, LucidePlus, LucideTriangleAlert,
-    HlmAlertImports, HlmBadgeImports, HlmButtonImports, HlmCardImports,
-    HlmCheckboxImports, HlmDialogImports, HlmDropdownMenuImports, HlmFieldImports,
-    HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports,
-    HlmSeparatorImports, HlmSheetImports, HlmSkeletonImports, HlmToasterImports,
-    HlmSwitchImports, HlmTableImports, HlmTabsImports, HlmTextareaImports,
-    HlmTooltipImports]
+  imports: [EmptyState, StatusBadge, HlmAlertImports, HlmBadgeImports, HlmButtonImports, HlmCardImports, HlmCheckboxImports, HlmDialogImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports, HlmSeparatorImports, HlmSheetImports, HlmSkeletonImports, HlmToasterImports, HlmSwitchImports, HlmTableImports, HlmTabsImports, HlmTextareaImports, HlmTooltipImports, Icon]
 })
 export class DesignGuide {
   readonly appearance = inject(ThemeService);

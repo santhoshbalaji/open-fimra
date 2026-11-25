@@ -2,7 +2,7 @@
   <h2 class="text-display">Layers</h2>
   @if (error()) {
     <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
-      <svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+      <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
       <p hlmAlertDescription>{{ error() }}</p>
     </div>
   }
@@ -153,20 +153,20 @@
                   <p class="rematch flex items-start gap-2 rounded-control bg-background px-3 py-2">
                     @switch (replay.status) {
                       @case ('pending') {
-                        <svg lucideLoaderCircle aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
+                        <svg fimraIcon="loader-circle" aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
                         <span>Re-match queued.</span>
                       }
                       @case ('running') {
-                        <svg lucideLoaderCircle aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
+                        <svg fimraIcon="loader-circle" aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
                         <span>Re-matching detections. <span class="tabular-nums">{{ replay.processed }}</span> checked so far.</span>
                       }
                       @case ('completed') {
-                        <svg lucideCircleCheck aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                        <svg fimraIcon="circle-check" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
                         <span>Re-match complete. {{ replay.processed }} {{ replay.processed === 1 ? 'detection' : 'detections' }} checked.
                         {{ replay.alertsCreated }} new {{ replay.alertsCreated === 1 ? 'alert' : 'alerts' }}.</span>
                       }
                       @case ('failed') {
-                        <svg lucideCircleAlert aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-danger"></svg>
+                        <svg fimraIcon="circle-alert" aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-danger"></svg>
                         <span>Re-match failed after {{ replay.processed }} detections. Contact the system operator.</span>
                       }
                     }
@@ -193,9 +193,9 @@
                           <tr hlmTr [attr.data-blocking]="problem.blocksPublish || null">
                             <td hlmTd class="align-top">
                               @if (problem.blocksPublish) {
-                                <span hlmBadge variant="destructive"><svg lucideCircleX aria-hidden="true" class="size-3.5"></svg>Blocks publishing</span>
+                                <span hlmBadge variant="destructive"><svg fimraIcon="circle-x" aria-hidden="true" class="size-3.5"></svg>Blocks publishing</span>
                               } @else {
-                                <span hlmBadge variant="outline"><svg lucideInfo aria-hidden="true" class="size-3.5"></svg>Review</span>
+                                <span hlmBadge variant="outline"><svg fimraIcon="info" aria-hidden="true" class="size-3.5"></svg>Review</span>
                               }
                               @if (problem.featureRef) { <span class="mt-1 block text-xs text-muted-foreground sm:hidden">{{ problem.featureRef }}</span> }
                             </td>
@@ -236,7 +236,7 @@
                 @if (preview.changes[category.key]; as group) {
                   <details class="group rounded-control border border-border">
                     <summary class="flex min-h-(--target-web) cursor-pointer items-center gap-2 px-3 font-medium text-primary">
-                      <svg lucideChevronRight aria-hidden="true" class="size-4 transition-transform group-open:rotate-90"></svg>
+                      <svg fimraIcon="chevron-right" aria-hidden="true" class="size-4 transition-transform group-open:rotate-90"></svg>
                       {{ category.label }} (showing {{ group.items.length }} of {{ group.count }})</summary>
                     <ul class="max-h-60 overflow-auto border-t border-border px-3">
                       @for (item of group.items; track item.detectionId) {
@@ -252,7 +252,7 @@
               @if (preview.brokenGrants.length) {
                 <div class="grid gap-2 rounded-control border border-border border-s-4 border-s-warning px-4 py-3" aria-labelledby="grants-heading">
                   <h4 id="grants-heading" class="flex items-center gap-2 font-semibold">
-                    <svg lucideTriangleAlert aria-hidden="true" class="size-4"></svg>Grants that would be removed</h4>
+                    <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4"></svg>Grants that would be removed</h4>
                   <ul class="list-disc ps-5 [overflow-wrap:anywhere]">
                     @for (grant of preview.brokenGrants; track $index) {
                       <li>{{ grant.username }} · {{ grant.role }} · {{ grant.unitPath }}</li>
@@ -262,7 +262,7 @@
               }
               @if (preview.blocked || hasBlockingProblems()) {
                 <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
-                  <svg lucideCircleX aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+                  <svg fimraIcon="circle-x" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
                   <h4 hlmAlertTitle>Cannot publish yet</h4>
                   <p hlmAlertDescription>{{ preview.blocked || 'Fix blocking problems before publishing.' }}</p>
                 </div>

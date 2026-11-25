@@ -2,10 +2,6 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, ElementRef, OnInit, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  LucideCheck, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideKeyRound, LucideLock, LucideMailCheck,
-  LucideMailX, LucideMinus, LucideTriangleAlert
-} from '@lucide/angular';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -24,6 +20,7 @@ import { WEB_CONFIG } from './config';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
+import { Icon } from './ui/icon';
 
 export type StepKey = 'mode' | 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
 type Labels = Record<string, string>;
@@ -70,10 +67,7 @@ const uploadLabels: Record<Upload['status'], string> = {
 /** The guided first-run wizard (PLAN.md section 7) for a root administrator. */
 @Component({
   selector: 'fimra-setup-wizard',
-  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput,
-    HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmSkeleton, HlmSwitch, HlmTableImports,
-    LucideCheck, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideKeyRound, LucideLock, LucideMailCheck,
-    LucideMailX, LucideMinus, LucideTriangleAlert],
+  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmSkeleton, HlmSwitch, HlmTableImports, Icon],
   templateUrl: './setup-wizard.html',
   host: { class: 'block h-full overflow-auto' }
 })

@@ -1,6 +1,6 @@
 import { Component, input } from '@angular/core';
-import { LucideBellOff, LucideCircleCheck, LucideCircleX, LucideCheck, LucideClock, LucideTriangleAlert } from '@lucide/angular';
 import { HlmBadge } from '@spartan-ng/helm/badge';
+import { Icon } from './icon';
 
 function visibleLabel(value: string) {
   const text = value.trim();
@@ -10,18 +10,18 @@ function visibleLabel(value: string) {
 
 @Component({
   selector: 'fimra-status-badge',
-  imports: [HlmBadge, LucideBellOff, LucideCircleCheck, LucideCircleX, LucideCheck, LucideClock, LucideTriangleAlert],
+  imports: [HlmBadge, Icon],
   host: { class: 'inline-flex align-middle mx-1' },
   template: `
     <span hlmBadge variant="outline" class="gap-1.5 text-text">
       @switch (icon()) {
-        @case ('overdue') { <svg lucideTriangleAlert aria-hidden="true" class="size-4 fill-warning"></svg> }
-        @case ('complete') { <svg lucideCheck aria-hidden="true" class="size-4"></svg> }
-        @case ('healthy') { <svg lucideCircleCheck aria-hidden="true" class="size-4"></svg> }
-        @case ('delayed') { <svg lucideClock aria-hidden="true" class="size-4"></svg> }
-        @case ('quiet') { <svg lucideBellOff aria-hidden="true" class="size-4"></svg> }
-        @case ('failing') { <svg lucideCircleX aria-hidden="true" class="size-4"></svg> }
-        @case ('step') { <svg lucideClock aria-hidden="true" class="size-4"></svg> }
+        @case ('overdue') { <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4 fill-warning"></svg> }
+        @case ('complete') { <svg fimraIcon="check" aria-hidden="true" class="size-4"></svg> }
+        @case ('healthy') { <svg fimraIcon="circle-check" aria-hidden="true" class="size-4"></svg> }
+        @case ('delayed') { <svg fimraIcon="clock" aria-hidden="true" class="size-4"></svg> }
+        @case ('quiet') { <svg fimraIcon="bell-off" aria-hidden="true" class="size-4"></svg> }
+        @case ('failing') { <svg fimraIcon="circle-x" aria-hidden="true" class="size-4"></svg> }
+        @case ('step') { <svg fimraIcon="clock" aria-hidden="true" class="size-4"></svg> }
       }
       {{ label() }}
     </span>

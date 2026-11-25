@@ -48,7 +48,7 @@
       </div>
     }
     <div class="group-row"><h3>Icon</h3>@for (size of iconSizes; track size) {
-      <button hlmBtn variant="outline" [size]="size" [attr.aria-label]="'Add ' + size"><svg lucidePlus></svg></button>
+      <button hlmBtn variant="outline" [size]="size" [attr.aria-label]="'Add ' + size"><svg fimraIcon="plus"></svg></button>
     }</div>
   </section>
   <section><h2>Fields</h2>
@@ -169,7 +169,7 @@
       <fimra-empty-state heading="No detections" detail="Choose a longer time window." /></div>
     <hlm-separator class="my-4"/>
     @for (variant of alertVariants; track variant) {
-      <div hlmAlert [variant]="variant"><h3 hlmAlertTitle class="flex items-center gap-2"><svg lucideTriangleAlert class="size-4"></svg>{{ variant === 'default' ? 'Import paused' : 'Import failed' }}</h3>
+      <div hlmAlert [variant]="variant"><h3 hlmAlertTitle class="flex items-center gap-2"><svg fimraIcon="triangle-alert" class="size-4"></svg>{{ variant === 'default' ? 'Import paused' : 'Import failed' }}</h3>
         <p hlmAlertDescription>Review the file before trying again.</p></div>
     }
     <h3 class="my-3">Loading rows</h3><div aria-label="Loading" role="status" class="grid gap-2">

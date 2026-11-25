@@ -1,0 +1,5 @@
+/* MapLibre's own styles load with the map, not in the first download. */
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+/* After MapLibre's rules, which set the map container to position: relative. */
+.map-canvas { position: absolute; inset: 0; }

@@ -10,9 +10,9 @@
 <section class="map-pane" aria-label="Detection map">
 <div #canvas class="map-canvas"></div>
 <div class="map-actions" role="group" aria-label="Map controls">
-  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg lucidePlus></svg></button>
-  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg lucideMinus></svg></button>
-  <button hlmBtn variant="ghost" [disabled]="!ready() || !boundary()" (click)="fit()" title="Fit workspace to map" aria-label="Fit workspace to map"><svg lucideMaximize></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg fimraIcon="plus"></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg fimraIcon="minus"></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready() || !boundary()" (click)="fit()" title="Fit workspace to map" aria-label="Fit workspace to map"><svg fimraIcon="maximize"></svg></button>
 </div>
 <div class="fire-controls">
   @if (workspace.current()) {
@@ -36,7 +36,7 @@
 </div>
 <section class="map-key" aria-label="Map key">
   <button hlmBtn variant="ghost" (click)="legend.set(!legend())" [attr.aria-expanded]="legend()" aria-controls="map-key-items">
-    <svg lucideLayers></svg> Map key
+    <svg fimraIcon="layers"></svg> Map key
   </button>
   <div id="map-key-items" class="key-groups" [hidden]="!legend()">
     @if (workspace.current()) {
@@ -96,7 +96,7 @@
       <h2 id="queue-title">Alert queue</h2>
       @if (exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
-          <button hlmBtn variant="outline" hlmDialogTrigger><svg lucideDownload></svg> Export</button>
+          <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
             <h2 hlmDialogTitle>Export</h2>
             @defer (on immediate) {

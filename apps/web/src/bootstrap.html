@@ -15,7 +15,7 @@
               autocapitalize="characters" [type]="showCode() ? 'text' : 'password'" class="font-mono tracking-wide">
             <button hlmBtn type="button" variant="outline" class="shrink-0" aria-controls="setup-code"
               [attr.aria-pressed]="showCode()" (click)="showCode.set(!showCode())">
-              @if (showCode()) { <svg lucideEyeOff aria-hidden="true"></svg> } @else { <svg lucideEye aria-hidden="true"></svg> }
+              @if (showCode()) { <svg fimraIcon="eye-off" aria-hidden="true"></svg> } @else { <svg fimraIcon="eye" aria-hidden="true"></svg> }
               Show<span class="sr-only"> setup code</span>
             </button>
           </div>
@@ -33,7 +33,7 @@
             <label hlmLabel class="national-mode items-start rounded-control border border-dashed border-border p-3 font-normal leading-normal">
               <hlm-radio value="national" disabled aria-describedby="national-help"><hlm-radio-indicator indicator /></hlm-radio>
               <span class="grid gap-1"><span class="flex flex-wrap items-center gap-2 font-medium">National
-                <span hlmBadge variant="outline"><svg lucideLock aria-hidden="true" class="size-3"></svg>Not available yet</span></span>
+                <span hlmBadge variant="outline"><svg fimraIcon="lock" aria-hidden="true" class="size-3"></svg>Not available yet</span></span>
                 <span id="national-help" class="text-muted-foreground">Not available yet. Phase 1 supports one state per installation.</span></span>
             </label>
           </hlm-radio-group>
@@ -59,7 +59,7 @@
         </hlm-field>
         @if (error()) {
           <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
-            <svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+            <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
             <p hlmAlertDescription>{{ error() }}</p>
           </div>
         }
