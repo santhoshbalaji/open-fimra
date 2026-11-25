@@ -12,6 +12,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications needs newer Java APIs on older Android versions.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -41,4 +43,16 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// The UnifiedPush connector asks for Tink's Java build and flutter_secure_storage
+// for its Android build. They hold the same classes, so use the Android build only.
+configurations.all {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.google.crypto.tink:tink")).using(module("com.google.crypto.tink:tink-android:1.24.0"))
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

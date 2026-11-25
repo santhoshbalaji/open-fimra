@@ -20,6 +20,9 @@ type identity struct {
 	// VerifiedEmail is the lower-case email claim when the token marks it
 	// verified. Invitations are claimed with it, even when email is off.
 	VerifiedEmail string
+	// SessionID is the sign-in session (the sid claim). A wiped phone's
+	// session is refused even when a call leaves out the device ID.
+	SessionID string
 }
 
 type authenticator struct {
@@ -76,6 +79,7 @@ func (a authenticator) verify(ctx context.Context, rawToken string) (identity, b
 	var claims struct {
 		Username  string           `json:"preferred_username"`
 		Name      string           `json:"name"`
+		Session   string           `json:"sid"`
 		NotBefore *jwt.NumericDate `json:"nbf"`
 	}
 	if err := token.Claims(&claims); err != nil {
@@ -95,6 +99,9 @@ func (a authenticator) verify(ctx context.Context, rawToken string) (identity, b
 		claims.Name = claims.Username
 	}
 	caller := identity{Subject: token.Subject, Username: claims.Username, Name: claims.Name}
+	if len(claims.Session) <= 200 {
+		caller.SessionID = claims.Session
+	}
 	var contact struct {
 		Email    string `json:"email"`
 		Verified bool   `json:"email_verified"`

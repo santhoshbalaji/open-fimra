@@ -1,0 +1,154 @@
+<div class="mx-auto grid max-w-[1160px] gap-4 px-4 pt-6 pb-10 sm:px-8">
+  <div class="flex flex-wrap items-center gap-3">
+    <h2 class="text-display">Field phones</h2>
+    <button hlmBtn variant="outline" class="ml-auto" (click)="closed.emit()">Back to the control room</button>
+  </div>
+  <p class="max-w-prose text-muted-foreground">
+    Each sign-in to the field app on a phone is listed here. A phone gets new fire alerts as notifications while it is
+    signed in. If a phone is lost, wipe it: it deletes its field data and sign-in the next time it connects.
+  </p>
+  @if (error()) {
+    <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
+      <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+
+  <ng-template #status let-device>
+    <span hlmBadge variant="outline" class="gap-1.5 text-text">
+      <svg [fimraIcon]="statusOf(device).icon" aria-hidden="true" class="size-4"></svg> {{ statusOf(device).label }}
+    </span>
+  </ng-template>
+
+  <section hlmCard aria-labelledby="mine-heading">
+    <hlm-card-header>
+      <h3 hlmCardTitle id="mine-heading" class="text-subhead">Your phones</h3>
+      <p hlmCardDescription>Remove a phone you no longer use. It stops getting notifications at once.</p>
+    </hlm-card-header>
+    <div hlmCardContent>
+      @if (mine(); as mine) {
+        @if (mine.length) {
+          <div hlmTableContainer class="rounded-control border border-border" tabindex="0" aria-labelledby="mine-heading">
+            <table hlmTable class="my-phones">
+              <caption class="sr-only">Your field phones</caption>
+              <thead hlmTHead>
+                <tr hlmTr>
+                  <th hlmTh scope="col">Phone</th><th hlmTh scope="col">Status</th>
+                  <th hlmTh scope="col" class="max-sm:hidden">Notifications</th><th hlmTh scope="col" class="max-sm:hidden">Last contact</th>
+                  <th hlmTh scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody hlmTBody>
+                @for (device of mine; track device.id) {
+                  <tr hlmTr>
+                    <td hlmTd class="whitespace-normal">{{ platform(device) }}
+                      <span class="block text-xs text-muted-foreground">App {{ device.appVersion }}</span>
+                    </td>
+                    <td hlmTd><ng-container *ngTemplateOutlet="status; context: { $implicit: device }" /></td>
+                    <td hlmTd class="max-sm:hidden">{{ device.push ? 'On' : 'Off' }}</td>
+                    <td hlmTd class="tabular-nums max-sm:hidden">{{ device.lastSeenAt | date: 'd MMM y, HH:mm' }}</td>
+                    <td hlmTd class="text-right whitespace-nowrap">
+                      @if (device.status === 'active') {
+                        <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Remove ' + platform(device) + ', app ' + device.appVersion"
+                                (click)="pending.set({ device, action: 'remove', area: false })">Remove</button>
+                      }
+                      @if (canWipe(device)) {
+                        <button hlmBtn size="sm" variant="ghost" class="ml-1" [attr.aria-label]="'Wipe ' + platform(device) + ', app ' + device.appVersion"
+                                (click)="pending.set({ device, action: 'wipe', area: false })">Wipe</button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <fimra-empty-state heading="No phones yet" detail="Sign in to the field app on a phone to get alerts there." />
+        }
+      } @else if (!error()) {
+        <div class="grid gap-2" aria-hidden="true"><hlm-skeleton class="h-9 w-full" /><hlm-skeleton class="h-9 w-full" /></div>
+      } @else {
+        <button hlmBtn variant="outline" (click)="error.set(''); load()">Retry</button>
+      }
+    </div>
+  </section>
+
+  @if (manages()) {
+    <section hlmCard aria-labelledby="area-heading">
+      <hlm-card-header>
+        <h3 hlmCardTitle id="area-heading" class="text-subhead">Phones in your area</h3>
+        <p hlmCardDescription>Phones of people with a role in your units. A wipe cannot be undone.</p>
+      </hlm-card-header>
+      <div hlmCardContent>
+        @if (area(); as area) {
+          @if (area.length) {
+            <div hlmTableContainer class="rounded-control border border-border" tabindex="0" aria-labelledby="area-heading">
+              <table hlmTable class="area-phones">
+                <caption class="sr-only">Field phones in your area</caption>
+                <thead hlmTHead>
+                  <tr hlmTr>
+                    <th hlmTh scope="col">Person</th><th hlmTh scope="col" class="max-sm:hidden">Phone</th>
+                    <th hlmTh scope="col">Status</th><th hlmTh scope="col" class="max-sm:hidden">Last contact</th>
+                    <th hlmTh scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (device of area; track device.id) {
+                    <tr hlmTr>
+                      <td hlmTd class="whitespace-normal">{{ owner(device) }}
+                        <span class="block text-xs text-muted-foreground">{{ device.owner?.username }}</span>
+                      </td>
+                      <td hlmTd class="whitespace-normal max-sm:hidden">{{ platform(device) }}
+                        <span class="block text-xs text-muted-foreground">App {{ device.appVersion }}</span>
+                      </td>
+                      <td hlmTd>
+                        <ng-container *ngTemplateOutlet="status; context: { $implicit: device }" />
+                        @if (device.wipeRequestedBy) { <span class="block text-xs text-muted-foreground">By {{ device.wipeRequestedBy }}</span> }
+                      </td>
+                      <td hlmTd class="tabular-nums max-sm:hidden">{{ device.lastSeenAt | date: 'd MMM y, HH:mm' }}</td>
+                      <td hlmTd class="text-right">
+                        @if (canWipe(device)) {
+                          <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Wipe the phone of ' + owner(device)"
+                                  (click)="pending.set({ device, action: 'wipe', area: true })">Wipe</button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <fimra-empty-state heading="No phones in your area" detail="Phones appear here once staff sign in to the field app." />
+          }
+        } @else {
+          <div class="grid gap-2" aria-hidden="true"><hlm-skeleton class="h-9 w-full" /></div>
+        }
+      </div>
+    </section>
+  }
+</div>
+
+<hlm-dialog [role]="'alertdialog'" [state]="pending() ? 'open' : 'closed'" (closed)="pending.set(null)">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+    @if (pending(); as ask) {
+      <hlm-dialog-header>
+        @if (ask.action === 'remove') {
+          <h3 hlmDialogTitle class="text-title">Remove this {{ platform(ask.device).toLowerCase() }}?</h3>
+          <p hlmDialogDescription>It stops getting notifications at once and is signed out the next time it connects.</p>
+        } @else {
+          <h3 hlmDialogTitle class="text-title">Wipe {{ ask.area ? 'the phone of ' + owner(ask.device) : 'this phone' }}?</h3>
+          <p hlmDialogDescription>
+            The next time it connects, the field app deletes its field data and sign-in and returns to the sign-in page.
+            It gets no more notifications. This cannot be undone.
+          </p>
+        }
+      </hlm-dialog-header>
+      <hlm-dialog-footer>
+        <button hlmBtn variant="outline" [disabled]="busy()" (click)="pending.set(null)">Cancel</button>
+        <button hlmBtn variant="destructive" [disabled]="busy()" (click)="confirm()">
+          {{ ask.action === 'remove' ? 'Remove phone' : 'Wipe phone' }}
+        </button>
+      </hlm-dialog-footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

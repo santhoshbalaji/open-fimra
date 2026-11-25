@@ -23,6 +23,7 @@ FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
 FIMRA_UPLOAD_DIR ?= .geo-uploads
 FIMRA_MAILPIT_HTTP_PORT ?= 18025
 FIMRA_MAILPIT_SMTP_PORT ?= 11025
+FIMRA_NTFY_PORT ?= 18110
 export FIMRA_UPLOAD_DIR := $(abspath $(FIMRA_UPLOAD_DIR))
 FIMRA_EXPORT_DIR ?= .geo-exports
 export FIMRA_EXPORT_DIR := $(abspath $(FIMRA_EXPORT_DIR))
@@ -55,6 +56,8 @@ api-run: export FIMRA_SMTP_USERNAME := $(FIMRA_SMTP_USERNAME)
 api-run: export FIMRA_SMTP_PASSWORD := $(FIMRA_SMTP_PASSWORD)
 api-run: export FIMRA_SMTP_SECURITY := $(FIMRA_SMTP_SECURITY)
 api-run: export FIMRA_WEB_URL := $(FIMRA_WEB_URL)
+api-run: export FIMRA_PUSH_SERVERS := $(FIMRA_PUSH_SERVERS)
+api-run: export FIMRA_PUSH_FCM_CREDENTIALS_FILE := $(FIMRA_PUSH_FCM_CREDENTIALS_FILE)
 api-run: export FIMRA_SETUP_CODE := $(FIMRA_SETUP_CODE)
 api-run: export FIMRA_ATTACHMENT_STORE := $(FIMRA_ATTACHMENT_STORE)
 api-run: export FIMRA_ATTACHMENT_MAX_MB := $(FIMRA_ATTACHMENT_MAX_MB)
@@ -68,6 +71,7 @@ api-run backfill-firms rotate-settings-key: export FIMRA_SETTINGS_KEY := $(FIMRA
 api-run backfill-firms rotate-settings-key: export FIMRA_SETTINGS_OLD_KEYS := $(FIMRA_SETTINGS_OLD_KEYS)
 api-test-integration: export FIMRA_TEST_MAILPIT_URL := http://127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT)
 api-test-integration: export FIMRA_TEST_MAILPIT_SMTP := 127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT)
+api-test-integration: export FIMRA_TEST_PUSH_URL := http://127.0.0.1:$(FIMRA_NTFY_PORT)
 # The GIS link test reads the API with ogrinfo in the geo worker's GDAL base image.
 GDAL_IMAGE ?= $(shell sed -n 's/^FROM \(ghcr.io\/osgeo\/gdal:[^ ]*\).*/\1/p' services/geo-worker/Dockerfile)
 api-test-integration: export FIMRA_GIS_OGR_IMAGE := $(GDAL_IMAGE)
@@ -87,20 +91,23 @@ dev: ## Start the development stack (PostGIS and Keycloak) and wait until it is 
 	@$(COMPOSE) ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
 dev-down: ## Stop the development stack, keeping its data
-	$(COMPOSE) --profile geo --profile mail down
+	$(COMPOSE) --profile geo --profile mail --profile push down
 
 dev-reset: ## Stop the development stack and delete its data
-	$(COMPOSE) --profile geo --profile mail down --volumes
+	$(COMPOSE) --profile geo --profile mail --profile push down --volumes
 
-.PHONY: mail-up
+.PHONY: mail-up push-up
 mail-up: ## Start the local mail catcher
 	$(COMPOSE) up -d --wait mailpit
 
+push-up: ## Start the local push server (ntfy) for field app notifications
+	$(COMPOSE) up -d --wait ntfy
+
 dev-logs: ## Follow the development stack's logs
-	$(COMPOSE) --profile geo logs -f
+	$(COMPOSE) --profile geo --profile mail --profile push logs -f
 
 dev-ps: ## Show the development stack's containers
-	$(COMPOSE) --profile geo ps
+	$(COMPOSE) --profile geo --profile mail --profile push ps
 
 db-up: ## Start only the development database and wait until it is healthy
 	$(COMPOSE) up -d --wait db
@@ -147,8 +154,8 @@ api-run: ## Run the core API on the development stack
 api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
-api-test-integration: mail-up ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration)$$' -count=1 -v .
+api-test-integration: mail-up push-up ## Test the core API against the migrated development stack
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }

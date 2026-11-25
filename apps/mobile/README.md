@@ -10,9 +10,49 @@ This first version works online. Keeping alerts, forms and maps on the phone, an
 - **Workspaces.** The app lists the workspaces where the user has a role. A user with more than one can switch from the account menu or the title.
 - **Alerts.** The list shows the past seven days, newest first. Each alert shows its place, forest class, age and its status as an icon and a label, with **Overdue** when a time limit has passed. Officers who review alerts can filter by queue. Pull down to refresh.
 - **Map.** The map opens on the user's own units, outlined. It draws the core API's permission-filtered vector tiles: units, forest and exclusions, and detections with the shared symbols (shape for forest class, colour for age). **Map key** explains them in words. Tap a point to open its alert. The map uses MapLibre and loads nothing from outside services, so it needs no licence key.
+- **Notifications.** After sign-in the phone registers itself with the core API. New alerts for the user's area arrive as notifications through a push app the user installs, such as ntfy, connected to the department's own push server. A notification says only "New fire alert"; tapping it opens the alert, which the app fetches over the signed-in API. **Notifications and phones** in the account menu shows whether notifications work on this phone and lists the user's phones, so they can remove one they no longer use.
+- **Remote wipe.** An administrator can ask a lost phone to delete its field data. The phone does it the next time it contacts the API. See [Remote wipe](#remote-wipe).
 - **Alert details and steps.** An alert shows where and when it was seen, its source and its timeline. The buttons offer only the steps the user's role allows next. Field steps such as **Reached site** save the phone's location, which must be near the fire. Supervising officers can record a reason instead. Each step carries a client ID, so pressing **Save** again after a lost answer records it once.
 
 The interface uses the shared [design tokens](../../docs/design-system/tokens.json) in a light and a dark theme that follow the phone's setting, the Inter font bundled with the app, the [project logo](../../docs/design-system/logo) and touch targets of at least 48 pixels.
+
+## Notifications
+
+The app uses [UnifiedPush](https://unifiedpush.org), so it needs no Google service. On the phone:
+
+1. Install a UnifiedPush push app, such as ntfy from F-Droid or the Play Store.
+2. In the push app, set the department's push server as the default server, for example `https://push.example.org`. The core API only sends to servers in its `FIMRA_PUSH_SERVERS` setting.
+3. Open the field app and sign in. It finds the push app, gets an address from it and registers it with the API. **Notifications and phones** says **Notifications are on** once the API accepts it. Android 13 and later also ask whether the app may show notifications.
+
+If no push app is installed, the app works as before without notifications and says how to turn them on. After installing one, choose **Check again**.
+
+Push messages are encrypted for the phone and hold only IDs and a short generic text. The push app wakes the field app to show the notification, even when the field app is closed. The same notification arriving twice replaces the first. A message asking the phone to check in (sent after a wipe request) makes it call the API, which decides what to do; a push message can never wipe a phone by itself.
+
+The browser test build has no push. It registers as a browser device without notifications.
+
+## Remote wipe
+
+Every call to the API names the phone's registration in the `Fimra-Device` header. When an administrator has wiped the phone, the API refuses its next call, whatever it is, with `device_wiped`. The app then:
+
+1. tells the API it is deleting its data (`POST /api/v1/devices/{id}/wiped`), while it still has a token,
+2. deletes the field data listed below,
+3. ends the session on the sign-in server, and returns to the sign-in screen with a message saying why.
+
+What a wipe deletes, in order:
+
+| Data | Where it is |
+| --- | --- |
+| Alert notifications shown on the phone | The Android notification shade |
+| The push registration with the push app | The push app, which forgets the phone's address |
+| Map areas saved for offline use | MapLibre's offline store (none yet; slice 26 adds offline maps) |
+| The phone's registration ID | The Android Keystore |
+| Sign-in tokens | The Android Keystore |
+
+The list lives in one place, `fieldDataOnPhone` in `lib/src/device/local_data.dart`. Anything new the app keeps on the phone, such as the offline alerts, forms and queued reports of slice 26, must be added there.
+
+A wipe keeps the server settings, which are not personal data, so the user can sign in again. This version of the app does not save alerts on the phone: it reads them from the API each time, and the API marks its answers and map tiles `no-store` so they are not kept. The sign-in page's cookies belong to the phone's browser; ending the session on the sign-in server makes them useless.
+
+A phone that was removed from the account (`device_revoked`) signs out without the wipe list. Signing out tells the API, stops push and forgets the registration ID. The next sign-in makes a new registration.
 
 ## Build and test without installing Flutter
 
@@ -36,9 +76,9 @@ make mobile-walkthrough       # the browser build in headless Chromium, with scr
 
 Both create their own database, `fimra_mobile_test`, beside the development one and run a core API on it at `127.0.0.1:18099` (set `MOBILE_TEST_API_ADDR` to change it). They load the demo state and detections, then add one synthetic forest patch and two detections in beat B01, because the demo seed gives the beat guard no alerts. The development database is left alone.
 
-The integration tests sign the beat guard in through the real `open-fimra-mobile` client with PKCE, with a scripted browser filling in the Keycloak form. They check that the client refuses password sign-in and a request without a proof key, that each demo user sees only their own alerts and tiles, and that the beat guard can acknowledge an alert exactly once. Other demo users get their tokens from the development-only `open-fimra-dev-cli` client.
+The integration tests sign the beat guard in through the real `open-fimra-mobile` client with PKCE, with a scripted browser filling in the Keycloak form. They check that the client refuses password sign-in and a request without a proof key, that each demo user sees only their own alerts and tiles, and that the beat guard can acknowledge an alert exactly once. They also register the beat guard's phone, check who can see it, have the division officer wipe it and check that the phone's next call deletes its data and returns it to sign-in. Other demo users get their tokens from the development-only `open-fimra-dev-cli` client.
 
-The walkthrough builds the app for a browser, serves it on `127.0.0.1:4300` (`MOBILE_WEB_PORT`, 4300 to 4303) and signs in as the beat guard at phone size. It sets the server under **Server settings**, checks the list and the map, acknowledges an alert and saves screenshots to `~/open-fimra-screenshots/field-app` (`MOBILE_SHOTS`). The browser build exists only for these tests. It serves its own copy of MapLibre GL JS, which `make mobile-web` downloads from the npm registry and checks against its published checksum.
+The walkthrough builds the app for a browser, serves it on `127.0.0.1:4300` (`MOBILE_WEB_PORT`, 4300 to 4303) and signs in as the beat guard at phone size. It sets the server under **Server settings**, checks the list and the map, acknowledges an alert, opens **Notifications and phones**, has the division officer wipe the phone through the API, checks that the next start returns to sign-in with the reason, and saves screenshots to `~/open-fimra-screenshots/field-app` (`MOBILE_SHOTS`). The browser build exists only for these tests. It serves its own copy of MapLibre GL JS, which `make mobile-web` downloads from the npm registry and checks against its published checksum.
 
 ## Run it on a phone or an emulator
 
@@ -67,6 +107,7 @@ The development realm has a public client, `open-fimra-mobile`, with the authori
 | `lib/src/auth` | PKCE, the OpenID Connect client, the session and token storage |
 | `lib/src/api` | The core API client and its data classes |
 | `lib/src/data` | The repository the screens use. Offline storage goes here. |
+| `lib/src/device` | Device registration, push, notifications and the wipe list |
 | `lib/src/map` | The map style and the token for map requests |
 | `lib/src/theme` | The theme, generated from the design tokens |
 | `lib/src/ui` | Screens and shared widgets |

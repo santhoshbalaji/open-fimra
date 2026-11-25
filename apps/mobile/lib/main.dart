@@ -4,9 +4,10 @@ import 'package:flutter/semantics.dart';
 
 import 'src/app.dart';
 import 'src/config.dart';
+import 'src/device/push_platform.dart';
 import 'src/map/map_auth.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   // In a browser, keep the accessibility tree on so screen readers and the
   // automated browser tests can find every control by its label.
@@ -19,5 +20,12 @@ Future<void> main() async {
   }
   final store = ConfigStore(defaults);
   final config = await store.load();
+  if (isBackgroundStart(args)) {
+    // The push app started the field app without a screen to hand it a
+    // message. Show the notification, or call the API for a device check,
+    // without opening the app.
+    await AppServices.connect(config).start(foreground: false);
+    return;
+  }
   runApp(FimraApp(configStore: store, initialConfig: config, servicesFactory: AppServices.connect));
 }

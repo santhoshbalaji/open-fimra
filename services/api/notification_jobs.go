@@ -25,6 +25,7 @@ type notificationWorker struct {
 	river.WorkerDefaults[notificationArgs]
 	db    *pgxpool.Pool
 	email notificationChannel
+	push  pushSettings
 }
 
 type notificationMessage struct {
@@ -40,16 +41,11 @@ type notificationChannel interface {
 	deliver(context.Context, notificationMessage) (string, error)
 }
 
-// These channels stay out of the job queue until a deployment supplies providers.
+// Text messages stay out of the job queue until a deployment supplies a gateway.
 type smsNotificationChannel struct{}
-type pushNotificationChannel struct{}
 
 func (smsNotificationChannel) deliver(context.Context, notificationMessage) (string, error) {
 	return "failed", errors.New("text messages require an agency gateway and registered templates")
-}
-
-func (pushNotificationChannel) deliver(context.Context, notificationMessage) (string, error) {
-	return "failed", errors.New("push requires a provider and device registration")
 }
 
 func checkOverdueNotifications(ctx context.Context, db ingestDB, now time.Time) error {
@@ -79,6 +75,13 @@ func (w *notificationWorker) Work(ctx context.Context, _ *river.Job[notification
 	if err := checkOverdueNotifications(ctx, w.db, time.Now()); err != nil {
 		return fmt.Errorf("check overdue alerts: %w", err)
 	}
+	if err := w.deliverEmails(ctx); err != nil {
+		return err
+	}
+	return w.deliverPushes(ctx)
+}
+
+func (w *notificationWorker) deliverEmails(ctx context.Context) error {
 	if w.email == nil {
 		return nil
 	}

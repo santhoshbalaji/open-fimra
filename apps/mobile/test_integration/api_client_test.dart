@@ -10,6 +10,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:fimra_field/src/api/api_client.dart';
 import 'package:fimra_field/src/api/models.dart';
@@ -19,6 +20,10 @@ import 'package:fimra_field/src/auth/session.dart';
 import 'package:fimra_field/src/auth/tokens.dart';
 import 'package:fimra_field/src/config.dart';
 import 'package:fimra_field/src/data/alert_repository.dart';
+import 'package:fimra_field/src/device/device_manager.dart';
+import 'package:fimra_field/src/device/device_store.dart';
+import 'package:fimra_field/src/device/local_data.dart';
+import 'package:fimra_field/src/device/push.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -239,6 +244,94 @@ void main() {
       }
     });
   });
+
+  // Runs last: wiping the phone also refuses its sign-in session.
+  group('phone registration and remote wipe', skip: skip, () {
+    test('the beat guard registers a phone, an officer wipes it and its next call deletes its data', () async {
+      final tokens = MemoryTokenStore();
+      final ids = MemoryDeviceStore();
+      final push = _NoPushApp();
+      final deleted = <String>[];
+      final session = Session(
+        oidc: OidcClient(config: config, httpClient: client),
+        store: tokens,
+        browser: KeycloakFormBrowser('beat.guard', 'demo'),
+      );
+      late final DeviceManager devices;
+      final api = FimraApi(
+        baseUrl: config.apiBaseUrl,
+        token: ({bool forceRefresh = false}) => session.accessToken(forceRefresh: forceRefresh),
+        httpClient: client,
+        deviceId: () => devices.deviceId,
+        onDeviceAction: (action, message) => devices.handleAction(action, message),
+      );
+      Future<void> Function() record(String name, Future<void> Function() delete) => () async {
+        deleted.add(name);
+        await delete();
+      };
+      devices = DeviceManager(
+        api: api,
+        session: session,
+        store: ids,
+        push: push,
+        notifier: const NoNotifier(),
+        platform: 'android',
+        localData: fieldDataOnPhone(
+          notifications: record('notifications', () async {}),
+          pushRegistration: record('push', push.stop),
+          offlineMaps: record('maps', () async {}),
+          deviceId: record('device', ids.clear),
+          signInTokens: record('tokens', tokens.clear),
+        ),
+      );
+      await session.restore();
+      await devices.start();
+      await session.signIn();
+      await pumpEventQueue();
+      await devices.register();
+      final id = ids.id;
+      expect(id, isNotNull);
+      expect(devices.device?.status, DeviceStatus.active);
+      // The test phone has no push app, so it is registered without push.
+      expect(devices.pushStatus, PushStatus.noPushApp);
+      final mine = await api.devices();
+      expect(mine.where((d) => d.current).single.id, id);
+      expect(mine.single.appVersion, fieldAppVersion);
+
+      Future<http.Response> asUser(String user, String method, String path) async {
+        final request = http.Request(method, Uri.parse('${config.apiBaseUrl}$path'))
+          ..headers['Authorization'] = 'Bearer ${await passwordToken(client, user)}';
+        return http.Response.fromStream(await client.send(request));
+      }
+
+      final listed = await asUser('division.officer', 'GET', '/api/v1/workspaces/demo/devices');
+      expect(listed.statusCode, 200, reason: listed.body);
+      expect(listed.body, contains(id));
+      expect((await asUser('no.role', 'GET', '/api/v1/workspaces/demo/devices')).statusCode, 403);
+      expect((await asUser('no.role', 'POST', '/api/v1/workspaces/demo/devices/$id/wipe')).statusCode, 404);
+      final wipe = await asUser('division.officer', 'POST', '/api/v1/workspaces/demo/devices/$id/wipe');
+      expect(wipe.statusCode, 200, reason: wipe.body);
+      expect(wipe.body, contains('wipe_pending'));
+
+      // Any call from the phone now starts the wipe.
+      await expectLater(
+        OnlineAlertRepository(api).alerts('demo'),
+        throwsA(isA<DeviceActionException>().having((e) => e.action, 'action', DeviceAction.wipe)),
+      );
+      expect(deleted, ['notifications', 'push', 'maps', 'device', 'tokens']);
+      expect(tokens.tokens, isNull);
+      expect(ids.id, isNull);
+      expect(session.status, SessionStatus.signedOut);
+      expect(session.message, contains('delete its field data'));
+
+      final after = await asUser('division.officer', 'GET', '/api/v1/workspaces/demo/devices');
+      final row = (jsonDecode(after.body)['items'] as List).cast<Map<String, dynamic>>().firstWhere(
+        (d) => d['id'] == id,
+      );
+      expect(row['status'], 'wiped');
+      expect(row['owner']['username'], 'beat.guard');
+    });
+  });
 }
 
 /// Signs in through the field app client with PKCE and returns the token.
@@ -305,4 +398,19 @@ class KeycloakFormBrowser implements AuthBrowser {
     }
     return response;
   }
+}
+
+/// A phone with no push app installed.
+class _NoPushApp implements PushService {
+  @override
+  bool get supported => true;
+
+  @override
+  Future<bool> start({
+    required void Function(PushAddress? address) onAddress,
+    required void Function(Uint8List message) onMessage,
+  }) async => false;
+
+  @override
+  Future<void> stop() async {}
 }

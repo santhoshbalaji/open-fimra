@@ -20,20 +20,55 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// The API refused a call because an administrator wiped this phone or it
+/// was removed from the user's account. The app has been told through
+/// [DeviceActionHandler] before this is thrown.
+class DeviceActionException extends ApiException {
+  const DeviceActionException(this.action, String message) : super(401, message);
+
+  /// [DeviceAction.wipe] or [DeviceAction.removed].
+  final DeviceAction action;
+}
+
+enum DeviceAction { wipe, removed }
+
 /// Gives the API client a current access token.
 typedef TokenProvider = Future<String> Function({bool forceRefresh});
 
+/// Called when the API says this phone must wipe itself or was removed.
+typedef DeviceActionHandler = Future<void> Function(DeviceAction action, String message);
+
+/// The device calls the field app makes. [FimraApi] implements it; tests use fakes.
+abstract interface class DeviceApi {
+  Future<DeviceReceipt> registerDevice(String id, DeviceRegistration registration);
+  Future<List<Device>> devices();
+  Future<void> revokeDevice(String id, {bool signOut = false});
+  Future<void> confirmWiped(String id);
+}
+
 /// Calls the core API with the signed-in user's token. The API applies the
 /// user's grants to every answer, so the app only shows what it receives.
-class FimraApi {
-  FimraApi({required String baseUrl, required TokenProvider token, required http.Client httpClient})
-    : _base = baseUrl,
-      _tokenFor = token,
-      _http = httpClient;
+class FimraApi implements DeviceApi {
+  FimraApi({
+    required String baseUrl,
+    required TokenProvider token,
+    required http.Client httpClient,
+    this.deviceId,
+    this.onDeviceAction,
+  }) : _base = baseUrl,
+       _tokenFor = token,
+       _http = httpClient;
 
   final String _base;
   final TokenProvider _tokenFor;
   final http.Client _http;
+
+  /// This phone's registration ID, sent with every call so the API can tell
+  /// a wiped phone to wipe. Null before the phone is registered.
+  String? Function()? deviceId;
+
+  /// Told when the API says this phone was wiped or removed.
+  DeviceActionHandler? onDeviceAction;
   static const _timeout = Duration(seconds: 20);
 
   String get baseUrl => _base;
@@ -81,9 +116,46 @@ class FimraApi {
     await _send('POST', '${workspacePath(slug)}/alerts/${Uri.encodeComponent(id)}/steps', request.toJson()),
   );
 
-  Future<Map<String, dynamic>> _get(String path, [Map<String, String>? query]) => _send('GET', path, null, query);
+  @override
+  /// Registers this phone, or records its latest push address and contact.
+  Future<DeviceReceipt> registerDevice(String id, DeviceRegistration registration) async =>
+      DeviceReceipt.fromJson(await _send('PUT', '/api/v1/devices/${Uri.encodeComponent(id)}', registration.toJson()));
 
-  Future<Map<String, dynamic>> _send(String method, String path, Object? body, [Map<String, String>? query]) async {
+  @override
+  /// The user's phones, newest contact first.
+  Future<List<Device>> devices() async {
+    final json = await _get('/api/v1/devices');
+    return (json['items'] as List? ?? const []).whereType<Map<String, dynamic>>().map(Device.fromJson).toList();
+  }
+
+  @override
+  /// Removes one of the user's phones. [signOut] records that this phone signed out.
+  Future<void> revokeDevice(String id, {bool signOut = false}) async {
+    await _send(
+      'DELETE',
+      '/api/v1/devices/${Uri.encodeComponent(id)}',
+      null,
+      query: signOut ? const {'reason': 'sign_out'} : null,
+      allowEmpty: true,
+    );
+  }
+
+  @override
+  /// Tells the API this phone deleted its data after a wipe request.
+  Future<void> confirmWiped(String id) async {
+    await _send('POST', '/api/v1/devices/${Uri.encodeComponent(id)}/wiped', null, allowEmpty: true);
+  }
+
+  Future<Map<String, dynamic>> _get(String path, [Map<String, String>? query]) =>
+      _send('GET', path, null, query: query);
+
+  Future<Map<String, dynamic>> _send(
+    String method,
+    String path,
+    Object? body, {
+    Map<String, String>? query,
+    bool allowEmpty = false,
+  }) async {
     final url = Uri.parse('$_base$path').replace(queryParameters: query == null || query.isEmpty ? null : query);
     Future<http.Response> attempt(bool refresh) async {
       final String token;
@@ -97,6 +169,8 @@ class FimraApi {
       final request = http.Request(method, url)
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json';
+      final device = deviceId?.call();
+      if (device != null) request.headers['Fimra-Device'] = device;
       if (body != null) {
         request.headers['Content-Type'] = 'application/json';
         request.body = jsonEncode(body);
@@ -110,26 +184,46 @@ class FimraApi {
       }
     }
 
+    Map<String, dynamic>? decode(http.Response response) {
+      try {
+        final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+        return decoded is Map<String, dynamic> ? decoded : null;
+      } on FormatException {
+        return null;
+      }
+    }
+
     var response = await attempt(false);
-    // A token can be revoked or expire early; refresh once and retry.
-    if (response.statusCode == 401) response = await attempt(true);
-    Map<String, dynamic>? json;
-    try {
-      final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) json = decoded;
-    } on FormatException {
-      json = null;
+    var json = decode(response);
+    // A token can be revoked or expire early; refresh once and retry. A wiped
+    // or removed phone is told so instead, and a new token would not help.
+    if (response.statusCode == 401 && _deviceAction(json) == null) {
+      response = await attempt(true);
+      json = decode(response);
     }
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (json == null && allowEmpty && response.body.isEmpty) return const {};
       if (json == null) throw ApiException(response.statusCode, 'The server sent an answer the app cannot read.');
       return json;
     }
     final message = json?['error'];
+    final action = response.statusCode == 401 ? _deviceAction(json) : null;
+    if (action != null) {
+      final text = message is String && message.isNotEmpty ? message : 'Sign in again.';
+      await onDeviceAction?.call(action, text);
+      throw DeviceActionException(action, text);
+    }
     throw ApiException(
       response.statusCode,
       message is String && message.isNotEmpty ? message : _fallback(response.statusCode),
     );
   }
+
+  static DeviceAction? _deviceAction(Map<String, dynamic>? json) => switch (json?['code']) {
+    'device_wiped' => DeviceAction.wipe,
+    'device_revoked' => DeviceAction.removed,
+    _ => null,
+  };
 
   static String _fallback(int status) => switch (status) {
     401 => 'Your session has ended. Sign in again.',

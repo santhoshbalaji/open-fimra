@@ -72,7 +72,7 @@ func TestWizardIntegration(t *testing.T) {
 		t.Fatalf("configure the mail catcher: %v", err)
 	}
 	// The poll runs below on demand, so the River client gets no FIRMS workers.
-	jobs, err := newJobClient(pool, logger, nil, mailpit)
+	jobs, err := newJobClient(pool, logger, nil, mailpit, pushSettings{})
 	if err != nil {
 		t.Fatal(err)
 	}

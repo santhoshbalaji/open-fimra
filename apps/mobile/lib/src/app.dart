@@ -7,6 +7,11 @@ import 'auth/session.dart';
 import 'auth/tokens.dart';
 import 'config.dart';
 import 'data/alert_repository.dart';
+import 'device/device_manager.dart';
+import 'device/device_store.dart';
+import 'device/local_data.dart';
+import 'device/push.dart';
+import 'device/push_platform.dart';
 import 'theme/app_theme.dart';
 import 'ui/home.dart';
 import 'ui/sign_in.dart';
@@ -15,32 +20,74 @@ import 'ui/widgets.dart';
 /// Everything that depends on the server settings. A new set is made when
 /// the user changes them.
 class AppServices {
-  AppServices({required this.config, required this.session, required this.repository});
+  AppServices({required this.config, required this.session, required this.repository, this.devices});
 
   /// Connects to the servers in [config] over [httpClient].
   factory AppServices.connect(
     AppConfig config, {
     http.Client? httpClient,
     TokenStore? tokenStore,
+    DeviceStore? deviceStore,
+    PushService? push,
+    AlertNotifier? notifier,
     AuthBrowser browser = const SystemAuthBrowser(),
   }) {
     final client = httpClient ?? http.Client();
+    final tokens = tokenStore ?? SecureTokenStore();
+    final ids = deviceStore ?? SecureDeviceStore();
+    final pushService = push ?? platformPush();
+    final alerts = notifier ?? platformNotifier();
     final session = Session(
       oidc: OidcClient(config: config, httpClient: client),
-      store: tokenStore ?? SecureTokenStore(),
+      store: tokens,
       browser: browser,
     );
+    late final DeviceManager devices;
     final api = FimraApi(
       baseUrl: config.apiBaseUrl,
       token: ({bool forceRefresh = false}) => session.accessToken(forceRefresh: forceRefresh),
       httpClient: client,
+      deviceId: () => devices.deviceId,
+      onDeviceAction: (action, message) => devices.handleAction(action, message),
     );
-    return AppServices(config: config, session: session, repository: OnlineAlertRepository(api));
+    devices = DeviceManager(
+      api: api,
+      session: session,
+      store: ids,
+      push: pushService,
+      notifier: alerts,
+      localData: fieldDataOnPhone(
+        notifications: alerts.clear,
+        pushRegistration: pushService.stop,
+        offlineMaps: clearMapRegions,
+        deviceId: ids.clear,
+        signInTokens: tokens.clear,
+      ),
+    );
+    return AppServices(config: config, session: session, repository: OnlineAlertRepository(api), devices: devices);
   }
 
   final AppConfig config;
   final Session session;
   final AlertRepository repository;
+
+  /// This phone's registration, push notifications and wipe handling.
+  final DeviceManager? devices;
+
+  /// Signs out on the phone, the API and the sign-in server.
+  Future<void> signOut() => devices?.signOut() ?? session.signOut();
+
+  /// Ends a session the server no longer accepts.
+  Future<void> sessionEnded() =>
+      devices?.sessionEnded() ?? session.signOut(message: 'Your session has ended. Sign in again.');
+
+  /// Starts the session and the phone's registration.
+  Future<void> start({bool foreground = true}) async {
+    await session.restore();
+    await devices?.start(foreground: foreground);
+  }
+
+  void dispose() => devices?.dispose();
 }
 
 typedef ServicesFactory = AppServices Function(AppConfig config);
@@ -73,7 +120,13 @@ class _FimraAppState extends State<FimraApp> {
   @override
   void initState() {
     super.initState();
-    _services.session.restore();
+    _services.start();
+  }
+
+  @override
+  void dispose() {
+    _services.dispose();
+    super.dispose();
   }
 
   Future<void> _changeConfig(AppConfig config, {bool reset = false}) async {
@@ -83,9 +136,11 @@ class _FimraAppState extends State<FimraApp> {
       await widget.configStore.save(config);
     }
     final next = reset ? await widget.configStore.load() : config;
-    await _services.session.signOut();
+    final previous = _services;
+    await previous.signOut();
     setState(() => _services = widget.servicesFactory(next));
-    await _services.session.restore();
+    WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+    await _services.start();
   }
 
   @override

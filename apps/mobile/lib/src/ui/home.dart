@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
@@ -6,6 +8,7 @@ import '../app.dart';
 import 'alert_detail.dart';
 import 'alert_list.dart';
 import 'alert_map.dart';
+import 'devices.dart';
 import 'widgets.dart';
 
 /// Builds the map tab. Widget tests pass a stand-in.
@@ -43,7 +46,41 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    widget.services.devices?.openRequest.addListener(_openRequested);
     _load();
+  }
+
+  @override
+  void dispose() {
+    widget.services.devices?.openRequest.removeListener(_openRequested);
+    super.dispose();
+  }
+
+  /// Opens the alert of a tapped notification. The push message held only
+  /// its IDs; the alert itself comes from the API with the user's grants.
+  Future<void> _openRequested() async {
+    final requests = widget.services.devices?.openRequest;
+    final notice = requests?.value;
+    if (notice == null || _loading) return;
+    requests!.value = null;
+    final slug = notice.workspace;
+    final alertId = notice.alert;
+    if (slug == null || alertId == null) return;
+    if (slug != _view?.workspace.slug) {
+      if (_profile?.workspaces.any((w) => w.slug == slug) != true) return;
+      await _load(slug);
+    }
+    final view = _view;
+    if (!mounted || view == null || view.workspace.slug != slug) return;
+    try {
+      final alert = await widget.services.repository.alert(slug, alertId);
+      if (mounted) await _open(alert);
+    } on DeviceActionException {
+      return;
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   Future<void> _load([String? slug]) async {
@@ -69,10 +106,15 @@ class _HomeScreenState extends State<HomeScreen> {
             : WorkspaceView(services: widget.services, profile: profile, workspace: workspace, map: map);
         _loading = false;
       });
+      // A notification tapped while the app was starting opens now.
+      unawaited(_openRequested());
+    } on DeviceActionException {
+      // The phone was wiped or removed; the sign-in screen explains.
+      return;
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.status == 401) {
-        await widget.services.session.signOut();
+        await widget.services.sessionEnded();
         return;
       }
       setState(() {
@@ -91,6 +133,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (changed == true) await _listKey.currentState?.reload();
+  }
+
+  void _openDevices() {
+    final devices = widget.services.devices;
+    if (devices == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => DevicesScreen(devices: devices)));
   }
 
   Future<void> _chooseWorkspace() async {
@@ -148,7 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (value) {
               if (value == 'workspace') _chooseWorkspace();
-              if (value == 'sign-out') widget.services.session.signOut();
+              if (value == 'devices') _openDevices();
+              if (value == 'sign-out') widget.services.signOut();
             },
             itemBuilder: (context) => [
               PopupMenuItem(
@@ -156,6 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Text('Signed in as ${profile?.username ?? widget.services.session.username ?? ''}'),
               ),
               if (multiple) const PopupMenuItem(value: 'workspace', child: Text('Change workspace')),
+              if (widget.services.devices != null)
+                const PopupMenuItem(value: 'devices', child: Text('Notifications and phones')),
               const PopupMenuItem(value: 'sign-out', child: Text('Sign out')),
             ],
           ),

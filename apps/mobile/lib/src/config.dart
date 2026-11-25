@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// This app's version, as in pubspec.yaml. The phone sends it when it
+/// registers, so administrators can see which version each phone runs.
+const fieldAppVersion = '0.2.0+2';
+
 /// Where the app finds the core API and the sign-in server.
 ///
 /// Build-time defaults come from `--dart-define` values. A user can replace

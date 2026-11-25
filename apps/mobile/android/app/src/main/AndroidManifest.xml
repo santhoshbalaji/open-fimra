@@ -3,6 +3,8 @@
     <!-- Field steps such as "Reached site" save the phone's location. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Shows new fire alerts as notifications (Android 13 and later ask the user). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="Open FIMRA"

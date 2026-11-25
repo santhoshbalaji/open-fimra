@@ -1,5 +1,7 @@
 // Plain data classes for the core API's JSON. See services/api/README.md.
 
+import 'dart:convert';
+
 double? _double(Object? value) => value is num ? value.toDouble() : null;
 String _string(Object? value) => value is String ? value : (value?.toString() ?? '');
 String? _optional(Object? value) => value is String && value.isNotEmpty ? value : null;
@@ -409,3 +411,178 @@ class StepReceipt {
   final String step;
   final DateTime at;
 }
+
+/// Where push messages reach this phone: a UnifiedPush endpoint and its
+/// Web Push keys, or a Firebase token when that optional service is used.
+class PushAddress {
+  const PushAddress({required this.provider, required this.endpoint, this.publicKey, this.auth});
+  final String provider;
+  final String endpoint;
+  final String? publicKey;
+  final String? auth;
+
+  Map<String, dynamic> toJson() => {'provider': provider, 'endpoint': endpoint, 'publicKey': ?publicKey, 'auth': ?auth};
+
+  @override
+  bool operator ==(Object other) =>
+      other is PushAddress &&
+      other.provider == provider &&
+      other.endpoint == endpoint &&
+      other.publicKey == publicKey &&
+      other.auth == auth;
+
+  @override
+  int get hashCode => Object.hash(provider, endpoint, publicKey, auth);
+}
+
+/// What the phone tells the API when it registers.
+class DeviceRegistration {
+  const DeviceRegistration({required this.platform, required this.appVersion, this.push});
+  final String platform;
+  final String appVersion;
+  final PushAddress? push;
+
+  Map<String, dynamic> toJson() => {'platform': platform, 'appVersion': appVersion, 'push': push?.toJson()};
+}
+
+/// The state of one registered phone, as the API reports it.
+enum DeviceStatus {
+  active('Signed in', 'active'),
+  signedOut('Signed out', 'signed_out'),
+  removed('Removed', 'removed'),
+  wipePending('Waiting to delete its data', 'wipe_pending'),
+  wiped('Data deleted', 'wiped');
+
+  const DeviceStatus(this.label, this.slug);
+  final String label;
+  final String slug;
+
+  static DeviceStatus parse(Object? value) =>
+      DeviceStatus.values.where((s) => s.slug == value).firstOrNull ?? DeviceStatus.removed;
+}
+
+class Device {
+  const Device({
+    required this.id,
+    required this.platform,
+    required this.appVersion,
+    required this.push,
+    required this.status,
+    required this.registeredAt,
+    required this.lastSeenAt,
+    this.current = false,
+  });
+
+  factory Device.fromJson(Map<String, dynamic> json) => Device(
+    id: _string(json['id']),
+    platform: _string(json['platform']),
+    appVersion: _string(json['appVersion']),
+    push: json['push'] == true,
+    status: DeviceStatus.parse(json['status']),
+    registeredAt: DateTime.tryParse(_string(json['registeredAt'])) ?? DateTime.fromMillisecondsSinceEpoch(0),
+    lastSeenAt: DateTime.tryParse(_string(json['lastSeenAt'])) ?? DateTime.fromMillisecondsSinceEpoch(0),
+    current: json['current'] == true,
+  );
+
+  final String id;
+  final String platform;
+  final String appVersion;
+
+  /// True when the phone can receive alert notifications now.
+  final bool push;
+  final DeviceStatus status;
+  final DateTime registeredAt;
+  final DateTime lastSeenAt;
+
+  /// True for the phone making the request.
+  final bool current;
+
+  String get platformLabel => switch (platform) {
+    'android' => 'Android phone',
+    'ios' => 'iPhone',
+    'web' => 'Browser test build',
+    _ => 'Phone',
+  };
+}
+
+/// The answer to a registration.
+class DeviceReceipt {
+  const DeviceReceipt({required this.device, required this.pushProviders, this.pushProblem});
+  factory DeviceReceipt.fromJson(Map<String, dynamic> json) => DeviceReceipt(
+    device: Device.fromJson(json['device'] as Map<String, dynamic>? ?? const {}),
+    pushProviders: (json['pushProviders'] as List? ?? const []).whereType<String>().toList(),
+    pushProblem: _optional(json['pushProblem']),
+  );
+  final Device device;
+
+  /// The push services the server sends through.
+  final List<String> pushProviders;
+
+  /// Why the server will not send to this phone's push address, in plain English.
+  final String? pushProblem;
+}
+
+/// A push message, decoded. It holds IDs and a generic text only; the app
+/// fetches the alert itself over the signed-in API.
+class PushNotice {
+  const PushNotice({
+    required this.type,
+    this.notification,
+    this.workspace,
+    this.alert,
+    this.title = 'New fire alert',
+    this.body = 'Open the field app to see it.',
+  });
+
+  /// Reads a message, or returns null for anything the app does not know.
+  static PushNotice? parse(List<int> bytes) {
+    try {
+      final json = jsonDecode(utf8.decode(bytes));
+      if (json is! Map<String, dynamic> || json['v'] != 1) return null;
+      final type = json['type'];
+      if (type == 'device_check') return const PushNotice(type: 'device_check');
+      if (type != 'notification') return null;
+      final notification = _optional(json['notification']);
+      final workspace = _optional(json['workspace']);
+      final alert = _optional(json['alert']);
+      if (notification == null || int.tryParse(notification) == null || workspace == null) return null;
+      return PushNotice(
+        type: 'notification',
+        notification: notification,
+        workspace: workspace,
+        alert: alert != null && int.tryParse(alert) != null ? alert : null,
+        title: _shortText(json['title'], 'New fire alert'),
+        body: _shortText(json['body'], 'Open the field app to see it.'),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// The data kept with a shown notification, for opening its alert.
+  static PushNotice? fromPayload(String? payload) => payload == null ? null : parse(utf8.encode(payload));
+
+  final String type;
+  final String? notification;
+  final String? workspace;
+  final String? alert;
+  final String title;
+  final String body;
+
+  /// The Android notification ID: one per server notification, so a repeated
+  /// message replaces the first instead of adding a second.
+  int get id => (int.tryParse(notification ?? '') ?? 0) & 0x7fffffff;
+
+  String toPayload() => jsonEncode({
+    'v': 1,
+    'type': type,
+    'notification': notification,
+    'workspace': workspace,
+    'alert': alert,
+    'title': title,
+    'body': body,
+  });
+}
+
+String _shortText(Object? value, String fallback) =>
+    value is String && value.trim().isNotEmpty && value.length <= 120 ? value.trim() : fallback;

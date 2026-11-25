@@ -2,7 +2,9 @@
 // in headless Chromium. Run it with `make mobile-walkthrough`. It points the
 // app at the test API under Server settings, signs in through Keycloak with
 // PKCE in a pop-up window, checks the alert list, opens the map and
-// acknowledges an alert. Screenshots go to SHOTS, outside the repository.
+// acknowledges an alert. Then the division officer wipes the phone through
+// the API, and the app's next call deletes its data and returns to sign-in.
+// Screenshots go to SHOTS, outside the repository.
 import { chromium } from 'playwright';
 
 const { WEB, API, ISSUER, SHOTS } = process.env;
@@ -120,6 +122,30 @@ try {
   await shown(darkPage, 'alerts in the past 7 days', false).waitFor({ timeout: 60_000 });
   await shot(darkPage, '09-alerts-dark');
   step('After a reload the saved session opens the list again, here in the dark theme.');
+
+  await darkPage.getByRole('button', { name: 'Account' }).click();
+  await shown(darkPage, 'Notifications and phones').click();
+  await shown(darkPage, 'Browser test build (this phone)').waitFor();
+  await shown(darkPage, 'Notifications are not available here').waitFor();
+  await shot(darkPage, '10-phones');
+  step('Notifications and phones lists this registration; the browser build has no push.');
+
+  // The division officer wipes the phone, as an administrator would for a lost one.
+  const form = new URLSearchParams({ grant_type: 'password', client_id: 'open-fimra-dev-cli', username: 'division.officer', password: 'demo' });
+  const token = (await (await fetch(`${ISSUER}/protocol/openid-connect/token`, { method: 'POST', body: form })).json()).access_token;
+  const auth = { Authorization: `Bearer ${token}` };
+  const area = await (await fetch(`${API}/api/v1/workspaces/demo/devices`, { headers: auth })).json();
+  const phoneRow = area.items.find(d => d.platform === 'web' && d.status === 'active' && d.owner?.username === 'beat.guard');
+  if (!phoneRow) throw new Error('The division officer does not see the beat guard\'s phone.');
+  const wiped = await fetch(`${API}/api/v1/workspaces/demo/devices/${phoneRow.id}/wipe`, { method: 'POST', headers: auth });
+  if (wiped.status !== 200) throw new Error(`Wipe request failed with HTTP ${wiped.status}`);
+  await darkPage.reload();
+  await shown(darkPage, 'An administrator asked this phone to delete its field data', false).waitFor({ timeout: 60_000 });
+  await darkPage.getByRole('button', { name: 'Sign in', exact: true }).waitFor();
+  await shot(darkPage, '11-wiped');
+  const after = await (await fetch(`${API}/api/v1/workspaces/demo/devices`, { headers: auth })).json();
+  if (after.items.find(d => d.id === phoneRow.id)?.status !== 'wiped') throw new Error('The phone did not report its wipe.');
+  step('After the wipe request, the next start deleted the session and registration and showed why; the API records it as wiped.');
   console.log('Walkthrough passed.');
 } catch (error) {
   if (current) {

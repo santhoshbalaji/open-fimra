@@ -62,9 +62,12 @@ class Session extends ChangeNotifier {
     }
   }
 
-  Future<void> signOut() async {
+  /// Ends the session on the phone and on the sign-in server. [message] is
+  /// shown on the sign-in screen, for example after a wipe.
+  Future<void> signOut({String? message}) async {
     final tokens = _tokens;
     _tokens = null;
+    _message = message;
     await _tokenStore.clear();
     _set(SessionStatus.signedOut);
     if (tokens != null) await _client.signOut(tokens);

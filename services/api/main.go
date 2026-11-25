@@ -134,6 +134,13 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	if smtp != nil {
 		email = smtp
 	}
+	push, err := readPushSettings()
+	if err != nil {
+		return err
+	}
+	if !push.enabled() {
+		logger.Info("Push notifications are off. Set FIMRA_PUSH_SERVERS to the field app's push server to turn them on.")
+	}
 	secrets, err := readSettingsCipher()
 	if err != nil {
 		return err
@@ -148,7 +155,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	keys := newFIRMSKeys(pool, secrets, cfg.firmsMapKey, nil)
 	auth := newAuthenticator(provider, cfg.issuer, cfg.audience)
 	auth.emailEnabled = email != nil
-	jobs, err := newJobClient(pool, logger, keys, email)
+	jobs, err := newJobClient(pool, logger, keys, email, push)
 	if err != nil {
 		return fmt.Errorf("could not configure the job queue: %w", err)
 	}
@@ -176,7 +183,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 
 	server := &http.Server{
 		Handler: newHandler(pool, auth, logger, cfg.corsOrigins, cfg.uploadDir, jobs,
-			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys), withAttachments(attachments, maxAttachment)),
+			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys), withAttachments(attachments, maxAttachment), withPush(push)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,

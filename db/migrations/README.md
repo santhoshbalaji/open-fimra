@@ -30,6 +30,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00025_form_templates` | Form levels (national, state and division), the unit that owns a division form, each version's template rules and locks, and the checks on which versions may extend which |
 | `00026_submission_exports` | Exports of field reports, whose frozen rows each name a submission of their alert |
 | `00027_situation_reports` | Situation report jobs, holding the report the API worked out and the PDF the geo worker draws from it, and response times to every workflow milestone |
+| `00028_field_devices` | Field phones with their push address, push as a notification channel with one message per phone, and the wipe flag the API checks on every call |
 
 ## Commands
 
