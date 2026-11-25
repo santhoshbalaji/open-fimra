@@ -12,6 +12,7 @@ Thumbs.db
 /.geo-uploads/
 /.geo-exports/
 /.geo-exports-check/
+/.situation-reports-check/
 /.form-attachments/
 /.xlsforms/
 # Flutter packages and Gradle files for the container builds (make mobile-*)
@@ -34,6 +35,9 @@ Thumbs.db
 # Spreadsheets such as XLSForm files are written by tests and commands
 *.xlsx
 *.xls
+
+# Situation report PDFs are written by the worker and tests
+*.pdf
 
 # Screenshots belong outside the repository, except the design-system images
 *.png

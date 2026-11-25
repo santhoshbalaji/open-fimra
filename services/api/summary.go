@@ -9,19 +9,36 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// scopeSQL chooses what a caller may see in a time window. The dashboard and
+// situation reports both start with it.
+//
+//go:embed scope.sql
+var scopeSQL string
+
 //go:embed summary.sql
-var summarySQL string
+var summaryTailSQL string
+
+var summarySQL = scopeSQL + summaryTailSQL
+
+// responseMilestones are the workflow steps whose response times are measured,
+// in workflow order. Alerted is the time from the satellite observation to the
+// alert being raised; the others run from the alert being raised.
+var responseMilestones = []string{"alerted", "acknowledged", "team_sent", "reached_site", "controlled", "extinguished"}
 
 type responsePercentiles struct {
 	Median *float64 `json:"median"`
 	P90    *float64 `json:"p90"`
+	// Count is how many alerts reached the step.
+	Count int `json:"count"`
 }
 type summaryFeed struct {
 	Source  string `json:"source"`
 	Product string `json:"product"`
 	Status  string `json:"status"`
 }
-type workspaceSummary struct {
+
+// summaryCounts are the counts the dashboard and situation reports share.
+type summaryCounts struct {
 	Detections      map[string]int                 `json:"detections"`
 	Today           map[string]int                 `json:"today"`
 	Queues          map[string]int                 `json:"queues"`
@@ -30,7 +47,37 @@ type workspaceSummary struct {
 	Overdue         int                            `json:"overdue"`
 	PendingReports  int                            `json:"pendingReports"`
 	ResponseSeconds map[string]responsePercentiles `json:"responseSeconds"`
-	FeedHealth      []summaryFeed                  `json:"feedHealth"`
+}
+
+type workspaceSummary struct {
+	summaryCounts
+	FeedHealth []summaryFeed `json:"feedHealth"`
+}
+
+// countWindow is the time window of the shared counts. A nil start means
+// hours before now, and a nil end means now.
+type countWindow struct {
+	start *time.Time
+	hours int
+	end   *time.Time
+	class string
+	path  *string
+}
+
+// loadCounts runs the dashboard's counts query. It reports whether the caller
+// has a grant in the workspace, and the workspace ID for a root grant.
+func loadCounts(ctx context.Context, db rowQuerier, subject, slug string, w countWindow) (c summaryCounts, allowed bool, root *string, err error) {
+	err = db.QueryRow(ctx, summarySQL, subject, slug, w.start, w.hours, w.end, w.class, w.path).Scan(&allowed, &root,
+		&c.Detections, &c.Today, &c.Queues, &c.Steps, &c.Active, &c.Overdue, &c.PendingReports, &c.ResponseSeconds)
+	if err != nil {
+		return c, false, nil, err
+	}
+	for _, step := range responseMilestones {
+		if _, ok := c.ResponseSeconds[step]; !ok {
+			c.ResponseSeconds[step] = responsePercentiles{}
+		}
+	}
+	return c, allowed, root, nil
 }
 
 func (a api) summary(w http.ResponseWriter, r *http.Request) {
@@ -43,10 +90,10 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	var s workspaceSummary
-	var allowed bool
-	var root *string
 	caller := r.Context().Value(identityKey{}).(identity)
-	err = a.reader.QueryRow(ctx, summarySQL, caller.Subject, chi.URLParam(r, "slug"), f.hours, f.class, f.path).Scan(&allowed, &root, &s.Detections, &s.Today, &s.Queues, &s.Steps, &s.Active, &s.Overdue, &s.PendingReports, &s.ResponseSeconds)
+	counts, allowed, root, err := loadCounts(ctx, a.reader, caller.Subject, chi.URLParam(r, "slug"),
+		countWindow{hours: f.hours, class: f.class, path: f.path})
+	s.summaryCounts = counts
 	if err != nil {
 		a.logger.Error("Could not read dashboard counts", "error", err)
 		writeError(w, 500, "Could not load dashboard.")
@@ -55,11 +102,6 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 	if !allowed {
 		writeError(w, 403, "A role in this workspace is required.")
 		return
-	}
-	for _, step := range []string{"acknowledged", "reached_site", "controlled"} {
-		if _, ok := s.ResponseSeconds[step]; !ok {
-			s.ResponseSeconds[step] = responsePercentiles{}
-		}
 	}
 	if root != nil {
 		now := time.Now()

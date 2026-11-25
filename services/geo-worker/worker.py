@@ -1,4 +1,5 @@
-"""Import, export and form conversion jobs from PostgreSQL. Each job and its result share a transaction."""
+"""Import, export, form conversion and situation report jobs from PostgreSQL. Each job and its result share a
+transaction."""
 
 import logging
 import os
@@ -14,6 +15,7 @@ from shapely.errors import ShapelyError
 from checks import Parent, Review, hierarchy_paths, review_layer, unit_topology
 from export import process_next_export
 from form_jobs import process_next_form_conversion
+from situation_report import process_next_situation_report
 from source import ImportErrorWithProblem, Problem, read_source, square_metres
 
 logger = logging.getLogger("geo-worker")
@@ -142,7 +144,8 @@ def main():
                     imported = process_next(conn, upload_dir)
                     exported = process_next_export(conn, export_dir)
                     converted = process_next_form_conversion(conn)
-                    if not (imported or exported or converted):
+                    reported = process_next_situation_report(conn)
+                    if not (imported or exported or converted or reported):
                         time.sleep(0.5)
         except psycopg.Error as exc:
             logger.error("Database error in the geo worker: %s", error_cause(exc))

@@ -1,0 +1,31 @@
+:host { display: block; height: 100%; overflow: auto; }
+.report-heading { font-size: var(--text-subhead); font-weight: 600; color: var(--color-brand); }
+.report-map { width: 100%; height: auto; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.map-ground { fill: var(--color-map-background); }
+.map-land { fill: var(--color-card); }
+.map-forest { fill: color-mix(in srgb, var(--color-chart-3) 34%, transparent); stroke: var(--color-text-secondary); stroke-width: .5; fill-rule: evenodd; }
+.map-unit { fill: none; stroke: var(--color-text-secondary); stroke-width: 1; stroke-dasharray: 5 3; }
+.map-outline { fill: none; stroke: var(--color-text); stroke-width: 2; }
+.map-incident { fill: none; stroke: var(--color-brand); stroke-width: 1.4; stroke-dasharray: 3 2; }
+.map-incident-label { fill: var(--color-brand); font-size: 10px; }
+.map-unit-label { fill: var(--color-text-secondary); font-size: 11px; paint-order: stroke; stroke: var(--color-card); stroke-width: 3px; }
+.map-alert { fill: var(--color-fire-age-1); stroke: var(--color-card); stroke-width: 1; }
+.map-alert.ring { fill: none; stroke: var(--color-fire-age-1); stroke-width: 2.2; }
+.map-alert.closed { fill: var(--color-neutral-mark); }
+.map-alert.ring.closed { fill: none; stroke: var(--color-neutral-mark); }
+.report-legend li { display: flex; align-items: center; gap: 6px; }
+.report-legend .key-symbol { background: var(--color-fire-age-1); }
+.report-legend .key-symbol.near_edge { background: transparent; border-color: var(--color-fire-age-1); }
+.report-legend .key-symbol.closed { background: var(--color-neutral-mark); }
+.key-incident { width: 18px; height: 10px; border: 1.5px dashed var(--color-brand); }
+.report-legend .key-forest { width: 18px; }
+
+@media print {
+  :host { height: auto; overflow: visible; }
+  section { padding: 0; max-width: none; }
+  .report-controls, .report-actions { display: none; }
+  .report { border: 0; padding: 0; gap: 12px; }
+  .report-section, .report-figures, header { break-inside: avoid; }
+  .report-map { max-height: 120mm; }
+  .report-map, .report-figures div, .report-legend span { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

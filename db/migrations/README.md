@@ -29,6 +29,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00024_manual_fire_reports` | The workspace of a detection recorded by hand with the manual fire report, so re-matching keeps it to that workspace |
 | `00025_form_templates` | Form levels (national, state and division), the unit that owns a division form, each version's template rules and locks, and the checks on which versions may extend which |
 | `00026_submission_exports` | Exports of field reports, whose frozen rows each name a submission of their alert |
+| `00027_situation_reports` | Situation report jobs, holding the report the API worked out and the PDF the geo worker draws from it, and response times to every workflow milestone |
 
 ## Commands
 
