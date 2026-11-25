@@ -187,19 +187,20 @@
                   <div hlmTableContainer class="max-h-72 overflow-y-auto rounded-control border border-border" tabindex="0" aria-labelledby="problems-heading">
                     <table hlmTable class="problems">
                       <caption class="sr-only">Problems found in this layer version</caption>
-                      <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Effect</th><th hlmTh scope="col">Feature</th><th hlmTh scope="col">Problem</th></tr></thead>
+                      <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Effect</th><th hlmTh scope="col" class="max-sm:hidden">Feature</th><th hlmTh scope="col">Problem</th></tr></thead>
                       <tbody hlmTBody>
                         @for (problem of sortedProblems(); track $index) {
                           <tr hlmTr [attr.data-blocking]="problem.blocksPublish || null">
-                            <td hlmTd>
+                            <td hlmTd class="align-top">
                               @if (problem.blocksPublish) {
                                 <span hlmBadge variant="destructive"><svg lucideCircleX aria-hidden="true" class="size-3.5"></svg>Blocks publishing</span>
                               } @else {
                                 <span hlmBadge variant="outline"><svg lucideInfo aria-hidden="true" class="size-3.5"></svg>Review</span>
                               }
+                              @if (problem.featureRef) { <span class="mt-1 block text-xs text-muted-foreground sm:hidden">{{ problem.featureRef }}</span> }
                             </td>
-                            <td hlmTd class="text-muted-foreground">{{ problem.featureRef || '—' }}</td>
-                            <td hlmTd class="min-w-48 whitespace-normal">{{ problem.message }}</td>
+                            <td hlmTd class="text-muted-foreground max-sm:hidden">{{ problem.featureRef || '—' }}</td>
+                            <td hlmTd class="whitespace-normal [overflow-wrap:anywhere] sm:min-w-48">{{ problem.message }}</td>
                           </tr>
                         }
                       </tbody>
