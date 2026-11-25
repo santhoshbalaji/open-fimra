@@ -50,6 +50,19 @@ With Go 1.26 or later, run `make dev`, `make db-migrate` and `make api-test-inte
 
 Run `make api-lint api-test` for formatting, Go vet and unit tests. The integration tests check the reference matches, replay a synthetic feed and check which tile features each demo grant can see. To replay a file yourself, run `make ingest-fixture FILE=packages/connectors/firms/fixtures/viirs.csv`. See the [core API guide](services/api/README.md) for settings and endpoints.
 
+## Running more than one stack
+
+Two checkouts that use the same development stack share one database, and their migrations can clash. Give each checkout its own stack with a project name and free ports, for example in its `.env`:
+
+```bash
+COMPOSE_PROJECT_NAME=open-fimra-second
+FIMRA_DB_PORT=15433
+FIMRA_KEYCLOAK_PORT=18181
+FIMRA_HTTP_ADDR=127.0.0.1:18091
+```
+
+Each stack uses about 2.5 GB of memory.
+
 ## Making a change
 
 1. Branch from `main`.

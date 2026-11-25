@@ -400,7 +400,11 @@ These are not yet verified and are checked before Phase 1 starts.
 
 ## 15. Next steps
 
-The first build is a walking skeleton: a fresh install that gives a login and a map with a synthetic forest, and then fills that map with classified detections. It is built in thin slices, in this order. Each slice is a separate pull request and ends when its condition is met.
+Work is built in thin slices. Each slice is a separate pull request and ends when its condition is met.
+
+### Walking skeleton (complete)
+
+A fresh install gives a login and a map with a synthetic forest, and fills that map with classified detections.
 
 | # | Slice | Delivers | Done when |
 |---|---|---|---|
@@ -411,10 +415,27 @@ The first build is a walking skeleton: a fresh install that gives a login and a 
 | 5 | Web shell | Angular app with Tailwind, Spartan UI, the design tokens, the logo, sign-in and a MapLibre map of the demo layers | A fresh install gives a login and a map (Phase 0 complete) |
 | 6 | Core loop | FIRMS area connector, de-duplication, classification (inside, near the edge, outside, and the beat), permission-filtered vector tiles, and the alert map styled by fire age | Replaying a feed creates no duplicates, and every reference point lands in its expected beat |
 
-Slices 1 and 2 come first because everything else builds on them. Slices 3, 4 and 5 are independent of each other. Slice 6 runs against recorded FIRMS responses and synthetic detections, so it does not wait for a FIRMS key.
+### Rest of Phase 1
+
+These slices finish roadmap phase 1 (section 10). They run in three waves. Slices in the same wave are independent of each other.
+
+| # | Wave | Slice | Delivers | Done when |
+|---|---|---|---|---|
+| 7 | A | Layer import | Geo worker service (Python with GDAL) that turns an uploaded GeoPackage, zipped Shapefile, GeoJSON or KML into a draft layer version: coordinate system check, geometry repair, overlap and gap report, attribute mapping, hierarchy building from parent codes or from the map, and a review list of problems | Uploading the demo state's source files gives draft versions that match `seed/demo-state/load.sql`, and every deliberate defect appears in the review list |
+| 8 | B | Layer publishing | Preview that replays past detections against a draft and shows what would be included, excluded or reassigned; publishing; re-matching of recent detections; layer screens in the web app | Publishing a changed beat layer moves the affected detections to their new beat, and past alerts keep the beat they had |
+| 9 | A | Alerts and queue | Alerts created from matches: *inside forest* routed to the responsible unit, *near the edge* to a review queue, triage cases to a triage queue; a filterable alert queue beside the map | Each reference detection produces the expected alert and queue, and replaying a feed creates no second alert |
+| 10 | B | Default workflow | Workflow templates, steps, instances and step log with roles, time limits and the default sequence and outcomes from section 5.4; actions on an alert in the web app | An alert can be taken from *New* to *Closed* by the right roles only, and every step is logged with user, time and location |
+| 11 | C | Notifications | Notification rules; in-app and email channels (a local mail catcher in development); one notification per alert and recipient | A new alert notifies the responsible officers once, and a replayed feed notifies no one again |
+| 12 | B | Control-room dashboard | Detections today by class, active alerts, alerts past their time limit, feed health per source, and the map and queue sharing the same filters | The dashboard's numbers match direct database counts for the demo data, for each demo user |
+| 13 | B | File exports | Export of any filtered view to GeoPackage, Shapefile, KML, GeoJSON and CSV through the geo worker, with hierarchy fields and a note of source, filters and time; permission checks and audit | An export opens in QGIS with the expected fields, and contains only what the user may see |
+| 14 | A | FIRMS backfill and feed health | Multi-year backfill from FIRMS standard-processing data, feed-health checks, and an alert to administrators when a source goes quiet in fire season | A backfill of the demo fixtures is safe to repeat, and a silent source raises a feed-health alert |
+| 15 | C | First-run wizard | Encrypted settings (including the FIRMS key), and the wizard from section 7: mode, hierarchy preset, layer upload, FIRMS connection, starter forms switched off for now, and inviting officers | A fresh install reaches a working alert map using only the wizard |
+
+Wave A starts together. Wave B needs slice 7 for slices 8 and 13, and slice 9 for slices 10, 12 and 13. Wave C needs wave B. Each slice adds its own migrations, numbered in the order the slices are merged.
 
 Alongside the build:
 
 - Request a FIRMS key on a department mailbox and start access conversations with FSI and NRSC.
 - Confirm the facts in section 14.
 - Write the form format specification, using the starter-pack forms as the first examples.
+- Agree with a pilot state how the side-by-side comparison with its current system will be run, since that is the condition for finishing phase 1.
