@@ -220,6 +220,7 @@ describe('SetupWizard', () => {
     expect(text()).toContain('Choose a unit.');
     expect(document.getElementById('invite-unit')?.getAttribute('aria-invalid')).toBe('true');
     choose('invite-unit', 'North Circle ( C1)');
+    expect(document.getElementById('invite-unit')?.textContent?.startsWith('North Circle')).toBe(true);
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     const invite = http.expectOne(base + '/invitations');
     expect(invite.request.method).toBe('POST');

@@ -3,7 +3,7 @@
 # Run it with `make wizard-walkthrough`, which sets the variables below.
 #
 # It creates the database WALK_DB beside the development database, starts a
-# geo worker on it, serves the built web app on 127.0.0.1:4200 with a
+# geo worker on it, serves the built web app on 127.0.0.1:$WEB_PORT (4200 by default) with a
 # runtime config for this stack, runs the API test harness with a fake FIRMS
 # server, and drives a headless Chromium in the Playwright container. The
 # screenshots go to SHOTS, which should be outside the repository.
@@ -12,6 +12,7 @@ set -euo pipefail
 : "${WALK_DB:?}" "${WALK_DATABASE_URL:?}" "${SHOTS:?}" "${ISSUER:?}" "${API_ADDR:?}"
 : "${MAIL_SMTP:?}" "${MAIL_HTTP:?}" "${GOOSE_VERSION:?}" "${PLAYWRIGHT_IMAGE:?}"
 read -ra compose <<< "${COMPOSE_CMD:?}"
+web_port=${WEB_PORT:-4200}
 cd "$(git rev-parse --show-toplevel)"
 
 setup_code=WALK-THRU-CODE-2345
@@ -26,8 +27,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ss -ltn | grep -q '127.0.0.1:4200 '; then
-  echo "Port 4200 is in use. Stop the web dev server first." >&2
+if ss -ltn | grep -q "127.0.0.1:$web_port "; then
+  echo "Port $web_port is in use. Stop the web dev server first." >&2
   exit 1
 fi
 
@@ -53,9 +54,9 @@ createServer((request, response) => {
   if (!file.startsWith(root) || !existsSync(file) || statSync(file).isDirectory()) file = join(root, 'index.html');
   response.writeHead(200, { 'Content-Type': types[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(response);
-}).listen(4200, '127.0.0.1');
+}).listen(Number(process.argv[3]), '127.0.0.1');
 EOF
-node "$work/serve.mjs" "$work/web" &
+node "$work/serve.mjs" "$work/web" "$web_port" &
 pids+=($!)
 
 # Build the test binary first, so the process to stop is the server itself.
@@ -64,7 +65,7 @@ pids+=($!)
   cd services/api
   FIMRA_WALKTHROUGH=1 FIMRA_DATABASE_URL="$WALK_DATABASE_URL" FIMRA_SETUP_CODE="$setup_code" \
     FIMRA_SMTP_ADDR="$MAIL_SMTP" FIMRA_SMTP_FROM=open-fimra@example.invalid FIMRA_SMTP_SECURITY=local \
-    FIMRA_WEB_URL=http://127.0.0.1:4200 FIMRA_HTTP_ADDR="$API_ADDR" \
+    FIMRA_WEB_URL="http://127.0.0.1:$web_port" FIMRA_CORS_ORIGINS="http://127.0.0.1:$web_port" FIMRA_HTTP_ADDR="$API_ADDR" \
     exec "$work/api.test" -test.v -test.run '^TestWizardWalkthroughServer$' -test.timeout 20m > "$work/api.log" 2>&1
 ) &
 pids+=($!)
@@ -78,7 +79,7 @@ mkdir -p "$SHOTS" "$HOME/.cache/open-fimra-walkthrough"
 cp scripts/wizard-walkthrough.mjs "$HOME/.cache/open-fimra-walkthrough/walkthrough.mjs"
 if ! docker run --rm --network host --init \
   -v "$HOME/.cache/open-fimra-walkthrough:/work" -v "$PWD/seed/demo-state:/seed:ro" -v "$SHOTS:/shots" \
-  -e WEB=http://127.0.0.1:4200 -e MAIL="http://$MAIL_HTTP" -e SEED=/seed -e SHOTS=/shots \
+  -e WEB="http://127.0.0.1:$web_port" -e MAIL="http://$MAIL_HTTP" -e SEED=/seed -e SHOTS=/shots \
   -e SETUP_CODE="$setup_code" -e FIRMS_KEY="$fake_key" -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
   "$PLAYWRIGHT_IMAGE" bash -c 'cd /work && { [ -d node_modules/playwright ] || npm install --no-save --silent playwright@1.63.0; } && node walkthrough.mjs'
 then

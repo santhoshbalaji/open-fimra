@@ -5,7 +5,7 @@
     <button hlmBtn variant="ghost" size="sm" type="button" class="ms-auto" (click)="leave.emit()">Leave setup for now</button>
   </div>
   @if (state(); as state) {
-    <div class="grid items-start gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+    <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
       <nav class="setup-steps -mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0" aria-label="Setup steps">
         <ol class="flex gap-1 pb-1 md:grid md:pb-0">
           @for (item of steps; track item.key; let index = $index) {
@@ -60,7 +60,7 @@
                   Phase 1 fully supports state mode only.</p>
               </div>
             </div>
-            <button hlmBtn type="button" class="justify-self-start" (click)="next()">Next</button>
+            <button hlmBtn type="button" class="self-start" (click)="next()">Next</button>
           }
           @case ('workspace') {
             <dl class="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr]">
@@ -69,7 +69,7 @@
               <dt class="text-muted-foreground">State code</dt><dd><code class="font-mono">{{ state.root?.code }}</code></dd>
             </dl>
             <p>These were chosen when setup started. The state boundary file must use the state code above.</p>
-            <button hlmBtn type="button" class="justify-self-start" (click)="next()">Next</button>
+            <button hlmBtn type="button" class="self-start" (click)="next()">Next</button>
           }
           @case ('hierarchy') {
             <p>Choose the levels your department uses, from the state down to the smallest unit. You can change the
@@ -101,7 +101,7 @@
                 </tbody>
               </table>
             </div>
-            <button hlmBtn type="button" class="justify-self-start" [disabled]="busy() || !levels().length"
+            <button hlmBtn type="button" class="self-start" [disabled]="busy() || !levels().length"
               (click)="saveHierarchy()">Save hierarchy</button>
           }
           @case ('layers') {
@@ -176,7 +176,7 @@
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
                 <svg lucideInfo aria-hidden="true" class="size-4 shrink-0"></svg>The workspace boundary is set when the state level is published.</p>
             }
-            <button hlmBtn type="button" class="justify-self-start" [disabled]="busy() || !layersReady()"
+            <button hlmBtn type="button" class="self-start" [disabled]="busy() || !layersReady()"
               (click)="finishLayers()">Continue</button>
           }
           @case ('firms') {
@@ -201,7 +201,7 @@
                     pattern="[A-Za-z0-9]{16,64}" class="font-mono">
                   <p hlmFieldDescription>Paste the key from the FIRMS email. It is saved, then tested.</p>
                 </hlm-field>
-                <button hlmBtn type="submit" class="mt-7" [disabled]="busy()">Save and test</button>
+                <button hlmBtn type="submit" class="self-start sm:mt-7" [disabled]="busy()">Save and test</button>
               </form>
             } @else {
               <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
@@ -209,7 +209,7 @@
                   system operator to set FIMRA_SETTINGS_KEY.</p></div>
             }
             @if (state.firms.source !== 'none') {
-              <button hlmBtn variant="outline" type="button" class="justify-self-start" [disabled]="busy()" (click)="testKey()">Test connection</button>
+              <button hlmBtn variant="outline" type="button" class="self-start" [disabled]="busy()" (click)="testKey()">Test connection</button>
             }
             @if (firmsResult(); as result) {
               <p role="status" class="flex items-center gap-2 rounded-control border border-border border-s-4 px-3 py-2"
@@ -240,7 +240,7 @@
             <p><span hlmBadge variant="secondary" class="me-1">Coming later</span> Starter forms for dispatch, first and final reports and patrol logs arrive
               in a later release. This step is switched off for now and does not block setup.</p>
             <label hlmLabel class="font-normal"><hlm-switch disabled />Switch on the starter forms</label>
-            <button hlmBtn type="button" class="justify-self-start" [disabled]="busy()" (click)="markStep('forms', 'skipped')">Continue</button>
+            <button hlmBtn type="button" class="self-start" [disabled]="busy()" (click)="markStep('forms', 'skipped')">Continue</button>
           }
           @case ('invitations') {
             <p>Invite each officer with the email address their sign-in account uses. Accounts are made in your identity
@@ -257,15 +257,14 @@
                     placeholder="officer@example.invalid"></hlm-field>
                 <hlm-field><label hlmFieldLabel for="invite-role">Role</label>
                   <hlm-select [value]="inviteRole()" (valueChange)="inviteRole.set($event ?? 'field_staff')" [itemToString]="roleLabel">
-                    <hlm-select-trigger buttonId="invite-role" class="w-full"><hlm-select-value /></hlm-select-trigger>
+                    <hlm-select-trigger buttonId="invite-role" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
                     <hlm-select-content *hlmSelectPortal>
                       @for (role of roles; track role) { <hlm-select-item [value]="role">{{ roleLabels[role] }}</hlm-select-item> }
                     </hlm-select-content>
                   </hlm-select></hlm-field>
                 <hlm-field><label hlmFieldLabel for="invite-unit">Unit</label>
                   <hlm-select [value]="inviteUnit() || null" (valueChange)="inviteUnit.set($event ?? '')" [itemToString]="unitName">
-                    <hlm-select-trigger buttonId="invite-unit" class="w-full" [forceInvalid]="unitMissing()" [aria-invalid]="unitMissing()">
-                      <hlm-select-value placeholder="Choose a unit" /></hlm-select-trigger>
+                    <hlm-select-trigger buttonId="invite-unit" class="w-full min-w-0 justify-start text-start" [forceInvalid]="unitMissing()" [aria-invalid]="unitMissing()"><hlm-select-value placeholder="Choose a unit" /></hlm-select-trigger>
                     <hlm-select-content *hlmSelectPortal>
                       @for (unit of units(); track unit.path) {
                         <hlm-select-item [value]="unit.path" [style.padding-inline-start.rem]="0.5 + unit.depth * 0.75">{{ unitLabel(unit) }}</hlm-select-item>
@@ -273,7 +272,7 @@
                     </hlm-select-content>
                   </hlm-select>
                   @if (unitMissing()) { <hlm-field-error forceShow>Choose a unit.</hlm-field-error> }</hlm-field>
-                <button hlmBtn type="submit" class="md:mt-7">Invite</button>
+                <button hlmBtn type="submit" class="md:self-end">Invite</button>
               </fieldset>
             </form>
             @if (invitations().length) {
@@ -324,7 +323,7 @@
                 <svg lucideTriangleAlert aria-hidden="true" class="size-4 shrink-0"></svg>No FIRMS key yet: the map shows no new detections until you add one.</p>
             }
             <p>Reopen this wizard at any time from the account menu.</p>
-            <button hlmBtn type="button" size="lg" class="justify-self-start" [disabled]="busy()" (click)="finish()">Finish and open the alert map</button>
+            <button hlmBtn type="button" size="lg" class="self-start" [disabled]="busy()" (click)="finish()">Finish and open the alert map</button>
           }
         }
       </section>
@@ -332,7 +331,7 @@
   } @else if (error()) {
     <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg lucideCircleAlert aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
       <p hlmAlertDescription>{{ error() }}</p></div>
-    <button hlmBtn variant="outline" type="button" class="justify-self-start" (click)="load(true)">Try again</button>
+    <button hlmBtn variant="outline" type="button" class="self-start" (click)="load(true)">Try again</button>
   } @else {
     <div role="status" class="grid gap-4 md:grid-cols-[220px_1fr]"><span class="sr-only">Loading setup…</span>
       <div class="grid gap-2" aria-hidden="true">@for (row of [1, 2, 3, 4, 5]; track row) { <hlm-skeleton class="h-10 w-full" /> }</div>
