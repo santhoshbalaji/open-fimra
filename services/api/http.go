@@ -85,6 +85,20 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.With(auth.require).Post("/api/v1/workspaces/{slug}/exports", a.createExport)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/exports/{id}", a.exportStatus)
 	router.With(auth.require).Get("/api/v1/workspaces/{slug}/exports/{id}/file", a.exportFile)
+	router.With(auth.require).Get("/api/v1/access-keys", a.accessKeys)
+	router.With(auth.require).Post("/api/v1/access-keys", a.accessKeys)
+	router.With(auth.require).Delete("/api/v1/access-keys/{id}", a.accessKeys)
+	// The GIS link is the only place a personal access key is accepted.
+	router.Route("/ogc/workspaces/{slug}", func(gis chi.Router) {
+		gis.Use(a.requireGIS(auth))
+		gis.Get("/", a.ogcLanding)
+		gis.Get("/conformance", a.ogcConformance)
+		gis.Get("/api", a.ogcAPI)
+		gis.Get("/collections", a.ogcCollections)
+		gis.Get("/collections/{collection}", a.ogcCollection)
+		gis.Get("/collections/{collection}/items", a.ogcItems)
+		gis.Get("/collections/{collection}/items/{feature}", a.ogcItem)
+	})
 	return router
 }
 

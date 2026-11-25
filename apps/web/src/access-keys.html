@@ -1,0 +1,143 @@
+<div class="mx-auto grid max-w-[1160px] gap-4 px-4 pt-6 pb-10 sm:px-8">
+  <div class="flex flex-wrap items-center gap-3">
+    <h2 class="text-display">GIS link</h2>
+    <button hlmBtn variant="outline" class="ml-auto" (click)="closed.emit()">Back to the control room</button>
+  </div>
+  <p class="max-w-prose text-muted-foreground">
+    Open the detections, alerts and published layers in QGIS or another desktop GIS. The link is read-only and shows
+    only what you can see here. It uses a personal access key, because desktop GIS cannot use this sign-in page.
+  </p>
+  @if (error()) {
+    <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
+      <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
+      <p hlmAlertDescription>{{ error() }}</p>
+    </div>
+  }
+  @if (made(); as made) {
+    <div hlmAlert class="grid-cols-[auto_1fr] gap-x-2.5" role="status">
+      <svg fimraIcon="key-round" aria-hidden="true" class="row-span-3 mt-0.5 size-4"></svg>
+      <h3 hlmAlertTitle>Copy the key {{ made.name }} now</h3>
+      <div hlmAlertDescription class="grid gap-2">
+        <p>You will not see it again. Keep it as safely as a password. Anyone with the key can see what you can see.</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <code class="new-key rounded-control border border-border bg-muted px-2 py-1 font-mono text-sm [overflow-wrap:anywhere]">{{ made.key }}</code>
+          <button hlmBtn size="sm" (click)="copy(made.key ?? '', 'Key')">Copy key</button>
+          <button hlmBtn size="sm" variant="ghost" (click)="dismissKey()">I have saved it</button>
+        </div>
+      </div>
+    </div>
+  }
+  <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-2">
+    <section hlmCard aria-labelledby="link-heading">
+      <hlm-card-header>
+        <h3 hlmCardTitle id="link-heading" class="text-subhead">Connect QGIS</h3>
+        <p hlmCardDescription>OGC API – Features, in WGS 84 longitude and latitude.</p>
+      </hlm-card-header>
+      <div hlmCardContent class="grid gap-3">
+        @if (address()) {
+          <div class="flex flex-wrap items-center gap-2">
+            <code class="service-address rounded-control border border-border bg-muted px-2 py-1 font-mono text-sm [overflow-wrap:anywhere]">{{ address() }}</code>
+            <button hlmBtn size="sm" variant="outline" (click)="copy(address(), 'Address')">Copy address</button>
+          </div>
+          <ol class="grid list-decimal gap-1 pl-5">
+            <li>In QGIS, open <strong>Layer › Add Layer › Add WFS / OGC API – Features Layer</strong> and choose <strong>New</strong>.</li>
+            <li>Paste the address above as the URL.</li>
+            <li>Under <strong>Authentication</strong>, add a <strong>Basic</strong> configuration. Enter any user name and paste your key as the password.</li>
+            <li>Choose <strong>Connect</strong>, then the collections you want.</li>
+          </ol>
+        } @else {
+          <p>You need a role in a workspace before the GIS link shows anything.</p>
+        }
+      </div>
+    </section>
+    <section hlmCard aria-labelledby="make-heading">
+      <hlm-card-header>
+        <h3 hlmCardTitle id="make-heading" class="text-subhead">Make a key</h3>
+        <p hlmCardDescription>Make one key for each computer, so you can revoke one without the others.</p>
+      </hlm-card-header>
+      <form hlmCardContent #keyForm class="key-form" (submit)="$event.preventDefault(); create(keyForm)">
+        <fieldset class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5" [disabled]="busy() || full()">
+          <hlm-field>
+            <label hlmFieldLabel for="key-name">Name</label>
+            <input hlmInput id="key-name" name="name" required maxlength="100" placeholder="Office laptop">
+          </hlm-field>
+          <hlm-field>
+            <label hlmFieldLabel for="key-expiry">Expires after</label>
+            <hlm-select [value]="expiry()" (valueChange)="expiry.set($event ?? '90')" [itemToString]="expiryLabel">
+              <hlm-select-trigger buttonId="key-expiry" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal>
+                @for (option of expiries; track option.value) { <hlm-select-item [value]="option.value">{{ option.label }}</hlm-select-item> }
+              </hlm-select-content>
+            </hlm-select>
+          </hlm-field>
+          @if (full()) { <p class="text-muted-foreground">You have reached the limit of {{ limit() }} keys. Revoke one you no longer use.</p> }
+          <button hlmBtn type="submit" class="justify-self-start">Make key</button>
+        </fieldset>
+      </form>
+    </section>
+    <section hlmCard aria-labelledby="keys-heading" class="lg:col-span-2">
+      <hlm-card-header>
+        <h3 hlmCardTitle id="keys-heading" class="text-subhead">Your keys</h3>
+        <p hlmCardDescription>A key works with your current roles. When a role changes, the key changes with it.</p>
+      </hlm-card-header>
+      <div hlmCardContent>
+        @if (keys(); as keys) {
+          @if (keys.length) {
+            <div hlmTableContainer class="rounded-control border border-border" tabindex="0" aria-labelledby="keys-heading">
+              <table hlmTable class="keys">
+                <caption class="sr-only">Your personal access keys</caption>
+                <thead hlmTHead>
+                  <tr hlmTr>
+                    <th hlmTh scope="col">Name</th><th hlmTh scope="col" class="max-sm:hidden">Starts with</th>
+                    <th hlmTh scope="col" class="max-sm:hidden">Made</th><th hlmTh scope="col">Expires</th>
+                    <th hlmTh scope="col" class="max-sm:hidden">Last used</th><th hlmTh scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody hlmTBody>
+                  @for (key of keys; track key.id) {
+                    <tr hlmTr>
+                      <td hlmTd class="min-w-32 whitespace-normal break-words">{{ key.name }}
+                        <span class="block text-xs text-muted-foreground sm:hidden">Last used: {{ key.lastUsedAt ? (key.lastUsedAt | date: 'd MMM y, HH:mm') : 'not yet' }}</span>
+                      </td>
+                      <td hlmTd class="font-mono max-sm:hidden">fimra_{{ key.hint }}…</td>
+                      <td hlmTd class="tabular-nums max-sm:hidden">{{ key.createdAt | date: 'd MMM y' }}</td>
+                      <td hlmTd class="tabular-nums">
+                        @if (key.expired) { <span hlmBadge variant="destructive">Expired</span> }
+                        @else if (key.expiresAt) { {{ key.expiresAt | date: 'd MMM y' }} } @else { Never }
+                      </td>
+                      <td hlmTd class="tabular-nums max-sm:hidden">{{ key.lastUsedAt ? (key.lastUsedAt | date: 'd MMM y, HH:mm') : 'Not yet' }}</td>
+                      <td hlmTd class="text-right">
+                        <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Revoke ' + key.name" (click)="revoking.set(key)">Revoke</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <fimra-empty-state heading="No keys yet" detail="Make a key to open this workspace in desktop GIS." />
+          }
+        } @else if (!error()) {
+          <div class="grid gap-2" aria-hidden="true"><hlm-skeleton class="h-9 w-full" /><hlm-skeleton class="h-9 w-full" /></div>
+        } @else {
+          <button hlmBtn variant="outline" (click)="error.set(''); load()">Retry</button>
+        }
+      </div>
+    </section>
+  </div>
+</div>
+
+<hlm-dialog [role]="'alertdialog'" [state]="revoking() ? 'open' : 'closed'" (closed)="revoking.set(null)">
+  <hlm-dialog-content *hlmDialogPortal class="sm:max-w-lg">
+    @if (revoking(); as key) {
+      <hlm-dialog-header>
+        <h3 hlmDialogTitle class="text-title">Revoke {{ key.name }}?</h3>
+        <p hlmDialogDescription>Desktop GIS using this key stops working at once. This cannot be undone.</p>
+      </hlm-dialog-header>
+      <hlm-dialog-footer>
+        <button hlmBtn variant="outline" [disabled]="busy()" (click)="revoking.set(null)">Cancel</button>
+        <button hlmBtn variant="destructive" [disabled]="busy()" (click)="revoke()">Revoke key</button>
+      </hlm-dialog-footer>
+    }
+  </hlm-dialog-content>
+</hlm-dialog>

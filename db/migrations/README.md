@@ -22,6 +22,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00017_notifications` | Notification rules, a replay-safe inbox and the email delivery outbox |
 | `00018_first_run_setup` | The one-time install claim, wizard progress, encrypted workspace secrets and pending invitations |
 | `00019_indexed_forest_matching` | Forest matching through the spatial index, with the same geodesic results |
+| `00020_personal_access_keys` | Hashed personal access keys for the GIS link, with expiry, last use and revocation |
 
 ## Commands
 
