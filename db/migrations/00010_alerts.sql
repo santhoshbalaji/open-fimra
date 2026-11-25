@@ -1,3 +1,8 @@
+-- Alerts and queues (PLAN.md section 5.3). Matching creates one alert per
+-- workspace and detection: inside forest goes to the responsible unit, near the
+-- edge to a review queue (a workspace setting), and triage cases to the triage
+-- queue. Outside and fixed heat sources create no alert.
+
 -- +goose Up
 ALTER TABLE workspaces ADD COLUMN review_near_edge boolean NOT NULL DEFAULT true;
 
