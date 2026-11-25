@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -54,36 +54,36 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 
 	pool, err := pgxpool.New(startup, cfg.databaseURL)
 	if err != nil {
-		return errors.New("could not configure the database connection")
+		return fmt.Errorf("could not configure the database connection: %w", err)
 	}
 	defer pool.Close()
 	if err := pool.Ping(startup); err != nil {
-		return errors.New("could not connect to the database")
+		return fmt.Errorf("could not connect to the database: %w", err)
 	}
 
 	provider, err := discoverProvider(startup, cfg.issuer)
 	if err != nil {
-		return errors.New("could not discover the OpenID Connect provider")
+		return fmt.Errorf("could not discover the OpenID Connect provider at %s: %w", cfg.issuer, err)
 	}
 
 	listener, err := new(net.ListenConfig).Listen(startup, "tcp", cfg.httpAddr)
 	if err != nil {
-		return errors.New("could not listen on the HTTP address")
+		return fmt.Errorf("could not listen on %s: %w", cfg.httpAddr, err)
 	}
 	defer listener.Close()
 
 	jobs, err := newJobClient(pool, logger)
 	if err != nil {
-		return errors.New("could not configure the job queue")
+		return fmt.Errorf("could not configure the job queue: %w", err)
 	}
 	if err := jobs.Start(ctx); err != nil {
-		return errors.New("could not start the job queue")
+		return fmt.Errorf("could not start the job queue: %w", err)
 	}
 	defer func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := jobs.Stop(shutdown); err != nil {
-			logger.Error("Could not stop the job queue before the deadline")
+			logger.Error("Could not stop the job queue before the deadline", "error", err)
 		}
 	}()
 
@@ -98,14 +98,14 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 	logger.Info("API listening", "address", listener.Addr().String())
 
 	select {
-	case <-served:
-		return errors.New("could not serve HTTP requests")
+	case err := <-served:
+		return fmt.Errorf("could not serve HTTP requests: %w", err)
 	case <-ctx.Done():
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdown); err != nil {
 			_ = server.Close()
-			return errors.New("could not shut down HTTP before the deadline")
+			return fmt.Errorf("could not shut down HTTP before the deadline: %w", err)
 		}
 		return nil
 	}
