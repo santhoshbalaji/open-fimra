@@ -75,3 +75,22 @@ check: ## Run the repository checks that continuous integration runs
 	python3 seed/generate.py --check
 	$(COMPOSE) config --quiet
 	@echo "Compose file is valid."
+
+# Corepack uses the pnpm version pinned in apps/web/package.json.
+PNPM ?= corepack pnpm
+.PHONY: web-install web-dev web-build web-test web-lint
+
+web-install: ## Install the web app's locked dependencies
+	cd apps/web && $(PNPM) install --frozen-lockfile
+
+web-dev: ## Serve the web app on 127.0.0.1:4200
+	cd apps/web && $(PNPM) run dev
+
+web-build: ## Build the web app for distribution
+	cd apps/web && $(PNPM) run build
+
+web-test: ## Run the web unit tests
+	cd apps/web && $(PNPM) run test
+
+web-lint: ## Lint the web app and its templates
+	cd apps/web && $(PNPM) run lint

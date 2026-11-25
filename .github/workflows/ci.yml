@@ -40,3 +40,19 @@ jobs:
         run: make db-test
       - name: Load the synthetic demo state and run the reference check
         run: make seed-test
+
+  web:
+    name: Web shell
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.3'
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: make web-install web-lint web-test web-build PNPM=pnpm

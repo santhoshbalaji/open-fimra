@@ -31,6 +31,9 @@ while IFS= read -r -d '' file; do
     fail "$file: environment files hold secrets and must not be committed"
   fi
 
+  # Git records directory links as paths. Their files are checked at the source.
+  [[ -L "$file" && -d "$file" ]] && continue
+
   size=$(wc -c < "$file")
   if (( size > max_bytes )); then
     fail "$file: $((size / 1024)) KiB is over the 2 MiB limit for committed files"

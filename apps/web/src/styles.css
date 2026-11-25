@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/noto-sans/wght.css';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+@import '@angular/cdk/overlay-prebuilt.css';
+@import './tokens.css';
+
+html, body, fimra-root { height: 100%; margin: 0; }
+body { font: var(--text-body)/1.5 var(--font-sans); color: var(--color-text); background: var(--color-background); }
+fimra-root { display: flex; flex-direction: column; height: 100dvh; }
+main { flex: 1; min-height: 0; }
+.topbar { z-index: 1; padding: 12px clamp(12px, 2.5vw, 40px); border-bottom: 1px solid var(--color-border); }
+.logo { width: clamp(120px, 15vw, 174px); height: auto; }
+.workspace { padding-left: 16px; border-left: 1px solid var(--color-border); font-size: var(--text-subhead); }
+button { cursor: pointer; min-height: var(--target-web); min-width: var(--target-web); }
+button:disabled { cursor: wait; opacity: .55; }
+button:focus-visible, canvas:focus-visible { outline: 3px solid var(--color-brand); outline-offset: -3px; }
+button:hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
+button svg { width: 18px; height: 18px; flex: none; }
+button .chevron { width: 14px; }
+.icon-button, .user-trigger { border-radius: var(--radius-control); padding: 8px; }
+.user-trigger { max-width: 32vw; }
+.user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu, .map-actions, .map-key, .map-message { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 2px 9px rgb(0 0 0 / .10); }
+.account-menu { padding: 6px; min-width: 180px; max-width: 90vw; }
+.account-menu p { padding: 8px; font-size: var(--text-label); color: var(--color-text-secondary); }
+.account-menu button, .map-key button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-control); }
+.welcome { display: grid; align-content: center; justify-items: center; gap: 16px; }
+.sign-in { padding: 6px 16px; border-radius: var(--radius-control); color: var(--color-brand-foreground); background: var(--color-brand); }
+.sign-in:hover { color: var(--color-brand); }
+fimra-demo-map { display: block; height: 100%; position: relative; background: var(--color-map-background); }
+.map-canvas { position: absolute; inset: 0; }
+.map-actions { display: grid; position: absolute; top: 16px; right: 16px; padding: 3px; }
+.map-actions button { display: grid; place-items: center; border-radius: var(--radius-control); }
+.map-key { position: absolute; left: 16px; bottom: 16px; padding: 4px; }
+.map-key button { font-weight: 600; }
+.map-key ul { padding: 4px 12px 8px; }
+.map-key li { display: flex; align-items: center; gap: 10px; line-height: 1.8; font-size: var(--text-label); }
+.key-line { width: 23px; border-top-style: solid; border-color: var(--color-text-secondary); }
+.key-line.beats { border-top-style: dashed; }
+.key-line.circles, .key-line.divisions { border-color: var(--color-brand); }
+.key-line.state { border-color: var(--color-text); }
+.key-forest { border: 1px solid var(--color-text-secondary); width: 23px; height: 10px; background: color-mix(in srgb, var(--color-chart-3) 34%, var(--color-card)); }
+.key-kiln { width: 10px; height: 10px; margin-inline: 6.5px; background: var(--color-neutral-mark); border: 2px solid var(--color-text); }
+.map-message { position: absolute; top: 16px; left: 16px; max-width: 65%; padding: 12px; }
+@media (max-width: 640px) {
+  .topbar { gap: 8px; }
+  .workspace { padding-left: 8px; font-size: var(--text-body); }
+  .user-name, .chevron { display: none; }
+  .map-key ul { columns: 2; }
+  .map-key li { break-inside: avoid; }
+}
