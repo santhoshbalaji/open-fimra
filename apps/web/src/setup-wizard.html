@@ -237,10 +237,40 @@
             }
           }
           @case ('forms') {
-            <p><span hlmBadge variant="secondary" class="me-1">Coming later</span> Starter forms for dispatch, first and final reports and patrol logs arrive
-              in a later release. This step is switched off for now and does not block setup.</p>
-            <label hlmLabel class="font-normal"><hlm-switch disabled />Switch on the starter forms</label>
-            <button hlmBtn type="button" class="self-start" [disabled]="busy()" (click)="markStep('forms', 'skipped')">Continue</button>
+            <p>The starter forms follow the default workflow: the control room sends a team, the team reports from the
+              site, and an officer checks the first and final reports. Use them as they are, or change or replace them later.</p>
+            @if (pack(); as pack) {
+              <ul class="pack-forms grid gap-2">
+                @for (form of pack.forms; track form.form) {
+                  <li class="grid gap-1 rounded-control border border-border p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                      <p><strong>{{ form.title }}</strong></p>
+                      <fimra-status-badge class="mx-0!" [icon]="form.status === 'missing' ? 'step' : 'complete'" [label]="packStatus(form)" />
+                    </div>
+                    <p class="text-muted-foreground">{{ packUse(form) }}</p>
+                    @for (skip of form.skipped ?? []; track skip.step) {
+                      <p class="flex items-start gap-2 text-sm"><svg fimraIcon="info" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                        Not put on {{ skip.step }}: {{ skip.reason }}</p>
+                    }
+                  </li>
+                }
+              </ul>
+              <label hlmLabel class="font-normal"><hlm-switch [checked]="pack.enabled" [disabled]="busy() || pack.enabled"
+                (checkedChange)="$event && enablePack()" />Switch on the starter forms</label>
+              @if (!pack.enabled) {
+                <p class="text-sm text-muted-foreground">Forms already in this workspace with the same names are left as they are.</p>
+              }
+              <div class="flex flex-wrap items-center gap-2">
+                <button hlmBtn type="button" [disabled]="busy() || !pack.enabled" (click)="markStep('forms', 'done')">Continue</button>
+                @if (!pack.enabled) {
+                  <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="markStep('forms', 'skipped')">Skip for now</button>
+                }
+              </div>
+            } @else {
+              <div class="grid gap-2" aria-hidden="true">
+                <div hlmSkeleton class="h-16 w-full"></div><div hlmSkeleton class="h-16 w-full"></div>
+              </div>
+            }
           }
           @case ('invitations') {
             <p>Invite each officer with the email address their sign-in account uses. Accounts are made in your identity

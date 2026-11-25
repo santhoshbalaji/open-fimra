@@ -296,29 +296,7 @@ WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 FOR UPDATE OF v
 			return err
 		}
 		if !published {
-			// Check again: the validator may be newer than the draft.
-			columns, problems := formschema.Columns([]byte(source))
-			if len(problems) > 0 {
-				return problem(http.StatusUnprocessableEntity, "The form is not valid.", problems...)
-			}
-			tree, err := parseFormTree([]byte(source))
-			if err != nil {
-				return err
-			}
-			views, err := formViews(id, tree, columns)
-			if err != nil {
-				return err
-			}
-			for _, view := range views {
-				if _, err := tx.Exec(ctx, view.SQL); err != nil {
-					return err
-				}
-				if _, err := tx.Exec(ctx, `INSERT INTO form_version_views (form_version_id, repeat_key, view_name) VALUES ($1, $2, $3)`,
-					id, view.RepeatKey, view.Name); err != nil {
-					return err
-				}
-			}
-			if _, err := tx.Exec(ctx, `UPDATE form_versions SET published_at = now(), published_by = $2 WHERE id = $1`, id, access.userID); err != nil {
+			if err := publishFormVersion(ctx, tx, id, source, access.userID); err != nil {
 				return err
 			}
 		}
@@ -329,6 +307,70 @@ WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 FOR UPDATE OF v
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// publishFormVersion freezes a draft and creates its flat views. The caller
+// holds a lock on the version and knows it is a draft.
+func publishFormVersion(ctx context.Context, tx pgx.Tx, id int64, source, userID string) error {
+	// Check again: the validator may be newer than the draft.
+	columns, problems := formschema.Columns([]byte(source))
+	if len(problems) > 0 {
+		return problem(http.StatusUnprocessableEntity, "The form is not valid.", problems...)
+	}
+	tree, err := parseFormTree([]byte(source))
+	if err != nil {
+		return err
+	}
+	views, err := formViews(id, tree, columns)
+	if err != nil {
+		return err
+	}
+	for _, view := range views {
+		if _, err := tx.Exec(ctx, view.SQL); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO form_version_views (form_version_id, repeat_key, view_name) VALUES ($1, $2, $3)`,
+			id, view.RepeatKey, view.Name); err != nil {
+			return err
+		}
+	}
+	_, err = tx.Exec(ctx, `UPDATE form_versions SET published_at = now(), published_by = $2 WHERE id = $1`, id, userID)
+	return err
+}
+
+// workspaceTemplate is the workflow template new alerts in a workspace use:
+// the workspace's own, or else the shared default.
+const workspaceTemplate = `SELECT t.id FROM workflow_templates t WHERE t.workspace_id IS NULL OR t.workspace_id = $1
+ORDER BY t.workspace_id NULLS LAST LIMIT 1`
+
+// formStep is one form version placed on a workflow step.
+type formStep struct {
+	formID, versionID, templateID int64
+	key, step                     string
+	version                       int
+	hierarchyID                   *string
+	unitPaths                     []string
+}
+
+// saveAssignment puts a published version on a step, replacing the form's
+// earlier version there, and records it in the audit log.
+func saveAssignment(ctx context.Context, tx pgx.Tx, access workspaceAccess, subject string, a formStep) error {
+	if a.unitPaths == nil {
+		a.unitPaths = []string{}
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO form_assignments (form_id, form_version_id, template_id, step, hierarchy_id, unit_paths, assigned_by)
+VALUES ($1, $2, $3, $4, $5, $6::text[]::ltree[], $7)
+ON CONFLICT (form_id, template_id, step) DO UPDATE SET form_version_id = EXCLUDED.form_version_id,
+    hierarchy_id = EXCLUDED.hierarchy_id, unit_paths = EXCLUDED.unit_paths,
+    assigned_by = EXCLUDED.assigned_by, assigned_at = now()`,
+		a.formID, a.versionID, a.templateID, a.step, a.hierarchyID, a.unitPaths, access.userID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
+VALUES ($1, 'user', $2, 'form.assign', 'form', $3, jsonb_build_object('step', $4::text, 'version', $5::int, 'unitPaths', $6::text[]))`,
+		access.workspaceID, subject, a.key, a.step, a.version, a.unitPaths)
+	return err
 }
 
 type assignmentRequest struct {
@@ -443,18 +485,8 @@ WHERE h.workspace_id = $1 AND h.slug = $2 GROUP BY h.id`, access.workspaceID, in
 		if input.UnitPaths == nil {
 			input.UnitPaths = []string{}
 		}
-		if _, err := tx.Exec(ctx, `
-INSERT INTO form_assignments (form_id, form_version_id, template_id, step, hierarchy_id, unit_paths, assigned_by)
-VALUES ($1, $2, $3, $4, $5, $6::text[]::ltree[], $7)
-ON CONFLICT (form_id, template_id, step) DO UPDATE SET form_version_id = EXCLUDED.form_version_id,
-    hierarchy_id = EXCLUDED.hierarchy_id, unit_paths = EXCLUDED.unit_paths,
-    assigned_by = EXCLUDED.assigned_by, assigned_at = now()`,
-			formID, versionID, templateID, step, hierarchyID, input.UnitPaths, access.userID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
-VALUES ($1, 'user', $2, 'form.assign', 'form', $3, jsonb_build_object('step', $4::text, 'version', $5::int, 'unitPaths', $6::text[]))`,
-			access.workspaceID, subject, key, step, input.Version, input.UnitPaths); err != nil {
+		if err := saveAssignment(ctx, tx, access, subject, formStep{formID: formID, versionID: versionID, templateID: templateID,
+			key: key, step: step, version: input.Version, hierarchyID: hierarchyID, unitPaths: input.UnitPaths}); err != nil {
 			return err
 		}
 		result, err = json.Marshal(map[string]any{"form": key, "step": step, "version": input.Version,

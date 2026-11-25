@@ -69,7 +69,7 @@ The first download should stay under 150 kB compressed, for slow mobile connecti
 
 **GIS link keys** in the account menu shows the workspace's read-only GIS link address and QGIS steps. Each person can make personal access keys for desktop GIS there, see when each was last used and revoke them. A new key is shown once. See the [GIS link](../../services/api/README.md#gis-link).
 
-The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. The report steps record a pending report until report forms are available.
+The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. A step with an assigned form, such as the starter pack's first report, needs its submission before the alert can move on, and the timeline shows the reason when a move is refused. The web app cannot fill in forms yet: submissions go through the [core API](../../services/api/README.md#submissions).
 
 ## First-run setup
 
@@ -81,7 +81,7 @@ The wizard then opens for root administrators until it is finished. Its steps ar
 3. **Hierarchy**: choose a preset, such as State → Circle → Division → Range → Beat, and edit the English and Hindi labels.
 4. **Layers**: upload one file per level from the state down, then the forest layer and, optionally, known heat sources. Each row shows the import status and any blocking problems. Publish each one when it is ready. The **Layers screen** has the full review and preview.
 5. **NASA FIRMS**: paste the map key. It is saved encrypted and tested. The page shows only when it was set and its last four characters. Skipping asks you to confirm, because the map then gets no new detections.
-6. **Starter forms**: coming later, switched off.
+6. **Starter forms**: lists the five starter forms and where each is filled in. Switch them on to add and publish them and put them on their workflow steps. Forms the workspace already has with the same names are left as they are. You can also skip this step and switch them on later by reopening the wizard.
 7. **Invite officers**: enter an email, role and unit for each officer. Officers claim the role the first time they sign in with that verified address.
 8. **Finish** shows a summary and opens the alert map.
 

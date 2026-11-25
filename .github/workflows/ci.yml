@@ -77,6 +77,8 @@ jobs:
           cache-dependency-path: apps/web/pnpm-lock.yaml
       - name: Run both validators on the shared examples and type-check the TypeScript module
         run: make web-install form-schema-test PNPM=pnpm
+      - name: Check the starter forms against the validator and the default workflow
+        run: make starter-pack-test
 
   api:
     name: Core API lint and unit tests

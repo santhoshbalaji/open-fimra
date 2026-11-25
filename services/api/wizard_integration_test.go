@@ -93,8 +93,12 @@ func TestWizardIntegration(t *testing.T) {
 	}
 	auth := newAuthenticator(provider, cfg.issuer, cfg.audience)
 	auth.emailEnabled = true
+	store, err := newLocalAttachments(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(newHandler(pool, auth, logger, devOrigins, cfg.uploadDir, jobs,
-		withSetup(newSetupGuard(setupCode), secrets, keys)))
+		withSetup(newSetupGuard(setupCode), secrets, keys), withAttachments(store, defaultAttachmentBytes)))
 	t.Cleanup(server.Close)
 	client := &http.Client{Timeout: 20 * time.Second}
 	tokens := map[string]string{}
@@ -147,6 +151,26 @@ func TestWizardIntegration(t *testing.T) {
 			}
 		}
 	}
+	send := func(user, method, path, contentType string, body []byte) (int, []byte, http.Header) {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, method, server.URL+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", contentType)
+		req.Header.Set("Authorization", "Bearer "+tokens[user])
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		data, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		responses.Write(data)
+		return res.StatusCode, data, res.Header
+	}
 	me := func(user string) meResponse {
 		t.Helper()
 		var profile meResponse
@@ -164,6 +188,7 @@ func TestWizardIntegration(t *testing.T) {
 	const slug = "wizard-state"
 	base := "/api/v1/workspaces/" + slug
 	var state setupState
+	pack := starterPackRun{ctx: ctx, pool: pool, base: base, call: call, send: send}
 
 	section("first administrator", func(t *testing.T) {
 		if profile := me("state.admin"); !profile.Setup.BootstrapAvailable || len(profile.RoleAssignments) != 0 {
@@ -384,9 +409,9 @@ func TestWizardIntegration(t *testing.T) {
 			t.Fatalf("a workspace without a saved key must fall back to FIMRA_FIRMS_MAP_KEY: %s %v", source, err)
 		}
 		call("state.admin", http.MethodPost, base+"/setup/steps/firms", map[string]string{"status": "done"}, http.StatusOK, nil)
-		call("state.admin", http.MethodPost, base+"/setup/steps/forms", map[string]string{"status": "done"}, http.StatusBadRequest, nil)
-		call("state.admin", http.MethodPost, base+"/setup/steps/forms", map[string]string{"status": "skipped"}, http.StatusOK, nil)
 	})
+
+	section("starter forms", pack.enable)
 
 	beforeMail := map[string]int{}
 	section("invite officers", func(t *testing.T) {
@@ -547,6 +572,9 @@ func TestWizardIntegration(t *testing.T) {
 			}
 		}
 	})
+
+	section("starter forms on the default workflow", pack.workflow)
+	section("manual fire report", pack.manualReport)
 
 	section("no secrets or addresses leak", func(t *testing.T) {
 		for name, output := range map[string]string{"logs": logs.String(), "API responses": responses.String()} {

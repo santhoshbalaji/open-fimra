@@ -2,6 +2,7 @@ WITH candidates AS MATERIALIZED (
     SELECT d.id, d.observed_at, d.geom
     FROM matchable_detections d JOIN workspaces w ON w.id = $1
     WHERE d.observed_at BETWEEN $3 AND $4 AND detection_in_workspace(w, d.geom)
+      AND (d.workspace_id IS NULL OR d.workspace_id = w.id)
 ),
 compared AS (
     SELECT d.id, d.observed_at,

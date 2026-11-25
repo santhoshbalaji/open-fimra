@@ -231,6 +231,11 @@ form-schema-test: ## Run the Go and TypeScript form validators on the shared exa
 	@test -x apps/web/node_modules/.bin/tsc || { echo "Run make web-install first: the type check uses the web app's TypeScript."; exit 1; }
 	apps/web/node_modules/.bin/tsc -p $(FORM_SCHEMA)/tsconfig.json
 
+.PHONY: starter-pack-test
+starter-pack-test: ## Check the starter forms with the Go validator and against the default workflow
+	cd packages/starter-pack && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
+	cd packages/starter-pack && go vet ./... && go test -count=1 ./...
+
 check: ## Run the repository checks that continuous integration runs
 	scripts/check-repo.sh
 	python3 seed/generate.py --check

@@ -1,0 +1,107 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "manual-fire-report",
+  "version": 1,
+  "title": { "en": "Manual fire report", "hi": "आग की सूचना (हाथ से दर्ज)" },
+  "description": {
+    "en": "Record a fire that was reported by phone, by forest staff or by another agency. Saving the report makes an alert that follows the normal workflow.",
+    "hi": "फ़ोन, वन कर्मचारियों या किसी दूसरी एजेंसी से मिली आग की सूचना दर्ज करें। सूचना सहेजने पर एक अलर्ट बनता है, जो सामान्य कार्यप्रवाह से आगे बढ़ता है।"
+  },
+  "languages": ["en", "hi"],
+  "sections": [
+    {
+      "key": "report",
+      "title": { "en": "Report", "hi": "सूचना" },
+      "items": [
+        {
+          "key": "report_source",
+          "type": "single-choice",
+          "label": { "en": "How was the fire reported?", "hi": "आग की सूचना कैसे मिली?" },
+          "required": true,
+          "choices": [
+            { "key": "public-call", "label": { "en": "Phone call from the public", "hi": "जनता से फ़ोन कॉल" } },
+            { "key": "staff-sighting", "label": { "en": "Seen by forest staff", "hi": "वन कर्मचारी ने देखा" } },
+            { "key": "other-agency", "label": { "en": "Another agency", "hi": "दूसरी एजेंसी" } },
+            { "key": "other-satellite-service", "label": { "en": "Another satellite service", "hi": "दूसरी उपग्रह सेवा" } }
+          ]
+        },
+        {
+          "key": "reporter_name",
+          "type": "text",
+          "label": { "en": "Name of the person reporting", "hi": "सूचना देने वाले का नाम" },
+          "maxLength": 100,
+          "showWhen": { "op": "not-equals", "field": "report_source", "value": "other-satellite-service" }
+        },
+        {
+          "key": "reporter_phone",
+          "type": "text",
+          "label": { "en": "Phone number", "hi": "फ़ोन नंबर" },
+          "pattern": "[6-9][0-9]{9}",
+          "patternHint": { "en": "Ten digits, starting with 6, 7, 8 or 9", "hi": "दस अंक, जो 6, 7, 8 या 9 से शुरू हों" },
+          "requireWhen": { "op": "equals", "field": "report_source", "value": "public-call" },
+          "showWhen": { "op": "equals", "field": "report_source", "value": "public-call" }
+        },
+        {
+          "key": "reported_at",
+          "type": "date-time",
+          "label": { "en": "When was the fire reported?", "hi": "सूचना कब मिली?" },
+          "required": true,
+          "notInFuture": true
+        }
+      ]
+    },
+    {
+      "key": "place",
+      "title": { "en": "Location", "hi": "स्थान" },
+      "items": [
+        {
+          "key": "fire_location",
+          "type": "point",
+          "label": { "en": "Fire location", "hi": "आग का स्थान" },
+          "hint": { "en": "Use GPS at the site if you can.", "hi": "हो सके तो मौके पर GPS का उपयोग करें।" },
+          "required": true
+        },
+        {
+          "key": "landmark",
+          "type": "text",
+          "label": { "en": "Nearest landmark", "hi": "पास का कोई जाना-पहचाना स्थान" },
+          "maxLength": 200
+        }
+      ]
+    },
+    {
+      "key": "fire",
+      "title": { "en": "Fire", "hi": "आग" },
+      "items": [
+        {
+          "key": "visible_signs",
+          "type": "single-choice",
+          "label": { "en": "What can be seen?", "hi": "क्या दिख रहा है?" },
+          "choices": [
+            { "key": "smoke", "label": { "en": "Smoke only", "hi": "केवल धुआँ" } },
+            { "key": "flames", "label": { "en": "Flames", "hi": "लपटें" } },
+            { "key": "both", "label": { "en": "Smoke and flames", "hi": "धुआँ और लपटें" } }
+          ]
+        },
+        {
+          "key": "estimated_area",
+          "type": "number",
+          "label": { "en": "Estimated area", "hi": "अनुमानित क्षेत्रफल" },
+          "unit": "ha",
+          "decimals": 1,
+          "min": 0
+        }
+      ]
+    }
+  ],
+  "layout": {
+    "pages": [
+      { "key": "all", "title": { "en": "Fire report", "hi": "आग की सूचना" }, "sections": ["report", "place", "fire"] }
+    ],
+    "items": [
+      { "item": "report_source", "widget": "radio" },
+      { "item": "visible_signs", "widget": "buttons" }
+    ]
+  }
+}
