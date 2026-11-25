@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertQueue } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { chartColors } from './class-chart';
 import { Dashboard } from './dashboard';
 import { DashboardFilters } from './dashboard-filters';
+import { LowBandwidthSwitch } from './low-bandwidth-switch';
 import { WorkspaceService } from './workspace';
 
 describe('Control-room dashboard', () => {
@@ -34,17 +36,49 @@ describe('Control-room dashboard', () => {
     http.expectOne(r => r.url.endsWith('/summary')).flush(data);
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
-    expect(page.querySelector('.metric-grid dl')?.textContent).toContain('Inside forest4');
-    expect([...page.querySelectorAll('.metric-grid strong')].map(el => el.textContent)).toEqual(['3', '2', '1']);
+    expect(page.querySelector('.stat-grid dl')?.textContent).toContain('Inside forest4');
+    expect([...page.querySelectorAll('.stat-value')].map(el => el.textContent)).toEqual(['3', '2', '1']);
     expect(page.querySelector('tbody')?.textContent).toContain('Inside forest9');
-    expect(page.textContent).toContain('Acknowledged2 min4 min');
-    expect(page.textContent).toContain('Quiet');
+    expect(page.textContent?.replace(/\s+/g, '')).toContain('Acknowledged2min4min');
+    const feed = page.querySelector('[aria-labelledby=feeds-title] li') as HTMLElement;
+    expect(feed.textContent).toContain('Demo · sample');
+    expect(feed.querySelector('fimra-status-badge')?.textContent?.trim()).toBe('Quiet');
+    expect(feed.querySelector('fimra-status-badge svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(page.querySelector('[aria-labelledby=steps-title]')?.textContent).toContain('Acknowledged');
     expect(page.querySelector('fimra-class-chart')).toBeNull();
     vi.advanceTimersByTime(60_000);
     http.expectOne(r => r.url.endsWith('/summary')).flush({...data, feedHealth: null});
     fixture.detectChanges();
     expect(page.textContent).not.toContain('Feed health');
     http.verify();
+  });
+
+  it('shows skeletons while loading and empty states when there is no data', () => {
+    const fixture = TestBed.createComponent(Dashboard);
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('[role=status]')?.textContent).toContain('Loading dashboard');
+    expect(page.querySelectorAll('hlm-skeleton').length).toBeGreaterThan(0);
+    vi.advanceTimersByTime(0);
+    TestBed.inject(HttpTestingController).expectOne(r => r.url.endsWith('/summary'))
+      .flush({...data, today: {}, detections: {}, steps: {}, feedHealth: []});
+    fixture.detectChanges();
+    expect(page.querySelector('hlm-skeleton')).toBeNull();
+    expect([...page.querySelectorAll('fimra-empty-state')].map(el => el.textContent?.trim()))
+      .toEqual([expect.stringContaining('No detections'), expect.stringContaining('No alerts'),
+        expect.stringContaining('No feeds have polled yet.')]);
+    expect(page.querySelector('fimra-class-chart')).toBeNull();
+  });
+
+  it('reads chart colours from the theme in a fixed order', () => {
+    const root = document.createElement('div');
+    ['first', 'second', 'third', 'fourth'].forEach((colour, index) => root.style.setProperty('--color-chart-' + (index + 1), colour));
+    root.style.setProperty('--color-text', 'ink');
+    document.body.append(root);
+    const colours = chartColors(root);
+    root.remove();
+    expect(colours.series).toEqual(['first', 'second', 'third', 'fourth']);
+    expect(colours.text).toBe('ink');
   });
 
   it('uses one filter selection for the dashboard, queue and tile request', () => {
@@ -60,6 +94,21 @@ describe('Control-room dashboard', () => {
       r.params.get('hours') === '72' && r.params.get('class') === 'inside' && r.params.get('unitPath') === 'ds.c1');
     expect(requests.map(r => r.request.url.split('/').pop()).sort()).toEqual(['alerts', 'summary']);
     expect(filters.tileClasses()).toBe('inside');
+  });
+
+  it('switches low bandwidth with a labelled switch', () => {
+    const fixture = TestBed.createComponent(LowBandwidthSwitch);
+    fixture.detectChanges();
+    const control = fixture.nativeElement.querySelector('[role=switch]') as HTMLButtonElement;
+    const label = document.getElementById(control.getAttribute('aria-labelledby') ?? '');
+    expect(label?.textContent?.trim()).toBe('Low bandwidth');
+    expect(control.getAttribute('aria-describedby')).toBe('low-bandwidth-help');
+    expect(control.getAttribute('aria-checked')).toBe('false');
+    control.click();
+    fixture.detectChanges();
+    expect(TestBed.inject(DashboardFilters).lowBandwidth()).toBe(true);
+    expect(control.getAttribute('aria-checked')).toBe('true');
+    expect(localStorage.getItem('fimra.lowBandwidth')).toBe('true');
   });
 
   it('remembers low bandwidth and works when storage is blocked', () => {

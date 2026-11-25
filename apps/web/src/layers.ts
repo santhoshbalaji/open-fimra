@@ -2,10 +2,26 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { BrnButton } from '@spartan-ng/brain/button';
+import {
+  LucideChevronRight, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideLoaderCircle, LucideTriangleAlert
+} from '@lucide/angular';
+import { HlmAlertImports } from '@spartan-ng/helm/alert';
+import { HlmBadge } from '@spartan-ng/helm/badge';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmCheckbox } from '@spartan-ng/helm/checkbox';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmFieldImports } from '@spartan-ng/helm/field';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { HlmLabel } from '@spartan-ng/helm/label';
+import { HlmSelectImports } from '@spartan-ng/helm/select';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
+import { HlmTableImports } from '@spartan-ng/helm/table';
 import { Observable, Subscription, exhaustMap, finalize, takeWhile, timer } from 'rxjs';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { EmptyState } from './ui/empty-state';
+import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
 
 type Role = 'hierarchy' | 'forest' | 'exclusion' | 'analysis';
@@ -38,9 +54,11 @@ interface Preview {
 
 @Component({
   selector: 'fimra-layers',
-  imports: [BrnButton, DatePipe],
+  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmCheckbox,
+    HlmDialogImports, HlmFieldImports, HlmInput, HlmLabel, HlmSelectImports, HlmSkeleton, HlmTableImports,
+    LucideChevronRight, LucideCircleAlert, LucideCircleCheck, LucideCircleX, LucideInfo, LucideLoaderCircle, LucideTriangleAlert],
   templateUrl: './layers.html',
-  styleUrl: './layers.css'
+  host: { class: 'block h-full overflow-auto' }
 })
 export class Layers implements OnInit {
   private readonly http = inject(HttpClient);
@@ -58,14 +76,28 @@ export class Layers implements OnInit {
   readonly statusLabels: Record<Status, string> = {
     pending: 'Importing', ready: 'Ready for review', failed: 'Import failed', published: 'Published', retired: 'Retired'
   };
+  readonly statusIcons: Record<Status, 'step' | 'complete' | 'overdue'> = {
+    pending: 'step', ready: 'step', failed: 'overdue', published: 'complete', retired: 'complete'
+  };
   readonly catalog = signal<Catalog | null>(null);
   readonly chosenLayer = signal('');
   readonly chosenRole = signal<Role>('forest');
   readonly chosenHierarchy = signal('');
+  readonly chosenDepth = signal<number | null>(null);
+  /** Set when an upload is tried without a choice in a required select. */
+  readonly checked = signal(false);
   readonly layer = computed(() => this.catalog()?.layers.find(item => item.slug === this.chosenLayer()));
   readonly role = computed(() => this.layer()?.role ?? this.chosenRole());
   readonly hierarchy = computed(() => this.catalog()?.hierarchies.find(item =>
     item.slug === (this.layer()?.hierarchy ?? this.chosenHierarchy())));
+  readonly depth = computed(() => this.layer()?.depth ?? this.chosenDepth());
+  readonly missing = computed(() => {
+    const hierarchy = this.role() === 'hierarchy';
+    return {
+      hierarchy: this.checked() && hierarchy && !this.layer() && !this.hierarchy(),
+      depth: this.checked() && hierarchy && this.depth() === null
+    };
+  });
   readonly draft = signal<Draft | null>(null);
   readonly version = signal('');
   readonly days = signal(30);
@@ -75,7 +107,24 @@ export class Layers implements OnInit {
   readonly busy = signal(false);
   readonly loadingDraft = signal(false);
   readonly error = signal('');
-  readonly hasBlockingProblems = computed(() => this.draft()?.problems.some(problem => problem.blocksPublish) ?? false);
+  readonly blockingCount = computed(() => this.draft()?.problems.filter(problem => problem.blocksPublish).length ?? 0);
+  readonly hasBlockingProblems = computed(() => this.blockingCount() > 0);
+  /** Blocking problems first, keeping the server's order within each group. */
+  readonly sortedProblems = computed(() => [...this.draft()?.problems ?? []]
+    .sort((a, b) => Number(b.blocksPublish) - Number(a.blocksPublish)));
+
+  // Labels shown in the select triggers.
+  readonly layerLabel = (slug: string) => {
+    const item = this.catalog()?.layers.find(layer => layer.slug === slug);
+    return item ? item.name + ' (' + item.slug + ')' : 'New layer';
+  };
+  readonly roleLabel = (role: Role) => this.roleLabels[role];
+  readonly hierarchyLabel = (slug: string) => this.catalog()?.hierarchies.find(item => item.slug === slug)?.name ?? slug;
+  readonly levelLabel = (depth: number) => this.hierarchy()?.levels?.find(level => level.depth === depth)?.name ?? String(depth);
+  readonly uploadLabel = (versionId: string) => {
+    const upload = this.catalog()?.uploads.find(item => item.versionId === versionId);
+    return upload ? upload.layerName + ' · Version ' + upload.version + ' · ' + this.statusLabels[upload.status] : versionId;
+  };
 
   ngOnInit(): void {
     this.loadCatalog();
@@ -88,6 +137,13 @@ export class Layers implements OnInit {
   }
 
   upload(form: HTMLFormElement): void {
+    this.checked.set(true);
+    const missing = this.missing();
+    if (missing.hierarchy || missing.depth) {
+      form.querySelector<HTMLElement>(missing.hierarchy ? '#layer-hierarchy' : '#layer-depth')?.focus();
+      return;
+    }
+    this.checked.set(false);
     const data = new FormData(form);
     const layer = this.layer();
     const settings: Record<string, string | number> = {};
@@ -102,10 +158,9 @@ export class Layers implements OnInit {
     }
     data.set('role', this.role());
     if (this.role() === 'hierarchy') {
-      settings['depth'] = layer?.depth ?? Number(data.get('depth'));
+      settings['depth'] = this.depth() ?? 0;
       data.set('hierarchy', this.hierarchy()?.slug ?? '');
     }
-    data.delete('depth');
     data.set('settings', JSON.stringify(settings));
     this.run(this.http.post<Draft>(this.base, data), draft => {
       this.open(draft.versionId, draft);
@@ -139,6 +194,16 @@ export class Layers implements OnInit {
   selectRole(role: string): void {
     const selection = this.roles.find(item => item === role);
     if (selection) this.chosenRole.set(selection);
+  }
+
+  chooseHierarchy(slug: string): void {
+    this.chosenHierarchy.set(slug);
+    this.chosenDepth.set(null);
+  }
+
+  cancelPublish(): void {
+    this.confirming.set(false);
+    this.removeGrants.set(false);
   }
 
   changeDays(days: number): void {
