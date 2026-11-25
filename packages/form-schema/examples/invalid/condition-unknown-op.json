@@ -1,0 +1,60 @@
+{
+  "expected": "sections[0].items[1].showWhen.op must be one of: all, any, not, answered, equals, not-equals, more-than, at-least, less-than, at-most, includes.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "weather",
+            "type": "single-choice",
+            "label": {
+              "en": "Weather"
+            },
+            "choices": [
+              {
+                "key": "dry",
+                "label": {
+                  "en": "Dry"
+                }
+              },
+              {
+                "key": "windy",
+                "label": {
+                  "en": "Windy"
+                }
+              },
+              {
+                "key": "rain",
+                "label": {
+                  "en": "Rain"
+                }
+              }
+            ]
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "bigger",
+              "field": "weather",
+              "value": "dry"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

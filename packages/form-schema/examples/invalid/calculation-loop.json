@@ -1,0 +1,52 @@
+{
+  "expected": "Field \"one\" depends on itself: one → two → one.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "one",
+            "type": "calculated",
+            "label": {
+              "en": "One"
+            },
+            "calculate": {
+              "op": "field",
+              "field": "two"
+            }
+          },
+          {
+            "key": "two",
+            "type": "calculated",
+            "label": {
+              "en": "Two"
+            },
+            "calculate": {
+              "op": "add",
+              "args": [
+                {
+                  "op": "field",
+                  "field": "one"
+                },
+                {
+                  "op": "number",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

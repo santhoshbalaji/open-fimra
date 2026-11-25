@@ -1,0 +1,40 @@
+{
+  "expected": "Field \"notes\": showWhen cannot use \"more-than\" on \"cause\", which is a text field.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "cause",
+            "type": "text",
+            "label": {
+              "en": "Cause"
+            }
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "more-than",
+              "field": "cause",
+              "value": "a"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

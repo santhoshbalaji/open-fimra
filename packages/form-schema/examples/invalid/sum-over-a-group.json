@@ -1,0 +1,49 @@
+{
+  "expected": "Field \"total\": calculate needs a repeating group, but \"details\" is a group.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "details",
+            "type": "group",
+            "title": {
+              "en": "Details"
+            },
+            "items": [
+              {
+                "key": "members",
+                "type": "number",
+                "label": {
+                  "en": "Members"
+                }
+              }
+            ]
+          },
+          {
+            "key": "total",
+            "type": "calculated",
+            "label": {
+              "en": "Total"
+            },
+            "calculate": {
+              "op": "sum",
+              "group": "details",
+              "field": "members"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

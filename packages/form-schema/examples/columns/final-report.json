@@ -1,0 +1,106 @@
+[
+  {
+    "name": "alert_id",
+    "field": "alert_id",
+    "valueType": "text"
+  },
+  {
+    "name": "observed_at",
+    "field": "observed_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "extinguished_at",
+    "field": "extinguished_at",
+    "valueType": "date-time"
+  },
+  {
+    "name": "duration_hours",
+    "field": "duration_hours",
+    "valueType": "number",
+    "unit": "h"
+  },
+  {
+    "name": "burnt_extent",
+    "field": "burnt_extent",
+    "valueType": "polygon"
+  },
+  {
+    "name": "burnt_extent_area_ha",
+    "field": "burnt_extent",
+    "valueType": "number",
+    "unit": "ha"
+  },
+  {
+    "name": "perimeter_walk",
+    "field": "perimeter_walk",
+    "valueType": "line"
+  },
+  {
+    "name": "perimeter_walk_length_km",
+    "field": "perimeter_walk",
+    "valueType": "number",
+    "unit": "km"
+  },
+  {
+    "name": "compartment_name",
+    "field": "compartment_name",
+    "valueType": "text",
+    "repeat": "compartments"
+  },
+  {
+    "name": "compartment_area",
+    "field": "compartment_area",
+    "valueType": "number",
+    "unit": "ha",
+    "repeat": "compartments"
+  },
+  {
+    "name": "compartment_total",
+    "field": "compartment_total",
+    "valueType": "number",
+    "unit": "ha"
+  },
+  {
+    "name": "damage_types",
+    "field": "damage_types",
+    "valueType": "choices"
+  },
+  {
+    "name": "wildlife_notes",
+    "field": "wildlife_notes",
+    "valueType": "text"
+  },
+  {
+    "name": "property_loss",
+    "field": "property_loss",
+    "valueType": "number",
+    "unit": "rupees"
+  },
+  {
+    "name": "injuries",
+    "field": "injuries",
+    "valueType": "number",
+    "unit": "people"
+  },
+  {
+    "name": "injury_details",
+    "field": "injury_details",
+    "valueType": "text"
+  },
+  {
+    "name": "report_files",
+    "field": "report_files",
+    "valueType": "attachments"
+  },
+  {
+    "name": "officer_signature",
+    "field": "officer_signature",
+    "valueType": "attachment"
+  },
+  {
+    "name": "signed_on",
+    "field": "signed_on",
+    "valueType": "date"
+  }
+]

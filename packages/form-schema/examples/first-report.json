@@ -1,0 +1,184 @@
+{
+  "$schema": "../form.schema.json",
+  "formatVersion": 1,
+  "id": "first-report",
+  "version": 1,
+  "title": { "en": "First report", "hi": "प्रारंभिक रिपोर्ट" },
+  "description": {
+    "en": "Draft for the Demo State starter pack. The first report from the site, sent soon after the fire is under control."
+  },
+  "lists": [
+    {
+      "key": "cause_groups",
+      "choices": [
+        { "key": "human", "label": { "en": "Caused by people" } },
+        { "key": "natural", "label": { "en": "Natural" } },
+        { "key": "unknown", "label": { "en": "Not known yet" } }
+      ]
+    },
+    {
+      "key": "causes",
+      "choices": [
+        { "key": "campfire", "label": { "en": "Campfire or cooking" }, "parent": "human" },
+        { "key": "field-burning", "label": { "en": "Burning on nearby fields" }, "parent": "human" },
+        { "key": "smoking", "label": { "en": "Cigarette or match" }, "parent": "human" },
+        { "key": "human-other", "label": { "en": "Other human cause" }, "parent": "human" },
+        { "key": "lightning", "label": { "en": "Lightning" }, "parent": "natural" },
+        { "key": "natural-other", "label": { "en": "Other natural cause" }, "parent": "natural" },
+        { "key": "under-inquiry", "label": { "en": "Under inquiry" }, "parent": "unknown" }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "key": "summary",
+      "title": { "en": "Summary" },
+      "items": [
+        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at" }, "source": "observed-at" },
+        { "key": "alert_location", "type": "alert-value", "label": { "en": "Alert location" }, "source": "location" },
+        { "key": "reached_at", "type": "date-time", "label": { "en": "Team reached the site at" }, "required": true, "notInFuture": true },
+        {
+          "key": "hours_to_reach",
+          "type": "calculated",
+          "label": { "en": "Hours from the alert to reaching the site" },
+          "unit": "h",
+          "decimals": 1,
+          "calculate": { "op": "hours-between", "start": "observed_at", "end": "reached_at" }
+        }
+      ]
+    },
+    {
+      "key": "fire",
+      "title": { "en": "The fire" },
+      "items": [
+        {
+          "key": "fire_status",
+          "type": "single-choice",
+          "label": { "en": "Fire now" },
+          "required": true,
+          "choices": [
+            { "key": "active", "label": { "en": "Still burning" } },
+            { "key": "controlled", "label": { "en": "Under control" } },
+            { "key": "extinguished", "label": { "en": "Put out" } }
+          ]
+        },
+        { "key": "cause_group", "type": "single-choice", "label": { "en": "Kind of cause" }, "required": true, "list": "cause_groups" },
+        {
+          "key": "cause",
+          "type": "single-choice",
+          "label": { "en": "Likely cause" },
+          "required": true,
+          "list": "causes",
+          "parent": "cause_group"
+        },
+        {
+          "key": "cause_notes",
+          "type": "text",
+          "label": { "en": "Describe the cause" },
+          "required": true,
+          "maxLength": 500,
+          "showWhen": {
+            "op": "any",
+            "conditions": [
+              { "op": "equals", "field": "cause", "value": "human-other" },
+              { "op": "equals", "field": "cause", "value": "natural-other" }
+            ]
+          }
+        },
+        {
+          "key": "estimated_area",
+          "type": "number",
+          "label": { "en": "Area burnt so far" },
+          "hint": { "en": "A rough estimate. The final report measures it." },
+          "required": true,
+          "unit": "ha",
+          "decimals": 2,
+          "min": 0,
+          "max": 10000
+        },
+        {
+          "key": "vegetation",
+          "type": "multiple-choice",
+          "label": { "en": "What is burning" },
+          "minSelected": 1,
+          "choices": [
+            { "key": "grass", "label": { "en": "Grass" } },
+            { "key": "scrub", "label": { "en": "Scrub" } },
+            { "key": "leaf-litter", "label": { "en": "Fallen leaves" } },
+            { "key": "trees", "label": { "en": "Standing trees" } },
+            { "key": "plantation", "label": { "en": "Plantation" } }
+          ]
+        },
+        { "key": "site_photos", "type": "photo", "label": { "en": "Photos of the site" }, "required": true, "minCount": 1, "maxCount": 5 }
+      ]
+    },
+    {
+      "key": "response",
+      "title": { "en": "Response" },
+      "items": [
+        {
+          "key": "teams",
+          "type": "repeat",
+          "title": { "en": "Teams on site" },
+          "itemLabel": { "en": "Team" },
+          "minRepeats": 1,
+          "maxRepeats": 20,
+          "items": [
+            { "key": "team_name", "type": "text", "label": { "en": "Team name" }, "required": true, "maxLength": 80 },
+            {
+              "key": "members",
+              "type": "number",
+              "label": { "en": "People" },
+              "required": true,
+              "unit": "people",
+              "decimals": 0,
+              "min": 1,
+              "max": 200
+            },
+            { "key": "team_arrived", "type": "time", "label": { "en": "Arrived at" } }
+          ]
+        },
+        {
+          "key": "total_staff",
+          "type": "calculated",
+          "label": { "en": "People on site" },
+          "unit": "people",
+          "decimals": 0,
+          "calculate": { "op": "sum", "group": "teams", "field": "members" }
+        },
+        { "key": "team_count", "type": "calculated", "label": { "en": "Teams on site" }, "decimals": 0, "calculate": { "op": "count", "group": "teams" } },
+        {
+          "key": "equipment",
+          "type": "multiple-choice",
+          "label": { "en": "Equipment used" },
+          "choices": [
+            { "key": "beaters", "label": { "en": "Fire beaters" } },
+            { "key": "blowers", "label": { "en": "Leaf blowers" } },
+            { "key": "water", "label": { "en": "Water" } },
+            { "key": "fire-line", "label": { "en": "Cut a fire line" } }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sign_off",
+      "title": { "en": "Sign off" },
+      "items": [
+        { "key": "remarks", "type": "text", "label": { "en": "Remarks" }, "maxLength": 1000 },
+        { "key": "reporter_signature", "type": "signature", "label": { "en": "Signature of the reporting officer" }, "required": true }
+      ]
+    }
+  ],
+  "layout": {
+    "items": [
+      { "item": "summary", "collapsed": true },
+      { "item": "fire_status", "widget": "radio" },
+      { "item": "cause_group", "widget": "buttons" },
+      { "item": "cause", "widget": "dropdown" },
+      { "item": "vegetation", "widget": "checkboxes" },
+      { "item": "team_name", "width": "half" },
+      { "item": "members", "widget": "stepper", "width": "half" },
+      { "item": "remarks", "widget": "paragraph" }
+    ]
+  }
+}

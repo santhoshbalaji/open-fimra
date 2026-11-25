@@ -1,0 +1,39 @@
+{
+  "expected": "Field \"patch_length\": calculate takes the length of \"patch\", which is not a walked track.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "patch",
+            "type": "polygon",
+            "label": {
+              "en": "Patch"
+            }
+          },
+          {
+            "key": "patch_length",
+            "type": "calculated",
+            "label": {
+              "en": "Patch length"
+            },
+            "calculate": {
+              "op": "length",
+              "field": "patch"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

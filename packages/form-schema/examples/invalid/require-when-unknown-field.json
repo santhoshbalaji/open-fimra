@@ -1,0 +1,32 @@
+{
+  "expected": "Field \"notes\": requireWhen refers to \"cause\", which does not exist.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "requireWhen": {
+              "op": "answered",
+              "field": "cause"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -196,6 +196,15 @@ api-lint: ## Check core API formatting and run Go vet
 	cd services/api && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
 	cd services/api && go vet ./...
 
+.PHONY: form-schema-test
+FORM_SCHEMA := packages/form-schema
+form-schema-test: ## Run the Go and TypeScript form validators on the shared examples (needs make web-install)
+	cd $(FORM_SCHEMA) && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
+	cd $(FORM_SCHEMA) && go vet ./... && go test -count=1 ./...
+	node --test $(FORM_SCHEMA)/ts/form-schema.test.ts
+	@test -x apps/web/node_modules/.bin/tsc || { echo "Run make web-install first: the type check uses the web app's TypeScript."; exit 1; }
+	apps/web/node_modules/.bin/tsc -p $(FORM_SCHEMA)/tsconfig.json
+
 check: ## Run the repository checks that continuous integration runs
 	scripts/check-repo.sh
 	python3 seed/generate.py --check

@@ -1,0 +1,584 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/santhoshbalaji/open-fimra/blob/main/packages/form-schema/form.schema.json",
+  "title": "Open FIMRA form definition, format 1",
+  "description": "Describes one version of a form. SPEC.md in the same folder explains every part. The validators in this folder also apply the rules that a JSON Schema cannot express.",
+  "type": "object",
+  "required": ["formatVersion", "id", "version", "title", "sections"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "formatVersion": { "const": 1 },
+    "id": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 60,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+      "x-patternMessage": "must use small letters and digits, with single hyphens between words, and start with a letter"
+    },
+    "version": { "type": "integer", "minimum": 1 },
+    "title": { "$ref": "#/$defs/text" },
+    "description": { "$ref": "#/$defs/text" },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/languageCode" }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "lists": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/list" }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "layout": { "$ref": "#/$defs/layout" }
+  },
+  "$defs": {
+    "languageCode": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+      "x-patternMessage": "must be a language code such as en or hi"
+    },
+    "text": {
+      "description": "Words shown to people, by language. English is always required.",
+      "type": "object",
+      "required": ["en"],
+      "propertyNames": { "$ref": "#/$defs/languageCode" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 2000 }
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "x-patternMessage": "must start with a small letter and use only small letters, digits and underscores"
+    },
+    "choiceKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "x-patternMessage": "must use only small letters, digits, underscores and hyphens, and start with a letter or digit"
+    },
+    "workflowStep": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "x-patternMessage": "must be a workflow step name such as first_report"
+    },
+    "stage": {
+      "type": "object",
+      "required": ["key", "title", "workflowStep"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "title": { "$ref": "#/$defs/text" },
+        "workflowStep": { "$ref": "#/$defs/workflowStep" }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/choiceKey" },
+        "label": { "$ref": "#/$defs/text" },
+        "parent": { "$ref": "#/$defs/choiceKey" }
+      }
+    },
+    "choices": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/choice" }
+    },
+    "list": {
+      "type": "object",
+      "required": ["key", "choices"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "choices": { "$ref": "#/$defs/choices" }
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "section": {
+      "type": "object",
+      "required": ["key", "title", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "title": { "$ref": "#/$defs/text" },
+        "description": { "$ref": "#/$defs/text" },
+        "stage": { "$ref": "#/$defs/key" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "items": { "$ref": "#/$defs/items" }
+      }
+    },
+    "item": {
+      "description": "A field, a group or a repeating group. The type decides which other properties are allowed.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": [
+            "group", "repeat", "text", "number", "date", "time", "date-time",
+            "single-choice", "multiple-choice", "point", "track", "polygon",
+            "photo", "signature", "file", "calculated", "alert-value"
+          ]
+        }
+      },
+      "allOf": [
+        { "if": { "required": ["type"], "properties": { "type": { "const": "group" } } }, "then": { "$ref": "#/$defs/group" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "repeat" } } }, "then": { "$ref": "#/$defs/repeat" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "text" } } }, "then": { "$ref": "#/$defs/textField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "number" } } }, "then": { "$ref": "#/$defs/numberField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "date" } } }, "then": { "$ref": "#/$defs/dateField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "time" } } }, "then": { "$ref": "#/$defs/timeField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "date-time" } } }, "then": { "$ref": "#/$defs/dateField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "single-choice" } } }, "then": { "$ref": "#/$defs/singleChoiceField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "multiple-choice" } } }, "then": { "$ref": "#/$defs/multipleChoiceField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "point" } } }, "then": { "$ref": "#/$defs/geometryField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "track" } } }, "then": { "$ref": "#/$defs/geometryField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "polygon" } } }, "then": { "$ref": "#/$defs/geometryField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "photo" } } }, "then": { "$ref": "#/$defs/photoField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "signature" } } }, "then": { "$ref": "#/$defs/signatureField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "file" } } }, "then": { "$ref": "#/$defs/fileField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "calculated" } } }, "then": { "$ref": "#/$defs/calculatedField" } },
+        { "if": { "required": ["type"], "properties": { "type": { "const": "alert-value" } } }, "then": { "$ref": "#/$defs/alertValueField" } }
+      ]
+    },
+    "group": {
+      "type": "object",
+      "required": ["key", "title", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "group" },
+        "title": { "$ref": "#/$defs/text" },
+        "description": { "$ref": "#/$defs/text" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "items": { "$ref": "#/$defs/items" }
+      }
+    },
+    "repeat": {
+      "type": "object",
+      "required": ["key", "title", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "repeat" },
+        "title": { "$ref": "#/$defs/text" },
+        "description": { "$ref": "#/$defs/text" },
+        "itemLabel": { "$ref": "#/$defs/text" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "minRepeats": { "type": "integer", "minimum": 0, "maximum": 500 },
+        "maxRepeats": { "type": "integer", "minimum": 1, "maximum": 500 },
+        "items": { "$ref": "#/$defs/items" }
+      }
+    },
+    "textField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "text" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "minLength": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "pattern": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "patternHint": { "$ref": "#/$defs/text" }
+      }
+    },
+    "numberField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "number" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "unit": { "$ref": "#/$defs/unit" },
+        "decimals": { "$ref": "#/$defs/decimals" },
+        "min": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "dateField": {
+      "description": "A date, or a date and time.",
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "enum": ["date", "date-time"] },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "notInFuture": { "type": "boolean" }
+      }
+    },
+    "timeField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "time" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" }
+      }
+    },
+    "singleChoiceField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "single-choice" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "choices": { "$ref": "#/$defs/choices" },
+        "list": { "$ref": "#/$defs/key" },
+        "parent": { "$ref": "#/$defs/key" }
+      }
+    },
+    "multipleChoiceField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "multiple-choice" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "choices": { "$ref": "#/$defs/choices" },
+        "list": { "$ref": "#/$defs/key" },
+        "parent": { "$ref": "#/$defs/key" },
+        "minSelected": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "maxSelected": { "type": "integer", "minimum": 1, "maximum": 1000 }
+      }
+    },
+    "geometryField": {
+      "description": "A GPS point, a walked track or a drawn area.",
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "enum": ["point", "track", "polygon"] },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "maxAccuracyMetres": { "type": "number", "minimum": 1, "maximum": 10000 }
+      }
+    },
+    "photoField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "photo" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "minCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "maxCount": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "signatureField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "signature" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" }
+      }
+    },
+    "fileField": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "file" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "requireWhen": { "$ref": "#/$defs/condition" },
+        "minCount": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "maxCount": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "maxSizeMegabytes": { "type": "number", "minimum": 1, "maximum": 100 },
+        "accept": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^\\.[a-z0-9]{1,10}$",
+            "x-patternMessage": "must be a file ending such as .pdf"
+          }
+        }
+      }
+    },
+    "calculatedField": {
+      "type": "object",
+      "required": ["key", "label", "calculate"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "calculated" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "unit": { "$ref": "#/$defs/unit" },
+        "decimals": { "$ref": "#/$defs/decimals" },
+        "calculate": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "alertValueField": {
+      "type": "object",
+      "required": ["key", "label", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "type": { "const": "alert-value" },
+        "label": { "$ref": "#/$defs/text" },
+        "hint": { "$ref": "#/$defs/text" },
+        "showWhen": { "$ref": "#/$defs/condition" },
+        "source": {
+          "enum": [
+            "alert-id", "observed-at", "raised-at", "location", "unit",
+            "forest-class", "source", "confidence", "fire-power"
+          ]
+        }
+      }
+    },
+    "unit": { "type": "string", "minLength": 1, "maxLength": 20 },
+    "decimals": { "type": "integer", "minimum": 0, "maximum": 6 },
+    "condition": {
+      "description": "A test on the answers so far. The op decides the other properties.",
+      "type": "object",
+      "required": ["op"],
+      "properties": {
+        "op": {
+          "enum": [
+            "all", "any", "not", "answered", "equals", "not-equals",
+            "more-than", "at-least", "less-than", "at-most", "includes"
+          ]
+        }
+      },
+      "allOf": [
+        { "if": { "required": ["op"], "properties": { "op": { "enum": ["all", "any"] } } }, "then": { "$ref": "#/$defs/conditionList" } },
+        { "if": { "required": ["op"], "properties": { "op": { "const": "not" } } }, "then": { "$ref": "#/$defs/conditionNot" } },
+        { "if": { "required": ["op"], "properties": { "op": { "const": "answered" } } }, "then": { "$ref": "#/$defs/conditionAnswered" } },
+        {
+          "if": { "required": ["op"], "properties": { "op": { "enum": ["equals", "not-equals", "more-than", "at-least", "less-than", "at-most", "includes"] } } },
+          "then": { "$ref": "#/$defs/conditionCompare" }
+        }
+      ]
+    },
+    "conditionList": {
+      "type": "object",
+      "required": ["conditions"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "enum": ["all", "any"] },
+        "conditions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } }
+      }
+    },
+    "conditionNot": {
+      "type": "object",
+      "required": ["condition"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "not" },
+        "condition": { "$ref": "#/$defs/condition" }
+      }
+    },
+    "conditionAnswered": {
+      "type": "object",
+      "required": ["field"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "answered" },
+        "field": { "$ref": "#/$defs/key" }
+      }
+    },
+    "conditionCompare": {
+      "type": "object",
+      "required": ["field", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "type": "string" },
+        "field": { "$ref": "#/$defs/key" },
+        "value": {}
+      }
+    },
+    "expression": {
+      "description": "A calculation. The op decides the other properties.",
+      "type": "object",
+      "required": ["op"],
+      "properties": {
+        "op": {
+          "enum": [
+            "number", "field", "add", "subtract", "multiply", "divide",
+            "sum", "count", "area", "length", "hours-between"
+          ]
+        }
+      },
+      "allOf": [
+        { "if": { "required": ["op"], "properties": { "op": { "const": "number" } } }, "then": { "$ref": "#/$defs/expressionNumber" } },
+        { "if": { "required": ["op"], "properties": { "op": { "enum": ["field", "area", "length"] } } }, "then": { "$ref": "#/$defs/expressionField" } },
+        { "if": { "required": ["op"], "properties": { "op": { "enum": ["add", "multiply"] } } }, "then": { "$ref": "#/$defs/expressionMany" } },
+        { "if": { "required": ["op"], "properties": { "op": { "enum": ["subtract", "divide"] } } }, "then": { "$ref": "#/$defs/expressionPair" } },
+        { "if": { "required": ["op"], "properties": { "op": { "const": "sum" } } }, "then": { "$ref": "#/$defs/expressionSum" } },
+        { "if": { "required": ["op"], "properties": { "op": { "const": "count" } } }, "then": { "$ref": "#/$defs/expressionCount" } },
+        { "if": { "required": ["op"], "properties": { "op": { "const": "hours-between" } } }, "then": { "$ref": "#/$defs/expressionHours" } }
+      ]
+    },
+    "expressionNumber": {
+      "type": "object",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "number" },
+        "value": { "type": "number" }
+      }
+    },
+    "expressionField": {
+      "type": "object",
+      "required": ["field"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "enum": ["field", "area", "length"] },
+        "field": { "$ref": "#/$defs/key" }
+      }
+    },
+    "expressionMany": {
+      "type": "object",
+      "required": ["args"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "enum": ["add", "multiply"] },
+        "args": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/expression" } }
+      }
+    },
+    "expressionPair": {
+      "type": "object",
+      "required": ["args"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "enum": ["subtract", "divide"] },
+        "args": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/expression" } }
+      }
+    },
+    "expressionSum": {
+      "type": "object",
+      "required": ["group", "field"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "sum" },
+        "group": { "$ref": "#/$defs/key" },
+        "field": { "$ref": "#/$defs/key" }
+      }
+    },
+    "expressionCount": {
+      "type": "object",
+      "required": ["group"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "count" },
+        "group": { "$ref": "#/$defs/key" }
+      }
+    },
+    "expressionHours": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "op": { "const": "hours-between" },
+        "start": { "$ref": "#/$defs/key" },
+        "end": { "$ref": "#/$defs/key" }
+      }
+    },
+    "layout": {
+      "description": "How to show the form. It never changes what data the form collects.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/page" }
+        },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/layoutItem" }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["key", "sections"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "title": { "$ref": "#/$defs/text" },
+        "sections": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/key" } }
+      }
+    },
+    "layoutItem": {
+      "type": "object",
+      "required": ["item"],
+      "additionalProperties": false,
+      "properties": {
+        "item": { "$ref": "#/$defs/key" },
+        "widget": { "enum": ["line", "paragraph", "input", "stepper", "radio", "dropdown", "buttons", "checkboxes"] },
+        "width": { "enum": ["full", "half"] },
+        "collapsed": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "expected": "Field \"notes\": showWhen refers to \"site_notes\", which is filled in at a later stage.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "answered",
+              "field": "site_notes"
+            }
+          }
+        ],
+        "stage": "sent"
+      },
+      {
+        "key": "site",
+        "title": {
+          "en": "Site"
+        },
+        "items": [
+          {
+            "key": "site_notes",
+            "type": "text",
+            "label": {
+              "en": "Site notes"
+            }
+          }
+        ],
+        "stage": "arrived"
+      }
+    ],
+    "stages": [
+      {
+        "key": "sent",
+        "title": {
+          "en": "Team sent"
+        },
+        "workflowStep": "team_sent"
+      },
+      {
+        "key": "arrived",
+        "title": {
+          "en": "Reached site"
+        },
+        "workflowStep": "reached_site"
+      }
+    ]
+  }
+}

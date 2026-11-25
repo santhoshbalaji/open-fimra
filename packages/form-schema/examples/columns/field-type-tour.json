@@ -1,0 +1,149 @@
+[
+  {
+    "name": "short_code",
+    "field": "short_code",
+    "valueType": "text"
+  },
+  {
+    "name": "count_seen",
+    "field": "count_seen",
+    "valueType": "number"
+  },
+  {
+    "name": "visit_date",
+    "field": "visit_date",
+    "valueType": "date"
+  },
+  {
+    "name": "visit_time",
+    "field": "visit_time",
+    "valueType": "time"
+  },
+  {
+    "name": "visit_moment",
+    "field": "visit_moment",
+    "valueType": "date-time"
+  },
+  {
+    "name": "weather",
+    "field": "weather",
+    "valueType": "choice"
+  },
+  {
+    "name": "hazards",
+    "field": "hazards",
+    "valueType": "choices"
+  },
+  {
+    "name": "hazard_notes",
+    "field": "hazard_notes",
+    "valueType": "text"
+  },
+  {
+    "name": "spot",
+    "field": "spot",
+    "valueType": "point"
+  },
+  {
+    "name": "path",
+    "field": "path",
+    "valueType": "line"
+  },
+  {
+    "name": "path_length_km",
+    "field": "path",
+    "valueType": "number",
+    "unit": "km"
+  },
+  {
+    "name": "patch",
+    "field": "patch",
+    "valueType": "polygon"
+  },
+  {
+    "name": "patch_area_ha",
+    "field": "patch",
+    "valueType": "number",
+    "unit": "ha"
+  },
+  {
+    "name": "patch_area",
+    "field": "patch_area",
+    "valueType": "number",
+    "unit": "ha"
+  },
+  {
+    "name": "path_length",
+    "field": "path_length",
+    "valueType": "number",
+    "unit": "km"
+  },
+  {
+    "name": "picture",
+    "field": "picture",
+    "valueType": "attachments"
+  },
+  {
+    "name": "witness_signature",
+    "field": "witness_signature",
+    "valueType": "attachment"
+  },
+  {
+    "name": "attachment",
+    "field": "attachment",
+    "valueType": "attachments"
+  },
+  {
+    "name": "alert_confidence",
+    "field": "alert_confidence",
+    "valueType": "text"
+  },
+  {
+    "name": "alert_raised",
+    "field": "alert_raised",
+    "valueType": "date-time"
+  },
+  {
+    "name": "alert_source",
+    "field": "alert_source",
+    "valueType": "text"
+  },
+  {
+    "name": "crew_size",
+    "field": "crew_size",
+    "valueType": "number",
+    "unit": "people",
+    "repeat": "crews"
+  },
+  {
+    "name": "shift_hours",
+    "field": "shift_hours",
+    "valueType": "number",
+    "unit": "h",
+    "repeat": "shifts"
+  },
+  {
+    "name": "shift_effort",
+    "field": "shift_effort",
+    "valueType": "number",
+    "unit": "h",
+    "repeat": "shifts"
+  },
+  {
+    "name": "crew_hours",
+    "field": "crew_hours",
+    "valueType": "number",
+    "unit": "h",
+    "repeat": "crews"
+  },
+  {
+    "name": "average_crew",
+    "field": "average_crew",
+    "valueType": "number"
+  },
+  {
+    "name": "spare_people",
+    "field": "spare_people",
+    "valueType": "number"
+  }
+]

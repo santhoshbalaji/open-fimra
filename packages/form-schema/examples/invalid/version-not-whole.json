@@ -1,0 +1,28 @@
+{
+  "expected": "version must be a whole number.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1.5,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

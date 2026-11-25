@@ -1,0 +1,31 @@
+{
+  "expected": "sections[0].items[0].accept[0] must be a file ending such as .pdf.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "papers",
+            "type": "file",
+            "label": {
+              "en": "Papers"
+            },
+            "accept": [
+              "pdf"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

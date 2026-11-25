@@ -14,6 +14,7 @@
     "experimentalDecorators": true,
     "isolatedModules": true,
     "paths": {
+      "@open-fimra/form-schema": ["../../packages/form-schema/ts/form-schema.ts"],
       "@spartan-ng/helm/button": ["./src/ui/button/src/index.ts"],
       "@spartan-ng/helm/utils": ["./src/ui/utils/src/index.ts"],
       "@spartan-ng/helm/field": ["./src/ui/field/src/index.ts"],

@@ -1,0 +1,34 @@
+{
+  "expected": "languages must include \"en\".",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example",
+      "hi": "टूटा हुआ उदाहरण"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main",
+          "hi": "मुख्य"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes",
+              "hi": "टिप्पणी"
+            }
+          }
+        ]
+      }
+    ],
+    "languages": [
+      "hi"
+    ]
+  }
+}

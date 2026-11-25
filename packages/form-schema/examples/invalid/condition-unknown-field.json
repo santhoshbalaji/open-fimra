@@ -1,0 +1,60 @@
+{
+  "expected": "Field \"notes\": showWhen refers to \"wether\", which does not exist.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "weather",
+            "type": "single-choice",
+            "label": {
+              "en": "Weather"
+            },
+            "choices": [
+              {
+                "key": "dry",
+                "label": {
+                  "en": "Dry"
+                }
+              },
+              {
+                "key": "windy",
+                "label": {
+                  "en": "Windy"
+                }
+              },
+              {
+                "key": "rain",
+                "label": {
+                  "en": "Rain"
+                }
+              }
+            ]
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "equals",
+              "field": "wether",
+              "value": "dry"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

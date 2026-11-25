@@ -1,0 +1,49 @@
+{
+  "expected": "sections[0].items[1] has \"required\", which is not allowed here.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "area",
+            "type": "number",
+            "label": {
+              "en": "Area"
+            }
+          },
+          {
+            "key": "double_area",
+            "type": "calculated",
+            "label": {
+              "en": "Double area"
+            },
+            "calculate": {
+              "op": "multiply",
+              "args": [
+                {
+                  "op": "field",
+                  "field": "area"
+                },
+                {
+                  "op": "number",
+                  "value": 2
+                }
+              ]
+            },
+            "required": true
+          }
+        ]
+      }
+    ]
+  }
+}

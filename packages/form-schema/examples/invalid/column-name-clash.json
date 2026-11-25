@@ -1,0 +1,35 @@
+{
+  "expected": "Field \"burnt\": the column \"burnt_area_ha\" it adds clashes with another key.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "burnt",
+            "type": "polygon",
+            "label": {
+              "en": "Burnt area"
+            }
+          },
+          {
+            "key": "burnt_area_ha",
+            "type": "number",
+            "label": {
+              "en": "Burnt area ha"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

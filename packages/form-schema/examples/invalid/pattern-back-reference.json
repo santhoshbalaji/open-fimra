@@ -1,0 +1,29 @@
+{
+  "expected": "Field \"notes\": pattern uses \"\\1\", which not every device supports.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "pattern": "(a)\\1"
+          }
+        ]
+      }
+    ]
+  }
+}

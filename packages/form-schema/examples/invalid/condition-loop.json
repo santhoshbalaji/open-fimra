@@ -1,0 +1,43 @@
+{
+  "expected": "Field \"first\" depends on itself: first → second → first.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "first",
+            "type": "text",
+            "label": {
+              "en": "First"
+            },
+            "showWhen": {
+              "op": "answered",
+              "field": "second"
+            }
+          },
+          {
+            "key": "second",
+            "type": "text",
+            "label": {
+              "en": "Second"
+            },
+            "showWhen": {
+              "op": "answered",
+              "field": "first"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

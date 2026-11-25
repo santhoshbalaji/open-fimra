@@ -1,0 +1,48 @@
+{
+  "expected": "Field \"notes\": showWhen refers to \"members\", which is inside the repeating group \"teams\".",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "teams",
+            "type": "repeat",
+            "title": {
+              "en": "Teams"
+            },
+            "items": [
+              {
+                "key": "members",
+                "type": "number",
+                "label": {
+                  "en": "Members"
+                }
+              }
+            ]
+          },
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            },
+            "showWhen": {
+              "op": "answered",
+              "field": "members"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

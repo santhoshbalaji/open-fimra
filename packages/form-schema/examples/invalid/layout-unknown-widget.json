@@ -1,0 +1,36 @@
+{
+  "expected": "layout.items[0].widget must be one of: line, paragraph, input, stepper, radio, dropdown, buttons, checkboxes.",
+  "form": {
+    "formatVersion": 1,
+    "id": "broken-example",
+    "version": 1,
+    "title": {
+      "en": "Broken example"
+    },
+    "sections": [
+      {
+        "key": "main",
+        "title": {
+          "en": "Main"
+        },
+        "items": [
+          {
+            "key": "notes",
+            "type": "text",
+            "label": {
+              "en": "Notes"
+            }
+          }
+        ]
+      }
+    ],
+    "layout": {
+      "items": [
+        {
+          "item": "notes",
+          "widget": "slider"
+        }
+      ]
+    }
+  }
+}
