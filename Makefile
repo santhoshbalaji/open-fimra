@@ -29,18 +29,24 @@ PSQL := $(COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRE
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
 .PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections
+.PHONY: backfill-firms backfill-demo backfill-queue feed-health
 
-api-run api-test-integration ingest-fixture demo-detections: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+api-run api-test-integration ingest-fixture demo-detections backfill-firms backfill-demo backfill-queue feed-health: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
-api-run: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
+api-run backfill-firms: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
 api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
 ingest-fixture: export FIMRA_FIXTURE_FILE := $(if $(FILE),$(if $(filter /%,$(FILE)),$(FILE),$(CURDIR)/$(FILE)))
 ingest-fixture: export FIMRA_FIXTURE_PRODUCT := $(or $(PRODUCT),VIIRS_SNPP_NRT)
 
+# Backfill settings. FROM and TO are UTC days in YYYY-MM-DD form, both included.
+WORKSPACE ?= demo
+PRODUCTS ?= VIIRS_SNPP_SP,MODIS_SP
+BACKFILL_FLAGS = -workspace "$(WORKSPACE)" -from "$(FROM)" -to "$(TO)" -products "$(PRODUCTS)"
+
 help: ## Show this list
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-22s %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-22s %s\n", $$1, $$2}'
 
 dev: ## Start the development stack (PostGIS and Keycloak) and wait until it is healthy
 	$(COMPOSE) up -d --wait
@@ -104,7 +110,7 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration)$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
@@ -112,6 +118,21 @@ ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 
 demo-detections: ## Load the synthetic workspace and detections at four ages
 	cd services/api && go run . ingest-firms -demo -file ../../packages/connectors/firms/fixtures/demo.csv
+
+backfill-firms: ## Backfill FIRMS standard-processing data given FROM, TO and optional WORKSPACE and PRODUCTS
+	@test -n "$(FROM)" -a -n "$(TO)" || { echo "Set FROM and TO, for example FROM=2024-01-01 TO=2024-06-30."; exit 1; }
+	cd services/api && go run . backfill-firms $(BACKFILL_FLAGS)
+
+backfill-queue: ## Queue a FIRMS backfill job for the running API given FROM, TO and optional WORKSPACE and PRODUCTS
+	@test -n "$(FROM)" -a -n "$(TO)" || { echo "Set FROM and TO, for example FROM=2024-01-01 TO=2024-06-30."; exit 1; }
+	cd services/api && go run . backfill-firms -enqueue $(BACKFILL_FLAGS)
+
+backfill-demo: ## Backfill the demo workspace from the synthetic standard-processing fixtures; safe to repeat
+	cd services/api && go run . backfill-firms -demo -workspace demo -from 2000-01-01 -to 2000-02-15 \
+		-products VIIRS_SNPP_SP,MODIS_SP -fixtures ../../packages/connectors/firms/fixtures
+
+feed-health: ## Check every workspace's live feeds once, record feed-health alerts and print each feed's status
+	cd services/api && go run . feed-health
 
 api-lint: ## Check core API formatting and run Go vet
 	cd services/api && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi

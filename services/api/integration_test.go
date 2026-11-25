@@ -143,13 +143,19 @@ func TestIntegration(t *testing.T) {
 	}
 
 	t.Run("periodic heartbeat", func(t *testing.T) {
-		select {
-		case event := <-completed:
-			if event == nil || event.Job.Kind != (heartbeatArgs{}).Kind() {
-				t.Fatal("the queue did not complete a heartbeat")
+		// Other periodic jobs, such as the feed health check, also complete.
+		for {
+			select {
+			case event := <-completed:
+				if event == nil {
+					t.Fatal("the queue stopped before it completed a heartbeat")
+				}
+				if event.Job.Kind == (heartbeatArgs{}).Kind() {
+					return
+				}
+			case <-ctx.Done():
+				t.Fatal("timed out waiting for the queue to complete a heartbeat")
 			}
-		case <-ctx.Done():
-			t.Fatal("timed out waiting for the queue to complete a heartbeat")
 		}
 	})
 }

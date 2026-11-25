@@ -81,8 +81,16 @@ jobs:
           cache-dependency-path: services/api/go.sum
       - run: make dev
       - run: make db-migrate
-      - name: Test sign-in, reference alerts, replay and access to queues and tiles
+      - name: Test sign-in, reference alerts, replay, access to queues and tiles, backfill and feed health
         run: make api-test-integration
+      - name: Backfill the demo fixtures twice; the second run must fetch nothing
+        run: |
+          make backfill-demo
+          make backfill-demo | tee backfill-repeat.log
+          grep -q 'Ran 0 chunks (0 failed)' backfill-repeat.log
+          grep -q 'inserted 0, duplicates 0' backfill-repeat.log
+      - name: Check feed health once
+        run: make feed-health
 
   layer-import:
     name: Layer import and draft review

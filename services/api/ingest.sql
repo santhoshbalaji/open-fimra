@@ -8,13 +8,47 @@ WITH input AS (
 ),
 inserted AS (
     INSERT INTO detections (source, product, source_key, satellite, instrument, observed_at,
-                            geom, scan_m, track_m, brightness_k, frp_mw, confidence, day_night, raw)
+                            geom, scan_m, track_m, brightness_k, frp_mw, confidence, day_night, raw,
+                            ingest_run_id)
     SELECT $2, $3, source_key, satellite, instrument, observed_at,
            ST_SetSRID(ST_Point(longitude, latitude), 4326), scan_m, track_m,
-           brightness_k, frp_mw, NULLIF(confidence, ''), NULLIF(day_night, ''), COALESCE(raw, '{}')
+           brightness_k, frp_mw, NULLIF(confidence, ''), NULLIF(day_night, ''), COALESCE(raw, '{}'),
+           $5
     FROM input
     ON CONFLICT DO NOTHING
-    RETURNING id, observed_at, geom
+    RETURNING id, observed_at, geom, satellite, scan_m, track_m
+),
+-- The same satellite observation can arrive in two products of one source,
+-- such as VIIRS_SNPP_NRT and later VIIRS_SNPP_SP ($4). Look for an earlier
+-- record from the same satellite at the same minute, within half a pixel
+-- (at least 187.5 metres). Each record links to its nearest such record, and
+-- each earlier record takes at most one link, the nearest.
+nearest AS (
+    SELECT i.id, i.observed_at, e.id AS primary_id, e.observed_at AS primary_observed_at, e.distance_m
+    FROM inserted i
+    CROSS JOIN LATERAL (
+        SELECT e.id, e.observed_at, ST_Distance(e.geom::geography, i.geom::geography) AS distance_m
+        FROM detections e
+        WHERE NULLIF($4::text, '') IS NOT NULL AND e.source = $2 AND e.product = $4::text
+          AND e.observed_at = i.observed_at AND e.satellite IS NOT DISTINCT FROM i.satellite
+          AND ST_DWithin(e.geom::geography, i.geom::geography,
+                         GREATEST(COALESCE(i.scan_m, 0), COALESCE(i.track_m, 0), 375) / 2)
+          AND NOT EXISTS (
+              SELECT 1 FROM detection_links l
+              WHERE (l.detection_id, l.observed_at) = (e.id, e.observed_at)
+                 OR (l.primary_id, l.primary_observed_at) = (e.id, e.observed_at))
+        ORDER BY distance_m, e.id
+        LIMIT 1
+    ) e
+),
+linked AS (
+    INSERT INTO detection_links (detection_id, observed_at, primary_id, primary_observed_at, reason, distance_m)
+    SELECT DISTINCT ON (primary_id, primary_observed_at)
+           id, observed_at, primary_id, primary_observed_at, 'same_observation', distance_m
+    FROM nearest
+    ORDER BY primary_id, primary_observed_at, distance_m, id
+    ON CONFLICT DO NOTHING
+    RETURNING detection_id, observed_at
 ),
 published AS (
     SELECT l.workspace_id, l.role, v.id
@@ -26,6 +60,8 @@ candidates AS (
     FROM inserted d
     JOIN workspaces w ON ST_DWithin(w.boundary::geography, d.geom::geography,
                                      COALESCE((w.settings->>'areaMarginMetres')::float8, 0))
+    -- A linked record shares the earlier record's matches.
+    WHERE NOT EXISTS (SELECT 1 FROM linked l WHERE (l.detection_id, l.observed_at) = (d.id, d.observed_at))
 ),
 classified AS (
     SELECT c.*,
@@ -58,7 +94,7 @@ classified AS (
 matched AS (
     INSERT INTO detection_matches (workspace_id, detection_id, observed_at, forest_class,
                                    forest_feature_id, forest_distance_m, unit_paths, hierarchy,
-                                   hierarchy_unit_paths, triage_reason, layer_version_ids)
+                                   hierarchy_unit_paths, triage_reason, layer_version_ids, matched_at)
     SELECT c.workspace_id, c.id, c.observed_at, c.forest_class,
         c.forest_feature_id, c.distance_m, COALESCE(units.paths, '{}'), units.snapshot,
         COALESCE(units.paths_by_hierarchy, '{}'),
@@ -67,7 +103,9 @@ matched AS (
                  WHEN units.interior_beats >= 2 THEN 'overlapping_units'
                  WHEN units.beats >= 2 THEN 'shared_boundary' END
         END,
-        ARRAY(SELECT p.id FROM published p WHERE p.workspace_id = c.workspace_id ORDER BY p.id)
+        ARRAY(SELECT p.id FROM published p WHERE p.workspace_id = c.workspace_id ORDER BY p.id),
+        -- The time each match is written, for the processing-time measure.
+        clock_timestamp()
     FROM classified c
     CROSS JOIN LATERAL (
         WITH covering AS (
@@ -111,4 +149,5 @@ routed AS (
     FROM matched CROSS JOIN LATERAL alert_route(match) route
     ON CONFLICT DO NOTHING
 )
-SELECT (SELECT count(*) FROM inserted)::integer, (SELECT count(*) FROM matched)::integer;
+SELECT (SELECT count(*) FROM inserted)::integer, (SELECT count(*) FROM matched)::integer,
+       (SELECT count(*) FROM linked)::integer;

@@ -44,11 +44,28 @@ func TestCoreLoopIntegration(t *testing.T) {
 	}
 	defer tx.Rollback(context.Background())
 
-	// Load a copy of the seed inside this transaction. A shared database may
-	// already contain the demo workspace, its role grants and map detections.
-	suffix := fmt.Sprintf("%08x", rand.Uint32())
-	slug := "demo-test-" + suffix
-	prefix := suffix + seedPrefix[8:]
+	suffix, slug, prefix := loadSeedCopy(t, ctx, tx)
+	now := time.Now().UTC()
+	t.Run("reference matching", func(t *testing.T) {
+		checkReferenceMatches(t, ctx, tx, slug, "reference_"+suffix)
+	})
+	t.Run("multi-month feed replay", func(t *testing.T) {
+		checkReplay(t, ctx, tx, prefix+"01", "replay_"+suffix, now)
+	})
+	t.Run("tile permissions and filters", func(t *testing.T) {
+		checkTiles(t, ctx, tx, slug, prefix, "demo_"+suffix, now)
+	})
+}
+
+// loadSeedCopy loads a copy of the demo seed inside tx, with its own slug and
+// IDs. A shared database may already contain the demo workspace, its role
+// grants and map detections. IDs start with prefix, and the workspace ID is
+// prefix + "01".
+func loadSeedCopy(t *testing.T, ctx context.Context, tx pgx.Tx) (suffix, slug, prefix string) {
+	t.Helper()
+	suffix = fmt.Sprintf("%08x", rand.Uint32())
+	slug = "demo-test-" + suffix
+	prefix = suffix + seedPrefix[8:]
 	for _, file := range []string{"load.sql", "roles.sql"} {
 		body, err := os.ReadFile(filepath.Join("..", "..", "seed", "demo-state", file))
 		if err != nil {
@@ -60,17 +77,7 @@ func TestCoreLoopIntegration(t *testing.T) {
 			t.Fatalf("load test seed %s: %v", file, err)
 		}
 	}
-
-	now := time.Now().UTC()
-	t.Run("reference matching", func(t *testing.T) {
-		checkReferenceMatches(t, ctx, tx, slug, "reference_"+suffix)
-	})
-	t.Run("multi-month feed replay", func(t *testing.T) {
-		checkReplay(t, ctx, tx, prefix+"01", "replay_"+suffix, now)
-	})
-	t.Run("tile permissions and filters", func(t *testing.T) {
-		checkTiles(t, ctx, tx, slug, prefix, "demo_"+suffix, now)
-	})
+	return suffix, slug, prefix
 }
 
 func checkReferenceMatches(t *testing.T, ctx context.Context, tx pgx.Tx, workspace, source string) {

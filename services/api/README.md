@@ -1,6 +1,6 @@
 # Core API
 
-The core service uses the development sign-in server to verify access tokens. It reads each signed-in user's role grants from PostgreSQL. A River worker runs a heartbeat on startup and every five minutes. The heartbeat leaves application data alone.
+The core service uses the development sign-in server to verify access tokens. It reads each signed-in user's role grants from PostgreSQL. River workers run a heartbeat and a feed health check on startup and every five minutes. The heartbeat leaves application data alone.
 
 ## Run locally
 
@@ -14,7 +14,7 @@ make demo-detections
 make api-run
 ```
 
-The integration tests check sign-in with all four demo users. They also exercise reference matching, replay a synthetic feed across two months and decode detection tiles to check access and filters. Run it before starting the API, so the test worker can pick up its scheduled heartbeat. `make api-test` and `make api-lint` run without the development stack.
+The integration tests check sign-in with all four demo users. They also exercise reference matching, replay a synthetic feed across two months and decode detection tiles to check access and filters. They run a backfill three times, make a feed go silent on a fake clock and check the feed health endpoint. Run them before starting the API, so the test worker can pick up its scheduled heartbeat. `make api-test` and `make api-lint` run without the development stack.
 
 | Variable | Development default |
 |---|---|
@@ -32,6 +32,7 @@ When run through Make, the database URL defaults to `DATABASE_URL` and the issue
 
 - `GET /healthz` returns 200 while the service is running.
 - `GET /readyz` returns 200 when PostgreSQL responds and 503 when it cannot be reached.
+- `GET /api/v1/workspaces/{slug}/feeds` returns feed health for workspace administrators. See [Feed health](#feed-health).
 - `GET /api/v1/me` takes an access token in the `Authorization: Bearer` header. It returns the caller's `subject`, `username` and `roleAssignments`. Each assignment includes the workspace slug and name, hierarchy slug, role, unit code and name, level slug, path and beat count. A grant to one beat counts that beat. A signed-in user without grants gets an empty list. A missing or rejected token gets a JSON error and a bearer challenge with HTTP 401.
 
 The service finds the signing keys through OpenID Connect discovery and caches them. It checks the issuer, audience and token times. It allows 30 seconds for differences between clocks.
@@ -64,7 +65,9 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## FIRMS ingestion
 
-With a map key, a River job starts polling on service startup and runs every 15 minutes. It requests two UTC calendar days for each of the four products and each workspace with a boundary. The database keeps one detection per feed observation and matches each new detection to every workspace in range. Each poll or import records its time window, counts and outcome in `ingest_runs`.
+With a map key, a River job starts polling on service startup and runs every 15 minutes. It requests two UTC calendar days for each of the four products and each workspace with a boundary. The database keeps one detection per feed observation and matches each new detection to every workspace in range. Each poll, backfill chunk or import records its kind, time window, counts and outcome in `ingest_runs`.
+
+The poller and backfill share one rate limiter for the key. NASA allows 5,000 transactions in each 10 minutes per key, and says a larger request may count as more than one. The limiter counts one transaction for each day a request asks for, which overestimates on purpose. It counts only the requests of its own process, so a backfill run from the command line has its own share.
 
 Use `make ingest-fixture FILE=path/to/file.csv PRODUCT=MODIS_NRT` to import a file without calling FIRMS. The product defaults to `VIIRS_SNPP_NRT`. `make demo-detections` uses the synthetic demo file and shifts its observation times to the current hour.
 
@@ -113,6 +116,70 @@ must be resolved before publishing. Each item has a `kind`, `message`,
 `blocksPublish` flag and, where available, a `featureRef`. A reference like
 `feature:3` means the third feature read from the selected source layer.
 
+## FIRMS backfill
+
+Backfill fetches FIRMS standard-processing products, such as `VIIRS_SNPP_SP` and `MODIS_SP`, for one workspace and a range of UTC days. FIRMS publishes these weeks after the near-real-time products, with better calibration and geolocation, and keeps them for many years.
+
+- It uses the area API's date form, `/api/area/csv/{key}/{product}/{box}/{days}/{date}`, which returns the days from `date` to `date + days - 1`. The [FIRMS area API page](https://firms.modaps.eosdis.nasa.gov/api/area/) allows 1 to 5 days, so the range is split into chunks of at most 5 days.
+- It first asks the [data availability API](https://firms.modaps.eosdis.nasa.gov/api/data_availability/) which days the product has. FIRMS answers a day it has not processed yet with an empty file, so days after the last available day are left out and never recorded as done.
+- Each chunk is one `ingest_runs` row of kind `backfill`. A failed chunk is recorded and the next chunk still runs.
+- It is safe to repeat. A run skips every day that a successful backfill run of the same workspace, source and product already covers, so it continues where an earlier run stopped. Records that are fetched again are duplicates and change nothing.
+
+```sh
+make backfill-firms FROM=2024-01-01 TO=2024-06-30                 # run here, needs FIMRA_FIRMS_MAP_KEY
+make backfill-queue FROM=2024-01-01 TO=2024-06-30 WORKSPACE=demo  # queue a job for the running API
+make backfill-demo                                                 # synthetic fixtures, no network
+```
+
+`PRODUCTS` defaults to `VIIRS_SNPP_SP,MODIS_SP`. The queued job runs on its own queue, so a long backfill never delays a poll. A job that times out or fails is retried and starts from the first unfinished day. `make backfill-demo` loads the demo workspace and reads the synthetic files in [the fixtures folder](../../packages/connectors/firms/fixtures/). Run it twice: the second run fetches nothing. Records read from fixtures are stored under the source `demo`, like `make demo-detections`, so they never count as done for a real FIRMS backfill. A product with no fixture file fails instead of counting as an empty day.
+
+### Same observation, two products
+
+A satellite observation reaches FIRMS twice: in a near-real-time product, then in the standard-processing product. Both records are kept. When the second arrives, it is linked in `detection_links` to the first and gets no workspace match of its own, so it is not counted or alerted twice. This works in either order.
+
+Two records are the same observation when they come from the same source, the paired product (for example `VIIRS_SNPP_NRT` and `VIIRS_SNPP_SP`), the same satellite and the same minute, and lie within half a pixel of each other: half the larger of the scan and track sizes, and at least 187.5 metres. Each record links to the nearest such record, and each earlier record takes at most one link.
+
+## Feed health
+
+`GET /api/v1/workspaces/{slug}/feeds` takes a bearer token. Only a role at the root of one of the workspace's hierarchies, such as the state administrator, may see it. Anyone else, and any unknown workspace, gets 403.
+
+It lists each live feed: a source and product that the workspace has polled. Backfill and file imports are not live feeds.
+
+| Field | Meaning |
+|---|---|
+| `status` | `healthy`, `delayed`, `quiet` or `failing`, from the thresholds below |
+| `lastRunAt`, `lastRunStatus`, `lastError` | The latest poll and how it ended. The FIRMS key is never in the error. |
+| `lastSuccessAt` | When the latest successful poll's response arrived |
+| `latestObservationAt`, `delaySeconds` | The newest observation the feed has returned in the last 90 days, and its age |
+| `failuresLast24h` | Failed polls in the last 24 hours |
+| `processing` | Records new in a poll in the last 7 days, the 95th percentile of their processing time in seconds, and the share processed within 20 minutes |
+
+The response also has `thresholds`, the `fireSeason` with `inSeason`, and `openAlerts`.
+
+| Status | When |
+|---|---|
+| `failing` | No successful poll for 60 minutes, which is four missed polls |
+| `quiet` | Polls work, but the newest observation is over 36 hours old: two missed daytime passes |
+| `delayed` | The newest observation is over 18 hours old: one missed daytime pass, plus the few hours FIRMS takes to publish |
+| `healthy` | Otherwise |
+
+A new feed's age counts from its first poll. A workspace can change the thresholds and the fire season in its settings:
+
+```json
+{"feedHealth": {"failingAfterMinutes": 60, "delayedAfterHours": 18, "quietAfterHours": 36,
+                "fireSeason": {"start": "11-01", "end": "06-30"}}}
+```
+
+The default fire season is 1 November to 30 June in India Standard Time. It is the national forest fire season. It covers the early fires of the dry deciduous forests of central and southern India and the late fires of the Himalayan pine forests in May and June. Forest fires are rare in the monsoon months, so a quiet feed is expected then. Invalid settings are logged and the defaults are used, so a typing mistake cannot switch alerts off.
+
+### Feed-health alerts
+
+A River job checks every workspace's feeds every five minutes. When a feed is `quiet` or `failing` in fire season, it records an alert in `feed_health_alerts`. There is at most one open alert per workspace feed: while the problem continues, the check updates that alert's status and last check time. When the feed is `healthy` or `delayed` again, the check resolves the alert. Outside fire season no new alert opens, and an open alert stays open until its feed recovers. Notifications are sent from these alerts in a later slice. `make feed-health` runs the check once and prints each feed.
+
+### Processing time
+
+The release gate asks that 95% of newly published FIRMS records are processed within 20 minutes. FIRMS does not say when it published a record. A record that is new in a poll was published after the feed's previous successful poll, so the time from that poll's fetch to the record's match is an upper estimate. Each run records `fetched_at` when its response arrived, each detection records the run that first stored it, and each match records `matched_at` when it was written.
+
 ## Database queries
 
 Regenerate the checked-in Go queries from this directory after editing `queries.sql`:
@@ -121,7 +188,7 @@ Regenerate the checked-in Go queries from this directory after editing `queries.
 go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 ```
 
-The role query starts from the signed-in user's ID. The tile query checks grants and reads matches in one SQL statement. The ingest statement saves detections and builds their match snapshots in the same transaction.
+The role query starts from the signed-in user's ID. The tile query checks grants and reads matches in one SQL statement. The ingest statement saves detections, links records of the same observation and builds their match snapshots in the same transaction. `feeds.sql` gathers the facts behind each feed's status.
 
 ## Alert queues
 

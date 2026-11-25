@@ -12,6 +12,9 @@ import (
 	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
 )
 
+// feedCheckInterval is how often feed health is checked.
+const feedCheckInterval = 5 * time.Minute
+
 type heartbeatArgs struct{}
 
 func (heartbeatArgs) Kind() string { return "heartbeat" }
@@ -39,11 +42,32 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, firmsMapKey string) (
 			&river.PeriodicJobOpts{RunOnStart: true},
 		),
 	}
+
+	// Feed health is checked even without a map key: a feed that stopped
+	// because its key was removed is a silent failure too.
+	const feedHealth = "feed_health"
+	queues[feedHealth] = river.QueueConfig{MaxWorkers: 1}
+	river.AddWorker(workers, &feedHealthWorker{db: pool, logger: logger})
+	periodic = append(periodic, river.NewPeriodicJob(
+		river.PeriodicInterval(feedCheckInterval),
+		func() (river.JobArgs, *river.InsertOpts) {
+			return feedHealthArgs{}, &river.InsertOpts{
+				Queue: feedHealth, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByPeriod: feedCheckInterval},
+			}
+		},
+		&river.PeriodicJobOpts{RunOnStart: true},
+	))
+
 	if firmsMapKey != "" {
 		const queue = "firms"
 		interval := 15 * time.Minute
+		// The poller and backfill share one area client, and so one rate limiter.
+		area := firms.NewArea(firmsMapKey, nil)
 		queues[queue] = river.QueueConfig{MaxWorkers: 1}
-		river.AddWorker(workers, &firmsPollWorker{pool: pool, area: firms.NewArea(firmsMapKey, nil)})
+		river.AddWorker(workers, &firmsPollWorker{pool: pool, area: area})
+		// Backfill has its own queue so that a long backfill never delays a poll.
+		queues[backfillQueue] = river.QueueConfig{MaxWorkers: 1}
+		river.AddWorker(workers, &firmsBackfillWorker{db: pool, fetch: area.FetchRange, available: area.Availability})
 		periodic = append(periodic, river.NewPeriodicJob(
 			river.PeriodicInterval(interval),
 			func() (river.JobArgs, *river.InsertOpts) {

@@ -1,0 +1,64 @@
+-- Facts about each live feed of each workspace, as of $2. $1 limits the
+-- result to one workspace, or is null for all of them. A feed is a source and
+-- product that a workspace has polled at least once.
+WITH feeds AS (
+    SELECT r.workspace_id, r.source, r.product, min(r.started_at) AS first_run_at
+    FROM ingest_runs r
+    WHERE r.kind = 'poll' AND r.workspace_id IS NOT NULL
+      AND ($1::uuid IS NULL OR r.workspace_id = $1::uuid) AND r.started_at <= $2
+    GROUP BY r.workspace_id, r.source, r.product
+)
+SELECT f.workspace_id::text, w.slug, w.settings, f.source, f.product, f.first_run_at,
+       last_run.started_at, last_run.status, last_run.error_message,
+       success.fetched_at, observed.latest_observed_at,
+       (SELECT count(*) FROM ingest_runs r
+        WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+          AND r.status = 'failed' AND r.started_at > $2 - interval '24 hours' AND r.started_at <= $2)::integer,
+       processing.records, processing.p95_seconds, processing.within_gate
+FROM feeds f
+JOIN workspaces w ON w.id = f.workspace_id
+LEFT JOIN LATERAL (
+    SELECT r.started_at, r.status, r.error_message FROM ingest_runs r
+    WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+      AND r.started_at <= $2
+    ORDER BY r.started_at DESC, r.id DESC LIMIT 1
+) last_run ON true
+LEFT JOIN LATERAL (
+    SELECT r.fetched_at FROM ingest_runs r
+    WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+      AND r.status = 'succeeded' AND r.started_at <= $2
+    ORDER BY r.started_at DESC, r.id DESC LIMIT 1
+) success ON true
+-- Each poll records the newest observation in its rolling window, so the
+-- latest observation is usually in the last successful poll. Look back 90 days
+-- for a feed that has been quiet for longer than the window.
+LEFT JOIN LATERAL (
+    SELECT max(r.latest_observed_at) AS latest_observed_at FROM ingest_runs r
+    WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+      AND r.status = 'succeeded' AND r.started_at > $2 - interval '90 days' AND r.started_at <= $2
+) observed ON true
+-- Processing time for the 20-minute release gate, over the last 7 days. A
+-- record new in a poll was published after the previous successful poll of
+-- the feed, so the time from that poll's fetch to the match is an upper
+-- estimate of the time from publication to processing.
+LEFT JOIN LATERAL (
+    WITH runs AS (
+        SELECT r.id, r.fetched_at, lag(r.fetched_at) OVER (ORDER BY r.started_at, r.id) AS previous_fetched_at
+        FROM ingest_runs r
+        WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+          AND r.status = 'succeeded' AND r.started_at > $2 - interval '7 days' AND r.started_at <= $2
+    ),
+    delays AS (
+        SELECT extract(epoch FROM m.matched_at - runs.previous_fetched_at)::float8 AS seconds
+        FROM runs
+        JOIN detections d ON d.ingest_run_id = runs.id
+        JOIN detection_matches m
+          ON (m.workspace_id, m.detection_id, m.observed_at) = (f.workspace_id, d.id, d.observed_at)
+        WHERE runs.previous_fetched_at IS NOT NULL
+    )
+    SELECT count(*)::integer AS records,
+           percentile_cont(0.95) WITHIN GROUP (ORDER BY seconds) AS p95_seconds,
+           avg((seconds <= 1200)::integer)::float8 AS within_gate
+    FROM delays
+) processing ON true
+ORDER BY w.slug, f.source, f.product;

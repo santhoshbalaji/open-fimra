@@ -22,8 +22,17 @@ type ingestDB interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+// Kinds of ingest run. Feed health reads only polls.
+const (
+	runPoll     = "poll"
+	runBackfill = "backfill"
+	runImport   = "import"
+)
+
 type ingestRun struct {
 	WorkspaceID *string
+	// Kind defaults to an import without a workspace and a poll with one.
+	Kind        string
 	Source      string
 	Product     string
 	WindowStart time.Time
@@ -31,7 +40,7 @@ type ingestRun struct {
 }
 
 type ingestCounts struct {
-	Fetched, Inserted, Duplicates, Matched int
+	Fetched, Inserted, Duplicates, Matched, Linked int
 }
 
 type readObservations func(context.Context) ([]firms.Observation, error)
@@ -44,16 +53,28 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 		run.WindowEnd = time.Now()
 		run.WindowStart = run.WindowEnd
 	}
+	if run.Kind == "" {
+		run.Kind = runPoll
+		if run.WorkspaceID == nil {
+			run.Kind = runImport
+		}
+	}
 	err := db.QueryRow(ctx, `
-		INSERT INTO ingest_runs (workspace_id, source, product, window_start, window_end)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		run.WorkspaceID, run.Source, run.Product, run.WindowStart, run.WindowEnd).Scan(&id)
+		INSERT INTO ingest_runs (workspace_id, kind, source, product, window_start, window_end)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		run.WorkspaceID, run.Kind, run.Source, run.Product, run.WindowStart, run.WindowEnd).Scan(&id)
 	if err != nil {
 		return counts, fmt.Errorf("start ingest run: %w", err)
 	}
 
 	observations, err := read(ctx)
 	counts.Fetched = len(observations)
+	var latest *time.Time
+	for i := range observations {
+		if latest == nil || observations[i].ObservedAt.After(*latest) {
+			latest = &observations[i].ObservedAt
+		}
+	}
 	if inferWindow && len(observations) > 0 {
 		run.WindowStart, run.WindowEnd = observations[0].ObservedAt, observations[0].ObservedAt
 		for _, o := range observations[1:] {
@@ -67,13 +88,20 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 	}
 	if err == nil {
 		err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-			if err := insertAndMatch(ctx, tx, run, observations, &counts); err != nil {
+			// The response has been read: processing time starts here.
+			var fetchedAt time.Time
+			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&fetchedAt); err != nil {
+				return fmt.Errorf("read the fetch time: %w", err)
+			}
+			if err := insertAndMatch(ctx, tx, id, run, observations, &counts); err != nil {
 				return err
 			}
 			_, err := tx.Exec(ctx, `
 				UPDATE ingest_runs SET status = 'succeeded', finished_at = clock_timestamp(),
-				    fetched = $2, inserted = $3, duplicates = $4, window_start = $5, window_end = $6
-				WHERE id = $1`, id, counts.Fetched, counts.Inserted, counts.Duplicates, run.WindowStart, run.WindowEnd)
+				    fetched = $2, inserted = $3, duplicates = $4, window_start = $5, window_end = $6,
+				    fetched_at = $7, latest_observed_at = $8, linked = $9
+				WHERE id = $1`, id, counts.Fetched, counts.Inserted, counts.Duplicates, run.WindowStart, run.WindowEnd,
+				fetchedAt, latest, counts.Linked)
 			if err != nil {
 				return fmt.Errorf("finish ingest run: %w", err)
 			}
@@ -96,7 +124,7 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 	return ingestCounts{Fetched: counts.Fetched}, fmt.Errorf("ingest run %d: %w", id, err)
 }
 
-func insertAndMatch(ctx context.Context, tx pgx.Tx, run ingestRun, observations []firms.Observation, counts *ingestCounts) error {
+func insertAndMatch(ctx context.Context, tx pgx.Tx, runID int64, run ingestRun, observations []firms.Observation, counts *ingestCounts) error {
 	if len(observations) == 0 {
 		return nil
 	}
@@ -126,7 +154,8 @@ func insertAndMatch(ctx context.Context, tx pgx.Tx, run ingestRun, observations 
 			return fmt.Errorf("ensure detection partition for %s: %w", month.Format("2006-01"), err)
 		}
 	}
-	err = tx.QueryRow(ctx, ingestSQL, batch, run.Source, run.Product).Scan(&counts.Inserted, &counts.Matched)
+	err = tx.QueryRow(ctx, ingestSQL, batch, run.Source, run.Product, firms.Counterpart(run.Product), runID).
+		Scan(&counts.Inserted, &counts.Matched, &counts.Linked)
 	if err != nil {
 		return fmt.Errorf("insert and match detections: %w", err)
 	}
