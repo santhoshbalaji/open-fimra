@@ -368,19 +368,50 @@ Acting on the incident moves its members. Each member alert that you could move 
 
 Forms use the [form format](../../packages/form-schema/SPEC.md). The API checks every form file with the Go validator in `packages/form-schema`, so it accepts exactly what the web designer and the phone accept.
 
-A form belongs to a workspace. Each version is a draft until it is published. A published version never changes: the database refuses any change to it or its deletion, and keeps the exact text that was published. To change a published form, add a version with a higher number. Each version can record the version it extends (`extendsVersionId`). National, state and division templates that extend each other use this later; for now it is always empty.
+A form belongs to a workspace. Each version is a draft until it is published. A published version never changes: the database refuses any change to it or its deletion, and keeps the exact text that was published. To change a published form, add a version with a higher number.
 
-A workspace administrator at the root of the hierarchy manages forms. Anyone with a role in the workspace can read published versions. Drafts are hidden from everyone else.
+A workspace administrator at the root of the hierarchy manages national and state forms. A division form can also be managed by a supervising officer whose unit holds the form's unit. Anyone with a role in the workspace can read published versions. Drafts are hidden from everyone else. Versions show `submissionCount`, the number of reports filled in on them, to the people who manage the form.
 
 | Request | What it does |
 |---|---|
 | `GET /api/v1/workspaces/{slug}/forms` | Lists forms with their versions and assignments |
-| `POST /api/v1/workspaces/{slug}/forms` | Adds a draft from a form file in the body. Its `id` names the form and its `version` must be higher than every existing version. Returns 201 and a `Location` header. |
+| `POST /api/v1/workspaces/{slug}/forms` | Adds a draft from a form file in the body, or from a form file with its template settings (see [Templates](#templates)). Its `id` names the form and its `version` must be higher than every existing version. Returns 201 and a `Location` header. |
 | `GET /api/v1/workspaces/{slug}/forms/{form}/versions/{version}` | Returns a version with its `definition`, `columns`, `status` and flat `views` |
-| `PUT /api/v1/workspaces/{slug}/forms/{form}/versions/{version}` | Replaces a draft. A published version gets 409. |
+| `PUT /api/v1/workspaces/{slug}/forms/{form}/versions/{version}` | Replaces a draft. A published version gets 409. A plain form file keeps the draft's template settings; a file with its settings replaces them. |
 | `POST /api/v1/workspaces/{slug}/forms/{form}/versions/{version}/publish` | Publishes a draft and creates its flat views. Publishing again returns the same version. |
 | `PUT /api/v1/workspaces/{slug}/forms/{form}/assignments/{step}` | Assigns a published version to a workflow step, with `{"version": 1}`. Add `"hierarchy": "territorial"` and `"unitPaths": ["ds.c1.d1"]` to use the form only under those units. |
 | `DELETE /api/v1/workspaces/{slug}/forms/{form}/assignments/{step}` | Takes the form off the step |
+
+### Templates
+
+Forms come in three levels ([PLAN.md section 5.4](../../PLAN.md#54-workflow-forms-and-field-reporting)):
+
+| Level | Who manages it | What it extends |
+|---|---|---|
+| `national` | Arrives as a template file from a national body. A root administrator adds it, and it is published at once, so it is never a draft here and never changes. | Nothing |
+| `state` | A root administrator | A published national template, or nothing |
+| `division` | A root administrator, or a supervising officer for the division | A published state form, always |
+
+To give a level, the unit of a division form, the version it extends or template rules, send the form file inside an envelope:
+
+```json
+{
+  "level": "state",
+  "extends": {"form": "first-report", "version": 1},
+  "template": {"allowExtension": true, "locked": ["demo_state"]},
+  "definition": {"formatVersion": 1, "id": "demo-first-report", "version": 1, "...": "..."}
+}
+```
+
+A division form adds `"hierarchy": "territorial", "unitPath": "ds.c1.d1"`: a current unit below the top. A form keeps its level and unit for all its versions. Each version records the version it extends in `extends` (and `extendsVersionId`), so a new version can extend a newer template.
+
+`template` says what the version allows the forms one level down: `allowExtension` lets them extend it, and `locked` lists section and item keys they must keep. A locked section, group or repeating group locks everything inside it. Division forms cannot be extended. A version keeps the locks of the template it extends as well as its own, so a division form keeps the national parts of its state form. The rules are frozen with the version.
+
+When a draft is saved and again when it is published, the API compares it with the version it extends. Every locked part must be there, unchanged and inside the same section or group. The shared lists and stages that locked parts use must be unchanged too. Unlocked parts can change or go, and new sections and questions can be added outside locked parts. A form that breaks a lock gets 422 with one sentence per problem, such as `Field "crew_size" is locked by the template it extends and cannot be removed.` The web designer runs the same checks as the form changes, with the same messages. The database also refuses a version that extends a draft, a form in another workspace, a form that is not one level up, or a template that does not allow extension.
+
+A division form can be assigned only under its own unit: the assignment needs its hierarchy and unit paths at or below the unit that owns it. Assignment stays with the root administrator.
+
+Submissions record the exact version they were filled in on, so a report filled in on a national template keeps showing with that template's version after the state extends it.
 
 A form that does not pass the validator gets 422 with the validator's messages in `problems`. Each form has at most one version at each step; assigning another version replaces it. The step belongs to the workflow template that new alerts in the workspace use. A form with stages can be assigned only at the workflow step of one of its stages, and is filled in there up to that stage.
 

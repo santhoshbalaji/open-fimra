@@ -1,5 +1,5 @@
 {
- "comment": "Shared cases for template extension. services/api/form_templates_test.go and apps/web/src/form-locks.spec.ts both run them and must give the same messages. Synthetic content only.",
+ "comment": "Shared cases for template extension. services/api/form_templates_test.go and apps/web/src/forms/form-locks.spec.ts both run them and must give the same messages. Synthetic content only.",
  "parent": {
   "formatVersion": 1,
   "id": "national-report",
