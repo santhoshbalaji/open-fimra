@@ -1,0 +1,116 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/santhoshbalaji/open-fimra/services/api/internal/db"
+)
+
+type api struct {
+	pool    *pgxpool.Pool
+	queries *db.Queries
+	logger  *slog.Logger
+}
+
+func newHandler(pool *pgxpool.Pool, auth authenticator, logger *slog.Logger) http.Handler {
+	a := api{pool: pool, queries: db.New(pool), logger: logger}
+	router := chi.NewRouter()
+	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	router.Get("/readyz", a.ready)
+	router.With(auth.require).Get("/api/v1/me", a.me)
+	return router
+}
+
+func (a api) ready(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	if err := a.pool.Ping(ctx); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "The database is unavailable.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type workspace struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+type unit struct {
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	LevelSlug string `json:"levelSlug"`
+	Path      string `json:"path"`
+}
+
+type roleAssignment struct {
+	Workspace workspace `json:"workspace"`
+	Hierarchy string    `json:"hierarchy"`
+	Role      string    `json:"role"`
+	Unit      unit      `json:"unit"`
+	BeatCount int64     `json:"beatCount"`
+}
+
+type meResponse struct {
+	Subject         string           `json:"subject"`
+	Username        string           `json:"username"`
+	RoleAssignments []roleAssignment `json:"roleAssignments"`
+}
+
+func (a api) me(w http.ResponseWriter, r *http.Request) {
+	caller := r.Context().Value(identityKey{}).(identity)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	userID, err := a.queries.UpsertUser(ctx, db.UpsertUserParams{
+		OidcSubject: caller.Subject,
+		Username:    caller.Username,
+		DisplayName: caller.Name,
+	})
+	if err != nil {
+		a.logger.Error("Could not save the signed-in user")
+		writeError(w, http.StatusInternalServerError, "Could not load the signed-in user.")
+		return
+	}
+
+	rows, err := a.queries.ListRoleAssignments(ctx, userID)
+	if err != nil {
+		a.logger.Error("Could not read the user's role assignments")
+		writeError(w, http.StatusInternalServerError, "Could not load the signed-in user.")
+		return
+	}
+
+	assignments := make([]roleAssignment, 0, len(rows))
+	for _, row := range rows {
+		assignments = append(assignments, roleAssignment{
+			Workspace: workspace{Slug: row.WorkspaceSlug, Name: row.WorkspaceName},
+			Hierarchy: row.HierarchySlug,
+			Role:      row.RoleSlug,
+			Unit:      unit{Code: row.UnitCode, Name: row.UnitName, LevelSlug: row.LevelSlug, Path: row.UnitPath},
+			BeatCount: row.BeatCount,
+		})
+	}
+
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, meResponse{
+		Subject: caller.Subject, Username: caller.Username, RoleAssignments: assignments,
+	})
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}

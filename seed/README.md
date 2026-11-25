@@ -13,6 +13,7 @@ Never add real forest boundaries, staff details or field reports to this folder 
 | `exclusions.geojson` | One known heat source (a brick kiln) |
 | `reference-detections.geojson` | Eleven test detections, each with the result it should get |
 | `load.sql` | Loads the demo workspace, hierarchy, layers and features into the database |
+| `roles.sql` | Adds the demo role grants after `load.sql`. It also works with a previously loaded demo workspace. |
 | `reference.sql` | The reference detections as a temporary table |
 
 All of it is written by [`generate.py`](generate.py), which uses only the Python standard library and always writes the same bytes. Do not edit these files by hand.

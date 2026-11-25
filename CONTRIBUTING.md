@@ -44,6 +44,12 @@ Database migrations need Go (the version in CI is the current stable release). `
 
 With the development stack running, use Node.js 24.15 or later in the 24.x series with Corepack. Run `make web-install`, then `make web-dev`. Open <http://127.0.0.1:4200> and sign in with a demo user. Before pushing web changes, run `make web-lint web-test web-build`. The [web app guide](apps/web/README.md) covers remote access and configuration.
 
+## Running the core API
+
+With Go 1.26 or later, run `make dev`, `make db-migrate` and `make api-test-integration`. The integration test loads the demo workspace and grants, signs in with the four demo accounts and checks the answers from the API. Then run `make api-run` to serve the API on <http://127.0.0.1:18090>.
+
+Run `make api-lint api-test` for formatting, Go vet and unit tests. See the [core API guide](services/api/README.md) for settings and endpoints.
+
 ## Making a change
 
 1. Branch from `main`.
