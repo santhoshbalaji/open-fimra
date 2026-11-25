@@ -138,6 +138,10 @@ A default single-server install is about seven containers: proxy, web, core API,
 | Mobile | Flutter | One codebase, works offline with GPS and camera |
 | Map server | None in the first version | Analysis runs in PostGIS and the geo worker, and files plus OGC API – Features cover GIS links. A map server for WMS/WFS can be added later. |
 | Licence | AGPL-3.0 | Anyone who runs a changed version for users must share those changes and keep the project's credit |
+| Database migrations | goose, plain SQL files in `db/migrations` | Readable SQL that a database administrator can review; runs from the Go binary or the command line |
+| Developer commands | One `Makefile` at the repository root | One entry point for every part of the repository, with no extra tool to install |
+| Web package manager | pnpm | Fast, strict about dependencies |
+| Continuous integration | GitHub Actions | Free for public repositories; every check can also run locally through `make` |
 
 ### 4.4 Design system
 
@@ -396,7 +400,21 @@ These are not yet verified and are checked before Phase 1 starts.
 
 ## 15. Next steps
 
-1. Request a FIRMS key on a department mailbox and start access conversations with FSI and NRSC.
-2. Build synthetic demo layers: one state with circles, divisions, ranges, beats and forest polygons.
-3. Build a proof of the core loop: FIRMS area API → PostGIS → classification against the demo forest layer → map.
-4. Write the form format specification using the starter-pack forms as the first examples.
+The first build is a walking skeleton: a fresh install that gives a login and a map with a synthetic forest, and then fills that map with classified detections. It is built in thin slices, in this order. Each slice is a separate pull request and ends when its condition is met.
+
+| # | Slice | Delivers | Done when |
+|---|---|---|---|
+| 1 | Repository skeleton | Folder layout from section 9, `Makefile`, development Compose stack (PostGIS and Keycloak), continuous integration, contribution guide | `make dev` starts the stack and continuous integration passes |
+| 2 | Base data model | Migrations for workspaces, hierarchy units (`ltree`), layers and versions, partitioned detections, detection matches, jobs and audit log | Migrations apply and roll back cleanly |
+| 3 | Synthetic demo state | A generator in `seed/` for a fictional state with circles, divisions, ranges, beats and forest polygons, including holes, shared edges, overlaps and missing codes | Output is reproducible, and it doubles as the spatial reference test set |
+| 4 | Core API skeleton | Go service with health check, OpenID Connect token checks, roles at a hierarchy path, and the job queue | A signed-in request returns the caller's units; an anonymous one is refused |
+| 5 | Web shell | Angular app with Tailwind, Spartan UI, the design tokens, the logo, sign-in and a MapLibre map of the demo layers | A fresh install gives a login and a map (Phase 0 complete) |
+| 6 | Core loop | FIRMS area connector, de-duplication, classification (inside, near the edge, outside, and the beat), permission-filtered vector tiles, and the alert map styled by fire age | Replaying a feed creates no duplicates, and every reference point lands in its expected beat |
+
+Slices 1 and 2 come first because everything else builds on them. Slices 3, 4 and 5 are independent of each other. Slice 6 runs against recorded FIRMS responses and synthetic detections, so it does not wait for a FIRMS key.
+
+Alongside the build:
+
+- Request a FIRMS key on a department mailbox and start access conversations with FSI and NRSC.
+- Confirm the facts in section 14.
+- Write the form format specification, using the starter-pack forms as the first examples.
