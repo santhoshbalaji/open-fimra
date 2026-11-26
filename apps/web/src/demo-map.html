@@ -1,12 +1,4 @@
-@if (workspace.current()) {
-  <div class="queue-toolbar">
-    <div class="view-switch" role="group" aria-label="Workspace view">
-      <button hlmBtn variant="ghost" [attr.aria-pressed]="!mobileQueue()" (click)="mobileQueue.set(false)">Map</button>
-      <button hlmBtn variant="ghost" [attr.aria-pressed]="mobileQueue()" (click)="mobileQueue.set(true); queue.select(null)">Alert queue</button>
-    </div>
-  </div>
-}
-<div class="workspace-panes" [class.show-queue]="mobileQueue() && workspace.current()">
+<div class="workspace-panes" [class.show-queue]="mobileQueue()" [class.show-details]="!!selected()">
 <section class="map-pane" aria-label="Detection map">
 <div #canvas class="map-canvas"></div>
 <div class="map-actions" role="group" aria-label="Map controls">
@@ -94,15 +86,10 @@
   </section>
 }
 @if (workspace.current()) {
-  <aside class="alert-panel" aria-labelledby="queue-title">
-    <div class="view-switch" role="group" aria-label="Group the queue">
-      <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'alerts'" (click)="showView('alerts')">Alerts</button>
-      <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'incidents'" (click)="showView('incidents')">Incidents</button>
-      <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="queueView() === 'reports'" (click)="showView('reports')">Reports</button>
-    </div>
+  <aside class="alert-panel" aria-labelledby="queue-title" fimraListScroll>
     <div class="queue-heading">
-      <h2 id="queue-title">{{ queueView() === 'incidents' ? 'Incidents' : queueView() === 'reports' ? 'Field reports' : 'Alert queue' }}</h2>
-      @if (queueView() !== 'incidents' && exportEndpoint(); as endpoint) {
+      <h2 id="queue-title">Alert queue</h2>
+      @if (exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
@@ -110,26 +97,12 @@
             @defer (on immediate) {
               <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
                 [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
-                [initialKind]="queueView() === 'reports' ? 'submissions' : 'alerts'" [form]="reportFilters().form"
-                [formLabel]="reportFilters().formLabel" [decision]="reportFilters().decision" (closed)="dialog.close()" />
+                (closed)="dialog.close()" />
             }
           </hlm-dialog-content>
         </hlm-dialog>
       }
     </div>
-    @if (queueView() === 'incidents') {
-      @defer (on immediate) {
-        <fimra-incidents [endpoint]="exportEndpoint()!" [now]="now()" (openAlert)="openMember($event)" (showOnMap)="showIncident($event)" />
-      } @placeholder {
-        <div role="status" aria-label="Loading incidents" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
-      }
-    } @else if (queueView() === 'reports') {
-      @defer (on immediate) {
-        <fimra-submissions [endpoint]="exportEndpoint()!" [now]="now()" (openAlert)="openMember($event)" (filtersChanged)="reportFilters.set($event)" />
-      } @placeholder {
-        <div role="status" aria-label="Loading reports" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
-      }
-    } @else {
     <div class="queue-tabs" role="group" aria-label="Alert queues">
       @for (tab of queue.tabs(); track tab) {
         <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
@@ -172,7 +145,6 @@
     @if (queue.cursor()) { <button hlmBtn variant="outline" (click)="queue.changePage('')">Newest alerts</button> }
     @if (queue.page()?.nextCursor; as cursor) {
       <button hlmBtn variant="outline" (click)="queue.changePage(cursor)">Older alerts</button>
-    }
     }
   </aside>
 }

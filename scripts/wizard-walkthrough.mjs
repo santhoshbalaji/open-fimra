@@ -45,6 +45,7 @@ async function signIn(browser, username) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const page = await context.newPage();
   await page.goto(WEB);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.locator('#username').fill(username);
   await page.locator('#password').fill('demo');
   await page.locator('#kc-login').click();

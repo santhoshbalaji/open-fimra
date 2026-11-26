@@ -49,6 +49,7 @@ try {
   assert.equal(backgrounds.size, 2, 'The two palettes should have different surfaces.');
 
   await page.goto(WEB);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.locator('#username').fill('division.officer');
   await page.locator('#password').fill('demo');
   await page.locator('#kc-login').click();

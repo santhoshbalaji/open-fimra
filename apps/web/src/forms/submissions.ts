@@ -12,6 +12,7 @@ import { DashboardFilters } from '../dashboard-filters';
 import { classes, relativeAge } from '../detections';
 import { EmptyState } from '../ui/empty-state';
 import { StatusBadge } from '../ui/status-badge';
+import { ShellNavigation } from '../shell-navigation';
 import { WorkspaceService } from '../workspace';
 import { decisionLabels, type Decision, type SubmissionRow, type WorkspaceForm } from './form-api';
 import { textIn } from './form-text';
@@ -38,15 +39,19 @@ const tabs: { value: DecisionFilter; label: string }[] = [
   styleUrl: './forms.css',
   encapsulation: ViewEncapsulation.None,
   template: `
-    @if (selected(); as row) {
+    @if (selectedId(); as id) {
+      @let row = selected();
       <section aria-labelledby="report-title">
         <div class="queue-heading">
-          <h3 id="report-title" tabindex="-1">{{ title(row) }}</h3>
+          <h3 id="report-title" tabindex="-1">{{ row ? title(row) : 'Field report' }}</h3>
           <button hlmBtn variant="ghost" (click)="close()">All reports</button>
         </div>
-        <p class="incident-summary">{{ place(row) }} · {{ classes[row.forest_class] }}
-          <button hlmBtn variant="link" size="sm" (click)="showAlert(row)">Show alert #{{ row.alert_id }}</button></p>
-        <fimra-submission-view [workspaceUrl]="endpoint()" [submissionId]="row.id" (decided)="decided()" />
+        <fimra-submission-view #detail [workspaceUrl]="endpoint()" [submissionId]="id" (decided)="decided()" />
+        @if (detail.submission()?.alertId || row?.alert_id; as alertId) {
+          <p class="incident-summary">@if (row) { {{ place(row) }} · {{ classes[row.forest_class] }} }
+            <button hlmBtn variant="link" size="sm" (click)="showAlert(alertId)">Show alert #{{ alertId }}</button>
+          </p>
+        }
       </section>
     } @else {
       <div class="queue-tabs" role="group" aria-label="Decisions">
@@ -117,6 +122,8 @@ export class Submissions {
   readonly forms = signal<WorkspaceForm[]>([]);
   readonly message = signal('');
   readonly selected = signal<SubmissionRow | null>(null);
+  private readonly navigation = inject(ShellNavigation, { optional: true });
+  readonly selectedId = computed(() => this.navigation ? this.navigation.query().get('report') : this.selected()?.id);
   private readonly reload = signal(0);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
@@ -136,13 +143,27 @@ export class Submissions {
       });
       onCleanup(() => request.unsubscribe());
     });
-    effect(() => {
-      this.endpoint();
-      this.filters.params();
-      this.decision();
-      this.form();
-      this.cursor.set('');
-    });
+    if (this.navigation) {
+      const query = this.navigation.query;
+      effect(() => {
+        const decision = query().get('decision');
+        this.decision.set(decision === 'all' ? '' : decision === 'approved' || decision === 'returned' ? decision : 'pending');
+        this.form.set(query().get('form') ?? '');
+        this.cursor.set(query().get('cursor') ?? '');
+      });
+      effect(() => {
+        const id = this.selectedId();
+        this.selected.set(this.page()?.items.find(item => item.id === id) ?? null);
+      });
+    } else {
+      effect(() => {
+        this.endpoint();
+        this.filters.params();
+        this.decision();
+        this.form();
+        this.cursor.set('');
+      });
+    }
     effect(() => this.filtersChanged.emit({ form: this.form(), decision: this.decision(), formLabel: this.formLabel() }));
     effect(onCleanup => {
       const params: Record<string, string | number> = { ...this.filters.params() };
@@ -182,36 +203,57 @@ export class Submissions {
   }
 
   setDecision(value: DecisionFilter): void {
+    if (this.navigation) {
+      this.navigation.update({ decision: value || 'all', cursor: null });
+      return;
+    }
     this.page.set(null);
     this.decision.set(value);
   }
 
   setForm(value: string | null | undefined): void {
+    const form = !value || value === 'all' ? '' : value;
+    if (this.navigation) {
+      this.navigation.update({ form: form || null, cursor: null });
+      return;
+    }
     this.page.set(null);
-    this.form.set(!value || value === 'all' ? '' : value);
+    this.form.set(form);
   }
 
   changePage(cursor: string): void {
+    if (this.navigation) {
+      this.navigation.update({ cursor: cursor || null });
+      return;
+    }
     this.page.update(page => page && { ...page, items: [], nextCursor: undefined });
     this.cursor.set(cursor);
   }
 
   open(row: SubmissionRow): void {
-    this.selected.set(row);
-    queueMicrotask(() => document.getElementById('report-title')?.focus());
+    if (this.navigation) this.navigation.update({ report: row.id });
+    else {
+      this.selected.set(row);
+      queueMicrotask(() => document.getElementById('report-title')?.focus());
+    }
   }
 
   close(): void {
-    this.selected.set(null);
+    if (this.navigation) this.navigation.update({ report: null });
+    else this.selected.set(null);
   }
 
   decided(): void {
     this.reload.update(n => n + 1);
   }
 
-  async showAlert(row: SubmissionRow): Promise<void> {
+  async showAlert(id: string): Promise<void> {
+    if (this.navigation) {
+      this.navigation.go('/monitor/alerts', { alert: id });
+      return;
+    }
     try {
-      this.openAlert.emit(await firstValueFrom(this.http.get<AlertRow>(this.endpoint() + '/alerts/' + row.alert_id)));
+      this.openAlert.emit(await firstValueFrom(this.http.get<AlertRow>(this.endpoint() + '/alerts/' + id)));
     } catch (error) {
       this.failed(error as HttpErrorResponse);
       this.message.set('The alert could not open.');

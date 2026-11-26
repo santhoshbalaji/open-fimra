@@ -1,6 +1,8 @@
 import { isDevMode } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
+import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
+import { shellRoutes } from './shell-routes';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { App } from './app';
 import { bearerInterceptor } from './auth';
@@ -13,10 +15,19 @@ const start = guide
   : loadConfig().then(config => bootstrapApplication(App, {
     providers: [
       provideSpartanHlm(),
+      provideRouter(shellRoutes, withDisabledInitialNavigation()),
       { provide: WEB_CONFIG, useValue: config },
       provideHttpClient(withInterceptors([bearerInterceptor]))
     ]
   }));
 start.catch(() => {
-  document.body.textContent = 'Open FIMRA could not start. Check the web configuration and reload.';
+  const main = document.createElement('main');
+  main.className = 'welcome';
+  const heading = document.createElement('h1');
+  heading.textContent = 'Open FIMRA is unavailable';
+  const retry = document.createElement('button');
+  retry.textContent = 'Reload';
+  retry.onclick = () => location.reload();
+  main.append(heading, retry);
+  document.body.replaceChildren(main);
 });

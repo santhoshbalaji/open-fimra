@@ -1,11 +1,15 @@
 # Control room
 
-Sign in to see detections in your first assigned workspace. The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. The map key explains the age colours and forest shapes.
+Sign in with your department account to open your first assigned workspace. The header shows your workspace and assigned area. If the account has no workspace role, ask your workspace administrator to assign one, or use **Switch account** to sign in with another account.
+
+**Monitor** contains **Map**, **Alerts** and **Incidents**. **Reports** contains **Field reports** and **Situation report**. The shell also links to **Dashboard** and the **Settings** screens your role can use. On a phone, open **Menu** to switch destinations. Use **Search** or Ctrl+K (Command+K on a Mac) to find a destination by name. Links keep the selected workspace and filters. Refresh keeps the current view, and Back restores the previous view and its list position.
+
+The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. The map key explains the age colours and forest shapes.
 
 Click a point or use the **Detections in view** menu to open its details. Times use your local time zone. Press Escape to close the details and return to the menu. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit workspace to map** to return to the workspace boundary.
 
 
-The **Alert queue** sits beside the map. On a small screen, switch between **Map** and **Alert queue**. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
+The alert queue sits beside the map on large screens. On a phone, open **Alerts** from **Menu** to see the queue. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
 
 Choose **Dashboard** to see detections by forest class, routed alerts by queue and step, and times to acknowledgment, arrival and control. The map, queue and dashboard keep the same filters when you switch views. Today's detections start at midnight in India. A root grant also shows each feed's health.
 
@@ -13,11 +17,11 @@ The chart has a matching data table. **Low bandwidth** keeps the numbers, table 
 
 ## Incidents
 
-Choose **Incidents** at the top of the queue panel to see alerts grouped into incidents: fires close together in place and time. **Alerts** returns to the alert queue. The list uses the same time window, forest class and unit path. Each row shows how many alerts you can see, their places, when the fire was last seen and the incident's own step. Open an incident to draw its alerts on the map, read its timeline and record a step. A step on the incident also moves each member alert that you could move the same way. Choose a member alert to open its own details. A merged incident links to the incident that now holds its alerts. The incident screen loads only when you open it, so it adds nothing to the first download.
+Choose **Monitor → Incidents** to see alerts grouped into fires close together in place and time. The list uses the same time window, forest class and unit path. Each row shows how many alerts you can see, their places, when the fire was last seen and the incident's own step. Open an incident to read its timeline and record a step. Choose **Show incident on map** to see its alerts on the map. A step on the incident also moves each member alert that you could move the same way. Choose a member alert to open its own details. A merged incident links to the incident that now holds its alerts. The incident screen loads only when you open it, so it adds nothing to the first download.
 
 ## Forms
 
-Root administrators and division officers see **Forms** in the top bar. The screen lists national templates, state forms and division forms, with each version's status, the template it extends and how many reports were filled in on it. Published versions open read-only; earlier reports keep showing with the version they used.
+Root administrators and division officers see **Form templates** under **Settings**. The screen lists national templates, state forms and division forms, with each version's status, the template it extends and how many reports were filled in on it. Published versions open read-only; earlier reports keep showing with the version they used.
 
 - **Add a national template** takes a template file from a national body. It is published at once.
 - **Extend** starts a state form from a national template, or a division form from a state form, when the template allows it. Parts the template locks show **Locked by template** and cannot be changed.
@@ -26,13 +30,13 @@ Root administrators and division officers see **Forms** in the top bar. The scre
 
 The designer has three views. **Design** shows the sections and questions. Choose a type under **Add** to put it after the selected item, or drag it into place. Drag the handles to move items, or use the arrow buttons or Alt with the up or down arrow on a selected row; **Move to** puts an item in another section or group. Select an item to change its key, question, hint, limits, choices and when it is shown. With **Let states extend this form** (or divisions) switched on in the form settings, each item can be locked for the forms that extend it. **Preview** shows the form read-only as people will fill it in, with its conditions in plain English. **Form file** shows the form in the [form format](../../packages/form-schema/SPEC.md) for stages, shared lists and layout. The shared validator checks the form as it changes and lists each problem in plain English; choose a problem to go to the item. **Publish** saves the draft and freezes the version.
 
-The designer and its validator load only when you open **Forms**, so they add nothing to the first download. The read-only renderer in [`src/forms/form-preview.ts`](src/forms/form-preview.ts) takes a form and, optionally, a submission's answers, so other screens can show a report with the version it used.
+The designer and its validator load only when you open **Form templates**, so they add nothing to the first download. The read-only renderer in [`src/forms/form-preview.ts`](src/forms/form-preview.ts) takes a form and, optionally, a submission's answers, so other screens can show a report with the version it used.
 
 ## Field reports
 
 When a workflow step has a report form, the alert's details list it under **Reports**. Choose **Fill in** once the alert has reached the step. The form opens in a dialog, a page at a time, in the language you choose when the form has translations. Questions appear and disappear with their conditions, cascading lists offer only the choices that go with the earlier answer, and calculated values and values from the alert fill in by themselves. Add or remove entries of a repeating group, such as teams. Type a position as longitude and latitude or add your own position; tracks and areas take one position per line. Photos and files upload to the alert as you add them, and a signature is drawn in the box and saved. **Send report** checks the answers with the server's rules first and lists what needs fixing beside each question. The server's own problems show the same way. A form filled in over several steps shows the earlier answers read-only.
 
-Choose **Reports** at the top of the queue panel to list field reports with the shared time window, forest class and unit path. The tabs show reports waiting for a decision, approved, returned or all, and you can pick one form. Open a report to read it with the form version it was filled in on. A supervising officer on the alert, a division officer at division level or above or a state administrator, can **Approve** it or **Return with a note**. A returned report no longer counts, so the alert waits for a new one. Decisions never change. **Export** beside the list exports the same reports; with one form chosen, the file has a column for each answer.
+Choose **Reports → Field reports** to list field reports with the shared time window, forest class and unit path. The tabs show reports waiting for a decision, approved, returned or all, and you can pick one form. Open a report to read it with the form version it was filled in on. A supervising officer on the alert, a division officer at division level or above or a state administrator, can **Approve** it or **Return with a note**. A returned report no longer counts, so the alert waits for a new one. Decisions never change. **Export** beside the list exports the same reports; with one form chosen, the file has a column for each answer.
 
 The report screens load only when you open them, so they add nothing to the first download.
 
@@ -70,13 +74,13 @@ make web-install
 make web-dev
 ```
 
-Run the [core API](../../services/api/README.md) in a separate terminal for workspace access and detection tiles. Open <http://127.0.0.1:4200>. Keycloak asks you to sign in. For example, use `state.admin` with the password `demo`. The account menu contains **Sign out**. The theme follows your system until you choose a theme with the top bar button.
+Run the [core API](../../services/api/README.md) in a separate terminal for workspace access and detection tiles. Open <http://127.0.0.1:4200>. Choose **Sign in** to open your department’s sign-in page. For example, use `state.admin` with the password `demo`. The account menu contains **Sign out**. The theme follows your system until you choose a theme from the header or phone menu.
 
 For a remote development host, forward the web, sign-in and API ports to your computer. For example, run `ssh -L 4200:127.0.0.1:4200 -L 18180:127.0.0.1:18180 -L 18090:127.0.0.1:18090 dev@devhub`, then open the same local address.
 
 ## Configuration and assets
 
-[public/config.json](public/config.json) sets the sign-in issuer, public client ID and core API address. The app reads it at startup. Keycloak uses the authorisation code flow with a one-time proof key (PKCE). The callback and sign-out return addresses use the web app's own origin. A static host must serve `index.html` for `/callback` and `/signed-out`.
+[public/config.json](public/config.json) sets the sign-in issuer, public client ID and core API address. The app reads it at startup. Keycloak uses the authorisation code flow with a one-time proof key (PKCE). The callback and sign-out return addresses use the web app's own origin. A static host must serve `index.html` for app routes, including `/monitor/*`, `/reports/*`, `/settings/*`, `/dashboard`, `/restricted`, `/callback` and `/signed-out`.
 
 The map loads the signed-in workspace’s published reference tiles and fits to its boundary. The synthetic GeoJSON in seed/demo-state remains available for seed generation and import tests. The map uses local fonts and a bundled worker and needs WebGL. Only the configured API receives your access token.
 
@@ -90,13 +94,15 @@ make web-test
 make web-build
 ```
 
+Run `make dev db-migrate seed-test demo-detections shell-walkthrough` for a headless Chromium check of the four demo profiles, keyboard search, refresh and Back. It checks both themes at desktop and phone widths with axe and saves screenshots to `~/open-fimra-screenshots/u4`. Use `WEB_PORT` for a different loopback port allowed by your sign-in realm.
+
 The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to stop the dev server.
 
-The first download should stay under 150 kB compressed, for slow mobile connections in the field. It is about 139 kB. The map library, its styles, charts and every screen except the shell load afterwards. For icons, use the `fimraIcon` directive in [`src/ui/icon.ts`](src/ui/icon.ts), for example `<svg fimraIcon="bell" aria-hidden="true">`. It draws Lucide icons from `@ng-icons/lucide`; add a new icon to its list. The build warns above 620 kB and fails above 700 kB before compression.
+The first download should stay under 150 kB compressed, for slow mobile connections in the field. The production build reports the size of the first download. The map library, its styles, charts and every screen except the shell load afterwards. For icons, use the `fimraIcon` directive in [`src/ui/icon.ts`](src/ui/icon.ts), for example `<svg fimraIcon="bell" aria-hidden="true">`. It draws Lucide icons from `@ng-icons/lucide`; add a new icon to its list. The build warns above 620 kB and fails above 700 kB before compression.
 
-**Field phones** in the account menu lists the phones where you are signed in to the field app, with their status and whether they get notifications. Remove one you no longer use. State administrators and division officers also see the phones of people in their units and can wipe a lost one: it deletes its field data and sign-in the next time it connects. See [field phones and push](../../services/api/README.md#field-phones-and-push).
+**Settings → Field phones** lists the phones where you are signed in to the field app, with their status and whether they get notifications. Remove one you no longer use. State administrators and division officers also see the phones of people in their units and can wipe a lost one: it deletes its field data and sign-in the next time it connects. See [field phones and push](../../services/api/README.md#field-phones-and-push).
 
-**GIS link keys** in the account menu shows the workspace's read-only GIS link address and QGIS steps. Each person can make personal access keys for desktop GIS there, see when each was last used and revoke them. A new key is shown once. See the [GIS link](../../services/api/README.md#gis-link).
+**Settings → GIS link** shows the workspace's read-only GIS link address and QGIS steps. Each person can make personal access keys for desktop GIS there, see when each was last used and revoke them. A new key is shown once. See the [GIS link](../../services/api/README.md#gis-link).
 
 The alert queue shows the current step and flags overdue alerts. Select a row or a map point to open its timeline. Choose an available next step, add a note if needed, and save. For a field step, allow the browser to share your location. A supervising officer can enter a reason for a location exception. Ending the workflow requires confirmation. A step with an assigned form, such as the starter pack's first report, needs its submission before the alert can move on, and the timeline shows the reason when a move is refused. See [Field reports](#field-reports).
 
@@ -114,7 +120,7 @@ The wizard then opens for root administrators until it is finished. Its steps ar
 7. **Invite officers**: enter an email, role and unit for each officer. Officers claim the role the first time they sign in with that verified address.
 8. **Finish** shows a summary and opens the alert map.
 
-**Leave setup for now** returns to the control room. **Finish setup** in the top bar opens the wizard again. After it is finished, reopen it from the account menu with **Settings: first-run setup**.
+**Leave setup for now** returns to the control room. **Settings → Setup** opens the wizard again. After it is complete, choose **Reopen setup** from that screen.
 
 `make wizard-walkthrough` drives these screens in headless Chromium on a fresh database, with a fake FIRMS server, and saves screenshots to `~/open-fimra-screenshots/first-run-wizard`. It uses rootless Docker, port 4200 and your stack's ports from `.env`. Set `WEB_PORT` to use another web port that your sign-in realm allows, such as `make wizard-walkthrough WEB_PORT=4203`.
 

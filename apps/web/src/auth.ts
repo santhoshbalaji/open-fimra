@@ -19,6 +19,7 @@ export class AuthService {
   readonly user = signal<User | null>(null);
   readonly error = signal('');
   readonly signedOut = signal(false);
+  readonly opening = signal(true);
 
   constructor() {
     this.manager.events.addUserLoaded(user => this.user.set(user));
@@ -35,39 +36,51 @@ export class AuthService {
   async open(): Promise<void> {
     try {
       if (location.pathname === '/signed-out') {
-        await this.manager.signoutRedirectCallback();
+        const response = await this.manager.signoutRedirectCallback();
         history.replaceState(null, '', '/');
         this.signedOut.set(true);
+        if (response?.userState === 'switch-account') await this.signIn(true);
         return;
       }
       const callback = location.pathname === '/callback';
       const user = callback ? await this.manager.signinRedirectCallback() : await this.manager.getUser();
       if (callback) {
-        const search = typeof user?.state === 'string' && user.state.startsWith('?') ? user.state : '';
-        history.replaceState(null, '', new URL(search || '.', document.baseURI));
+        const target = typeof user?.state === 'string' && /^(?:\/(?!\/)|\?)/.test(user.state)
+          ? new URL(user.state, document.baseURI) : new URL('.', document.baseURI);
+        history.replaceState(null, '', target.origin === location.origin ? target : '/');
       }
       if (user && !user.expired) this.user.set(user);
-      else await this.signIn();
+
     } catch {
       this.error.set('Sign-in could not finish. Try again.');
+    } finally {
+      this.opening.set(false);
     }
   }
 
-  async signIn(): Promise<void> {
+  async signIn(switchAccount = false): Promise<void> {
     this.error.set('');
+    this.opening.set(true);
+    const target = new URL(location.href);
+    for (const key of [...target.searchParams.keys()]) {
+      if (!['workspace', 'view', 'alert', 'detection', 'incident', 'report', 'hours', 'class',
+        'unitPath', 'queue', 'cursor', 'decision', 'form', 'period', 'from', 'to', 'hierarchy', 'reportHours', 'show'].includes(key)) target.searchParams.delete(key);
+    }
+    if (target.pathname === '/callback' || target.pathname === '/signed-out') target.pathname = '/';
     try {
-      await this.manager.signinRedirect({ state: location.search });
+      await this.manager.signinRedirect({ state: target.pathname + target.search, prompt: switchAccount ? 'login' : undefined });
     } catch {
       this.error.set('Cannot reach the sign-in service. Try again.');
+      this.opening.set(false);
     }
   }
 
-  async signOut(): Promise<void> {
+  async signOut(switchAccount = false): Promise<void> {
+    this.error.set('');
     try {
-      await this.manager.signoutRedirect();
+      await this.manager.signoutRedirect({ state: switchAccount ? 'switch-account' : undefined });
     } catch {
-      this.error.set('Sign-out could not finish. Sign in again.');
-      this.user.set(null);
+      this.error.set('Sign-out could not finish. Try again.');
     }
   }
 }

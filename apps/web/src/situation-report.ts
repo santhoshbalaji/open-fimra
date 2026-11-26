@@ -7,10 +7,11 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { ShellNavigation } from './shell-navigation';
 import { WorkspaceService } from './workspace';
 import { StatusBadge } from './ui/status-badge';
 import { Icon } from './ui/icon';
@@ -170,6 +171,8 @@ export class SituationReportView {
   private readonly workspace = inject(WorkspaceService);
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly lifetime = inject(DestroyRef);
+  private readonly navigation = inject(ShellNavigation, { optional: true });
+  private reportRequest = 0;
   private timer?: ReturnType<typeof setTimeout>;
 
   readonly today = indiaToday();
@@ -235,14 +238,58 @@ export class SituationReportView {
       const request = this.http.get<{ units: ReportUnit[] }>(endpoint + '/situation-report/units').subscribe({
         next: ({ units }) => {
           this.units.set(units);
-          // Start with the caller's highest unit.
-          const top = units.reduce<ReportUnit | null>((best, unit) => !best || unit.depth < best.depth ? unit : best, null);
-          this.unitKey.set(top ? this.key(top) : '');
+          if (!this.navigation) this.unitKey.set(this.initialUnit(units));
         },
         error: (error: HttpErrorResponse) => this.failed(error)
       });
       onCleanup(() => request.unsubscribe());
     });
+    if (this.navigation) {
+      const query = this.navigation.query;
+      effect(() => {
+        const params = query();
+        const units = this.units();
+        const path = params.get('unitPath');
+        const hierarchy = params.get('hierarchy');
+        const unit = units.find(unit => unit.path === path && (!hierarchy || hierarchy === unit.hierarchy));
+        const period = params.get('period');
+        this.unitKey.set(unit ? this.key(unit) : path ? '' : this.initialUnit(units));
+        this.kind.set(period === 'hours' || period === 'range' ? period : 'day');
+        this.from.set(params.get('from') ?? this.today);
+        this.to.set(params.get('to') ?? this.today);
+        this.hours.set(Number(params.get('reportHours') ?? 24));
+        if (!units.length) return;
+        if (params.get('show') && (!path || unit)) {
+          untracked(() => void this.loadReport());
+        } else {
+          this.reportRequest++;
+          this.loading.set(false);
+          this.report.set(null);
+          this.message.set(path && !unit ? 'Choose a unit you can report on.' : '');
+          this.pdf.set(null);
+          this.pdfMessage.set('');
+          clearTimeout(this.timer);
+        }
+      });
+    }
+  }
+
+  private initialUnit(units: ReportUnit[]): string {
+    const top = units.reduce<ReportUnit | null>((best, unit) => !best || unit.depth < best.depth ? unit : best, null);
+    return top ? this.key(top) : '';
+  }
+
+  pickUnit(value: string | null | undefined): void {
+    const unit = this.units().find(unit => this.key(unit) === value);
+    if (!unit) return;
+    if (this.navigation) this.navigation.update({ unitPath: unit.path, hierarchy: unit.hierarchy, show: null });
+    else this.unitKey.set(this.key(unit));
+  }
+
+  setPeriodValue(key: 'from' | 'to' | 'reportHours', value: string): void {
+    if (this.navigation) this.navigation.update({ [key]: value || null, show: null });
+    else if (key === 'reportHours') this.hours.set(+value);
+    else this[key].set(value);
   }
 
   key(unit: ReportUnit): string {
@@ -254,7 +301,9 @@ export class SituationReportView {
   }
 
   pickKind(value: string | null | undefined): void {
-    if (value === 'day' || value === 'range' || value === 'hours') this.kind.set(value);
+    if (value !== 'day' && value !== 'range' && value !== 'hours') return;
+    if (this.navigation) this.navigation.update({ period: value, show: null });
+    else this.kind.set(value);
   }
 
   private request(): Record<string, string | number> {
@@ -270,7 +319,20 @@ export class SituationReportView {
   }
 
   async show(): Promise<void> {
+    if (this.navigation) {
+      const unit = this.selectedUnit();
+      if (!unit) return;
+      const params = this.navigation.query();
+      if (params.get('show') === '1' && params.get('unitPath') === unit.path) await this.loadReport();
+      else this.navigation.update({ unitPath: unit.path, hierarchy: unit.hierarchy, show: '1' });
+      return;
+    }
+    await this.loadReport();
+  }
+
+  private async loadReport(): Promise<void> {
     if (!this.endpoint()) return;
+    const request = ++this.reportRequest;
     clearTimeout(this.timer);
     this.loading.set(true);
     this.message.set('');
@@ -278,12 +340,15 @@ export class SituationReportView {
     this.pdfMessage.set('');
     try {
       const params = new HttpParams({ fromObject: this.request() });
-      this.report.set(await firstValueFrom(this.http.get<SituationReport>(this.endpoint() + '/situation-report', { params })));
+      const report = await firstValueFrom(this.http.get<SituationReport>(this.endpoint() + '/situation-report', { params }));
+      if (request === this.reportRequest) this.report.set(report);
     } catch (error) {
-      this.report.set(null);
-      this.failed(error as HttpErrorResponse);
+      if (request === this.reportRequest) {
+        this.report.set(null);
+        this.failed(error as HttpErrorResponse);
+      }
     } finally {
-      this.loading.set(false);
+      if (request === this.reportRequest) this.loading.set(false);
     }
   }
 
