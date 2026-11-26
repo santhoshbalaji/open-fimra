@@ -1,0 +1,10 @@
+@reference "./styles.css";
+
+.setup-feedback {
+  @apply block rounded-control border border-border border-s-4 border-s-primary px-3 py-2;
+}
+
+.setup-actions {
+  @apply flex flex-wrap items-center gap-2 max-md:sticky max-md:bottom-0 max-md:z-[1]
+    max-md:-mx-5 max-md:border-t max-md:border-border max-md:bg-card max-md:px-5 max-md:py-2 sm:max-md:-mx-6 sm:max-md:px-6;
+}

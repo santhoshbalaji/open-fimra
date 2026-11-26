@@ -360,6 +360,13 @@ func TestWizardIntegration(t *testing.T) {
 
 		// The demo beats have deliberate defects that block publishing.
 		raw := upload(state.Layers[4], "beats", readLayerFixture(t, "beats"))
+		var resumed setupState
+		call("state.admin", http.MethodGet, base+"/setup", nil, http.StatusOK, &resumed)
+		beats := resumed.Layers[4]
+		if resumed.Steps["hierarchy"].Status != "done" || resumed.Steps["layers"].Status != "" ||
+			beats.Published || beats.Latest == nil || beats.Latest.VersionID != raw.VersionID {
+			t.Fatalf("setup must resume with the unfinished layer and its draft: %+v", beats)
+		}
 		for _, ref := range []string{"feature:16", "feature:22", "feature:17"} {
 			if !hasBlockingProblem(raw, ref) {
 				t.Fatalf("beats should block on %s: %+v", ref, raw.Problems)
@@ -470,6 +477,16 @@ func TestWizardIntegration(t *testing.T) {
 		call("state.admin", http.MethodPost, base+"/setup/reopen", nil, http.StatusOK, &state)
 		if state.FinishedAt != nil || len(me("state.admin").Setup.Unfinished) != 1 {
 			t.Fatal("reopening must show the wizard again")
+		}
+		for _, step := range setupSteps {
+			if state.Steps[step].Status != "done" {
+				t.Fatalf("reopening must keep completed steps: %s = %+v", step, state.Steps[step])
+			}
+		}
+		call("state.admin", http.MethodPost, base+"/setup/steps/invitations", map[string]string{"status": "skipped"}, http.StatusOK, nil)
+		call("state.admin", http.MethodGet, base+"/setup", nil, http.StatusOK, &state)
+		if state.Steps["invitations"].Status != "skipped" {
+			t.Fatalf("resume must retain a skipped step: %+v", state.Steps["invitations"])
 		}
 		call("state.admin", http.MethodPost, base+"/setup/finish", nil, http.StatusOK, &state)
 	})

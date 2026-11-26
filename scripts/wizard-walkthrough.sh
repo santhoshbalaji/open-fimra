@@ -14,6 +14,14 @@ set -euo pipefail
 read -ra compose <<< "${COMPOSE_CMD:?}"
 web_port=${WEB_PORT:-4200}
 cd "$(git rev-parse --show-toplevel)"
+SHOTS=$(realpath -m "$SHOTS")
+case "$SHOTS/" in
+  "$PWD/"*) echo "Choose a screenshot folder outside the repository." >&2; exit 1 ;;
+esac
+if [[ ! $WALK_DB =~ ^[a-z][a-z0-9_]*$ ]]; then
+  echo "Use a database name made of lowercase letters, digits and underscores." >&2
+  exit 1
+fi
 
 setup_code=WALK-THRU-CODE-2345
 fake_key=0123456789abcdef0123456789abcdef
@@ -75,13 +83,14 @@ for _ in $(seq 120); do
 done
 curl -sf "http://$API_ADDR/healthz" > /dev/null || { cat "$work/api.log"; exit 1; }
 
-mkdir -p "$SHOTS" "$HOME/.cache/open-fimra-walkthrough"
-cp scripts/wizard-walkthrough.mjs "$HOME/.cache/open-fimra-walkthrough/walkthrough.mjs"
+axe_version=$(node -p 'require("./apps/web/package.json").devDependencies["@axe-core/playwright"]')
+mkdir -p "$SHOTS"
 if ! docker run --rm --network host --init \
-  -v "$HOME/.cache/open-fimra-walkthrough:/work" -v "$PWD/seed/demo-state:/seed:ro" -v "$SHOTS:/shots" \
+  -v "$work:/work" -v "$PWD/scripts/wizard-walkthrough.mjs:/work/walkthrough.mjs:ro" \
+  -v "$PWD/seed/demo-state:/seed:ro" -v "$SHOTS:/shots" \
   -e WEB="http://127.0.0.1:$web_port" -e MAIL="http://$MAIL_HTTP" -e SEED=/seed -e SHOTS=/shots \
-  -e SETUP_CODE="$setup_code" -e FIRMS_KEY="$fake_key" -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-  "$PLAYWRIGHT_IMAGE" bash -c 'cd /work && { [ -d node_modules/playwright ] || npm install --no-save --silent playwright@1.63.0; } && node walkthrough.mjs'
+  -e SETUP_CODE="$setup_code" -e FIRMS_KEY="$fake_key" -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -e AXE_VERSION="$axe_version" \
+  "$PLAYWRIGHT_IMAGE" bash -c 'cd /work && npm install --no-save playwright@1.63.0 "@axe-core/playwright@$AXE_VERSION" && node walkthrough.mjs'
 then
   tail -n 40 "$work/api.log"
   exit 1

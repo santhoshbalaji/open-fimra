@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { DatePipe } from '@angular/common';
-import { Component, DestroyRef, ElementRef, OnInit, computed, inject, output, signal, viewChild } from '@angular/core';
+import { DOCUMENT, DatePipe, NgTemplateOutlet } from '@angular/common';
+import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -11,18 +11,19 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmLabel } from '@spartan-ng/helm/label';
 import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
-import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
-import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { HlmTableImports } from '@spartan-ng/helm/table';
-import { Observable, Subscription, exhaustMap, finalize, switchMap, takeWhile, timer } from 'rxjs';
+import { Observable, Subscription, exhaustMap, finalize, forkJoin, of, switchMap, takeWhile, timer } from 'rxjs';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { EmptyState } from './ui/empty-state';
+import { FieldError, FieldErrorSummary } from './ui/field-error-summary';
+import { LiveStatus } from './ui/live-status';
+import { DataState, StateRegion } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
 
-export type StepKey = 'mode' | 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
+export type StepKey = 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
 type Labels = Record<string, string>;
 interface Level { depth: number; slug: string; labels: Labels; units: number }
 interface PresetLevel { slug: string; labels: Labels }
@@ -36,7 +37,7 @@ interface Firms { set: boolean; setAt?: string; hint?: string; source: 'settings
 export interface SetupState {
   workspace: { slug: string; name: string }; mode: 'state' | 'national'; preset: string | null;
   hierarchy: string; root: { code: string; path: string; published: boolean } | null; boundarySet: boolean;
-  levels: Level[]; layers: SetupLayer[]; steps: Partial<Record<StepKey, { status: 'done' | 'skipped'; updatedAt: string }>>;
+  levels: Level[]; layers: SetupLayer[]; steps: Partial<Record<StepKey | 'mode', { status: 'done' | 'skipped'; updatedAt: string }>>;
   firms: Firms; emailEnabled: boolean; finishedAt: string | null; presets: Preset[];
 }
 interface Problem { kind: string; featureRef: string | null; message: string; blocksPublish: boolean }
@@ -55,7 +56,6 @@ const workflowStepLabels: Record<string, string> = {
 };
 
 export const steps: { key: StepKey; label: string }[] = [
-  { key: 'mode', label: 'Mode' },
   { key: 'workspace', label: 'Workspace' },
   { key: 'hierarchy', label: 'Hierarchy' },
   { key: 'layers', label: 'Layers' },
@@ -76,9 +76,10 @@ const uploadLabels: Record<Upload['status'], string> = {
 /** The guided first-run wizard (PLAN.md section 7) for a root administrator. */
 @Component({
   selector: 'fimra-setup-wizard',
-  imports: [DatePipe, EmptyState, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmSkeleton, HlmSwitch, HlmTableImports, Icon],
+  imports: [DatePipe, NgTemplateOutlet, EmptyState, FieldErrorSummary, LiveStatus, StateRegion, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmTableImports, Icon],
   templateUrl: './setup-wizard.html',
-  host: { class: 'block h-full overflow-auto' }
+  styleUrl: './setup-wizard.css',
+  host: { class: 'block h-full overflow-auto max-md:scroll-pt-16 max-md:scroll-pb-16' }
 })
 export class SetupWizard implements OnInit {
   private readonly http = inject(HttpClient);
@@ -88,8 +89,11 @@ export class SetupWizard implements OnInit {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '') + '/api/v1/workspaces/' +
     encodeURIComponent(this.workspaces.current()?.slug ?? '');
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+  private readonly disclosure = viewChild<ElementRef<HTMLDetailsElement>>('stepDisclosure');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private watches = new Map<string, Subscription>();
+  private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
+  private readonly watches = new Map<string, Subscription>();
   readonly finished = output<void>();
   readonly openLayers = output<void>();
   readonly leave = output<void>();
@@ -99,7 +103,8 @@ export class SetupWizard implements OnInit {
   readonly roles = Object.keys(roleLabels);
   readonly uploadLabels = uploadLabels;
   readonly state = signal<SetupState | null>(null);
-  readonly step = signal<StepKey>('mode');
+  readonly step = signal<StepKey>('workspace');
+  readonly setupLoad = signal<DataState>({ kind: 'loading', heading: 'Loading setup' });
   readonly busy = signal(false);
   readonly error = signal('');
   readonly notice = signal('');
@@ -109,15 +114,21 @@ export class SetupWizard implements OnInit {
 
   readonly drafts = signal<Record<string, Draft>>({});
   readonly layerMessages = signal<Record<string, string>>({});
+  readonly checkErrors = signal<Record<string, string>>({});
+  readonly layerRefresh = signal<DataState>({ kind: 'ready' });
+  readonly advancingDisabled = computed(() => this.busy() || this.layerRefresh().kind === 'loading');
+  readonly updatingLayers = computed(() => this.busy() || this.layerRefresh().kind !== 'ready');
   readonly fields = signal({ nameField: 'name', codeField: 'code', parentCodeField: 'parent_code' });
 
   readonly firmsResult = signal<{ ok: boolean; message: string } | null>(null);
   readonly skippingFirms = signal(false);
 
   readonly pack = signal<StarterPack | null>(null);
+  readonly packLoad = signal<DataState>({ kind: 'loading', heading: 'Loading starter forms' });
 
   readonly invitations = signal<Invitation[]>([]);
   readonly units = signal<Unit[]>([]);
+  readonly invitationsLoad = signal<DataState>({ kind: 'loading', heading: 'Loading invitations and units' });
   readonly inviteRole = signal('field_staff');
   readonly inviteUnit = signal('');
   private readonly inviteTried = signal(false);
@@ -145,13 +156,30 @@ export class SetupWizard implements OnInit {
     const state = this.state();
     return !!state && state.boundarySet && state.layers.every(layer => !layer.required || layer.published);
   });
+  readonly layerBlockers = computed(() => (this.state()?.layers ?? []).flatMap(layer => {
+    const fieldId = 'review-' + layer.key;
+    const problems: FieldError[] = this.blocking(layer).map(problem => ({
+      fieldId, message: `${layer.name}${problem.featureRef ? ' · ' + problem.featureRef : ''}: ${problem.message}`
+    }));
+    if (!problems.length && this.layerFailed(layer)) {
+      problems.push({ fieldId, message: `${layer.name}: Import failed. Replace the file.` });
+    }
+    for (const refusal of [this.checkErrors()[layer.key], this.layerMessages()[layer.key]]) {
+      if (refusal) problems.push({ fieldId, message: `${layer.name}: ${refusal}` });
+    }
+    return problems;
+  }));
+  readonly nextLayer = computed(() => this.state()?.layers.find(layer =>
+    layer.required && !layer.published && !this.lockedLayers().has(layer.key)));
 
   ngOnInit(): void {
-    this.load(true);
+    this.load();
   }
 
   status(key: StepKey): 'done' | 'skipped' | 'todo' {
     const state = this.state();
+    // Once this screen can load a workspace, the claim step is complete.
+    if (key === 'workspace') return state ? 'done' : 'todo';
     if (key === 'finish') return state?.finishedAt ? 'done' : 'todo';
     return state?.steps[key]?.status ?? 'todo';
   }
@@ -160,36 +188,44 @@ export class SetupWizard implements OnInit {
     return { done: 'Done', skipped: 'Skipped', todo: 'To do' }[this.status(key)];
   }
 
-  load(chooseStep = false): void {
+  load(): void {
+    this.setupLoad.set({ kind: 'loading', heading: 'Loading setup' });
     this.http.get<SetupState>(this.base + '/setup').pipe(takeUntilDestroyed(this.destroy)).subscribe({
       next: state => {
         this.apply(state);
-        if (chooseStep) {
-          const next = steps.find(item => item.key !== 'finish' && this.status(item.key) === 'todo');
-          this.go(next?.key ?? 'finish', false);
-        }
+        this.setupLoad.set({ kind: 'ready' });
+        const next = steps.find(item => this.status(item.key) === 'todo');
+        this.go(next?.key ?? 'finish');
       },
-      error: error => this.failed(error)
+      error: error => {
+        const detail = this.failureMessage(error);
+        this.setupLoad.set(error.status === 403 ?
+          { kind: 'forbidden', detail } : { kind: 'error', heading: 'Could not load setup', detail });
+      }
     });
   }
 
-  go(key: StepKey, focus = true): void {
+  go(key: StepKey, notice = ''): void {
+    if (this.advancingDisabled()) return;
     this.step.set(key);
+    const disclosure = this.disclosure()?.nativeElement;
+    if (disclosure) disclosure.open = false;
+    this.skippingFirms.set(false);
     this.error.set('');
-    this.notice.set('');
+    this.notice.set(notice);
     if (key === 'invitations') this.loadInvitations();
     if (key === 'forms') this.loadPack();
-    setTimeout(() => {
-      // On a phone the steps scroll sideways, so keep the current one in view.
-      this.host.nativeElement.querySelector('.setup-steps [aria-current=step]')
-        ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-      if (focus) this.heading()?.nativeElement.focus();
-    });
+    afterNextRender(() => {
+      const heading = this.heading()?.nativeElement;
+      if (this.step() !== key || !heading) return;
+      heading.focus({ preventScroll: true });
+      this.host.nativeElement.scrollTop = 0;
+    }, { injector: this.injector });
   }
 
-  next(): void {
+  next(notice = ''): void {
     const following = steps[this.stepIndex() + 1];
-    if (following) this.go(following.key);
+    if (following) this.go(following.key, notice);
   }
 
   // Hierarchy
@@ -213,7 +249,7 @@ export class SetupWizard implements OnInit {
     }));
     this.run(this.http.post<SetupState>(this.base + '/setup/hierarchy', { preset: this.presetSlug(), levels }), state => {
       this.apply(state);
-      this.next();
+      this.next('Hierarchy saved.');
     });
   }
 
@@ -229,9 +265,25 @@ export class SetupWizard implements OnInit {
   }
 
   layerIcon(layer: SetupLayer): 'step' | 'complete' | 'overdue' {
-    const status = this.drafts()[layer.key]?.status ?? layer.latest?.status;
-    if (status === 'failed' || this.blocking(layer).length) return 'overdue';
+    if (this.layerFailed(layer) || this.blocking(layer).length || this.checkErrors()[layer.key] ||
+        this.layerMessages()[layer.key]) return 'overdue';
     return layer.published && (!layer.latest || layer.latest.status === 'published') ? 'complete' : 'step';
+  }
+
+  layerFailed(layer: SetupLayer): boolean {
+    return (this.drafts()[layer.key]?.status ?? layer.latest?.status) === 'failed';
+  }
+
+  focusLayer(key: string): void {
+    this.document.getElementById('review-' + key)?.focus();
+  }
+
+  retryCheck(layer: SetupLayer): void {
+    const versionId = this.drafts()[layer.key]?.versionId ?? layer.latest?.versionId;
+    if (versionId) {
+      this.focusLayer(layer.key);
+      this.watch(layer, null, versionId);
+    }
   }
 
   blocking(layer: SetupLayer): Problem[] {
@@ -251,6 +303,7 @@ export class SetupWizard implements OnInit {
     const file = input.files?.[0];
     if (!file) {
       this.setLayerMessage(layer, 'Choose a file first.');
+      input.focus();
       return;
     }
     const fields = this.fields();
@@ -271,6 +324,7 @@ export class SetupWizard implements OnInit {
     this.run(this.http.post<Draft>(this.base + '/layer-imports', data), draft => {
       input.value = '';
       this.watch(layer, draft);
+      this.notice.set(layer.name + ' uploaded. The file is being checked.');
     }, layer);
   }
 
@@ -278,6 +332,7 @@ export class SetupWizard implements OnInit {
     const draft = this.drafts()[layer.key];
     if (!draft) return;
     const url = this.base + '/layer-imports/' + encodeURIComponent(draft.versionId);
+    this.setLayerMessage(layer, '');
     this.run(this.http.get<Preview>(url + '/preview').pipe(
       switchMap(preview => {
         if (preview.blocked) throw new HttpErrorResponse({ status: 409, error: { error: preview.blocked } });
@@ -288,10 +343,25 @@ export class SetupWizard implements OnInit {
         return this.http.post(url + '/publish', { days: preview.days, grantConfirmation: '' });
       })
     ), () => {
-      this.drafts.update(drafts => { const copy = { ...drafts }; delete copy[layer.key]; return copy; });
-      this.setLayerMessage(layer, '');
-      this.load();
+      this.drafts.update(drafts => {
+        const remaining = { ...drafts };
+        delete remaining[layer.key];
+        return remaining;
+      });
+      this.units.set([]);
+      this.notice.set(layer.name + ' published.');
+      this.refreshLayers();
     }, layer);
+  }
+
+  refreshLayers(): void {
+    this.layerRefresh.set({ kind: 'loading', heading: 'Refreshing the layer list' });
+    this.http.get<SetupState>(this.base + '/setup').pipe(takeUntilDestroyed(this.destroy)).subscribe({
+      next: state => { this.apply(state); this.layerRefresh.set({ kind: 'ready' }); },
+      error: error => this.layerRefresh.set({
+        kind: 'error', heading: 'Could not refresh the layer list', detail: this.failureMessage(error)
+      })
+    });
   }
 
   finishLayers(): void {
@@ -320,8 +390,12 @@ export class SetupWizard implements OnInit {
   // Starter forms
 
   loadPack(): void {
+    this.packLoad.set({ kind: 'loading', heading: 'Loading starter forms' });
     this.http.get<StarterPack>(this.base + '/starter-pack').pipe(takeUntilDestroyed(this.destroy))
-      .subscribe({ next: pack => this.pack.set(pack), error: error => this.failed(error) });
+      .subscribe({
+        next: pack => { this.pack.set(pack); this.packLoad.set({ kind: 'ready' }); },
+        error: error => this.packLoad.set({ kind: 'error', heading: 'Could not load starter forms', detail: this.failureMessage(error) })
+      });
   }
 
   enablePack(): void {
@@ -346,12 +420,20 @@ export class SetupWizard implements OnInit {
   // Invitations
 
   loadInvitations(): void {
-    this.http.get<{ invitations: Invitation[] }>(this.base + '/invitations').pipe(takeUntilDestroyed(this.destroy))
-      .subscribe({ next: list => this.invitations.set(list.invitations), error: error => this.failed(error) });
-    if (!this.units().length) {
-      this.http.get<{ units: Unit[] }>(this.base + '/setup/units').pipe(takeUntilDestroyed(this.destroy))
-        .subscribe({ next: list => this.units.set(list.units), error: error => this.failed(error) });
-    }
+    if (!this.units().length) this.invitationsLoad.set({ kind: 'loading', heading: 'Loading invitations and units' });
+    forkJoin({
+      list: this.http.get<{ invitations: Invitation[] }>(this.base + '/invitations'),
+      scope: this.units().length ? of({ units: this.units() }) : this.http.get<{ units: Unit[] }>(this.base + '/setup/units')
+    }).pipe(takeUntilDestroyed(this.destroy)).subscribe({
+      next: ({ list, scope }) => {
+        this.invitations.set(list.invitations);
+        this.units.set(scope.units);
+        this.invitationsLoad.set({ kind: 'ready' });
+      },
+      error: error => this.invitationsLoad.set({
+        kind: 'error', heading: 'Could not load invitations', detail: this.failureMessage(error), keepContent: !!this.units().length
+      })
+    });
   }
 
   unitLabel(unit: Unit): string {
@@ -378,7 +460,7 @@ export class SetupWizard implements OnInit {
 
   revoke(item: Invitation): void {
     this.run(this.http.delete<{ invitations: Invitation[] }>(this.base + '/invitations/' + encodeURIComponent(item.id)),
-      list => this.invitations.set(list.invitations));
+      list => { this.invitations.set(list.invitations); this.notice.set('Invitation revoked.'); });
   }
 
   // Steps
@@ -386,8 +468,8 @@ export class SetupWizard implements OnInit {
   markStep(step: StepKey, status: 'done' | 'skipped'): void {
     this.run(this.http.post<SetupState>(this.base + '/setup/steps/' + step, { status }), state => {
       this.apply(state);
-      this.skippingFirms.set(false);
-      this.next();
+      const label = steps.find(item => item.key === step)?.label ?? '';
+      this.next(status === 'done' ? label + ' saved.' : label + ' skipped.');
     });
   }
 
@@ -420,6 +502,7 @@ export class SetupWizard implements OnInit {
 
   private watch(layer: SetupLayer, initial: Draft | null, versionId = initial?.versionId ?? ''): void {
     this.watches.get(layer.key)?.unsubscribe();
+    this.checkErrors.update(errors => ({ ...errors, [layer.key]: '' }));
     if (initial) this.drafts.update(drafts => ({ ...drafts, [layer.key]: initial }));
     const url = this.base + '/layer-imports/' + encodeURIComponent(versionId);
     const subscription = timer(initial ? 1000 : 0, 1000).pipe(
@@ -429,7 +512,7 @@ export class SetupWizard implements OnInit {
       finalize(() => this.watches.delete(layer.key))
     ).subscribe({
       next: draft => this.drafts.update(drafts => ({ ...drafts, [layer.key]: draft })),
-      error: error => this.failed(error, layer)
+      error: error => this.checkErrors.update(errors => ({ ...errors, [layer.key]: this.failureMessage(error) }))
     });
     this.watches.set(layer.key, subscription);
   }
@@ -439,18 +522,23 @@ export class SetupWizard implements OnInit {
   }
 
   private run<T>(request: Observable<T>, next: (value: T) => void, layer?: SetupLayer): void {
+    if (this.busy()) return;
     this.busy.set(true);
     this.error.set('');
     this.notice.set('');
-    request.pipe(takeUntilDestroyed(this.destroy), finalize(() => this.busy.set(false))).subscribe({
-      next, error: error => this.failed(error, layer)
+    request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
+      next: value => { this.busy.set(false); next(value); },
+      error: error => {
+        this.busy.set(false);
+        const message = this.failureMessage(error);
+        if (layer) this.setLayerMessage(layer, message);
+        else this.error.set(message);
+      }
     });
   }
 
-  private failed(error: HttpErrorResponse, layer?: SetupLayer): void {
+  private failureMessage(error: HttpErrorResponse): string {
     if (error.status === 401) this.auth.sessionEnded();
-    const message = typeof error.error?.error === 'string' ? error.error.error : 'The setup request failed. Try again.';
-    if (layer) this.setLayerMessage(layer, message);
-    else this.error.set(message);
+    return typeof error.error?.error === 'string' ? error.error.error : 'The setup request failed. Try again.';
   }
 }

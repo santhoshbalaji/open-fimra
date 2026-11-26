@@ -6,15 +6,14 @@
   </div>
   @if (state(); as state) {
     <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-      <nav class="setup-steps -mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0" aria-label="Setup steps">
-        <ol class="flex gap-1 pb-1 md:grid md:pb-0">
+      <ng-template #stepList>
+        <ol class="grid gap-1">
           @for (item of steps; track item.key; let index = $index) {
             @let current = step() === item.key;
             @let itemStatus = status(item.key);
             <li class="flex-none">
-              <button type="button" [attr.aria-current]="current ? 'step' : null" (click)="go(item.key)"
-                [attr.aria-label]="(index + 1) + '. ' + item.label + ', ' + statusLabel(item.key)"
-                class="grid min-h-(--target-web) w-full grid-cols-[28px_auto] items-center gap-x-2 rounded-control border border-transparent px-2 py-1.5 text-start hover:bg-muted md:grid-cols-[28px_1fr]"
+              <button type="button" [attr.aria-current]="current ? 'step' : null" [disabled]="advancingDisabled()" (click)="go(item.key)"
+                class="grid min-h-(--target-web) w-full grid-cols-[28px_minmax(0,1fr)] items-center gap-x-2 rounded-control border border-transparent px-2 py-1.5 text-start hover:bg-muted"
                 [class]="current ? 'border-primary! bg-secondary font-semibold text-secondary-foreground' : ''">
                 <span aria-hidden="true" class="row-span-2 grid size-7 place-items-center rounded-full border text-xs font-semibold"
                   [class]="current ? 'border-primary bg-primary text-primary-foreground' :
@@ -23,53 +22,47 @@
                   @else if (itemStatus === 'skipped' && !current) { <svg fimraIcon="minus" class="size-4"></svg> }
                   @else { {{ index + 1 }} }
                 </span>
-                <span class="whitespace-nowrap">{{ item.label }}</span>
-                <small class="text-xs font-normal whitespace-nowrap text-muted-foreground">{{ statusLabel(item.key) }}@if (current) { · Current }</small>
+                <span class="min-w-0 wrap-break-word">{{ item.label }}</span>
+                <small class="text-xs font-normal text-muted-foreground">{{ statusLabel(item.key) }}@if (current) { · Current }</small>
               </button>
             </li>
           }
         </ol>
+      </ng-template>
+      <nav class="setup-steps hidden md:block" aria-label="Setup steps">
+        <ng-container [ngTemplateOutlet]="stepList" />
       </nav>
+      <details #stepDisclosure class="setup-progress sticky top-0 z-10 min-w-0 rounded-control border border-border bg-card md:hidden">
+        <summary class="cursor-pointer rounded-control px-3 py-3 font-semibold">
+          Step {{ stepIndex() + 1 }} of {{ steps.length }}: {{ steps[stepIndex()].label }}
+        </summary>
+        <nav class="max-h-[40dvh] overflow-y-auto px-2 pb-2" aria-label="Setup steps">
+          <ng-container [ngTemplateOutlet]="stepList" />
+        </nav>
+      </details>
 
-      <section hlmCard class="setup-step gap-5 px-5 sm:px-6" aria-labelledby="step-heading">
+      <section hlmCard class="setup-step gap-5 overflow-visible! px-5 sm:px-6" aria-labelledby="step-heading">
         <div class="grid gap-1">
-          <p class="text-xs text-muted-foreground">Step {{ stepIndex() + 1 }} of {{ steps.length }}</p>
-          <h3 id="step-heading" #stepHeading tabindex="-1" class="text-title focus:outline-none focus-visible:outline-3 focus-visible:outline-ring">{{ steps[stepIndex()].label }}</h3>
+          <p class="hidden text-xs text-muted-foreground md:block">Step {{ stepIndex() + 1 }} of {{ steps.length }}</p>
+          <h3 id="step-heading" #stepHeading tabindex="-1" class="text-title focus-visible:outline-3 focus-visible:outline-ring">{{ steps[stepIndex()].label }}</h3>
         </div>
         @if (error()) {
           <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
             <p hlmAlertDescription>{{ error() }}</p></div>
         }
-        @if (notice()) {
-          <p role="status" class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-primary px-3 py-2">
-            <svg fimraIcon="circle-check" aria-hidden="true" class="size-4 shrink-0"></svg>{{ notice() }}</p>
-        }
+        <fimra-live-status class="rounded-control border-s-primary" [class.sr-only]="!busy() && !notice()"
+          [class.setup-feedback]="busy() || notice()" [message]="busy() ? 'Saving…' : notice()" />
 
         @switch (step()) {
-          @case ('mode') {
-            <div class="grid gap-3">
-              <div class="flex items-start gap-3 rounded-control border border-primary p-3">
-                <svg fimraIcon="circle-check" aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-primary"></svg>
-                <p><strong>{{ state.mode === 'state' ? 'State mode' : 'National mode' }}.</strong>
-                  This installation serves one state forest department.</p>
-              </div>
-              <div class="flex items-start gap-3 rounded-control border border-dashed border-border p-3 text-muted-foreground">
-                <svg fimraIcon="lock" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
-                <p><span hlmBadge variant="outline" class="me-1">Not available yet</span>
-                  National mode, for a national body that follows several states, is not available yet.
-                  Phase 1 fully supports state mode only.</p>
-              </div>
-            </div>
-            <button hlmBtn type="button" class="self-start" (click)="next()">Next</button>
-          }
           @case ('workspace') {
             <dl class="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr]">
+              <dt class="text-muted-foreground">Mode</dt><dd>{{ state.mode === 'state' ? 'State' : 'National' }}</dd>
               <dt class="text-muted-foreground">Name</dt><dd>{{ state.workspace.name }}</dd>
               <dt class="text-muted-foreground">Address</dt><dd><code class="font-mono">{{ state.workspace.slug }}</code></dd>
               <dt class="text-muted-foreground">State code</dt><dd><code class="font-mono">{{ state.root?.code }}</code></dd>
             </dl>
             <p>These were chosen when setup started. The state boundary file must use the state code above.</p>
-            <button hlmBtn type="button" class="self-start" (click)="next()">Next</button>
+            <button hlmBtn type="button" class="self-start" [disabled]="busy()" (click)="next()">Next</button>
           }
           @case ('hierarchy') {
             <p>Choose the levels your department uses, from the state down to the smallest unit. You can change the
@@ -85,30 +78,34 @@
               </hlm-radio-group>
             </fieldset>
             <div hlmTableContainer class="rounded-control border border-border">
-              <table hlmTable class="level-table">
+              <table hlmTable class="level-table table-fixed">
                 <caption class="px-3 pt-3 pb-1 text-start font-semibold [caption-side:top]">Level labels</caption>
                 <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Level</th><th hlmTh scope="col">English</th><th hlmTh scope="col">Hindi</th></tr></thead>
                 <tbody hlmTBody>
                   @for (level of levels(); track level.slug; let index = $index) {
                     <tr hlmTr>
-                      <th hlmTh scope="row" class="font-normal">{{ index + 1 }}. <code class="font-mono text-xs">{{ level.slug }}</code></th>
-                      <td hlmTd class="min-w-36"><input hlmInput [attr.aria-label]="'English label for level ' + (index + 1)" maxlength="60" required
+                      <th hlmTh scope="row" class="whitespace-normal font-normal"><span class="sr-only sm:not-sr-only">{{ index + 1 }}. </span><code class="font-mono text-xs wrap-break-word">{{ level.slug }}</code></th>
+                      <td hlmTd class="min-w-0"><input hlmInput [attr.aria-label]="'English label for level ' + (index + 1)" maxlength="60" required
                         [value]="level.labels['en'] ?? ''" (input)="setLabel(index, 'en', $any($event.target).value)"></td>
-                      <td hlmTd class="min-w-36"><input hlmInput lang="hi" [attr.aria-label]="'Hindi label for level ' + (index + 1)" maxlength="60"
+                      <td hlmTd class="min-w-0"><input hlmInput lang="hi" [attr.aria-label]="'Hindi label for level ' + (index + 1)" maxlength="60"
                         [value]="level.labels['hi'] ?? ''" (input)="setLabel(index, 'hi', $any($event.target).value)"></td>
                     </tr>
                   }
                 </tbody>
               </table>
             </div>
-            <button hlmBtn type="button" class="self-start" [disabled]="busy() || !levels().length"
-              (click)="saveHierarchy()">Save hierarchy</button>
+            <div class="setup-actions">
+              <button hlmBtn type="button" [disabled]="busy() || !levels().length"
+                (click)="saveHierarchy()">Save hierarchy</button>
+            </div>
           }
           @case ('layers') {
+            <fimra-field-error-summary heading="Layer problems to fix" [errors]="layerBlockers()" />
+            <fimra-state-region [class.sr-only]="layerRefresh().kind === 'ready'" [state]="layerRefresh()" (retry)="refreshLayers()" />
             <p>Upload one file for each level, in order from the state down, then the forest layer. Known heat sources,
               such as brick kilns, are optional. Each upload is checked in the background. Publish it once it has no
               blocking problems. The published state boundary becomes the workspace boundary.</p>
-            <fieldset hlmFieldSet class="min-w-0 gap-3" [disabled]="busy()">
+            <fieldset hlmFieldSet class="min-w-0 gap-3" [disabled]="updatingLayers()">
               <legend hlmFieldLegend variant="label">Field names in your files</legend>
               <div class="grid gap-4 sm:grid-cols-3">
                 <hlm-field><label hlmFieldLabel for="name-field">Name field</label>
@@ -129,9 +126,27 @@
                   [attr.data-published]="layer.published || null">
                   <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                     <div class="grid gap-1">
-                      <p><strong>{{ layer.name }}</strong>@if (!layer.required) { <small class="text-muted-foreground"> (optional)</small> }</p>
+                      <h4 [id]="'review-' + layer.key" tabindex="-1" class="rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+                        {{ layer.name }}@if (!layer.required) { <small class="font-normal text-muted-foreground"> (optional)</small> }
+                      </h4>
                       <fimra-status-badge class="layer-state mx-0! justify-self-start" [icon]="layerIcon(layer)" [label]="layerStatus(layer)" />
                     </div>
+                  </div>
+                  @if (checkErrors()[layer.key]; as detail) {
+                    <fimra-state-region [state]="{ kind: 'error', heading: 'Could not check the import', detail }"
+                      (retry)="retryCheck(layer)" />
+                  }
+                  @if (layerMessages()[layer.key]; as message) {
+                    <div hlmAlert variant="destructive">
+                      <p hlmAlertDescription>{{ message }}</p>
+                    </div>
+                  }
+                  @if (layerFailed(layer) || blocking(layer).length) {
+                    <p [id]="'repair-' + layer.key" class="font-medium text-danger">
+                      Correct these problems in the source file, then choose and upload a replacement.
+                    </p>
+                  }
+                  <div>
                     @if (locked) {
                       <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4 shrink-0"></svg>Publish the levels above first.</p>
                     } @else {
@@ -139,20 +154,20 @@
                         <label class="sr-only" [for]="'file-' + layer.key">File for {{ layer.name }}</label>
                         <input hlmInput #file type="file" [id]="'file-' + layer.key" accept=".gpkg,.zip,.geojson,.kml,.kmz"
                           class="h-auto min-w-0 flex-1 py-1.5 file:me-3 file:rounded-control file:bg-secondary file:px-3 file:text-secondary-foreground sm:w-64 sm:flex-none"
-                          [disabled]="busy()">
-                        <button hlmBtn variant="outline" type="button" [disabled]="busy()" (click)="uploadLayer(layer, file)">Upload</button>
+                          [attr.aria-describedby]="layerFailed(layer) || blocking(layer).length ? 'repair-' + layer.key : null"
+                          [disabled]="updatingLayers()">
+                        <button hlmBtn variant="outline" type="button" [disabled]="updatingLayers()" (click)="uploadLayer(layer, file)">
+                          {{ layerFailed(layer) || blocking(layer).length ? 'Upload replacement' : 'Upload' }}
+                        </button>
                         @if (canPublish(layer)) {
-                          <button hlmBtn type="button" [disabled]="busy()" (click)="publishLayer(layer)">Publish</button>
+                          <button hlmBtn type="button" [disabled]="updatingLayers()" (click)="publishLayer(layer)">Publish</button>
                         }
                       </div>
                     }
                   </div>
-                  @if (layerMessages()[layer.key]; as message) { <p class="text-sm" role="status">{{ message }}</p> }
                   @if (blocking(layer); as problems) {
                     @if (problems.length) {
                       <div class="grid gap-2 rounded-control border border-border border-s-4 border-s-danger px-3 py-2">
-                        <p class="flex items-center gap-2 font-medium text-danger"><svg fimraIcon="circle-x" aria-hidden="true" class="size-4 shrink-0"></svg>
-                          Correct these problems in the file and upload it again:</p>
                         <ul class="grid gap-1 [overflow-wrap:anywhere]">
                           @for (problem of problems; track $index) {
                             <li class="flex flex-wrap items-baseline gap-x-2">
@@ -176,8 +191,14 @@
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
                 <svg fimraIcon="info" aria-hidden="true" class="size-4 shrink-0"></svg>The workspace boundary is set when the state level is published.</p>
             }
-            <button hlmBtn type="button" class="self-start" [disabled]="busy() || !layersReady()"
-              (click)="finishLayers()">Continue</button>
+            <div class="setup-actions">
+              @if (layersReady()) {
+                <button hlmBtn type="button" [disabled]="updatingLayers()" (click)="finishLayers()">Continue</button>
+              } @else if (nextLayer(); as layer) {
+                <a hlmBtn variant="outline" [attr.href]="'#review-' + layer.key"
+                  (click)="$event.preventDefault(); focusLayer(layer.key)">Go to {{ layer.name }}</a>
+              }
+            </div>
           }
           @case ('firms') {
             <p>NASA FIRMS sends satellite fire detections. Request a free map key at
@@ -225,50 +246,51 @@
                 <div hlmAlertDescription class="grid gap-3"><p>You can add a key later from this wizard.</p>
                   <div class="flex flex-wrap items-center gap-2">
                     <button hlmBtn variant="outline" type="button" [disabled]="busy()" (click)="markStep('firms', 'skipped')">Skip anyway</button>
-                    <button hlmBtn variant="ghost" type="button" (click)="skippingFirms.set(false)">Go back</button>
+                    <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="skippingFirms.set(false)">Go back</button>
                   </div></div>
               </div>
             } @else {
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="setup-actions">
                 <button hlmBtn type="button" [disabled]="busy() || state.firms.source === 'none'"
                   (click)="markStep('firms', 'done')">Continue</button>
-                <button hlmBtn variant="ghost" type="button" (click)="skippingFirms.set(true)">Skip for now</button>
+                <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="skippingFirms.set(true)">Skip for now</button>
               </div>
             }
           }
           @case ('forms') {
             <p>The starter forms follow the default workflow: the control room sends a team, the team reports from the
               site, and an officer checks the first and final reports. Use them as they are, or change or replace them later.</p>
-            @if (pack(); as pack) {
-              <ul class="pack-forms grid gap-2">
-                @for (form of pack.forms; track form.form) {
-                  <li class="grid gap-1 rounded-control border border-border p-3">
-                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                      <p><strong>{{ form.title }}</strong></p>
-                      <fimra-status-badge class="mx-0!" [icon]="form.status === 'missing' ? 'step' : 'complete'" [label]="packStatus(form)" />
-                    </div>
-                    <p class="text-muted-foreground">{{ packUse(form) }}</p>
-                    @for (skip of form.skipped ?? []; track skip.step) {
-                      <p class="flex items-start gap-2 text-sm"><svg fimraIcon="info" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
-                        Not put on {{ skip.step }}: {{ skip.reason }}</p>
-                    }
-                  </li>
+            <fimra-state-region [state]="packLoad()" (retry)="loadPack()">
+              @if (pack(); as pack) {
+                @if (pack.enabled) {
+                  <fimra-status-badge class="mx-0!" icon="complete" label="Starter forms are on" />
+                } @else {
+                  <button hlmBtn type="button" [disabled]="busy()" (click)="enablePack()">Switch on the starter forms</button>
+                  <p class="mt-2 text-sm text-muted-foreground">Forms already in this workspace with the same names are kept.</p>
                 }
-              </ul>
-              <label hlmLabel class="font-normal"><hlm-switch [checked]="pack.enabled" [disabled]="busy() || pack.enabled"
-                (checkedChange)="$event && enablePack()" />Switch on the starter forms</label>
-              @if (!pack.enabled) {
-                <p class="text-sm text-muted-foreground">Forms already in this workspace with the same names are left as they are.</p>
+                <ul class="pack-forms mt-3 grid gap-2">
+                  @for (form of pack.forms; track form.form) {
+                    <li class="grid gap-1 rounded-control border border-border p-3">
+                      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                        <p><strong>{{ form.title }}</strong></p>
+                        <fimra-status-badge class="mx-0!" [icon]="form.status === 'missing' ? 'step' : 'complete'" [label]="packStatus(form)" />
+                      </div>
+                      <p class="text-muted-foreground">{{ packUse(form) }}</p>
+                      @for (skip of form.skipped ?? []; track skip.step) {
+                        <p class="flex items-start gap-2 text-sm"><svg fimraIcon="info" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
+                          Not put on {{ skip.step }}: {{ skip.reason }}</p>
+                      }
+                    </li>
+                  }
+                </ul>
               }
-              <div class="flex flex-wrap items-center gap-2">
-                <button hlmBtn type="button" [disabled]="busy() || !pack.enabled" (click)="markStep('forms', 'done')">Continue</button>
+            </fimra-state-region>
+            @if (pack(); as pack) {
+              <div class="setup-actions">
+                <button hlmBtn type="button" [disabled]="busy() || !pack.enabled || packLoad().kind !== 'ready'" (click)="markStep('forms', 'done')">Continue</button>
                 @if (!pack.enabled) {
                   <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="markStep('forms', 'skipped')">Skip for now</button>
                 }
-              </div>
-            } @else {
-              <div class="grid gap-2" aria-hidden="true">
-                <div hlmSkeleton class="h-16 w-full"></div><div hlmSkeleton class="h-16 w-full"></div>
               </div>
             }
           }
@@ -280,92 +302,89 @@
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
                 <svg fimraIcon="info" aria-hidden="true" class="size-4 shrink-0"></svg>Email is off on this server, so tell officers yourself.</p>
             }
-            <form #inviteForm class="invite-form" (submit)="$event.preventDefault(); invite(inviteForm)">
-              <fieldset class="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_auto]" [disabled]="busy()">
-                <hlm-field><label hlmFieldLabel for="invite-email">Email</label>
-                  <input hlmInput id="invite-email" name="email" type="email" required maxlength="254" autocomplete="off"
-                    placeholder="officer@example.invalid"></hlm-field>
-                <hlm-field><label hlmFieldLabel for="invite-role">Role</label>
-                  <hlm-select [value]="inviteRole()" (valueChange)="inviteRole.set($event ?? 'field_staff')" [itemToString]="roleLabel">
-                    <hlm-select-trigger buttonId="invite-role" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
-                    <hlm-select-content *hlmSelectPortal>
-                      @for (role of roles; track role) { <hlm-select-item [value]="role">{{ roleLabels[role] }}</hlm-select-item> }
-                    </hlm-select-content>
-                  </hlm-select></hlm-field>
-                <hlm-field><label hlmFieldLabel for="invite-unit">Unit</label>
-                  <hlm-select [value]="inviteUnit() || null" (valueChange)="inviteUnit.set($event ?? '')" [itemToString]="unitName">
-                    <hlm-select-trigger buttonId="invite-unit" class="w-full min-w-0 justify-start text-start" [forceInvalid]="unitMissing()" [aria-invalid]="unitMissing()"><hlm-select-value placeholder="Choose a unit" /></hlm-select-trigger>
-                    <hlm-select-content *hlmSelectPortal>
-                      @for (unit of units(); track unit.path) {
-                        <hlm-select-item [value]="unit.path" [style.padding-inline-start.rem]="0.5 + unit.depth * 0.75">{{ unitLabel(unit) }}</hlm-select-item>
+            <fimra-state-region [state]="invitationsLoad()" (retry)="loadInvitations()">
+              <form #inviteForm class="invite-form" (submit)="$event.preventDefault(); invite(inviteForm)">
+                <fieldset class="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_auto]" [disabled]="busy()">
+                  <hlm-field><label hlmFieldLabel for="invite-email">Email</label>
+                    <input hlmInput id="invite-email" name="email" type="email" required maxlength="254" autocomplete="off"
+                      placeholder="officer@example.invalid"></hlm-field>
+                  <hlm-field><label hlmFieldLabel for="invite-role">Role</label>
+                    <hlm-select [value]="inviteRole()" (valueChange)="inviteRole.set($event ?? 'field_staff')" [itemToString]="roleLabel">
+                      <hlm-select-trigger buttonId="invite-role" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
+                      <hlm-select-content *hlmSelectPortal>
+                        @for (role of roles; track role) { <hlm-select-item [value]="role">{{ roleLabels[role] }}</hlm-select-item> }
+                      </hlm-select-content>
+                    </hlm-select></hlm-field>
+                  <hlm-field><label hlmFieldLabel for="invite-unit">Unit</label>
+                    <hlm-select [value]="inviteUnit() || null" (valueChange)="inviteUnit.set($event ?? '')" [itemToString]="unitName">
+                      <hlm-select-trigger buttonId="invite-unit" class="w-full min-w-0 justify-start text-start" [forceInvalid]="unitMissing()" [aria-invalid]="unitMissing()"><hlm-select-value placeholder="Choose a unit" /></hlm-select-trigger>
+                      <hlm-select-content *hlmSelectPortal>
+                        @for (unit of units(); track unit.path) {
+                          <hlm-select-item [value]="unit.path" [style.padding-inline-start.rem]="0.5 + unit.depth * 0.75">{{ unitLabel(unit) }}</hlm-select-item>
+                        }
+                      </hlm-select-content>
+                    </hlm-select>
+                    @if (unitMissing()) { <hlm-field-error forceShow>Choose a unit.</hlm-field-error> }</hlm-field>
+                  <button hlmBtn type="submit" class="md:self-end">Invite</button>
+                </fieldset>
+              </form>
+              @if (invitations().length) {
+                <div hlmTableContainer class="mt-4 rounded-control border border-border">
+                  <table hlmTable class="invite-table">
+                    <caption class="px-3 pt-3 pb-1 text-start font-semibold text-foreground [caption-side:top]">Pending invitations</caption>
+                    <thead hlmTHead><tr hlmTr>
+                      <th hlmTh scope="col">Email</th><th hlmTh scope="col" class="max-sm:hidden">Role</th>
+                      <th hlmTh scope="col" class="max-sm:hidden">Unit</th><th hlmTh scope="col" class="max-sm:hidden">Expires</th>
+                      <th hlmTh scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+                    <tbody hlmTBody>
+                      @for (item of invitations(); track item.id) {
+                        <tr hlmTr>
+                          <td hlmTd class="whitespace-normal">
+                            <span class="font-mono [overflow-wrap:anywhere]">{{ item.email }}</span>
+                            @if (item.emailStatus === 'sent') { <span hlmBadge variant="outline" class="ms-2"><svg fimraIcon="mail-check" aria-hidden="true" class="size-3"></svg>Email sent</span> }
+                            @if (item.emailStatus === 'failed') { <span hlmBadge variant="destructive" class="ms-2"><svg fimraIcon="mail-x" aria-hidden="true" class="size-3"></svg>Email failed</span> }
+                            <span class="mt-1 block text-muted-foreground sm:hidden">{{ roleLabels[item.role] }} · {{ item.unitName || item.unitPath }} ·
+                              Expires {{ item.expiresAt | date:'mediumDate' }}</span>
+                          </td>
+                          <td hlmTd class="max-sm:hidden">{{ roleLabels[item.role] }}</td>
+                          <td hlmTd class="max-sm:hidden">{{ item.unitName || item.unitPath }}</td>
+                          <td hlmTd class="max-sm:hidden"><time>{{ item.expiresAt | date:'mediumDate' }}</time></td>
+                          <td hlmTd class="text-end"><button hlmBtn variant="ghost" size="sm" type="button" class="text-destructive" [disabled]="busy()"
+                            [attr.aria-label]="'Revoke invitation for ' + item.email" (click)="revoke(item)">Revoke</button></td>
+                        </tr>
                       }
-                    </hlm-select-content>
-                  </hlm-select>
-                  @if (unitMissing()) { <hlm-field-error forceShow>Choose a unit.</hlm-field-error> }</hlm-field>
-                <button hlmBtn type="submit" class="md:self-end">Invite</button>
-              </fieldset>
-            </form>
-            @if (invitations().length) {
-              <div hlmTableContainer class="rounded-control border border-border">
-                <table hlmTable class="invite-table">
-                  <caption class="px-3 pt-3 pb-1 text-start font-semibold text-foreground [caption-side:top]">Pending invitations</caption>
-                  <thead hlmTHead><tr hlmTr>
-                    <th hlmTh scope="col">Email</th><th hlmTh scope="col" class="max-sm:hidden">Role</th>
-                    <th hlmTh scope="col" class="max-sm:hidden">Unit</th><th hlmTh scope="col" class="max-sm:hidden">Expires</th>
-                    <th hlmTh scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-                  <tbody hlmTBody>
-                    @for (item of invitations(); track item.id) {
-                      <tr hlmTr>
-                        <td hlmTd class="whitespace-normal">
-                          <span class="font-mono [overflow-wrap:anywhere]">{{ item.email }}</span>
-                          @if (item.emailStatus === 'sent') { <span hlmBadge variant="outline" class="ms-2"><svg fimraIcon="mail-check" aria-hidden="true" class="size-3"></svg>Email sent</span> }
-                          @if (item.emailStatus === 'failed') { <span hlmBadge variant="destructive" class="ms-2"><svg fimraIcon="mail-x" aria-hidden="true" class="size-3"></svg>Email failed</span> }
-                          <span class="mt-1 block text-muted-foreground sm:hidden">{{ roleLabels[item.role] }} · {{ item.unitName || item.unitPath }} ·
-                            Expires {{ item.expiresAt | date:'mediumDate' }}</span>
-                        </td>
-                        <td hlmTd class="max-sm:hidden">{{ roleLabels[item.role] }}</td>
-                        <td hlmTd class="max-sm:hidden">{{ item.unitName || item.unitPath }}</td>
-                        <td hlmTd class="max-sm:hidden"><time>{{ item.expiresAt | date:'mediumDate' }}</time></td>
-                        <td hlmTd class="text-end"><button hlmBtn variant="ghost" size="sm" type="button" class="text-destructive" [disabled]="busy()"
-                          [attr.aria-label]="'Revoke invitation for ' + item.email" (click)="revoke(item)">Revoke</button></td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            } @else {
-              <fimra-empty-state heading="No pending invitations" detail="Officers you invite appear here until they sign in." />
-            }
-            <div class="flex flex-wrap items-center gap-2">
-              <button hlmBtn type="button" [disabled]="busy()" (click)="markStep('invitations', 'done')">Continue</button>
-              <button hlmBtn variant="ghost" type="button" (click)="markStep('invitations', 'skipped')">Skip for now</button>
+                    </tbody>
+                  </table>
+                </div>
+              } @else {
+                <fimra-empty-state heading="No pending invitations" detail="Officers you invite appear here until they sign in." />
+              }
+            </fimra-state-region>
+            <div class="setup-actions">
+              <button hlmBtn type="button" [disabled]="busy() || invitationsLoad().kind !== 'ready'" (click)="markStep('invitations', 'done')">Continue</button>
+              <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="markStep('invitations', 'skipped')">Skip for now</button>
             </div>
           }
           @case ('finish') {
             <ul class="grid">
               @for (item of steps.slice(0, -1); track item.key) {
                 <li class="flex items-center justify-between gap-2 border-b border-border py-2 last:border-0"><span>{{ item.label }}</span>
-                  <fimra-status-badge class="mx-0!" [icon]="status(item.key) === 'todo' ? 'step' : 'complete'" [label]="statusLabel(item.key)" /></li>
+                  <fimra-status-badge class="mx-0!" [icon]="status(item.key) === 'done' ? 'complete' : 'step'" [label]="statusLabel(item.key)" /></li>
               }
             </ul>
-            @if (status('firms') === 'skipped') {
+            @if (state.firms.source === 'none') {
               <p class="flex items-center gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2">
-                <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4 shrink-0"></svg>No FIRMS key yet: the map shows no new detections until you add one.</p>
+                <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4 shrink-0"></svg>No FIRMS key yet. Add one to receive new detections.</p>
             }
-            <p>Reopen this wizard at any time from the account menu.</p>
-            <button hlmBtn type="button" size="lg" class="self-start" [disabled]="busy()" (click)="finish()">Finish and open the alert map</button>
+            <p>Open the alert map to review detections and check which units they reach. To change these settings later, go to <strong>Settings → Setup</strong>.</p>
+            <div class="setup-actions">
+              <button hlmBtn type="button" [disabled]="busy()" (click)="finish()">Finish and open the alert map</button>
+            </div>
           }
         }
       </section>
     </div>
-  } @else if (error()) {
-    <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
-      <p hlmAlertDescription>{{ error() }}</p></div>
-    <button hlmBtn variant="outline" type="button" class="self-start" (click)="load(true)">Try again</button>
   } @else {
-    <div role="status" class="grid gap-4 md:grid-cols-[220px_1fr]"><span class="sr-only">Loading setup…</span>
-      <div class="grid gap-2" aria-hidden="true">@for (row of [1, 2, 3, 4, 5]; track row) { <hlm-skeleton class="h-10 w-full" /> }</div>
-      <div hlmCard class="px-6" aria-hidden="true"><hlm-skeleton class="h-6 w-40" /><hlm-skeleton class="h-24 w-full" /></div>
-    </div>
+    <fimra-state-region [state]="setupLoad()" (retry)="load()" />
   }
 </div>

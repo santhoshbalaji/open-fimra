@@ -201,11 +201,12 @@ wizard-test-integration: mail-up ## Take an empty, migrated database to a workin
 		cd services/api && FIMRA_WIZARD_INTEGRATION=1 go test -run '^TestWizardIntegration$$' -count=1 -v .
 
 WALKTHROUGH_SHOTS ?= $(HOME)/open-fimra-screenshots/first-run-wizard
+WALK_DB ?= fimra_walkthrough
 .PHONY: wizard-walkthrough
 wizard-walkthrough: mail-up web-build ## Drive the wizard in headless Chromium on a fresh database and save screenshots outside the repository
 	$(COMPOSE) build geo-worker
-	WALK_DB=fimra_walkthrough \
-	WALK_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/fimra_walkthrough?sslmode=disable" \
+	WALK_DB="$(WALK_DB)" \
+	WALK_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(WALK_DB)?sslmode=disable" \
 	SHOTS="$(WALKTHROUGH_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	MAIL_SMTP=127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT) MAIL_HTTP=127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT) \
 	GOOSE_VERSION=$(GOOSE_VERSION) PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble \

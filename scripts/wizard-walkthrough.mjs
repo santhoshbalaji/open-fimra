@@ -6,11 +6,15 @@
 // Environment: WEB (web app address), MAIL (mail catcher address), SEED (the
 // seed/demo-state folder), SHOTS (output folder), SETUP_CODE and FIRMS_KEY
 // (the fake FIRMS server's key).
-import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+import AxeBuilder from '@axe-core/playwright';
+import { chromium, expect } from 'playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { WEB, MAIL, SEED, SHOTS, SETUP_CODE, FIRMS_KEY } = process.env;
+const desktop = { width: 1440, height: 900 };
+const phone = { width: 390, height: 844 };
 mkdirSync(SHOTS, { recursive: true });
 let shot = 0;
 const save = async (page, name) => {
@@ -41,8 +45,8 @@ function repairedBeats() {
   return file;
 }
 
-async function signIn(browser, username) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+async function signIn(browser, username, viewport = desktop) {
+  const context = await browser.newContext({ viewport, colorScheme: 'light', reducedMotion: 'reduce' });
   const page = await context.newPage();
   await page.goto(WEB);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -52,24 +56,61 @@ async function signIn(browser, username) {
   return page;
 }
 
-const browser = await chromium.launch();
+async function captureStep(page, name, progress, nextAction) {
+  shot += 1;
+  for (const [size, viewport] of [['desktop', desktop], ['phone', phone]]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await page.locator('fimra-setup-wizard, fimra-bootstrap').evaluate(element => { element.scrollTop = 0; });
+      if (size === 'phone') {
+        await expect(page.getByText(progress, { exact: true })).toBeInViewport();
+        await expect(nextAction).toBeInViewport();
+      }
+      const { violations } = await new AxeBuilder({ page }).include('main')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']).analyze();
+      const serious = violations.filter(item => item.impact === 'serious' || item.impact === 'critical');
+      const label = `${name} ${size} ${theme}`;
+      assert.deepEqual(serious.map(item => ({ id: item.id, elements: item.nodes.map(node => ({ target: node.target, summary: node.failureSummary })) })), [], label);
+      await page.screenshot({ path: join(SHOTS, `${String(shot).padStart(2, '0')}-${name}-${size}-${theme}.png`) });
+      console.log(label, '— zero serious or critical axe violations');
+    }
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+}
+
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
-  const page = await signIn(browser, 'state.admin');
+  const page = await signIn(browser, 'state.admin', phone);
+  const button = name => page.getByRole('button', { name, exact: true });
+  const continueButton = button('Continue');
+  const step = async name => {
+    const heading = page.locator('#step-heading');
+    await expect(heading).toHaveText(name, { timeout: 30_000 });
+    await expect(heading).toBeFocused();
+    await expect(heading).toBeInViewport();
+  };
   await page.getByRole('heading', { name: 'Set up Open FIMRA' }).waitFor();
   await page.getByLabel('Setup code').fill(SETUP_CODE);
   await page.getByLabel('Workspace name').fill('Demo State');
   await page.getByLabel('State code').fill('DS');
-  await save(page, 'bootstrap');
-  await page.getByRole('button', { name: 'Start setup' }).click();
+  await captureStep(page, 'bootstrap', 'Step 1 of 7: Workspace', button('Start setup'));
+  await button('Start setup').click();
 
-  const step = name => page.locator('#step-heading', { hasText: name }).waitFor();
   await step('Hierarchy');
+  const progress = page.locator('.setup-progress summary');
+  await progress.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.setup-progress').getByRole('button')).toHaveCount(7);
+  await expect(page.locator('.setup-progress').getByRole('button', { name: 'Workspace Done' })).toBeVisible();
+  await page.keyboard.press('Enter');
   await page.getByLabel('Hindi label for level 5').fill('बीट (वन)');
-  await save(page, 'hierarchy-preset');
-  await page.getByRole('button', { name: 'Save hierarchy' }).click();
+  await captureStep(page, 'hierarchy-preset', 'Step 2 of 7: Hierarchy', button('Save hierarchy'));
+  await button('Save hierarchy').click();
 
   await step('Layers');
-  await save(page, 'layers-empty');
+  await captureStep(page, 'layers-empty', 'Step 3 of 7: Layers', page.getByRole('link', { name: 'Go to State' }));
   const layers = [
     ['level:0', 'state'], ['level:1', 'circles'], ['level:2', 'divisions'], ['level:3', 'ranges'],
     ['level:4', 'beats'], ['forest', 'forest'], ['exclusion', 'exclusions']
@@ -78,12 +119,22 @@ try {
     const row = page.locator('.layer-checklist > li').filter({ has: page.locator(`[id="file-${key}"]`) });
     const upload = async file => {
       await page.locator(`[id="file-${key}"]`).setInputFiles(file);
-      await row.getByRole('button', { name: 'Upload' }).click();
+      await row.getByRole('button', { name: /^Upload/ }).click();
     };
     await upload(join(SEED, `${stem}.geojson`));
     if (stem === 'beats') {
-      await row.getByText('Correct these problems').waitFor({ timeout: 60_000 });
-      await save(page, 'beats-blocking-problems');
+      await row.getByText('Correct these problems', { exact: false }).waitFor({ timeout: 60_000 });
+      await page.reload();
+      await step('Layers');
+      const summary = page.getByRole('group', { name: 'Layer problems to fix' });
+      const blocker = summary.getByRole('link').first();
+      await expect(blocker).toBeVisible({ timeout: 30_000 });
+      await captureStep(page, 'beats-blocking-problems', 'Step 3 of 7: Layers', page.getByRole('link', { name: /^Go to Beat/ }));
+      await blocker.focus();
+      await page.keyboard.press('Enter');
+      await expect(row.getByRole('heading')).toBeFocused();
+      await expect(row.getByRole('button', { name: 'Upload replacement' })).toBeInViewport();
+      await page.screenshot({ path: join(SHOTS, 'beats-repair-phone-light.png') });
       await upload(repairedBeats());
     }
     await row.getByRole('button', { name: 'Publish' }).waitFor({ timeout: 60_000 });
@@ -91,24 +142,24 @@ try {
     await page.locator('.layer-checklist > li[data-published]').filter({ has: page.locator(`[id="file-${key}"]`) })
       .waitFor({ timeout: 30_000 });
   }
-  await save(page, 'layers-published');
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await captureStep(page, 'layers-published', 'Step 3 of 7: Layers', continueButton);
+  await continueButton.click();
 
   await step('NASA FIRMS');
-  await save(page, 'firms-empty');
+  await captureStep(page, 'firms-empty', 'Step 4 of 7: NASA FIRMS', button('Save and test'));
   await page.getByLabel('Map key').fill(FIRMS_KEY);
   await page.getByRole('button', { name: 'Save and test' }).click();
   await page.getByText('FIRMS answered').waitFor();
-  await save(page, 'firms-saved');
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await captureStep(page, 'firms-saved', 'Step 4 of 7: NASA FIRMS', continueButton);
+  await continueButton.click();
 
   await step('Starter forms');
   await page.locator('.pack-forms > li').first().waitFor();
-  await save(page, 'starter-forms');
-  await page.getByRole('switch', { name: 'Switch on the starter forms' }).click();
-  await page.getByText('The starter forms are on.').waitFor();
-  await save(page, 'starter-forms-on');
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await captureStep(page, 'starter-forms', 'Step 5 of 7: Starter forms', button('Switch on the starter forms'));
+  await button('Switch on the starter forms').click();
+  await page.getByText('The starter forms are on.', { exact: true }).waitFor();
+  await captureStep(page, 'starter-forms-on', 'Step 5 of 7: Starter forms', continueButton);
+  await continueButton.click();
 
   await step('Invite officers');
   const choose = async (label, option) => {
@@ -125,17 +176,21 @@ try {
     await page.getByRole('button', { name: 'Invite', exact: true }).click();
     await page.getByText('Invitation saved.').waitFor();
   }
-  await page.getByText('Email sent').nth(1).waitFor({ timeout: 30_000 }).catch(() => {});
   await page.getByRole('button', { name: 'Revoke' }).first().waitFor();
-  await save(page, 'invitations');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await save(page, 'invitations-phone');
-  await page.setViewportSize({ width: 1280, height: 860 });
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await captureStep(page, 'invitations', 'Step 6 of 7: Invite officers', continueButton);
+  await continueButton.click();
 
   await step('Finish');
-  await save(page, 'finish');
-  await page.getByRole('button', { name: 'Finish and open the alert map' }).click();
+  const finish = button('Finish and open the alert map');
+  await captureStep(page, 'finish', 'Step 7 of 7: Finish', finish);
+  await finish.click();
+  await expect(page).toHaveURL(/\/monitor\/map/);
+  await page.goto(WEB + '/settings/setup?workspace=demo-state');
+  await button('Reopen setup').click();
+  await step('Finish');
+  await finish.click();
+  await expect(page).toHaveURL(/\/monitor\/map/);
+  await page.setViewportSize(desktop);
   await page.locator('.alert-table tbody tr').first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(2000);
   await save(page, 'alert-map-admin');
