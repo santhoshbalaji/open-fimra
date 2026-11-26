@@ -1,9 +1,10 @@
-@if (history(); as data) {
+<ng-template #actions let-data>
+
   @if (chosen(); as move) {
     <form (submit)="$event.preventDefault(); save(note.value, reason.value)">
-      <h3>{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
+      <h3 #formTitle [attr.tabindex]="subject() === 'incident' ? -1 : null">{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
       @if (move.terminal) { <p>This ends the workflow for this {{ subject() }}.</p> }
-      @if (subject() === 'incident') { <p>Member alerts you can act on move with the incident.</p> }
+      @if (subject() === 'incident') { <p>This can also move member alerts that allow the same step.</p> }
       <hlm-field><label hlmFieldLabel for="step-note">Note (optional)</label>
         <textarea hlmTextarea id="step-note" #note maxlength="2000"></textarea>
       </hlm-field>
@@ -20,7 +21,7 @@
       <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="choose(null)">Cancel</button>
     </form>
   } @else if (data.moves.length) {
-    <h3>Next step</h3>
+    <h3 #nextStep [attr.tabindex]="subject() === 'incident' ? -1 : null">Next step</h3>
     <div class="workflow-moves">
       @for (move of steps(); track move.step; let first = $first) {
         <button hlmBtn [variant]="first ? 'primary' : 'outline'" (click)="choose(move)">{{ move.label }}</button>
@@ -34,7 +35,19 @@
         </hlm-dropdown-menu></ng-template>
       }
     </div>
+  } @else if (subject() === 'incident' && !data.mergedInto) {
+    <p #nextStep tabindex="-1" class="text-text-secondary">No next step available.</p>
   }
+</ng-template>
+
+@if (subject() === 'incident') {
+  <fimra-state-region [state]="historyState()" (retry)="retryHistory()">
+    @if (history(); as data) {
+      <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: data }" />
+    }
+  </fimra-state-region>
+} @else if (history(); as data) {
+  <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: data }" />
   <h3>Timeline</h3>
   <ol class="step-timeline">
     @for (entry of data.entries; track $index) {

@@ -1,84 +1,98 @@
-@if (selected(); as incident) {
-  <section class="incident-detail" aria-labelledby="incident-title">
-    <div class="queue-heading">
-      <h3 id="incident-title" tabindex="-1">Incident #{{ incident.id }}</h3>
-      <button hlmBtn variant="ghost" (click)="close()">All incidents</button>
-    </div>
-    @if (incident.merged_into) {
-      <p role="status">This incident joined incident #{{ incident.merged_into }}, which now holds its alerts.
-        <button hlmBtn variant="link" (click)="openById(incident.merged_into)">Open incident #{{ incident.merged_into }}</button></p>
-    }
-    <div class="step-meta" aria-label="Current step">
-      <fimra-status-badge [icon]="incident.terminal ? 'complete' : 'step'" [label]="incident.step_label" />
-      <time [attr.datetime]="incident.step_time">{{ localTime.format(stepDate(incident.step_time)) }}</time>
-      @if (incident.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-    </div>
-    <p class="incident-summary">{{ incident.alert_count }} {{ incident.alert_count === 1 ? 'alert' : 'alerts' }} you can see ·
-      {{ places(incident) }} · first seen {{ relativeAge(incident.first_observed_at, now()) }},
-      last seen {{ relativeAge(incident.last_observed_at, now()) }}</p>
-    @if (detailMessage()) { <p role="status">{{ detailMessage() }}</p> }
-    @if (!incident.merged_into) {
-      <fimra-workflow subject="incident" [url]="incidentsUrl() + '/' + incident.id" [stepTime]="incident.step_time" (changed)="changed()" />
-    }
-    <h3>Member alerts</h3>
-    @if (members(); as rows) {
-      <table hlmTable class="alert-table">
-        <caption class="sr-only">Alerts in incident #{{ incident.id }}</caption>
-        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Detection and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
-        <tbody hlmTBody>
-          @for (row of rows; track row.id) {
-            <tr hlmTr>
-              <td hlmTd><button class="row-open" (click)="openAlert.emit(row)"
-                  [attr.aria-label]="classes[row.forest_class] + ', ' + (row.beat_name || 'Unknown beat') + ', ' + localTime.format(row.observed_at * 1000)">{{ classes[row.forest_class] }}</button>
-                <p>{{ row.beat_name || 'Unknown beat' }}</p>
-                <small><time [title]="localTime.format(row.observed_at * 1000)">{{ relativeAge(row.observed_at, now()) }}</time></small>
-              </td>
-              <td hlmTd><div class="step-meta">
-                <fimra-status-badge icon="step" [label]="row.step_label" />
-                @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-              </div></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    } @else if (!detailMessage()) {
-      <div role="status" aria-label="Loading member alerts" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
+<ng-template #placeCell let-row>
+  <button type="button" hlmBtn variant="link" class="h-auto min-h-9 max-w-full px-0 text-start whitespace-normal wrap-anywhere"
+    [attr.data-incident-id]="row.id" [attr.aria-label]="places(row) + ', incident #' + row.id"
+    [attr.aria-expanded]="selectedId() === row.id" (click)="open(row.id)">{{ places(row) }}</button>
+</ng-template>
+
+<ng-template #statusCell let-row>
+  <div class="flex flex-wrap gap-1">
+    <fimra-status-badge [icon]="row.terminal ? 'complete' : 'step'" [label]="row.step_label" />
+    @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+  </div>
+</ng-template>
+
+<ng-template #activityCell let-row>
+  <time [attr.datetime]="activity(row).toISOString()">{{ format.dateTime(activity(row)) }}</time>
+</ng-template>
+
+<div class="incident-workspace" [class.has-detail]="selectedId()">
+  <section #list class="incident-list" [fimraListScroll]="listKey()" aria-label="Incident list">
+    <p #listSummary tabindex="-1" class="rounded-control text-body wrap-anywhere focus-visible:outline-2 focus-visible:outline-ring">
+      @if (total(); as count) {
+        <strong>{{ format.number(count) }} {{ count === 1 ? 'incident' : 'incidents' }}</strong>
+        <span aria-hidden="true"> · </span>
+      }
+      {{ scope() }}
+    </p>
+    <fimra-data-table caption="Incidents" [columns]="columns()" [page]="page()" [state]="listState()"
+      [scrollKey]="tableKey()" [rowKey]="rowKey" [rowLabel]="places" (pageRequest)="changePage($event)" (retry)="retryList()" />
+    @if (cursor() && listState().kind === 'empty') {
+      <button hlmBtn variant="outline" class="self-start" (click)="firstPage()">First page</button>
     }
   </section>
-} @else if (selectedId()) {
-  <button hlmBtn variant="ghost" (click)="close()">All incidents</button>
-  <p role="status">{{ detailMessage() || 'Loading incident…' }}</p>
-} @else {
-  @if (message()) { <p role="status">{{ message() }}</p> }
-  @if (page(); as data) {
-    <p class="incident-summary">{{ data.total }} {{ data.total === 1 ? 'incident' : 'incidents' }} in this time window</p>
-    @if (data.items.length) {
-      <table hlmTable class="alert-table">
-        <caption class="sr-only">Incidents</caption>
-        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Alerts and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
-        <tbody hlmTBody>
-          @for (row of data.items; track row.id) {
-            <tr hlmTr>
-              <td hlmTd><button class="row-open" (click)="open(row)"
-                  [attr.aria-label]="'Incident ' + row.id + ', ' + row.alert_count + ' alerts, ' + places(row)">Incident #{{ row.id }}</button>
-                <p>{{ row.alert_count }} {{ row.alert_count === 1 ? 'alert' : 'alerts' }} · {{ places(row) }}</p>
-                <small>Last seen <time [title]="localTime.format(row.last_observed_at * 1000)">{{ relativeAge(row.last_observed_at, now()) }}</time></small>
-              </td>
-              <td hlmTd><div class="step-meta">
+
+  <fimra-side-panel class="incident-panel" [heading]="'Incident #' + selectedId()" [fullHeight]="true" (closed)="closed()">
+    @if (selectedId()) {
+      <fimra-state-region [state]="detailState()" (retry)="retryDetail()">
+        @if (incident(); as row) {
+          <div class="grid min-w-0 gap-4">
+            <div class="grid gap-2">
+              <p class="text-base font-medium wrap-anywhere">{{ places(row) }}</p>
+              <div class="flex flex-wrap items-center gap-2">
                 <fimra-status-badge [icon]="row.terminal ? 'complete' : 'step'" [label]="row.step_label" />
-                <time [attr.datetime]="row.step_time">{{ localTime.format(stepDate(row.step_time)) }}</time>
                 @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-              </div></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    } @else {
-      <fimra-empty-state [heading]="data.total ? 'No incidents on this page' : 'No incidents'" detail="Alerts close together in place and time appear here as one incident." />
+                <time class="text-label text-text-secondary" [attr.datetime]="activity(row).toISOString()">Updated {{ format.dateTime(activity(row)) }}</time>
+              </div>
+            </div>
+
+            <section aria-labelledby="incident-actions" class="grid min-w-0 gap-2">
+              <h3 id="incident-actions" class="text-base font-semibold">Incident actions</h3>
+              @if (row.merged_into; as target) {
+                <p>This incident joined incident #{{ target }}, which now holds its alerts.</p>
+                <button hlmBtn variant="link" class="justify-self-start px-0" (click)="open(target)">Open incident #{{ target }}</button>
+              }
+              <fimra-workflow #workflow class="m-0!" subject="incident" [url]="incidentsUrl() + '/' + row.id"
+                [stepTime]="row.step_time" (changed)="changed()" />
+              <a hlmBtn variant="outline" class="justify-self-start"
+                [routerLink]="navigation.href('/monitor/map', { incident: row.id })">Show incident on map</a>
+            </section>
+
+            <section aria-labelledby="member-alerts" class="grid min-w-0 gap-2 border-t border-divider pt-4">
+              <h3 id="member-alerts" class="text-base font-semibold">Member alerts ({{ format.number(row.alert_count) }})</h3>
+              <fimra-state-region [state]="memberState()" (retry)="retryMembers()">
+                <ul role="list" class="grid gap-2">
+                  @for (alert of members(); track alert.id) {
+                    <li class="grid gap-2 rounded-control border border-border p-3 wrap-anywhere" [class.border-action]="member()?.id === alert.id">
+                      <button type="button" hlmBtn variant="link" class="h-auto min-h-9 max-w-full justify-self-start px-0 text-start whitespace-normal"
+                        [attr.aria-expanded]="member()?.id === alert.id" (click)="selectMember(alert.id)">
+                        {{ alert.beat_name || 'Unknown beat' }} · Alert #{{ alert.id }}
+                      </button>
+                      <p class="text-label text-text-secondary">{{ classes[alert.forest_class] }} · {{ format.dateTime(date(alert.observed_at)) }}</p>
+                      <div class="flex flex-wrap gap-1">
+                        <fimra-status-badge icon="step" [label]="alert.step_label" />
+                        @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+                      </div>
+                      @if (member()?.id === alert.id) {
+                        <div class="flex flex-wrap gap-2">
+                          <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/map', { incident: row.id, alert: alert.id })">Show alert #{{ alert.id }} on map</a>
+                          <a hlmBtn variant="ghost" [routerLink]="navigation.href('/monitor/alerts', { alert: alert.id })">Open alert #{{ alert.id }}</a>
+                        </div>
+                      }
+                    </li>
+                  }
+                </ul>
+              </fimra-state-region>
+            </section>
+
+            @if (workflow.history(); as history) {
+              <section aria-labelledby="incident-timeline" class="grid min-w-0 gap-2 border-t border-divider pt-4">
+                <h3 id="incident-timeline" class="text-base font-semibold">Timeline</h3>
+                <fimra-timeline [events]="timeline(history.entries)" [now]="nowDate()" allActivityLabel="Show full history" />
+              </section>
+            }
+          </div>
+        }
+      </fimra-state-region>
     }
-    @if (cursor()) { <button hlmBtn variant="outline" (click)="changePage('')">Newest incidents</button> }
-    @if (data.nextCursor; as next) { <button hlmBtn variant="outline" (click)="changePage(next)">Older incidents</button> }
-  } @else if (!message()) {
-    <div role="status" aria-label="Loading incidents" class="grid gap-2"><hlm-skeleton class="h-12" /><hlm-skeleton class="h-12" /></div>
-  }
-}
+  </fimra-side-panel>
+</div>

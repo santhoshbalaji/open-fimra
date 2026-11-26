@@ -35,6 +35,11 @@ func (a api) incidents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, strings.Replace(err.Error(), "alert cursor", "incident cursor", 1))
 		return
 	}
+	sortOrder := r.URL.Query().Get("sort")
+	if sortOrder != "" && sortOrder != "activity-desc" && sortOrder != "activity-asc" {
+		writeError(w, 400, "Unknown incident sort order.")
+		return
+	}
 	var id *int64
 	if raw := chi.URLParam(r, "id"); raw != "" {
 		n, err := strconv.ParseInt(raw, 10, 64)
@@ -50,7 +55,7 @@ func (a api) incidents(w http.ResponseWriter, r *http.Request) {
 	var allowed, knownStatus bool
 	var page incidentPage
 	err = a.reader.QueryRow(ctx, incidentsSQL, caller.Subject, chi.URLParam(r, "slug"), id, f.hours,
-		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1).Scan(&allowed, &knownStatus, &page.Total, &page.Items)
+		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, sortOrder).Scan(&allowed, &knownStatus, &page.Total, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read incidents", "error", err)
 		writeError(w, 500, "Could not load incidents.")
@@ -75,15 +80,20 @@ func (a api) incidents(w http.ResponseWriter, r *http.Request) {
 	if len(page.Items) > f.limit {
 		page.Items = page.Items[:f.limit]
 		var last struct {
-			Time string `json:"last_observed_time"`
-			ID   string `json:"id"`
+			LastObserved string `json:"last_observed_time"`
+			Activity     string `json:"activity_at"`
+			ID           string `json:"id"`
 		}
 		if err := json.Unmarshal(page.Items[f.limit-1], &last); err != nil {
 			a.logger.Error("Could not read incident cursor", "error", err)
 			writeError(w, 500, "Could not load incidents.")
 			return
 		}
-		page.NextCursor = last.Time + "," + last.ID
+		cursorTime := last.LastObserved
+		if sortOrder != "" {
+			cursorTime = last.Activity
+		}
+		page.NextCursor = cursorTime + "," + last.ID
 	}
 	writeJSON(w, 200, page)
 }

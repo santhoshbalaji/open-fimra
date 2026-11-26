@@ -1,7 +1,9 @@
+import { DEFAULT_DIALOG_CONFIG, Dialog, DialogConfig } from '@angular/cdk/dialog';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, afterRenderEffect, inject, input, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, afterRenderEffect, inject, input, output, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { BrnDialogService } from '@spartan-ng/brain/dialog';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSheet, HlmSheetImports } from '@spartan-ng/helm/sheet';
 import { map } from 'rxjs';
@@ -14,15 +16,20 @@ let nextPanel = 0;
   exportAs: 'fimraSidePanel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmButton, HlmSheetImports, NgTemplateOutlet],
+  // The owner decides when to close a panel, including after changes to URL state.
+  viewProviders: [BrnDialogService, Dialog, {
+    provide: DEFAULT_DIALOG_CONFIG,
+    useValue: { ...new DialogConfig(), closeOnNavigation: false }
+  }],
   template: `
     <ng-template #body><ng-content /></ng-template>
     @if (open()) {
       @if (phone()) {
         <hlm-sheet #sheet side="bottom" state="open" autoFocus="first-heading" [restoreFocus]="false"
           (closed)="finishClose()">
-          <hlm-sheet-content *hlmSheetPortal class="rounded-t-card border-border">
+          <hlm-sheet-content *hlmSheetPortal [style.height]="fullHeight() ? '100dvh' : null" class="rounded-t-card border-border">
             <hlm-sheet-header>
-              <h2 hlmSheetTitle tabindex="-1" class="text-base">{{ heading() }}</h2>
+              <h2 #sheetHeading hlmSheetTitle tabindex="-1" class="text-base">{{ heading() }}</h2>
             </hlm-sheet-header>
             <div class="px-4 pb-4"><ng-container [ngTemplateOutlet]="body" /></div>
           </hlm-sheet-content>
@@ -42,13 +49,16 @@ let nextPanel = 0;
 })
 export class SidePanel {
   readonly heading = input.required<string>();
+  readonly fullHeight = input(false);
+  readonly closed = output<void>();
 
   private readonly injector = inject(Injector);
   private readonly breakpoints = inject(BreakpointObserver);
   private readonly opened = signal(false);
   private readonly dockHeading = viewChild<ElementRef<HTMLElement>>('dockHeading');
+  private readonly sheetHeading = viewChild<ElementRef<HTMLElement>>('sheetHeading');
   private readonly sheet = viewChild(HlmSheet);
-  private trigger: HTMLElement | null = null;
+  private trigger: HTMLElement | (() => HTMLElement | null) | null = null;
   private fallback: HTMLElement | null = null;
   protected readonly headingId = `fimra-panel-${++nextPanel}`;
   protected readonly phone = toSignal(
@@ -59,10 +69,14 @@ export class SidePanel {
   readonly open = this.opened.asReadonly();
 
   constructor() {
-    afterRenderEffect(() => this.dockHeading()?.nativeElement.focus());
+    afterRenderEffect(() => {
+      // Moving to a linked record can change the title while the panel stays open.
+      this.heading();
+      (this.dockHeading() ?? this.sheetHeading())?.nativeElement.focus();
+    });
   }
 
-  show(trigger: HTMLElement, fallback?: HTMLElement) {
+  show(trigger: HTMLElement | (() => HTMLElement | null), fallback?: HTMLElement) {
     this.trigger = trigger;
     this.fallback = fallback ?? null;
     this.opened.set(true);
@@ -83,8 +97,11 @@ export class SidePanel {
   protected finishClose() {
     if (!this.open()) return;
     this.opened.set(false);
+    this.closed.emit();
     afterNextRender(() => {
-      if (!this.open()) restoreOverlayFocus(this.trigger, this.fallback);
+      if (!this.open()) restoreOverlayFocus(
+        typeof this.trigger === 'function' ? this.trigger() : this.trigger, this.fallback
+      );
     }, { injector: this.injector });
   }
 }

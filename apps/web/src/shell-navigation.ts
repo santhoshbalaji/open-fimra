@@ -66,6 +66,10 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
     }
   }
   if ((path === '/monitor/incidents' || path === '/monitor/map') && typeof incident === 'string' && recordId(incident)) params['incident'] = incident;
+  if (path === '/monitor/incidents') {
+    if (params['incident'] && typeof input['member'] === 'string' && recordId(input['member'])) params['member'] = input['member'];
+    if (input['sort'] === 'activity-asc' || input['sort'] === 'activity-desc') params['sort'] = input['sort'];
+  }
   if (path === '/reports/field') {
     if (typeof report === 'string' && submissionId(report)) params['report'] = report;
     if (decision === 'all' || decision === 'pending' || decision === 'approved' || decision === 'returned') params['decision'] = decision;

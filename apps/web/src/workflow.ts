@@ -5,14 +5,15 @@ import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { StatusBadge } from './ui/status-badge';
-import { DatePipe } from '@angular/common';
+import { StateRegion, type DataState } from './ui/state-region';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, DestroyRef, effect, inject, input, output, signal } from '@angular/core';
+import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { firstValueFrom } from 'rxjs';
 
 interface Move { step: string; label: string; location_required: boolean; can_override: boolean; terminal: boolean }
-interface Entry {
+export interface WorkflowEntry {
   step: string; label: string; at: string; actor: string | null; note: string; reason: string;
   latitude: number | null; longitude: number | null; reportPending: boolean;
   /** Incident entries: how many of the member alerts you can see moved with this step. */
@@ -20,11 +21,11 @@ interface Entry {
   /** Alert entries: the incident whose step moved this alert. */
   incidentId?: string | null;
 }
-interface History { entries: Entry[]; moves: Move[]; mergedInto?: string | null }
+interface History { entries: WorkflowEntry[] | null; moves: Move[]; mergedInto?: string | null }
 
 @Component({
   selector: 'fimra-workflow',
-  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, HlmSkeletonImports, StatusBadge, DatePipe],
+  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, HlmSkeletonImports, StatusBadge, DatePipe, NgTemplateOutlet, StateRegion],
   templateUrl: './workflow.html'
 })
 export class Workflow {
@@ -41,6 +42,10 @@ export class Workflow {
   readonly message = signal('');
   readonly exception = signal(false);
   readonly reload = signal(0);
+  readonly historyState = signal<DataState>({ kind: 'loading', heading: 'Loading incident actions and history' });
+  private readonly injector = inject(Injector);
+  private readonly formTitle = viewChild<ElementRef<HTMLElement>>('formTitle');
+  private readonly nextStep = viewChild<ElementRef<HTMLElement>>('nextStep');
   private readonly http = inject(HttpClient);
   private readonly lifetime = inject(DestroyRef);
 
@@ -49,11 +54,18 @@ export class Workflow {
       const url = this.url();
       this.stepTime();
       this.reload();
+      this.historyState.set({ kind: 'loading', heading: 'Loading incident actions and history' });
       this.history.set(null);
       this.chosen.set(null);
       const sub = this.http.get<History>(url + '/history').subscribe({
-        next: history => this.history.set(history),
-        error: () => this.message.set('Could not load the timeline.')
+        next: history => {
+          this.history.set(history);
+          this.historyState.set({ kind: 'ready' });
+        },
+        error: () => {
+          if (this.subject() === 'incident') this.historyState.set({ kind: 'error', heading: 'Could not load incident actions and history' });
+          else this.message.set('Could not load the timeline.');
+        }
       });
       cleanup(() => sub.unsubscribe());
     });
@@ -62,6 +74,12 @@ export class Workflow {
     this.message.set('');
     this.chosen.set(move);
     this.exception.set(false);
+    if (this.subject() === 'incident') {
+      afterNextRender(() => (move ? this.formTitle() : this.nextStep())?.nativeElement.focus(), { injector: this.injector });
+    }
+  }
+  retryHistory() {
+    this.reload.update(n => n + 1);
   }
   async save(note: string, reason: string) {
     const move = this.chosen();

@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, inpu
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { map } from 'rxjs';
+import { ShellListScroll } from '../shell-list-scroll';
 import { defaultWorkspaceFormat } from '../workspace-format';
 import { Icon } from './icon';
 import { LiveStatus } from './live-status';
@@ -42,7 +43,7 @@ const ready: DataState = { kind: 'ready' };
 @Component({
   selector: 'fimra-data-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, Icon, LiveStatus, NgTemplateOutlet, StateRegion],
+  imports: [HlmButton, Icon, LiveStatus, NgTemplateOutlet, ShellListScroll, StateRegion],
   host: { class: 'block min-w-0' },
   styleUrls: ['./workspace-target.css', './data-table.css'],
   templateUrl: './data-table.html'
@@ -61,6 +62,7 @@ export class DataTable<Row> {
   readonly rowActions = input<TemplateRef<{ $implicit: Row }>>();
   /** Enable only when every visible field fits in a scannable phone card. */
   readonly phoneCards = input(false);
+  readonly scrollKey = input<string | null>(null);
 
   /** Fetch using cursor and sort, then return this position with the successful page. */
   readonly pageRequest = output<TablePosition>();

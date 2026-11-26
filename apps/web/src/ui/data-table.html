@@ -84,7 +84,7 @@
         }
       </ul>
     } @else {
-      <div class="table-scroll" role="region" [attr.aria-label]="caption() + ', scrollable table'" tabindex="0">
+      <div class="table-scroll" [fimraListScroll]="scrollKey()" role="region" [attr.aria-label]="caption() + ', scrollable table'" tabindex="0">
         <table>
           <caption class="sr-only">{{ caption() }}</caption>
           <thead>
