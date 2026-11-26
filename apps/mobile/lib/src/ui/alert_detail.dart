@@ -11,6 +11,7 @@ import '../data/field_store.dart';
 import '../device/device_store.dart';
 import '../forms/report_form.dart';
 import '../theme/app_theme.dart';
+import '../theme/status_icons.dart';
 import 'alert_map.dart';
 import 'home.dart';
 import 'outbox_screen.dart';
@@ -301,45 +302,44 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Semantics(headingLevel: 1, child: Text(_alert.placeName(widget.view.map), style: text.titleLarge)),
+              Semantics(
+                headingLevel: 1,
+                child: Text('${_alert.placeName(widget.view.map)} · Alert #${_alert.id}', style: text.titleLarge),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: [
-                  StatusBadge.step(_alert.status, _alert.stepLabel),
-                  if (_alert.overdue) StatusBadge.overdue(),
-                ],
+                children: [StatusBadge.step(_alert.stepLabel), if (_alert.overdue) StatusBadge.overdue()],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               if (widget.view.services.offline case final repo?)
                 FieldSyncStatus(repo: repo, workspace: _slug, alert: _alert.id),
-              _Facts(alert: _alert, map: widget.view.map),
-              if (widget.view.services.offline != null) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => Scaffold(
-                          appBar: AppBar(title: const Text('Alert map')),
-                          body: AlertMapView(view: widget.view, focus: _alert, onOpen: (_) {}),
-                        ),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Alert map')),
+                        body: AlertMapView(view: widget.view, focus: _alert, onOpen: (_) {}),
                       ),
                     ),
-                    icon: const Icon(Icons.map_outlined),
-                    label: const Text('View alert map'),
                   ),
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Show on map'),
                 ),
-                _reports(history),
-              ],
+              ),
+              const SizedBox(height: 8),
+              _Facts(alert: _alert, map: widget.view.map),
+              if (widget.view.services.offline != null) _reports(history),
               const SizedBox(height: 24),
               if (_problem != null)
                 MessageView(
                   icon: Icons.cloud_off_outlined,
                   title: 'Could not load the timeline',
                   body: _problem,
-                  action: FilledButton(onPressed: _load, child: const Text('Try again')),
+                  action: FilledButton(onPressed: _load, child: const Text('Retry')),
                 )
               else if (history == null)
                 const Center(child: CircularProgressIndicator())
@@ -367,13 +367,14 @@ class _Facts extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <(String, String)>[
       ('Seen', formatTime(alert.observedAt)),
-      ('Forest', alert.forest?.label ?? alert.forestClass),
+      ('Forest class', alert.forest?.label ?? alert.forestClass),
       for (final level in map.placeOrder(alert.placeHierarchy))
         if (alert.places[level.slug] case final place?) (level.label, '${place.name} (${place.code})'),
       ('Location', '${alert.latitude.toStringAsFixed(5)}, ${alert.longitude.toStringAsFixed(5)}'),
-      if (alert.source != null) ('Source', [alert.source, alert.product].nonNulls.join(' · ')),
-      if (alert.confidence != null) ('Confidence', alert.confidence!),
-      if (alert.frpMw != null) ('Fire power', '${alert.frpMw!.toStringAsFixed(1)} MW'),
+      if (alert.source case final source?) ('Source', sourceLabel(source)),
+      if (alert.product case final product?) ('Product', productLabel(product)),
+      if (alert.confidence case final confidence?) ('Confidence', confidenceLabel(confidence)),
+      if (alert.frpMw case final power?) ('Fire radiative power', '${power.toStringAsFixed(1)} megawatts'),
       if (alert.alertQueue != AlertQueue.unit) ('Queue', alert.alertQueue?.label ?? alert.queue),
     ];
     final text = Theme.of(context).textTheme;
@@ -435,7 +436,7 @@ class _Moves extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: FilledButton.icon(
               onPressed: () => onTake(move),
-              icon: Icon(move.locationRequired ? Icons.my_location : stepIcon(move.step)),
+              icon: Icon(move.locationRequired ? Icons.my_location : FimraStatusIcon.step),
               label: Text(move.label),
             ),
           ),
@@ -450,7 +451,7 @@ class _Moves extends StatelessWidget {
               for (final move in outcomes)
                 OutlinedButton.icon(
                   onPressed: () => onTake(move),
-                  icon: Icon(stepIcon(move.step)),
+                  icon: const Icon(FimraStatusIcon.step),
                   label: Text(move.label),
                 ),
             ],
@@ -479,7 +480,7 @@ class _TimelineEntry extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(stepIcon(entry.step), size: 20, color: p.textSecondary),
+          Icon(FimraStatusIcon.step, size: 20, color: p.textSecondary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -489,7 +490,7 @@ class _TimelineEntry extends StatelessWidget {
                 Text(details, style: text.bodySmall),
                 if (entry.note.isNotEmpty) Text(entry.note, style: text.bodyMedium),
                 if (entry.reason.isNotEmpty) Text('Location exception: ${entry.reason}', style: text.bodyMedium),
-                if (entry.reportPending) const StatusBadge(icon: Icons.schedule, label: 'Report pending'),
+                if (entry.reportPending) StatusBadge.step('Report pending'),
               ],
             ),
           ),

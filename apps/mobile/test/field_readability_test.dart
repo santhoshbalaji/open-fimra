@@ -197,11 +197,11 @@ void main() {
       await tester.tap(failed);
       await tester.pumpAndSettle();
 
-      final row = find.bySemanticsLabel(RegExp(r'^Beat 01, New, Inside forest, seen'));
+      final row = find.bySemanticsLabel(RegExp(r'^Beat 01 · Alert #41, New, Inside forest, seen'));
       await tester.scrollUntilVisible(row, 220);
       await tester.pumpAndSettle();
       expect(row.hitTestable(), findsOneWidget);
-      _order(tester, ['Report outbox', 'Beat 01, New, Inside forest']);
+      _order(tester, ['Report outbox', 'Beat 01 · Alert #41, New, Inside forest']);
       await _guidelines(tester);
       await tester.tap(row);
       await tester.pumpAndSettle();

@@ -14,7 +14,9 @@ import 'package:fimra_field/src/theme/app_theme.dart';
 import 'package:fimra_field/src/ui/alert_map.dart';
 import 'package:fimra_field/src/ui/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support.dart';
@@ -78,6 +80,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('a beat guard signs in and sees their alerts with status icons and labels', (tester) async {
+    final semantics = tester.ensureSemantics();
     final harness = Harness();
     await tester.pumpWidget(harness.app());
     await tester.pumpAndSettle();
@@ -89,13 +92,17 @@ void main() {
     expect(harness.server.requests.single['grant_type'], 'authorization_code');
     expect(find.text('Demo State'), findsOneWidget);
     expect(find.text('2 alerts in the past 7 days · Beat 01'), findsOneWidget);
-    expect(find.text('Beat 01'), findsNWidgets(2));
+    expect(find.text('Beat 01 · Alert #41'), findsOneWidget);
+    expect(find.text('Beat 01 · Alert #42'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Beat 01 · Alert #41, New,')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Beat 01 · Alert #42, Acknowledged,')), findsOneWidget);
+    semantics.dispose();
 
     // Every status is an icon and a label.
     final badges = tester.widgetList<StatusBadge>(find.byType(StatusBadge)).toList();
     expect(badges.map((b) => b.label), containsAll(['New', 'Acknowledged']));
     for (final badge in badges) {
-      expect(find.descendant(of: find.byWidget(badge), matching: find.byIcon(badge.icon)), findsOneWidget);
+      expect(find.descendant(of: find.byWidget(badge), matching: find.byIcon(Icons.schedule)), findsOneWidget);
     }
     // Field staff see no review queues.
     expect(find.byType(ChoiceChip), findsNothing);
@@ -103,6 +110,82 @@ void main() {
     await tester.tap(find.text('Map'));
     await tester.pumpAndSettle();
     expect(find.text('Map of Demo State'), findsOneWidget);
+  });
+
+  testWidgets('alert details show the place, IST and readable detection metadata', (tester) async {
+    await signIn(tester, Harness());
+    await tester.tap(find.text('Beat 01 · Alert #41'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Beat 01 · Alert #41'), findsOneWidget);
+    expect(find.text('25 Nov 2026, 1:30 pm IST'), findsOneWidget);
+    expect(find.text('Demo data'), findsOneWidget);
+    expect(find.text('VIIRS (Suomi NPP), near real time'), findsOneWidget);
+    expect(find.text('Nominal'), findsOneWidget);
+    final timeline = find.text('25 Nov 2026, 1:30 pm IST · System');
+    await tester.scrollUntilVisible(timeline, 150);
+    expect(timeline.hitTestable(), findsOneWidget);
+  });
+
+  testWidgets(
+    'Show on map opens the selected alert on the map without offline storage',
+    (tester) async {
+      // The route can run on Linux, where MapLibre shows a placeholder.
+      MapLibreNativePlugin.registerWith();
+      tester.binding.defaultBinaryMessenger.setMockMessageHandler(
+        'dev.flutter.pigeon.maplibre_gl.MapLibreGlobalHostApi.setHttpHeaders',
+        (_) async => const StandardMessageCodec().encodeMessage(<Object?>[null]),
+      );
+      final harness = Harness();
+      await signIn(tester, harness);
+      await tester.tap(find.text('Beat 01 · Alert #42'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Show on map'));
+      await tester.pumpAndSettle();
+      expect(find.text('Alert map'), findsOneWidget);
+      expect(tester.widget<AlertMapView>(find.byType(AlertMapView)).focus, harness.repository.items.last);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Beat 01 · Alert #42'), findsOneWidget);
+    },
+    variant: TargetPlatformVariant({TargetPlatform.linux}),
+  );
+
+  testWidgets('alert list and timeline errors offer Retry and recover', (tester) async {
+    final repository = _RetryRepository();
+    await signIn(tester, Harness(repository: repository));
+
+    final retry = find.widgetWithText(FilledButton, 'Retry');
+    expect(find.text('Could not load alerts'), findsOneWidget);
+    repository.failList = false;
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Beat 01 · Alert #41'));
+    await tester.pumpAndSettle();
+
+    final detailScroll = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(retry, 150, scrollable: detailScroll);
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load the timeline'), findsOneWidget);
+    repository.failHistory = false;
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Timeline'), 150, scrollable: detailScroll);
+    expect(retry, findsNothing);
+  });
+
+  test('reporting time crosses midnight in IST and confidence matches the web labels', () {
+    expect(formatTime(DateTime.parse('2026-11-25T22:30:00+02:00')), '26 Nov 2026, 2:00 am IST');
+    expect(['l', 'n', 'h', ' HIGH ', '80', '82.5', ''].map(confidenceLabel), [
+      'Low',
+      'Nominal',
+      'High',
+      'High',
+      '80%',
+      '82.5%',
+      'Unknown',
+    ]);
   });
 
   testWidgets('a beat guard acknowledges an alert', (tester) async {
@@ -345,4 +428,21 @@ void main() {
     expect(find.text('Under 6 hours'), findsOneWidget);
     expect(find.text('3 to 7 days'), findsOneWidget);
   });
+}
+
+class _RetryRepository extends FakeRepository {
+  bool failList = true;
+  bool failHistory = true;
+
+  @override
+  Future<AlertPage> alerts(String slug, {AlertQueue? queue, String? cursor}) async {
+    if (failList) throw const ApiException(503, 'The server could not answer.');
+    return super.alerts(slug, queue: queue, cursor: cursor);
+  }
+
+  @override
+  Future<AlertHistory> history(String slug, String id) async {
+    if (failHistory) throw const ApiException(503, 'The server could not answer.');
+    return super.history(slug, id);
+  }
 }

@@ -119,7 +119,7 @@ class AlertListViewState extends State<AlertListView> {
                 icon: Icons.cloud_off_outlined,
                 title: 'Could not load alerts',
                 body: problem,
-                action: FilledButton(onPressed: reload, child: const Text('Try again')),
+                action: FilledButton(onPressed: reload, child: const Text('Retry')),
               ),
             )
           else if (_items.isEmpty)
@@ -204,17 +204,17 @@ class AlertTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = FimraColours.of(context);
     final forest = alert.forest;
-    final place = alert.placeName(map);
+    final title = '${alert.placeName(map)} · Alert #${alert.id}';
     final seen = '${forest?.label ?? alert.forestClass}, seen ${formatAge(alert.observedAt, now)}';
     final badges = [
-      StatusBadge.step(alert.status, alert.stepLabel),
+      StatusBadge.step(alert.stepLabel),
       if (alert.overdue) StatusBadge.overdue(),
       if (alert.alertQueue != AlertQueue.unit)
         StatusBadge(icon: Icons.rule, label: alert.alertQueue?.label ?? alert.queue),
     ];
     return Semantics(
       button: true,
-      label: [place, ...badges.map((badge) => badge.label), seen].join(', '),
+      label: [title, ...badges.map((badge) => badge.label), seen].join(', '),
       onTap: onTap,
       excludeSemantics: true,
       child: Card(
@@ -239,7 +239,7 @@ class AlertTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(place, style: text.titleMedium),
+                      Text(title, style: text.titleMedium),
                       const SizedBox(height: 2),
                       Wrap(spacing: 6, runSpacing: 6, children: badges),
                       const SizedBox(height: 6),

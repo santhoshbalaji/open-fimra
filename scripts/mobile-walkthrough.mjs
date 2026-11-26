@@ -93,6 +93,7 @@ try {
   step('The sign-in error gives a next action and folds away the server details.');
 
   const popupPromise = context.waitForEvent('page');
+  await page.route(/\/api\/v1\/workspaces\/demo\/alerts\?/, route => route.abort(), { times: 1 });
   await signIn.click();
   const popup = await popupPromise;
   await popup.waitForLoadState();
@@ -107,15 +108,19 @@ try {
   await popup.locator('#kc-login').click();
   step('Keycloak opened for the open-fimra-mobile client with an S256 code challenge; the beat guard signed in.');
 
+  const retry = page.getByRole('button', { name: 'Retry', exact: true });
+  await shown(page, 'Could not load alerts').waitFor();
+  await themes(page, '04-alerts-retry');
+  await retry.click();
   await shown(page, '2 alerts in the past 7 days · Beat 01').waitFor({ timeout: 30_000 });
   await themes(page, '04-alerts');
   // Each alert card is one button whose label starts with its place.
-  const cards = page.getByRole('button', { name: /^Beat 01/ });
+  const cards = page.getByRole('button', { name: /^Beat 01 · Alert #\d+,/ });
   const places = await cards.count();
   const others = await page.getByRole('button', { name: /^Beat (0[2-9]|[1-9][0-9])/ }).count();
   if (others) throw new Error(`The beat guard sees ${others} alerts outside Beat 01`);
   if (places !== 2) throw new Error(`Expected two alerts in Beat 01, found ${places}`);
-  step('The list shows exactly two alerts, both in Beat 01, each with a status icon and label.');
+  step('Retry restored the list. Both Beat 01 cards name their alert number and status.');
 
   await page.getByRole('tab', { name: 'Map' }).or(page.getByRole('button', { name: 'Map' })).first().click();
   await page.waitForTimeout(8000);
@@ -146,8 +151,17 @@ try {
   await page.getByRole('tab', { name: 'Alerts' }).or(page.getByRole('button', { name: 'Alerts' })).first().click();
   await cards.first().click();
   await shown(page, 'Hill Division (D1)').waitFor();
+  await shown(page, 'IST').waitFor();
   await themes(page, '06-alert');
-  step('The alert shows its place, forest class, source and timeline.');
+  const showOnMap = page.getByRole('button', { name: 'Show on map', exact: true });
+  await showOnMap.click();
+  await shown(page, 'Alert map', true).waitFor();
+  await page.getByRole('button', { name: 'Map key', exact: true }).waitFor();
+  await page.waitForTimeout(3000);
+  await themes(page, '06-alert-map');
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await showOnMap.waitFor();
+  step('The alert shows its place, detection details and IST time. Show on map opens a focused map.');
 
   const acknowledge = page.getByRole('button', { name: 'Acknowledged' });
   await scrollTo(page, acknowledge);
