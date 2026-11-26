@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, computed, inject, output, signal } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -12,7 +12,9 @@ import { HlmTextarea } from '@spartan-ng/helm/textarea';
 import { Observable } from 'rxjs';
 import { AuthService } from '../auth';
 import { WEB_CONFIG } from '../config';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Icon } from '../ui/icon';
+import { StatusBadge } from '../ui/status-badge';
 import { WorkspaceService } from '../workspace';
 import { FormDesigner, ParentTemplate } from './form-designer';
 import { TemplateRules, sameJSON } from './form-locks';
@@ -59,7 +61,7 @@ const formIdPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
  */
 @Component({
   selector: 'fimra-forms-screen',
-  imports: [DatePipe, FormDesigner, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmInput, HlmSkeleton, HlmTextarea, Icon],
+  imports: [DatePipe, FormDesigner, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmInput, HlmSkeleton, HlmTextarea, Icon, StatusBadge],
   templateUrl: './forms-screen.html',
   host: { class: 'block h-full overflow-auto' }
 })
@@ -67,6 +69,12 @@ export class FormsScreen implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
+  private readonly dialogs = inject(ConfirmDialog);
+  private readonly injector = inject(Injector);
+  private readonly designer = viewChild(FormDesigner);
+  private readonly designerTitle = viewChild<ElementRef<HTMLHeadingElement>>('designerTitle');
+  private readonly startId = viewChild<ElementRef<HTMLInputElement>>('startId');
+  private confirmingPublish = false;
   readonly workspace = inject(WorkspaceService);
   readonly closed = output<void>();
   readonly levels: Level[] = ['national', 'state', 'division'];
@@ -84,7 +92,6 @@ export class FormsScreen implements OnInit {
   readonly startError = signal('');
   readonly importing = signal(false);
   readonly importText = signal('');
-  readonly confirmPublish = signal(false);
 
   readonly admin = computed(() => this.workspace.canManageLayers());
   /** The units where this user can own division forms. */
@@ -121,6 +128,7 @@ export class FormsScreen implements OnInit {
     if (problems && body?.problems) {
       this.serverProblems.set(body.problems);
       this.error.set(body.error ?? 'The server did not accept the form.');
+      this.designer()?.focusProblems();
       return;
     }
     this.error.set(body?.error ?? (error.status === 0 ? 'The server cannot be reached. Try again.' : 'Something went wrong. Try again.'));
@@ -176,8 +184,12 @@ export class FormsScreen implements OnInit {
     this.savedDefinition.set(editing.stored ? structuredClone(editing.definition) : null);
     this.savedRules.set(editing.stored ? structuredClone(editing.rules) : null);
     this.serverProblems.set([]);
-    this.confirmPublish.set(false);
     this.starting.set(null);
+    this.focusDesignerTitle();
+  }
+
+  private focusDesignerTitle(): void {
+    afterNextRender(() => this.designerTitle()?.nativeElement.focus(), { injector: this.injector });
   }
 
   /** The next version of a form, starting from its latest version. */
@@ -204,8 +216,13 @@ export class FormsScreen implements OnInit {
   }
 
   startBlank(): void {
+    this.start({ level: 'state', parent: null, units: [] });
+  }
+
+  private start(starting: Starting): void {
     this.startError.set('');
-    this.starting.set({ level: 'state', parent: null, units: [] });
+    this.starting.set(starting);
+    afterNextRender(() => this.startId()?.nativeElement.focus(), { injector: this.injector });
   }
 
   startExtension(version: VersionSummary): void {
@@ -215,7 +232,7 @@ export class FormsScreen implements OnInit {
       next: detail => {
         this.busy.set(false);
         const level: Level = detail.level === 'national' ? 'state' : 'division';
-        this.starting.set({ level, parent: detail, units: level === 'division' ? this.divisionUnits() : [] });
+        this.start({ level, parent: detail, units: level === 'division' ? this.divisionUnits() : [] });
       },
       error: (error: HttpErrorResponse) => this.failed(error)
     });
@@ -300,18 +317,48 @@ export class FormsScreen implements OnInit {
     });
   }
 
+  async confirmPublish(trigger: HTMLElement): Promise<void> {
+    const editing = this.editing();
+    if (!editing || editing.readonly || this.busy() || this.confirmingPublish) return;
+    const designer = this.designer();
+    if (designer?.problems().length) {
+      designer.focusProblems();
+      return;
+    }
+
+    const { definition, parent, rules } = editing;
+    const detail = [
+      this.dirty() ? 'Save and publish' : 'Publish',
+      `version ${definition.version} of ${textOf(definition.title) || definition.id} with its current sections, questions and rules.`,
+      parent ? `It extends ${parent.form} version ${parent.version} and keeps its locked parts.` : '',
+      rules.allowExtension ? `${editing.level === 'national' ? 'States' : 'Divisions'} can extend this version.` : '',
+      'This version will be read-only. Reports already filled in keep the version they used.'
+    ].filter(Boolean).join(' ');
+    this.confirmingPublish = true;
+    try {
+      const confirmed = await this.dialogs.open({
+        heading: `Publish version ${definition.version}?`, detail, confirmLabel: 'Publish', trigger
+      });
+      if (confirmed && this.editing() === editing) this.publish();
+    } finally {
+      this.confirmingPublish = false;
+    }
+  }
+
   /** Publishing freezes the version. Unsaved changes are saved first. */
-  publish(): void {
+  private publish(): void {
     const editing = this.editing();
     if (!editing || editing.readonly) return;
     if (this.dirty()) { this.save(() => this.publish()); return; }
     this.busy.set(true);
+    this.error.set('');
+    this.serverProblems.set([]);
     const url = this.base() + '/' + encodeURIComponent(editing.definition.id) + '/versions/' + editing.definition.version + '/publish';
     this.http.post<VersionSummary>(url, {}).subscribe({
       next: () => {
         this.busy.set(false);
-        this.confirmPublish.set(false);
         this.editing.update(current => current ? { ...current, status: 'published', readonly: true } : current);
+        this.focusDesignerTitle();
         toast.success(`Published ${editing.definition.id} version ${editing.definition.version}`);
         this.load();
       },

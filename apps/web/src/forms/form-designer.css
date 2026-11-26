@@ -1,0 +1,60 @@
+.designer-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.designer-row.selected,
+.form-settings.selected {
+  background: var(--color-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--color-brand);
+}
+
+.row-select {
+  min-height: var(--target-web);
+}
+
+@media (width < 48rem) {
+  .outline-heading {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-background);
+    padding-block: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .row-select,
+  .form-settings {
+    scroll-margin-block-start: 7rem;
+  }
+}
+
+@media (48rem <= width < 64rem) {
+  .designer-grid:not(.readonly) {
+    grid-template-columns: 10rem minmax(0, 1fr);
+  }
+
+  .designer-grid:not(.readonly) > .designer-properties {
+    grid-column: 2;
+  }
+}
+
+@media (width >= 64rem) {
+  .designer-grid {
+    grid-template-columns: minmax(9rem, 0.6fr) minmax(0, 2fr) minmax(16rem, 1.1fr);
+  }
+
+  .designer-grid.readonly {
+    grid-template-columns: minmax(0, 2fr) minmax(16rem, 1.1fr);
+  }
+
+  .designer-grid > .designer-properties {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100dvh - 9rem);
+    overflow-y: auto;
+  }
+}
+
+.designer-properties fieldset {
+  min-width: 0;
+}

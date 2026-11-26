@@ -1,7 +1,9 @@
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import firstReport from '../../../../packages/form-schema/examples/first-report.json';
 import { AuthService } from '../auth';
@@ -36,10 +38,12 @@ describe('FormsScreen', () => {
     roles.set([{ role: 'state_admin', hierarchy: 'territorial', path: 'ds' }]);
     TestBed.configureTestingModule({ imports: [FormsScreen], providers: [
       provideHttpClient(), provideHttpClientTesting(),
+      provideSpartanHlm(),
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } },
       { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }), canManageLayers: admin, roles } },
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test/' } }
     ] });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     fixture = TestBed.createComponent(FormsScreen);
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
@@ -48,6 +52,7 @@ describe('FormsScreen', () => {
   afterEach(() => {
     fixture.destroy();
     http.verify();
+    vi.restoreAllMocks();
   });
 
   it('lists forms by level with how many reports each version has', () => {
@@ -56,11 +61,12 @@ describe('FormsScreen', () => {
     const headings = [...root().querySelectorAll('h3')].map(h => h.textContent?.trim());
     expect(headings).toEqual(['National templates', 'State forms', 'Division forms']);
     expect(root().querySelector('.version-row')!.textContent).toContain('1 report');
+    expect(root().querySelector('.version-row fimra-status-badge svg[data-icon=circle-check]')).toBeTruthy();
     expect(button('Extend version 1 of First report')).toBeTruthy();
     expect(root().textContent).toContain('No state forms yet.');
   });
 
-  it('extends a national template as a state form, saves the draft and publishes it', () => {
+  it('extends a national template, saves the draft and publishes through the portal dialog', async () => {
     http.expectOne(base).flush([nationalForm]);
     fixture.detectChanges();
     click('Extend version 1 of First report');
@@ -74,6 +80,7 @@ describe('FormsScreen', () => {
     click('Open in the designer');
     expect(root().querySelector('h2')!.textContent).toContain('Demo State first report');
     expect(root().textContent).toContain('Extends first-report version 1');
+    expect(root().querySelector('fimra-status-badge svg[data-icon=file-pen-line]')).toBeTruthy();
     // The locked summary cannot be changed; a new section can be added.
     expect(root().querySelector('#form-row-0')!.textContent).toContain('Locked by template');
     click('Section');
@@ -87,13 +94,34 @@ describe('FormsScreen', () => {
       extends: { form: 'first-report', version: 1 } });
     http.expectOne(base).flush([nationalForm]);
     fixture.detectChanges();
+    const publish = button('Publish…')!;
+    const confirmPublish = vi.spyOn(fixture.componentInstance, 'confirmPublish');
+    publish.focus();
     click('Publish…');
-    expect(root().textContent).toContain('Reports already filled in keep the version they used.');
-    click('Publish');
+    TestBed.tick();
+    const dialog = document.querySelector('[role=alertdialog]')!;
+    expect(root().contains(dialog)).toBe(false);
+    expect(dialog.textContent).toContain('Publish version 1?');
+    expect(dialog.textContent).toContain('Reports already filled in keep the version they used.');
+    const cancel = dialog.querySelector('button')!;
+    expect(document.activeElement).toBe(cancel);
+    cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    TestBed.tick();
+    await confirmPublish.mock.results[0].value;
+    expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    expect(document.activeElement).toBe(publish);
+    http.expectNone(base + '/demo-first-report/versions/1/publish');
+
+    click('Publish…');
+    TestBed.tick();
+    document.querySelectorAll<HTMLButtonElement>('[role=alertdialog] button')[1].click();
+    TestBed.tick();
+    await confirmPublish.mock.results[1].value;
     http.expectOne(base + '/demo-first-report/versions/1/publish').flush({ ...nationalVersion, form: 'demo-first-report', level: 'state' });
     http.expectOne(base).flush([nationalForm]);
     fixture.detectChanges();
     expect(root().textContent).toContain('Published versions never change.');
+    expect(root().querySelector('fimra-status-badge svg[data-icon=circle-check]')).toBeTruthy();
     expect(button('Publish…')).toBeUndefined();
   });
 

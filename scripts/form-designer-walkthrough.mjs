@@ -39,115 +39,203 @@ async function get(path, username) {
   return response.json();
 }
 
-async function checkPresentation(page, selector, name, evidence) {
-  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-    await page.setViewportSize(viewport);
-    for (const theme of ['light', 'dark']) {
-      await page.emulateMedia({ colorScheme: theme });
-      await page.locator(`html[data-theme="${theme}"]`).waitFor({ state: 'attached' });
-      await evidence.scrollIntoViewIfNeeded();
-      const label = `${name}-${viewport.width}-${theme}`;
-      const result = await new AxeBuilder({ page }).include(selector).analyze();
-      const violations = result.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
-      check(!violations.length, label + ': ' + JSON.stringify(violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) }))));
-      console.log(label + ' has zero serious or critical axe violations');
-      await save(page, label);
-    }
-  }
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.emulateMedia({ colorScheme: 'light' });
+const viewports = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
+const themes = ['light', 'dark'];
+const activate = locator => locator.press('Enter');
+
+async function setTheme(page, theme) {
+  await page.emulateMedia({ colorScheme: theme });
+  await page.locator(`html[data-theme="${theme}"]`).waitFor({ state: 'attached' });
 }
 
-const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-const page = await context.newPage();
-try {
-  await page.goto(WEB);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.locator('#username').fill('state.admin');
-  await page.locator('#password').fill('demo');
-  await page.locator('#kc-login').click();
-  await page.getByRole('link', { name: 'Form templates', exact: true }).click();
-  await page.getByRole('heading', { name: 'National templates' }).waitFor();
+async function checkView(page, label, selector) {
+  const axe = new AxeBuilder({ page });
+  const result = await (selector ? axe.include(selector) : axe).analyze();
+  const violations = result.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
+  check(!violations.length, label + ': ' + JSON.stringify(violations.map(v => ({
+    id: v.id, nodes: v.nodes.map(n => ({ target: n.target, summary: n.failureSummary }))
+  }))));
+  console.log(label + ' has zero serious or critical axe violations');
+  await save(page, label);
+}
+
+async function checkFocus(locator, message) {
+  try {
+    await locator.and(locator.page().locator(':focus')).waitFor({ timeout: 3000 });
+  } catch {
+    throw new Error(message);
+  }
+}
+
+async function typeText(input, value) {
+  await input.press('Control+a');
+  await input.pressSequentially(value);
+  await input.press('Tab');
+}
+
+async function extendAndPublish(page, viewport, theme) {
+  await page.setViewportSize(viewport);
+  await setTheme(page, theme);
+  const phone = viewport.width === 390;
+  const label = `${viewport.width}-${theme}`;
+  const id = 'demo-fire-report-' + label;
+  const title = 'Demo fire report';
+  const byName = (name, root = page) => root.getByRole('button', { name, exact: true });
   const nationalCard = page.getByRole('article', { name: 'National report' });
+  const designer = page.locator('fimra-form-designer');
+  const outline = page.getByRole('region', { name: 'Form outline' });
+  const sheet = page.getByRole('dialog');
+  const add = byName('Add', designer);
+  const properties = byName('Properties', designer);
   await nationalCard.getByText('1 report', { exact: true }).waitFor();
-  await save(page, 'forms-by-level');
+  await activate(byName('Extend version 1 of National report', nationalCard));
+  await typeText(page.locator('#start-id'), id);
+  await typeText(page.locator('#start-title'), title);
+  await activate(byName('Open in the designer'));
+  await outline.waitFor();
+  const lockedField = page.locator('#form-row-0-0');
+  check(await lockedField.locator('fimra-status-badge svg[data-icon=lock]').count() === 1, 'the inherited question is missing its lock badge');
+  check(await page.locator('fimra-status-badge svg[data-icon=file-pen-line]').count() === 1, 'the draft is missing its status icon');
+  check(await designer.locator('fimra-status-badge svg[data-icon=check]').count() === 1, 'validation success is missing its check icon');
 
-  // Extend the national template as the state's own form.
-  await page.getByRole('button', { name: 'Extend version 1 of National report' }).click();
-  await page.locator('#start-id').fill('demo-fire-report');
-  await page.locator('#start-title').fill('Demo State fire report');
-  await page.getByRole('button', { name: 'Open in the designer' }).click();
-  await page.getByText('Extends national-fire-report version 1').first().waitFor();
-  check(await page.locator('#form-row-0').getByText('Locked by template').count() === 1, 'the locked section is not marked');
+  if (phone) {
+    const box = await outline.getByRole('heading', { name: 'Form outline' }).boundingBox();
+    const selected = await outline.getByText('Selected Form settings', { exact: true }).boundingBox();
+    const firstRow = await lockedField.boundingBox();
+    check(box.y >= 0 && selected.y + selected.height < viewport.height && firstRow.y < viewport.height,
+      'the outline and selection should be reachable on the first phone screen');
+    check(await designer.locator('#form-palette').count() === 0, 'the field choices are inline on a phone');
+    check(await designer.locator('#form-title').count() === 0, 'the properties are inline on a phone');
+    check(await page.locator('fimra-forms-screen').evaluate(screen => screen.scrollWidth <= screen.clientWidth),
+      'the designer has horizontal overflow on a phone');
+  }
+  await checkView(page, 'designer-' + label);
 
-  // Keyboard only: add a section and a question, rename it and move the section up.
-  await page.getByRole('button', { name: 'Section', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Text', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await page.locator('#prop-text-en').fill('Range office');
-  await page.keyboard.press('Tab');
-  await page.locator('#form-row-2').focus();
-  await page.keyboard.press('Alt+ArrowUp');
+  if (phone) {
+    await activate(add);
+    await sheet.getByRole('heading', { name: 'Add to form' }).waitFor();
+    await checkView(page, 'add-sheet-' + label);
+  }
+  await activate(byName('Section', phone ? sheet : designer));
+  if (phone) {
+    await sheet.waitFor({ state: 'hidden' });
+    await checkFocus(add, 'Add did not regain focus');
+    await page.keyboard.press('Enter');
+  }
+  await activate(byName('Text', phone ? sheet : designer));
+  if (phone) {
+    await sheet.waitFor({ state: 'hidden' });
+    await checkFocus(add, 'Add did not regain focus after adding a question');
+    await page.keyboard.press('Tab');
+    await checkFocus(properties, 'Properties should follow Add in the tab order');
+    await page.keyboard.press('Enter');
+    await sheet.getByRole('heading', { name: 'Properties', exact: true }).waitFor();
+    await checkView(page, 'properties-sheet-' + label);
+  }
+  const question = page.locator('#prop-text-en');
+  await question.press('Control+a');
+  await question.press('Backspace');
+  await question.press('Tab');
+  if (phone) {
+    await page.keyboard.press('Escape');
+    await sheet.waitFor({ state: 'hidden' });
+  }
+  const publish = byName('Publish…');
+  await activate(publish);
+  const summary = designer.locator('fimra-field-error-summary');
+  const newRow = page.locator('#form-row-2-1');
+  await checkFocus(summary, 'Publish did not take focus to the validation summary');
+  await checkView(page, 'validation-' + label);
+  await activate(summary.locator('a[href="#form-row-2-1"]'));
+  await checkFocus(newRow, 'the validation link did not focus the question');
+  if (phone) await activate(properties);
+  await typeText(question, 'Range office');
+  if (phone) {
+    await page.keyboard.press('Escape');
+    await sheet.waitFor({ state: 'hidden' });
+    await checkFocus(properties, 'Properties did not regain focus');
+    await outline.getByText('Selected Range office', { exact: true }).waitFor();
+  }
+
+  await page.locator('#form-row-2').press('Alt+ArrowUp');
   await page.getByText('Moved "New section" up to place 2.').waitFor({ state: 'attached' });
-  check((await page.locator('#form-row-1').textContent()).includes('New section'), 'the new section did not move up');
+  const moved = page.locator('#form-row-1');
+  check((await moved.textContent()).includes('New section'), 'the new section did not move up');
+  await checkFocus(moved, 'focus did not follow the moved section');
 
-  // Drag and drop: a number field from the palette into the new section.
-  const source = page.locator('#form-palette').getByRole('button', { name: 'Number', exact: true });
-  const target = page.locator('#form-list-1');
-  // Keyboard focus can scroll the palette under the sticky workspace header.
-  await source.evaluate(element => element.scrollIntoView({ block: 'center' }));
-  await source.hover();
-  const from = await source.boundingBox();
-  const to = await target.boundingBox();
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 + 10, { steps: 5 });
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height - 4, { steps: 20 });
-  await page.mouse.up();
-  await page.getByText(/Added number "New question" to section "New section"/).waitFor({ state: 'attached' });
+  if (!phone && theme === 'light') {
+    const source = designer.locator('#form-palette').getByRole('button', { name: 'Number', exact: true });
+    const target = page.locator('#form-list-1');
+    await source.evaluate(element => element.scrollIntoView({ block: 'center' }));
+    await source.hover();
+    const from = await source.boundingBox();
+    const to = await target.boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 + 10, { steps: 5 });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height - 4, { steps: 20 });
+    await page.mouse.up();
+    await page.getByText(/Added number "New question" to section "New section"/).waitFor({ state: 'attached' });
+  }
 
-  // A locked question cannot be edited.
-  await page.locator('#form-row-0-0').click();
+  await activate(lockedField);
+  if (phone) await activate(properties);
   await page.locator('#properties-heading').getByText('Team reached the site at').waitFor();
   check(await page.locator('#prop-text-en').isDisabled(), 'a locked question can be edited');
-  await page.getByText('No problems found').waitFor();
-  await save(page, 'designer-extending-national-template');
+  if (phone) {
+    await page.keyboard.press('Escape');
+    await sheet.waitFor({ state: 'hidden' });
+  }
 
-  await page.getByRole('button', { name: 'Preview' }).click();
-  const previewRule = page.getByText('Shown when Likely cause is Lightning.');
-  await checkPresentation(page, 'fimra-form-designer', 'preview', previewRule);
-  await page.getByRole('button', { name: 'Design' }).click();
-
-  await page.getByRole('button', { name: 'Save as draft' }).click();
-  await page.getByRole('button', { name: 'Save draft' }).waitFor();
-  await page.getByRole('button', { name: 'Publish…' }).click();
-  await page.getByRole('button', { name: 'Publish', exact: true }).click();
+  await activate(byName('Preview'));
+  await page.getByText('Shown when Likely cause is Lightning.').waitFor();
+  await checkView(page, 'preview-' + label);
+  if (theme === 'light') {
+    await activate(byName('Save as draft'));
+    await byName('Save draft').waitFor();
+  }
+  await activate(publish);
+  const dialog = page.getByRole('alertdialog', { name: 'Publish version 1?' });
+  await dialog.getByText(/Reports already filled in keep the version they used/).waitFor();
+  await checkFocus(byName('Cancel', dialog), 'Cancel should receive initial focus');
+  await checkView(page, 'publish-confirm-' + label);
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  await checkFocus(publish, 'focus did not return to Publish');
+  await page.keyboard.press('Enter');
+  await dialog.waitFor();
+  await checkFocus(byName('Cancel', dialog), 'Cancel should receive initial focus on reopen');
+  await page.keyboard.press('Tab');
+  await checkFocus(byName('Publish', dialog), 'Tab did not move to Publish');
+  await page.keyboard.press('Enter');
   await page.getByText('Published versions never change.').waitFor();
-  await save(page, 'published-state-form');
+  await checkView(page, 'published-' + label);
 
-  // The list shows the state's form and the national template's report.
-  await page.getByRole('button', { name: 'Back to forms' }).click();
-  const stateCard = page.getByRole('article', { name: 'Demo State fire report' });
-  await stateCard.getByText('extends national-fire-report version 1').waitFor();
+  await activate(byName('Back to forms'));
   await nationalCard.getByText('1 report', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'View version 1 of National report' }).click();
-  await page.getByText('1 report filled in on this version').waitFor();
-  await save(page, 'national-version-with-its-report');
-  await page.setViewportSize({ width: 390, height: 844 });
-  const overflow = await page.evaluate(() => [...document.querySelectorAll('fimra-forms-screen *')]
-    .filter(element => element.getBoundingClientRect().right > window.innerWidth + 1).length);
-  check(overflow === 0, `${overflow} elements are wider than a phone screen`);
-  await save(page, 'phone-width');
-
-  // The earlier report still shows with the version it used, and the state's form is published.
-  const report = await get('/submissions/' + submission, 'division.officer');
-  check(report.form === 'national-fire-report' && report.version === 1, 'the earlier report changed version: ' + JSON.stringify(report));
-  const state = await get('/forms/demo-fire-report/versions/1', 'state.admin');
+  const state = await get('/forms/' + id + '/versions/1', 'state.admin');
   check(state.status === 'published' && state.extends?.form === 'national-fire-report' && state.extends?.version === 1,
     'the state form is not published from the template: ' + JSON.stringify(state));
   check(state.template.locked.includes('basics') && state.template.locked.includes('crew_size'), 'the state form lost the national locks');
+  check(state.definition.sections[1].items.some(item => item.label?.en === 'Range office'), 'the edited and reordered question was not published');
+}
+
+const browser = await chromium.launch();
+const context = await browser.newContext({ viewport: viewports[0], reducedMotion: 'reduce' });
+const page = await context.newPage();
+try {
+  await page.goto(WEB + '/settings/forms?workspace=demo');
+  await activate(page.getByRole('button', { name: 'Sign in', exact: true }));
+  await page.locator('#username').fill('state.admin');
+  await page.locator('#password').fill('demo');
+  await activate(page.locator('#kc-login'));
+  await page.getByRole('heading', { name: 'National templates' }).waitFor();
+  for (const viewport of viewports) {
+    for (const theme of themes) await extendAndPublish(page, viewport, theme);
+  }
+
+  const report = await get('/submissions/' + submission, 'division.officer');
+  check(report.form === 'national-fire-report' && report.version === 1, 'the earlier report changed version: ' + JSON.stringify(report));
   // Publish a changed version of the same form. Its rule would hide the
   // crew answer on the earlier report if the viewer used the latest version.
   const national = await get('/forms/national-fire-report/versions/1', 'state.admin');
@@ -168,7 +256,15 @@ try {
   await presentation.getByRole('heading', { name: 'National report', exact: true }).waitFor();
   const originalAnswer = presentation.getByText('4 people', { exact: true });
   check(await presentation.getByText('Updated national report').count() === 0, 'the earlier report shows the newer form title');
-  await checkPresentation(page, 'fimra-submission-view', 'historical-report', originalAnswer);
+  await originalAnswer.waitFor();
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    for (const theme of themes) {
+      await setTheme(page, theme);
+      await originalAnswer.scrollIntoViewIfNeeded();
+      await checkView(page, `historical-report-${viewport.width}-${theme}`, 'fimra-submission-view');
+    }
+  }
   console.log('The earlier report shows the crew size using version 1 after version 2 changed its visibility rule.');
 } catch (error) {
   await save(page, 'failure');

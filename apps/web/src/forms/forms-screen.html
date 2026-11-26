@@ -1,12 +1,12 @@
 <div class="mx-auto grid max-w-[1400px] gap-4 px-4 pt-6 pb-10 sm:px-8">
   @if (editing(); as editing) {
     <div class="flex flex-wrap items-center gap-3">
-      <div class="grid gap-1">
-        <h2 class="text-display">{{ text(editing.definition.title) || editing.definition.id }}</h2>
+      <div class="grid min-w-0 gap-1 wrap-anywhere">
+        <h2 #designerTitle tabindex="-1" class="w-fit max-w-full text-display focus-visible:outline-2 focus-visible:outline-ring">{{ text(editing.definition.title) || editing.definition.id }}</h2>
         <p class="flex flex-wrap items-center gap-2 text-muted-foreground">
           <span hlmBadge variant="outline">{{ levelWords[editing.level].one }}</span>
           <span>{{ editing.definition.id }}, version {{ editing.definition.version }}</span>
-          <span hlmBadge [variant]="editing.status === 'published' ? 'secondary' : 'outline'">{{ editing.status === 'published' ? 'Published' : 'Draft' }}</span>
+          <fimra-status-badge [icon]="editing.status" [label]="editing.status === 'published' ? 'Published' : 'Draft'" />
           @if (editing.unit) { <span>For {{ editing.unit.path }}</span> }
           @if (editing.parent) { <span>Extends {{ editing.parent.form }} version {{ editing.parent.version }}</span> }
           @if (editing.submissionCount !== undefined && editing.status === 'published') {
@@ -16,28 +16,14 @@
       </div>
       <div class="ml-auto flex flex-wrap gap-2">
         @if (!editing.readonly) {
-          <button hlmBtn variant="outline" [disabled]="busy() || !dirty()" (click)="save()">{{ editing.stored ? 'Save draft' : 'Save as draft' }}</button>
-          <button hlmBtn [disabled]="busy()" (click)="confirmPublish.set(true)">Publish…</button>
+          <button hlmBtn variant="outline" [busy]="busy()" [disabled]="!dirty()" (click)="save()">{{ editing.stored ? 'Save draft' : 'Save as draft' }}</button>
+          <button #publishTrigger hlmBtn [busy]="busy()" aria-haspopup="dialog" (click)="confirmPublish(publishTrigger)">Publish…</button>
         }
-        <button hlmBtn variant="ghost" (click)="closeDesigner()">Back to forms</button>
+        <button hlmBtn variant="ghost" [disabled]="busy()" (click)="closeDesigner()">Back to forms</button>
       </div>
     </div>
     @if (editing.readonly && editing.status === 'published') {
       <p class="text-muted-foreground">Published versions never change. Reports filled in on this version always show with it. To make changes, start the next version.</p>
-    }
-    @if (confirmPublish() && !editing.readonly) {
-      <div hlmAlert class="grid-cols-[auto_1fr] gap-x-2.5" role="alertdialog" aria-labelledby="publish-title">
-        <svg fimraIcon="info" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
-        <h3 hlmAlertTitle id="publish-title">Publish version {{ editing.definition.version }}?</h3>
-        <div hlmAlertDescription class="grid gap-2">
-          <p>Publishing freezes this version: it can never change again. Reports already filled in keep the version they used.
-            @if (editing.rules.allowExtension) { Forms one level down can then extend it, keeping its locked parts. }</p>
-          <div class="flex flex-wrap gap-2">
-            <button hlmBtn size="sm" [disabled]="busy()" (click)="publish()">Publish</button>
-            <button hlmBtn size="sm" variant="ghost" (click)="confirmPublish.set(false)">Not now</button>
-          </div>
-        </div>
-      </div>
     }
     @if (error()) {
       <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5" role="alert">
@@ -45,7 +31,7 @@
         <p hlmAlertDescription>{{ error() }}</p>
       </div>
     }
-    <fimra-form-designer [form]="editing.definition" (formChange)="setDefinition($event)" [rules]="editing.rules" (rulesChange)="setRules($event)"
+    <fimra-form-designer [attr.inert]="busy() ? '' : null" [form]="editing.definition" (formChange)="setDefinition($event)" [rules]="editing.rules" (rulesChange)="setRules($event)"
                          [parent]="editing.parent" [level]="editing.level" [readonly]="editing.readonly" [serverProblems]="serverProblems()" />
   } @else {
     <div class="flex flex-wrap items-center gap-3">
@@ -86,7 +72,7 @@
           </div>
           <div class="grid gap-1">
             <label for="import-text" class="font-medium">Or paste it</label>
-            <textarea hlmTextarea id="import-text" class="min-h-40 font-mono text-sm" spellcheck="false" [value]="importText()" (input)="setImportText($event)"></textarea>
+            <textarea hlmTextarea id="import-text" class="min-h-40 text-sm" spellcheck="false" [value]="importText()" (input)="setImportText($event)"></textarea>
           </div>
           <div class="flex gap-2">
             <button hlmBtn [disabled]="busy() || !importText().trim()" (click)="importNational()">Add template</button>
@@ -110,7 +96,7 @@
         <form hlmCardContent #startForm class="start-form grid gap-3" (submit)="$event.preventDefault(); begin(startForm)">
           <div class="grid gap-1">
             <label for="start-id" class="font-medium">Form id</label>
-            <input hlmInput id="start-id" name="id" required spellcheck="false" placeholder="demo-first-report" aria-describedby="start-id-help">
+            <input #startId hlmInput id="start-id" name="id" required spellcheck="false" placeholder="demo-first-report" aria-describedby="start-id-help">
             <p id="start-id-help" class="text-label text-muted-foreground">Small letters and digits with hyphens. It names the form in reports and cannot change.</p>
           </div>
           <div class="grid gap-1">
@@ -156,7 +142,7 @@
                   @for (version of form.versions; track version.version) {
                     <li class="version-row flex flex-wrap items-center gap-2 border-t border-border pt-2">
                       <span class="font-medium">Version {{ version.version }}</span>
-                      <span hlmBadge [variant]="version.status === 'published' ? 'secondary' : 'outline'">{{ version.status === 'published' ? 'Published' : 'Draft' }}</span>
+                      <fimra-status-badge [icon]="version.status" [label]="version.status === 'published' ? 'Published' : 'Draft'" />
                       @if (version.publishedAt) { <span class="text-label text-muted-foreground">{{ version.publishedAt | date: 'd MMM y' }}</span> }
                       @if (version.extends) { <span class="text-label text-muted-foreground">extends {{ version.extends.form }} version {{ version.extends.version }}</span> }
                       @if (version.template.allowExtension) { <span class="text-label text-muted-foreground">can be extended</span> }
