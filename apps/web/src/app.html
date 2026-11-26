@@ -27,8 +27,10 @@
                 [attr.aria-label]=" msg('Dark theme') " [attr.aria-pressed]="appearance.theme() === 'dark'">
           <svg [fimraIcon]="appearance.theme() === 'dark' ? 'sun' : 'moon'" aria-hidden="true"></svg>
         </button>
-        @defer (on idle) { <fimra-export-tray /> }
-        @defer (on idle) { <fimra-notifications (openNotice)="openNotice($event)" /> }
+        @if (current.kind !== 'national') {
+          @defer (on idle) { <fimra-export-tray /> }
+          @defer (on idle) { <fimra-notifications (openNotice)="openNotice($event)" /> }
+        }
         @defer (on immediate) { <fimra-shell-account [name]="name" /> }
         @placeholder { <span class="user-trigger user-name">{{ name }}</span> }
       </div>

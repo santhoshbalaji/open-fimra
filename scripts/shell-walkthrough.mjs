@@ -8,7 +8,10 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
 const desktop = { width: 1536, height: 864 };
 const laptop = { width: 1366, height: 768 };
 const phone = { width: 390, height: 844 };
-const common = ['Map', 'Alerts', 'Incidents', 'Field reports', 'Situation report', 'Dashboard', 'GIS link', 'Field phones'];
+const common = [
+  'Map', 'Alerts', 'Incidents', 'Field reports', 'Referrals and preparedness', 'Daily situation return',
+  'Situation report', 'Dashboard', 'GIS link', 'Field phones'
+];
 const expect = playwrightExpect.configure({ timeout: 25_000 });
 
 async function signIn(page, username, path = '/') {
@@ -210,7 +213,7 @@ async function checkSidebarMatrix() {
 
 try {
   for (const [username, extra, start, heading] of [
-    ['state.admin', ['Layers', 'Form templates', 'Setup', 'Duty roster', 'Incident response'], '/', 'Map'],
+    ['state.admin', ['State return', 'Layers', 'Form templates', 'Setup', 'Duty roster', 'Incident response'], '/', 'Map'],
     ['division.officer', ['Form templates'], '/reports/field?decision=approved', 'Field reports'],
     ['beat.guard', [], '/monitor/map?unitPath=ds.c2', 'Map'],
     ['no.role', [], '/settings/layers', 'Restricted access']
@@ -263,9 +266,8 @@ try {
         await page.keyboard.press('Control+k');
         const dialog = page.getByRole('dialog', { name: 'Search destinations' });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup|Duty roster|Incident response/ })).toHaveCount(0);
-        await dialog.getByRole('textbox').fill('reports');
-        await page.keyboard.press('ArrowDown');
+        await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup|Duty roster|Incident response|State return|National portal/ })).toHaveCount(0);
+        await dialog.getByRole('textbox').fill('Situation report');
         await page.keyboard.press('Enter');
         await expect(page).toHaveURL(/\/reports\/situation/);
         await expect(dialog).toBeHidden();

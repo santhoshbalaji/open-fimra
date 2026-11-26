@@ -176,6 +176,66 @@
       "firstName": "Demo",
       "lastName": "No Role",
       "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d1000000-0000-4000-8000-0000000000a1",
+      "username": "national.ministry",
+      "enabled": true,
+      "email": "national.ministry@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Ministry Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d1000000-0000-4000-8000-0000000000a2",
+      "username": "national.survey",
+      "enabled": true,
+      "email": "national.survey@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Survey Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d1000000-0000-4000-8000-0000000000a3",
+      "username": "national.disaster",
+      "enabled": true,
+      "email": "national.disaster@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Disaster Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d1000000-0000-4000-8000-0000000000a4",
+      "username": "state.nodal",
+      "enabled": true,
+      "email": "state.nodal@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Nodal Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d1000000-0000-4000-8000-0000000000a5",
+      "username": "public.viewer",
+      "enabled": true,
+      "email": "public.viewer@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Public Viewer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d1000000-0000-4000-8000-0000000000a6",
+      "username": "north.nodal",
+      "enabled": true,
+      "email": "north.nodal@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "North Nodal Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
     }
   ]
 }

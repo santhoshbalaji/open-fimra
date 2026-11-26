@@ -62,6 +62,7 @@ export class App implements OnInit {
     return view?.group === 'Monitor';
   });
   readonly scope = computed(() => {
+    if (this.workspace.current()?.kind === 'national') return translate('National workspace');
     const unit = this.navigation.query().get('unitPath');
     const jurisdictions = this.workspace.jurisdictions();
     const selected = jurisdictions.find(([path]) => path === unit);

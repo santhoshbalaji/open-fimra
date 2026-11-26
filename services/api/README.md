@@ -819,6 +819,95 @@ an updated form version with the optional state allocation or preparedness
 quantity fields from the starter pack. Assign it to the applicable step or
 use it for the operations record.
 
+## National portal
+
+A national workspace receives signed state extracts. Keep its role assignments
+separate from the producing workspaces. A national role assignment covers one
+state in the receiving hierarchy. The state chooses which windows and records
+to share inside that scope.
+
+### Set up the receiving workspace
+
+1. Create a `workspaces` row with `kind = 'national'`. Give it an exchange
+   hierarchy with a national root and one child unit for each participating state.
+2. Add each state to `national_states` with its hierarchy and child unit path,
+   its agreed state and unit-system codes, and the highest location precision
+   it allows. Zero decimal places means a whole-degree grid. One means a
+   tenth-degree grid. The public view uses the state name only.
+3. Obtain the producer's Ed25519 public key through the agreed trust channel.
+   Register its fingerprint and raw 32-byte public key in
+   `national_state_keys` for that state. Register new keys independently when
+   a state rotates its key. Remove trust for revoked keys.
+4. Assign roles through `role_assignments` at the corresponding state child
+   unit. Use the signed-in identity's OpenID Connect subject in `users`.
+   A role at the national root grants no access to these records.
+
+| Role | View |
+| --- | --- |
+| `national_ministry` | State totals and preparedness or grant figures shared for each reporting window. |
+| `national_survey` | State and national satellite detection measures, and aggregate FSI feedback statuses that the state has shared. |
+| `national_disaster` | Major incidents and assistance updates explicitly shared by the state. |
+| `national_nodal` | Own state's submissions and receipts, sharing controls, publication and incident updates. |
+| `national_public` | The approved state-level releases in the assigned scope. |
+
+Use a sharing agreement to decide who can receive each record, set precision,
+and agree on retention and how to identify shared events. Use references and
+approved summaries in major incident updates. Keep personal and case evidence
+in the producing workspace.
+
+### Exchange and views
+
+These requests use a bearer token and start at
+`/api/v1/workspaces/{slug}/national`. The portal in the web app opens the
+view for the signed-in user's role.
+
+| Request | Result |
+| --- | --- |
+| `GET /` | The caller's national roles and the states they can submit for. |
+| `POST /upload` or `POST /push` | Receive the signed JSON body from a nodal officer or a state client with the nodal role. Return a receipt on success. |
+| `GET /ministry`, `/survey`, `/submissions`, `/public` | Return rows for the caller's role, state scope and shared records. |
+| `PUT /states/{state}/sharing` | Set `ministry`, `preparedness`, `survey` and `feedback` for a window using its inclusive closing dates `from` and `to`. Opening a window records an expected return even before an extract arrives. |
+| `PUT /states/{state}/publication` | Approve the current incident extract for `from` and `to` using `extractId`. Set `extractId` to null to withdraw the release. |
+| `PUT /states/{state}/satellite` | A survey officer records satellite measures for a shared comparison window. Include `from`, `to`, `source`, `product`, `startsAt`, `endsAt`, `expected`, `reported` and `detections`. The coverage counts are expected and reported satellite passes. Use null for detections when no coverage was reported. |
+| `PUT /states/{state}/feedback` | The nodal officer supplies the state-approved FSI feedback counts for `from` and `to`, using `prepared`, `submitted`, `accepted` and `rejected`. |
+| `GET /incidents` | Read the latest visible updates and the count of distinct shared event IDs. |
+| `PUT /states/{state}/incidents/{incident}` | Record a nodal officer's update. Send `sharedEventId`, `fsiId` if known, `status`, `severity`, `occurredAt`, `nextUpdateAt`, `threats`, `aidRequested`, `aidAccepted` and `provisionalImpacts`. Coordinates are optional and get rounded to the agreed precision or a coarser `precisionDecimals`. Set `shared` to permit disaster officers in scope to read this record. |
+
+A root state administrator on the same installation can also push a saved
+signed file with `POST /api/v1/workspaces/{source}/state-extracts/{id}/{kind}/push`.
+Send `{"destination":"receiving-workspace-slug"}`. The receiver checks its
+registered key for local and remote submissions. An exact replay returns the
+same receipt. A correction replaces only its own state, window and kind.
+The two document kinds keep separate revision chains and must agree on the
+approval and dates when both are supplied. Older receipts remain in submissions.
+
+The survey view names each source and shows its own expected, reported and
+missing coverage. The state coverage counts unit-days. Check both periods
+before comparing the figures. The restricted channel uses the same
+`sharedEventId` across participating states and keeps each state's own update
+and aid request. It counts that event once across the visible states.
+State totals are reported separately because the signed totals carry no
+incident identifiers. The audit log records authenticated channel requests,
+the records returned, accepted updates and refused writes.
+
+Public releases show the approved state geography and the new confirmed fire
+count when it is at least five. The public view uses only the approved current
+revision. A correction removes the earlier public figures until the state
+approves the replacement.
+
+### Try the fictional portal
+
+Run `make demo-national-portal` on the migrated development database. The
+replay loads a signed correction, a missing expected return and a shared event
+reported by two fictional states. Use `national.ministry`, `national.survey`,
+`national.disaster`, `state.nodal`, `north.nodal` or `public.viewer` with the
+development realm's demo password. These accounts are available when the realm
+is imported from the updated file. The integration test uses a test issuer to
+exercise the same subjects without editing a running realm.
+
+Run `make national-test-integration` to test receiving, corrections,
+permissions, public release and the audit log.
+
 ## File exports
 
 Any user with a role in a workspace can export what they can see on the map or in the alert queue. The geo worker writes the file. Run it with `make geo-worker-up`.

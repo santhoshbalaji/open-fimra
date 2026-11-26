@@ -3,7 +3,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 
-interface Workspace { slug: string; name: string }
+interface Workspace { slug: string; name: string; kind?: 'national' }
 interface Assignment { workspace: Workspace; role: string; hierarchy?: string; unit: { path: string; name?: string } }
 /** A role the user holds in the current workspace. */
 export interface Role { role: string; hierarchy: string; path: string }

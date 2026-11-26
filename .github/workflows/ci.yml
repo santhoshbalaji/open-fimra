@@ -117,8 +117,8 @@ jobs:
           echo '### Dashboard timings on the demo data' >> "$GITHUB_STEP_SUMMARY"
           awk '/^=== RUN .*dashboard_SQL_parity\// {n=split($NF, parts, "/"); user=parts[n]}
                /summary, 20 signed requests/ {sub(/^.*summary, /, ""); print "- " user ": " $0}' api-integration.log >> "$GITHUB_STEP_SUMMARY"
-      - name: Validate state extracts and correction receipts
-        run: make state-extract-test-integration
+      - name: Validate state extracts and the national exchange
+        run: make state-extract-test-integration national-test-integration
       - name: Backfill the demo fixtures twice; the second run must fetch nothing
         run: |
           make backfill-demo

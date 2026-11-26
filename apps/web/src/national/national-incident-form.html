@@ -1,0 +1,75 @@
+<details class="rounded-card border border-border bg-card p-4">
+  <summary class="font-semibold">{{ msg('Send a major incident update') }}</summary>
+  <form class="mt-4 grid gap-3" (submit)="submit($event)">
+    <fieldset [disabled]="busy()" class="grid min-w-0 gap-3 sm:grid-cols-2">
+      <label class="grid gap-1">{{ msg('State') }}
+        <select name="state" required class="rounded-control border border-border bg-card p-2">
+          @for (code of states(); track code) { <option [value]="code">{{ code }}</option> }
+        </select>
+      </label>
+      <label class="grid gap-1">{{ msg('State incident reference') }}
+        <input name="incidentRef" required maxlength="64" class="rounded-control border border-border bg-card p-2" />
+      </label>
+      <label class="grid gap-1">{{ msg('Shared event ID') }}
+        <input name="sharedEventId" required maxlength="36" class="rounded-control border border-border bg-card p-2" />
+      </label>
+      <label class="grid gap-1">{{ msg('FSI large fire ID (optional)') }}
+        <input name="fsiId" maxlength="64" class="rounded-control border border-border bg-card p-2" />
+      </label>
+      <label class="grid gap-1">{{ msg('Status') }}
+        <select name="status" required class="rounded-control border border-border bg-card p-2">
+          <option value="active">{{ msg('Active') }}</option>
+          <option value="controlled">{{ msg('Controlled') }}</option>
+          <option value="extinguished">{{ msg('Extinguished') }}</option>
+          <option value="closed">{{ msg('Closed') }}</option>
+        </select>
+      </label>
+      <label class="grid gap-1">{{ msg('Severity') }}
+        <select name="severity" required class="rounded-control border border-border bg-card p-2">
+          <option value="major">{{ msg('Major') }}</option>
+          <option value="severe">{{ msg('Severe') }}</option>
+          <option value="critical">{{ msg('Critical') }}</option>
+        </select>
+      </label>
+      <p class="text-text-secondary sm:col-span-2">{{ msg('Enter times in your device time zone.') }}</p>
+      <label class="grid gap-1">{{ msg('Update time') }}
+        <input name="occurredAt" type="datetime-local" required class="min-w-0 rounded-control border border-border bg-card p-2" />
+      </label>
+      <label class="grid gap-1">{{ msg('Next update') }}
+        <input name="nextUpdateAt" type="datetime-local" class="min-w-0 rounded-control border border-border bg-card p-2" />
+      </label>
+      <p class="text-text-secondary sm:col-span-2">{{ msg('Coordinates are optional. The portal rounds them to the agreed precision.') }}</p>
+      <label class="grid gap-1">{{ msg('Latitude') }}
+        <input type="number" step="any" min="-90" max="90" name="latitude" class="rounded-control border border-border bg-card p-2" />
+      </label>
+      <label class="grid gap-1">{{ msg('Longitude') }}
+        <input type="number" step="any" min="-180" max="180" name="longitude" class="rounded-control border border-border bg-card p-2" />
+      </label>
+      <label class="grid gap-1">{{ msg('Location precision') }}
+        <select name="precisionDecimals" class="rounded-control border border-border bg-card p-2">
+          <option value="">{{ msg('Agreed precision') }}</option>
+          <option value="0">{{ msg('Whole degree') }}</option>
+          <option value="1">{{ msg('Tenth of a degree') }}</option>
+        </select>
+      </label>
+      <label class="grid gap-1 sm:col-span-2">{{ msg('Spread or threats') }}
+        <textarea name="threats" maxlength="500" class="rounded-control border border-border bg-card p-2"></textarea>
+      </label>
+      <label class="grid gap-1">{{ msg('Aid requested') }}
+        <textarea name="aidRequested" maxlength="500" class="rounded-control border border-border bg-card p-2"></textarea>
+      </label>
+      <label class="grid gap-1">{{ msg('Aid accepted') }}
+        <textarea name="aidAccepted" maxlength="500" class="rounded-control border border-border bg-card p-2"></textarea>
+      </label>
+      <label class="grid gap-1 sm:col-span-2">{{ msg('Provisional impacts') }}
+        <textarea name="provisionalImpacts" maxlength="500" class="rounded-control border border-border bg-card p-2"></textarea>
+      </label>
+      <label class="flex items-center gap-2 sm:col-span-2">
+        <input name="shared" type="checkbox" /> {{ msg('Share with disaster management authorities') }}
+      </label>
+    </fieldset>
+    <div><button hlmBtn type="submit" [disabled]="busy()">{{ msg('Save incident update') }}</button></div>
+    @if (saved()) { <p role="status">{{ msg('Incident update saved.') }}</p> }
+    @if (error()) { <p role="alert">{{ msg(error()) }}</p> }
+  </form>
+</details>

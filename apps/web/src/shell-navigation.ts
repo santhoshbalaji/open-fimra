@@ -14,6 +14,7 @@ export const destinations = [
   { path: '/reports/daily', name: 'Daily situation return', icon: 'file-chart-column', group: 'Reports' },
   { path: '/reports/state', name: 'State return', icon: 'file-chart-column', group: 'Reports', grant: 'layers' },
   { path: '/reports/situation', name: 'Situation report', icon: 'file-chart-column', group: 'Reports' },
+  { path: '/national', name: 'National portal', icon: 'layout-dashboard', group: 'Dashboard' },
   { path: '/dashboard', name: 'Dashboard', icon: 'layout-dashboard', group: 'Dashboard', filters: true },
   { path: '/settings/layers', name: 'Layers', icon: 'layers', group: 'Settings', grant: 'layers' },
   { path: '/settings/forms', name: 'Form templates', icon: 'list-ordered', group: 'Settings', grant: 'forms' },
@@ -34,11 +35,14 @@ export function destinationAt(path: string): Destination | undefined {
 }
 
 export function allowsDestination(workspace: WorkspaceService, destination: Destination): boolean {
-  return !!workspace.current() &&
-    (!('grant' in destination) || (destination.grant === 'layers' ? workspace.canManageLayers() : workspace.canDesignForms()));
+  const current = workspace.current();
+  if (!current) return false;
+  if (current.kind === 'national' || destination.path === '/national') return current.kind === 'national' && destination.path === '/national';
+  return (!('grant' in destination) || (destination.grant === 'layers' ? workspace.canManageLayers() : workspace.canDesignForms()));
 }
 
 export function homePath(workspace: WorkspaceService): DestinationPath {
+  if (workspace.current()?.kind === 'national') return '/national';
   if (workspace.setupPending()) return '/settings/setup';
   return '/monitor/map';
 }
@@ -56,6 +60,10 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
   const validCursor = /^[0-9T:.Z+\-,a-f]{1,128}$/;
   const current = workspace.current();
   if (current) params['workspace'] = current.slug;
+  if (path === '/national') {
+    if (['ministry', 'survey', 'incidents', 'submissions', 'public'].includes(input['view'])) params['view'] = input['view'];
+    return params;
+  }
   const { unitPath, hours, alert, detection, incident, report, class: forest, queue, cursor, decision, form, view } = input;
   if (typeof unitPath === 'string' && workspace.allowsScope(unitPath)) params['unitPath'] = unitPath;
   if (typeof hours === 'string' && /^\d{1,3}$/.test(hours) && +hours >= 1 && +hours <= 720) params['hours'] = String(+hours);
