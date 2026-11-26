@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path as FilePath
+from zoneinfo import ZoneInfo
 
 import psycopg
 from reportlab.graphics.shapes import Circle, Drawing, Line, Path, Polygon, Rect, String
@@ -498,7 +499,43 @@ def story(report):
     return parts
 
 
-def numbered_canvas(footer):
+def daily_return_story(report, messages):
+    figures, review = report["dailyReturn"], report["review"]
+    zone = ZoneInfo(figures["policy"]["timeZone"])
+
+    def msg(key, *values):
+        return messages.get(key, key).format(*values)
+
+    def local(value):
+        return datetime.fromisoformat(value).astimezone(zone).strftime("%Y-%m-%d %H:%M")
+
+    parts = [
+        report_paragraph(msg("Daily situation return"), TITLE),
+        report_paragraph(report["scope"], SUBTITLE),
+        report_paragraph(report["period"]["from"] + " · " + msg("Revision {0}", review["revision"]), BODY),
+        report_paragraph(f"{msg('Reporting cutoff')} · {local(figures['cutoff'])} ({zone.key})", BODY),
+        report_paragraph(f"{msg('Figures through')} · {local(report['period']['end'])}", BODY),
+        report_paragraph(msg("Approved"), BODY),
+        report_paragraph(msg("Submitted by {0}", review["submittedBy"]) + " · " + local(review["submittedAt"]), BODY),
+        report_paragraph(msg("Reviewed by {0}", review["decidedBy"]) + " · " + local(review["decidedAt"]), BODY),
+    ]
+    if figures["nil"]:
+        parts.append(report_paragraph(msg("Nil return"), BODY))
+    for label_key, value in (("Remarks", figures["remarks"]), ("Review note", review["reviewNote"])):
+        if value:
+            parts.append(report_paragraph(msg(label_key), HEADING))
+            parts.extend(report_paragraph(line, BODY) for line in value.splitlines())
+    with (ASSETS / "locales" / "daily-return-metrics.json").open(encoding="utf-8") as file:
+        groups = json.load(file)
+    for group in groups:
+        rows = [[msg(label_text), f"{figures['totals'].get(key, 0):,.2f}".rstrip("0").rstrip(".")]
+                for key, label_text in group["rows"].items()]
+        parts += [CondPageBreak(23 * mm), report_paragraph(msg(group["label"]), HEADING),
+                  table([msg("Figure"), msg("Value")], rows, [0.8, 0.2])]
+    return parts
+
+
+def numbered_canvas(footer, page_label="Page {0} of {1}"):
     """A canvas that writes the footer and 'Page n of m' once every page is known."""
 
     class NumberedCanvas(canvas.Canvas):
@@ -520,8 +557,11 @@ def numbered_canvas(footer):
                     self.setFont(font, 7.5)
                     self.drawString(left, 9 * mm, run)
                     left += advance
-                self.setFont(FONT, 7.5)
-                self.drawRightString(PAGE_W - MARGIN, 9 * mm, f"Page {self._pageNumber} of {total}")
+                right = PAGE_W - MARGIN
+                for run, font, advance in reversed(list(shaped_runs(page_label.format(self._pageNumber, total), 7.5))):
+                    right -= advance
+                    self.setFont(font, 7.5)
+                    self.drawString(right, 9 * mm, run)
                 super().showPage()
             super().save()
 
@@ -531,14 +571,28 @@ def numbered_canvas(footer):
 def render(report):
     """Returns the PDF bytes and page count for one saved report."""
     out = BytesIO()
-    footer = f"Open FIMRA situation report · {report['scope']} · {short_period(report['period'])}"
+    if "dailyReturn" in report:
+        language = "hi" if report.get("language") == "hi" else "en"
+        with (ASSETS / "locales" / f"{language}.json").open(encoding="utf-8") as file:
+            messages = json.load(file)
+        title = messages.get("Daily situation return", "Daily situation return")
+        page_label = messages.get("Page {0} of {1}", "Page {0} of {1}")
+        subject = report["period"]["from"]
+        content = daily_return_story(report, messages)
+    else:
+        title = "Situation report"
+        page_label = "Page {0} of {1}"
+        subject = period_text(report["period"])
+        content = story(report)
+    footer = f"Open FIMRA · {title} · {report['scope']} · {short_period(report['period'])}"
+    if "dailyReturn" not in report:
+        footer = f"Open FIMRA situation report · {report['scope']} · {short_period(report['period'])}"
     if len(footer) > 110:
         footer = footer[:107] + "..."
     doc = SimpleDocTemplate(out, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN,
-                            bottomMargin=16 * mm, title=f"Situation report: {report['scope']}",
-                            author="Open FIMRA", subject=period_text(report["period"]), creator="Open FIMRA",
-                            invariant=1)
-    doc.build(story(report), canvasmaker=numbered_canvas(footer))
+                            bottomMargin=16 * mm, title=f"{title}: {report['scope']}",
+                            author="Open FIMRA", subject=subject, creator="Open FIMRA", invariant=1)
+    doc.build(content, canvasmaker=numbered_canvas(footer, page_label))
     return out.getvalue(), doc.page
 
 

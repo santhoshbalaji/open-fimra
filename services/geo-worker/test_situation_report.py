@@ -91,6 +91,25 @@ def pdf_text(data):
 
 
 class SituationReportTest(unittest.TestCase):
+    def test_daily_return_uses_hindi_and_bengali_fonts(self):
+        instant = "2026-03-09T12:30:00Z"
+        report = {
+            "scope": "পাহাড় বিভাগ",
+            "period": {"from": "2026-03-09", "to": "2026-03-09", "end": instant},
+            "language": "hi",
+            "dailyReturn": {"nil": True, "remarks": "कोई आग नहीं।", "cutoff": instant,
+                            "policy": {"timeZone": "Asia/Kolkata"}, "totals": {}},
+            "review": {"revision": 1, "submittedBy": "Demo officer", "decidedBy": "Demo reviewer",
+                       "submittedAt": instant, "decidedAt": instant, "reviewNote": ""},
+        }
+        data, pages = render(report)
+        reader = PdfReader(BytesIO(data))
+        self.assertEqual(pages, len(reader.pages))
+        fonts = {str(font.get_object()["/BaseFont"])
+                 for page in reader.pages for font in page["/Resources"]["/Font"].values()}
+        self.assertTrue(any("Devanagari" in font for font in fonts), fonts)
+        self.assertTrue(any("Bengali" in font for font in fonts), fonts)
+
     def test_report_renders_with_its_numbers(self):
         data, pages = render(synthetic_report())
         self.assertTrue(data.startswith(b"%PDF-"))

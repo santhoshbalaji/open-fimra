@@ -14,12 +14,16 @@ import { SidePanel } from './ui/side-panel';
 import { DataState, StateRegion } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
 
-export interface NotificationLink { workspace: string; alert: string | null }
+export interface NotificationLink { workspace: string; alert: string | null; dailyDay?: string; dailyUnit?: string }
 
 export function notificationURL(link: NotificationLink): URL {
   const url = new URL(document.baseURI);
   const params = new URLSearchParams({ workspace: link.workspace });
-  if (link.alert) params.set('alert', link.alert);
+  if (link.dailyDay && link.dailyUnit) {
+    url.pathname = url.pathname.replace(/\/$/, '') + '/reports/daily';
+    params.set('day', link.dailyDay);
+    params.set('unit', link.dailyUnit);
+  } else if (link.alert) params.set('alert', link.alert);
   else params.set('view', 'feed-health');
   url.search = params.toString();
   return url;
@@ -27,7 +31,7 @@ export function notificationURL(link: NotificationLink): URL {
 
 interface Notice {
   id: string;
-  event: 'alert_new' | 'alert_overdue' | 'feed_open' | 'incident_overdue' | 'incident_escalated';
+  event: 'alert_new' | 'alert_overdue' | 'feed_open' | 'incident_overdue' | 'incident_escalated' | 'daily_return_due' | 'daily_return_missing';
   createdAt: string;
   readAt: string | null;
   workspace: string;
@@ -35,6 +39,9 @@ interface Notice {
   forestClass: ForestClass | null;
   beatName: string | null;
   divisionName: string | null;
+  dailyDay?: string;
+  dailyUnit?: string;
+  dailyUnitName?: string;
 }
 interface Inbox { unreadCount: number; items: Notice[]; hasMore: boolean }
 type InboxFilter = 'all' | 'unread';
@@ -64,7 +71,8 @@ export class Notifications {
   readonly filter = signal<InboxFilter>('all');
   readonly busy = signal(false);
   readonly labels = { alert_new: 'New fire alert', alert_overdue: 'Fire alert overdue', feed_open: 'Feed needs attention',
-    incident_overdue: 'Incident response overdue', incident_escalated: 'Incident response escalated' };
+    incident_overdue: 'Incident response overdue', incident_escalated: 'Incident response escalated',
+    daily_return_due: 'Daily return due soon', daily_return_missing: 'Daily return missing' };
   readonly now = signal(new Date());
   readonly count = computed(() => this.inbox()?.unreadCount ?? 0);
   readonly unreadMessage = computed(() => this.inbox() ? translate('{0} unread', [this.format.number(this.count())]) : '');
@@ -106,6 +114,7 @@ export class Notifications {
   }
 
   title(item: Notice): string {
+    if (item.dailyUnitName) return translate(this.labels[item.event]) + ' · ' + item.dailyUnitName;
     if (!item.alertId) return translate(this.labels[item.event]);
     const place = [item.beatName, item.divisionName].filter(Boolean).join(', ');
     const title = item.forestClass ? translate(classes[item.forestClass]) : translate('Fire alert');
@@ -121,7 +130,8 @@ export class Notifications {
   }
 
   link(item: Notice): string {
-    return notificationURL({ workspace: item.workspace, alert: item.alertId }).href;
+    return notificationURL({ workspace: item.workspace, alert: item.alertId, ...(item.dailyDay && item.dailyUnit ?
+      { dailyDay: item.dailyDay, dailyUnit: item.dailyUnit } : {}) }).href;
   }
 
   follow(event: MouseEvent, item: Notice): void {
@@ -129,7 +139,8 @@ export class Notifications {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     this.panel().close();
-    this.openNotice.emit({ workspace: item.workspace, alert: item.alertId });
+    this.openNotice.emit({ workspace: item.workspace, alert: item.alertId, ...(item.dailyDay && item.dailyUnit ?
+      { dailyDay: item.dailyDay, dailyUnit: item.dailyUnit } : {}) });
   }
 
   selectFilter(filter: InboxFilter): void {

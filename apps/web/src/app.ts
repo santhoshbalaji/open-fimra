@@ -176,6 +176,10 @@ export class App implements OnInit {
   }
 
   openNotice(link: NotificationLink): void {
+    if (link.dailyDay && link.dailyUnit) {
+      this.navigation.go('/reports/daily', { workspace: link.workspace, day: link.dailyDay, unit: link.dailyUnit });
+      return;
+    }
     this.navigation.go(link.alert ? '/monitor/alerts' : '/dashboard', {
       workspace: link.workspace,
       unitPath: null,

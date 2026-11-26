@@ -1,0 +1,108 @@
+[
+  {
+    "label": "Sources",
+    "rows": {
+      "source.satellite": "Satellite reports",
+      "source.call": "Calls",
+      "source.radio": "Radio reports",
+      "source.staff": "Staff reports",
+      "source.public": "Public reports"
+    }
+  },
+  {
+    "label": "Verification and outcomes",
+    "rows": {
+      "verification.yes": "Fire seen",
+      "verification.no": "No fire seen",
+      "verification.unknown": "Verification inconclusive",
+      "outcome.false_alarm": "False alarms",
+      "outcome.duplicate": "Duplicates",
+      "outcome.non_forest": "Non-forest",
+      "outcome.controlled_burn": "Controlled burns",
+      "outcome.not_reachable": "Unreachable",
+      "outcome.unsafe": "Unsafe",
+      "outcome.outside_jurisdiction": "Outside jurisdiction"
+    }
+  },
+  {
+    "label": "Incidents and overdue work",
+    "rows": {
+      "incident.new": "New incidents",
+      "incident.active": "Active incidents",
+      "incident.controlled": "Incidents controlled",
+      "incident.extinguished": "Incidents extinguished",
+      "work.overdue": "Overdue incidents",
+      "work.overdue_alerts": "Overdue alerts"
+    }
+  },
+  {
+    "label": "Assistance",
+    "rows": {
+      "assistance.requested": "Requests for assistance",
+      "assistance.received": "Assistance received"
+    }
+  },
+  {
+    "label": "Affected area in hectares",
+    "rows": {
+      "area.field.approved": "Field, approved",
+      "area.field.provisional": "Field, provisional",
+      "area.satellite.approved": "Satellite, approved",
+      "area.satellite.provisional": "Satellite, provisional",
+      "area.mixed.approved": "Mixed, approved",
+      "area.mixed.provisional": "Mixed, provisional",
+      "area.unspecified.approved": "Method unspecified, approved",
+      "area.unspecified.provisional": "Method unspecified, provisional"
+    }
+  },
+  {
+    "label": "Response from new",
+    "rows": {
+      "response.new.seconds": "Total elapsed seconds",
+      "response.new.within": "Within target",
+      "response.new.late": "Past target",
+      "response.new.no_target": "No season target",
+      "response.new.unmeasured": "Actual time unavailable"
+    }
+  },
+  {
+    "label": "Response after reopening",
+    "rows": {
+      "response.reopened.seconds": "Total elapsed seconds",
+      "response.reopened.within": "Within target",
+      "response.reopened.late": "Past target",
+      "response.reopened.no_target": "No season target",
+      "response.reopened.unmeasured": "Actual time unavailable"
+    }
+  },
+  {
+    "label": "Response after acknowledgement",
+    "rows": {
+      "response.acknowledged.seconds": "Total elapsed seconds",
+      "response.acknowledged.within": "Within target",
+      "response.acknowledged.late": "Past target",
+      "response.acknowledged.no_target": "No season target",
+      "response.acknowledged.unmeasured": "Actual time unavailable"
+    }
+  },
+  {
+    "label": "Response after assignment",
+    "rows": {
+      "response.assigned.seconds": "Total elapsed seconds",
+      "response.assigned.within": "Within target",
+      "response.assigned.late": "Past target",
+      "response.assigned.no_target": "No season target",
+      "response.assigned.unmeasured": "Actual time unavailable"
+    }
+  },
+  {
+    "label": "Response after dispatch",
+    "rows": {
+      "response.team_sent.seconds": "Total elapsed seconds",
+      "response.team_sent.within": "Within target",
+      "response.team_sent.late": "Past target",
+      "response.team_sent.no_target": "No season target",
+      "response.team_sent.unmeasured": "Actual time unavailable"
+    }
+  }
+]

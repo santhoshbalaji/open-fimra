@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 )
+
+//go:embed daily_return_notices.sql
+var dailyReturnNoticesSQL string
 
 const (
 	notificationQueue    = "notifications"
@@ -34,6 +38,7 @@ type notificationMessage struct {
 	workspaceID, workspace, event string
 	alertID                       *int64
 	address                       *string
+	dailyDay, dailyUnit           *string
 }
 
 // Each channel decides whether the outcome can be retried safely.
@@ -100,6 +105,9 @@ func (w *notificationWorker) Work(ctx context.Context, _ *river.Job[notification
 	if err := checkOverdueNotifications(ctx, w.db, time.Now()); err != nil {
 		return fmt.Errorf("check overdue alerts: %w", err)
 	}
+	if _, err := w.db.Exec(ctx, dailyReturnNoticesSQL, time.Now()); err != nil {
+		return fmt.Errorf("check daily return cutoffs: %w", err)
+	}
 	if err := w.deliverEmails(ctx); err != nil {
 		return err
 	}
@@ -153,8 +161,9 @@ WITH ready AS MATERIALIZED (
     SELECT workspace_id,'system','notification.email_access','user',recipient_id::text
     FROM claimed WHERE address IS NOT NULL
 )
-SELECT id,attempts,workspace_id::text,slug,event,alert_id,address FROM claimed`).
-		Scan(&m.id, &m.attempt, &m.workspaceID, &m.workspace, &m.event, &m.alertID, &m.address)
+SELECT c.id,c.attempts,c.workspace_id::text,c.slug,c.event,c.alert_id,c.address,d.day::text,d.unit_path::text
+FROM claimed c LEFT JOIN notifications n ON n.id=c.id LEFT JOIN daily_return_notices d ON d.id=n.daily_notice_id`).
+		Scan(&m.id, &m.attempt, &m.workspaceID, &m.workspace, &m.event, &m.alertID, &m.address, &m.dailyDay, &m.dailyUnit)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}

@@ -1,0 +1,157 @@
+<section class="mx-auto grid max-w-6xl min-w-0 gap-5 p-4 sm:p-6 lg:p-8">
+  @if (failure()) { <p role="alert">{{ msg(failure()) }}</p> }
+  <div class="flex flex-wrap items-end gap-4">
+    <label>
+      {{ msg('Reporting day') }}
+      <input type="date" [ngModel]="day() || view()?.day" (ngModelChange)="chooseDay($event)" [attr.max]="view()?.today" />
+    </label>
+    @if (view()?.scopes?.length) {
+      <label>
+        {{ msg('Reporting scope') }}
+        <select [ngModel]="scope()" (ngModelChange)="scope.set($event); openUnit('')">
+          <option value="">{{ msg('All reporting units') }}</option>
+          @for (item of view()?.scopes; track item.path) { <option [value]="item.path">{{ item.name }}</option> }
+        </select>
+      </label>
+    }
+  </div>
+  @if (loading()) { <p role="status">{{ msg('Loading') }}</p> }
+  @if (view(); as data) {
+    @if (data.policy; as policy) {
+      @if (data.cutoff; as cutoff) {
+        <p>{{ msg('Reporting cutoff') }} · <time [attr.datetime]="cutoff">{{ when(cutoff, policy.timeZone) }}</time> ({{ policy.timeZone }})</p>
+      }
+      @if (data.coverage; as coverage) {
+        <section class="grid gap-3">
+          <h2 class="text-lg font-semibold">{{ msg('Daily return coverage') }}</h2>
+          <p>{{ coverageText(coverage) }}</p>
+          @if (coverage.units.length) {
+            <table class="w-full">
+              <thead><tr><th scope="col">{{ msg('Reporting unit') }}</th><th scope="col">{{ msg('Report status') }}</th></tr></thead>
+              <tbody>
+                @for (item of coverage.units; track item.path) {
+                  <tr>
+                    <th scope="row">
+                      <button type="button" class="text-start underline" (click)="openUnit(item.path)"
+                              [attr.aria-pressed]="item.path === path()">{{ item.name }}</button>
+                    </th>
+                    <td>{{ msg(label(item)) }} @if (item.decision) { · {{ msg(reviewLabel[item.decision]) }} }</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            }
+        </section>
+        @if (!path()) {
+          <section class="grid gap-3">
+            <div class="flex flex-wrap gap-2">
+              <button hlmBtn type="button" variant="outline" (click)="rollup.set('daily')" [attr.aria-pressed]="rollup() === 'daily'">{{ msg('Daily figures') }}</button>
+              <button hlmBtn type="button" variant="outline" (click)="rollup.set('season')" [attr.aria-pressed]="rollup() === 'season'">{{ msg('Season to date') }}</button>
+            </div>
+            <p>{{ msg('Roll-up figures use approved returns when available. Other submitted returns are provisional.') }}</p>
+            <p>{{ msg('Report figures exclude units that have yet to file.') }}</p>
+            @if (coverage.reported || rollup() === 'season') {
+              <ng-container [ngTemplateOutlet]="figures" [ngTemplateOutletContext]="{ $implicit: coverage[rollup()] }" />
+            }
+          </section>
+        }
+      }
+      @if (unit(); as detail) {
+        <section class="grid gap-3 rounded-card border border-border p-4">
+          <h2 class="text-lg font-semibold">{{ detail.unit }}</h2>
+          @if (detail.history.length) {
+            <label>
+              {{ msg('Revision history') }}
+              <select [ngModel]="revision() || detail.history[0].id" (ngModelChange)="revision.set($event)">
+                @for (entry of detail.history; track entry.id) {
+                  <option [value]="entry.id">{{ msg('Revision {0}', [format.number(entry.revision)]) }} · {{ msg(reviewLabel[entry.status]) }}</option>
+                }
+              </select>
+            </label>
+          }
+          @if (detail.snapshot; as snapshot) {
+            <p>{{ msg(reviewLabel[snapshot.review.status]) }} @if (snapshot.dailyReturn.nil) { · {{ msg('Nil return') }} }</p>
+            <p>{{ msg('Submitted by {0}', [snapshot.review.submittedBy]) }} · {{ when(snapshot.review.submittedAt, policy.timeZone) }}</p>
+            <p>{{ msg('Figures through') }} · {{ when(snapshot.period.end, policy.timeZone) }}</p>
+            @if (snapshot.review.decidedBy && snapshot.review.decidedAt) {
+              <p>{{ msg('Reviewed by {0}', [snapshot.review.decidedBy]) }} · {{ when(snapshot.review.decidedAt, policy.timeZone) }}</p>
+            }
+            @if (snapshot.review.reviewNote) {
+              <p class="whitespace-pre-wrap"><strong>{{ msg('Review note') }}</strong> · {{ snapshot.review.reviewNote }}</p>
+            }
+            @if (snapshot.dailyReturn.remarks) {
+              <p class="whitespace-pre-wrap"><strong>{{ msg('Remarks') }}</strong> · {{ snapshot.dailyReturn.remarks }}</p>
+            }
+            @if (snapshot.review.status === 'approved') {
+              <div><button hlmBtn type="button" variant="outline" (click)="download(snapshot)" [disabled]="pdfBusy()">
+                {{ msg(pdfBusy() ? 'Preparing PDF…' : 'Download PDF') }}
+              </button></div>
+            }
+            <ng-container [ngTemplateOutlet]="figures" [ngTemplateOutletContext]="{ $implicit: snapshot.dailyReturn.totals }" />
+          } @else {
+            <p>{{ msg('No return has been submitted.') }}</p>
+          }
+          @if (detail.canSubmit && (!revision() || revision() === detail.history[0]?.id)) {
+            <div class="grid gap-3">
+              <label class="flex items-center gap-2"><input type="checkbox" [(ngModel)]="nil" /> {{ msg('Nil return') }}</label>
+              @if (!nil) {
+                <label>{{ msg('Assistance received (count)') }} <input type="number" min="0" max="100000" step="1" [(ngModel)]="received" /></label>
+              }
+              <label>{{ msg('Remarks') }} <textarea maxlength="2000" rows="3" [(ngModel)]="remarks"></textarea></label>
+              <div><button hlmBtn type="button" (click)="change('submit')" [disabled]="saving()">
+                {{ msg(detail.history.length ? 'Submit correction' : 'Submit return') }}
+              </button></div>
+            </div>
+          }
+          @if (detail.canReview && (!revision() || revision() === detail.history[0]?.id)) {
+            <label>{{ msg('Review note') }} <textarea maxlength="2000" rows="3" [(ngModel)]="reviewNote"></textarea></label>
+            <div class="flex flex-wrap gap-2">
+              <button hlmBtn type="button" (click)="change('approved')" [disabled]="saving()">{{ msg('Approve') }}</button>
+              <button hlmBtn type="button" variant="outline" (click)="change('returned')" [disabled]="saving() || !reviewNote.trim()">{{ msg('Return for correction') }}</button>
+            </div>
+          }
+        </section>
+      }
+    } @else {
+      <p>{{ msg('No reporting season covers this day.') }}</p>
+    }
+    @if (data.canConfigure) {
+      <details class="rounded-card border border-border p-4">
+        <summary>{{ msg('Return settings') }}</summary>
+        <form class="mt-3 grid gap-3 sm:grid-cols-2" (ngSubmit)="configure()">
+          <label>{{ msg('Reporting hierarchy') }} <input name="hierarchy" [(ngModel)]="policy.hierarchy" required /></label>
+          <label>{{ msg('Reporting level') }} <input name="level" [(ngModel)]="policy.level" required /></label>
+          <label>{{ msg('Workspace time zone') }} <input name="zone" [(ngModel)]="policy.timeZone" required /></label>
+          <label>{{ msg('Reporting cutoff') }} <input name="cutoff" type="time" [(ngModel)]="policy.cutoff" required /></label>
+          <label>{{ msg('Season starts') }} <input name="from" type="date" [(ngModel)]="policy.from" required /></label>
+          <label>{{ msg('Season ends') }} <input name="to" type="date" [(ngModel)]="policy.to" required /></label>
+          <label>{{ msg('Designated approver') }}
+            <select name="approver" [(ngModel)]="policy.approver">
+              <option value="state_admin">{{ msg('State administrator') }}</option>
+              <option value="division_officer">{{ msg('Division officer') }}</option>
+            </select>
+          </label>
+          <div class="self-end"><button hlmBtn type="submit" [disabled]="saving()">{{ msg('Save reporting season') }}</button></div>
+        </form>
+      </details>
+    }
+  }
+</section>
+
+<ng-template #figures let-totals>
+  <div class="grid gap-3 sm:grid-cols-2">
+    @for (group of groups; track group.label) {
+      <details class="rounded-card border border-border p-3" [open]="group.label === 'Sources' || group.label === 'Incidents and overdue work'">
+        <summary>{{ msg(group.label) }}</summary>
+        <table class="mt-2 w-full" [attr.aria-label]="msg(group.label)">
+          <thead><tr><th scope="col">{{ msg('Figure') }}</th><th scope="col">{{ msg('Value') }}</th></tr></thead>
+          <tbody>
+            @for (row of group.rows; track row[0]) {
+              <tr><th scope="row">{{ msg(row[1]) }}</th><td>{{ format.number(totals[row[0]] ?? 0) }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </details>
+    }
+  </div>
+</ng-template>

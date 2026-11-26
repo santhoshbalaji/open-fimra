@@ -27,5 +27,6 @@ COPY --from=formcheck /formcheck /opt/geo-worker/bin/formcheck
 COPY --from=fonts /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf /usr/share/fonts/truetype/noto/NotoSans-Bold.ttf /usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf /usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf /app/fonts/
 COPY --from=fonts /usr/share/doc/fonts-noto-core/copyright /app/fonts/COPYRIGHT
 COPY --from=design-system tokens.json .
+COPY --from=report-locales en.json hi.json daily-return-metrics.json ./locales/
 COPY *.py situation-report-symbols.json ./
 CMD ["python", "worker.py"]

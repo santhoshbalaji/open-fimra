@@ -553,7 +553,7 @@ func (a api) prepareSituationReport(w http.ResponseWriter, ctx context.Context, 
 	}
 	_, err := a.reader.Exec(ctx, `WITH queued AS (
     UPDATE situation_reports r SET status='pending', finished_at=NULL, error_message=NULL
-    FROM workspaces w WHERE r.workspace_id=w.id AND w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid
+    FROM workspaces w WHERE r.workspace_id=w.id AND w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid AND r.daily_policy_id IS NULL
       AND r.status IN ('draft','failed') AND r.expires_at > now() AND r.snapshot_grants=`+situationReportGrants+`
     RETURNING r.id, r.workspace_id, r.period_from, r.period_to, r.content)
 INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
@@ -588,7 +588,7 @@ func (a api) readSituationReport(ctx context.Context, slug, id, subject string) 
     coalesce(r.content->>'scope',''), r.page_count, octet_length(r.pdf), r.created_at, r.finished_at, r.expires_at,
     r.error_message, w.slug
 FROM situation_reports r JOIN workspaces w ON w.id=r.workspace_id
-WHERE w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid
+WHERE w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid AND r.daily_policy_id IS NULL
   AND (r.snapshot_grants IS NULL OR r.snapshot_grants=`+situationReportGrants+`)`, slug, subject, id).Scan(&s.ID, &s.Status, &s.From, &s.To,
 		&s.Scope, &s.PageCount, &s.FileBytes, &s.CreatedAt, &s.FinishedAt, &s.ExpiresAt, &s.Error, &workspaceSlug)
 	if err != nil {
@@ -732,7 +732,7 @@ SELECT EXISTS (SELECT FROM grants), coalesce((SELECT jsonb_agg(jsonb_build_objec
 func expireSituationReports(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
 	tag, err := pool.Exec(ctx, `UPDATE situation_reports SET status='expired', content='{}', pdf=NULL, page_count=NULL,
     error_message=NULL, finished_at=coalesce(finished_at, now())
-WHERE status <> 'expired' AND expires_at <= now()`)
+WHERE daily_policy_id IS NULL AND status <> 'expired' AND expires_at <= now()`)
 	if err != nil {
 		return 0, fmt.Errorf("expire situation reports: %w", err)
 	}
