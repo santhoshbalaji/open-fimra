@@ -464,3 +464,10 @@ LAYER_SHOTS ?= $(HOME)/open-fimra-screenshots/u14
 layers-walkthrough: web-build ## Review and publish synthetic layers in Chromium on an isolated, seeded stack with a geo worker
 	SHOTS="$(LAYER_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh layers-walkthrough.mjs
+
+NOTIFICATION_SHOTS ?= $(HOME)/open-fimra-screenshots/u9
+.PHONY: notifications-walkthrough
+notifications-walkthrough: web-build ## Check the inbox by keyboard and with axe on the seeded development stack
+	$(PSQL) < scripts/notifications-walkthrough.sql
+	SHOTS="$(NOTIFICATION_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh notifications-walkthrough.mjs

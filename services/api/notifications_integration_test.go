@@ -47,6 +47,7 @@ FROM beat WHERE layer_version_id=$2 AND code='F01'`, prefix+"10", prefix+"31")
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	observedAt := now.Add(-time.Hour)
 	rows, err := tx.Query(ctx, `
 SELECT id, ST_X(geom), ST_Y(geom) FROM reference_detections UNION ALL
 SELECT 'B01', ST_X(point), ST_Y(point) FROM
@@ -55,7 +56,7 @@ SELECT 'B01', ST_X(point), ST_Y(point) FROM
 		t.Fatal(err)
 	}
 	observations, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (firms.Observation, error) {
-		o := firms.Observation{Satellite: "N", Instrument: "VIIRS", ObservedAt: now.Add(-time.Hour)}
+		o := firms.Observation{Satellite: "N", Instrument: "VIIRS", ObservedAt: observedAt}
 		var id string
 		err := row.Scan(&id, &o.Longitude, &o.Latitude)
 		o.Raw = map[string]string{"reference_id": id}
@@ -112,10 +113,11 @@ WHERE a.workspace_id=$1 AND d.source=$2`, workspaceID, run.Source, event)
 	}
 	assertNew()
 	for range 2 {
+		// Re-match this fixture without picking up other global demo detections.
 		_, err := tx.Exec(ctx, `
-INSERT INTO layer_rematches(layer_version_id,river_job_id,window_start,window_end) VALUES($1,0,$2,$3)
+INSERT INTO layer_rematches(layer_version_id,river_job_id,window_start,window_end) VALUES($1,0,$2,$2)
 ON CONFLICT(layer_version_id) DO UPDATE SET cursor_time=NULL,cursor_id=NULL,finished_at=NULL`,
-			prefix+"31", now.Add(-2*time.Hour), now)
+			prefix+"31", observedAt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,13 +188,8 @@ func checkNotificationEndpoints(t *testing.T, ctx context.Context, tx pgx.Tx, sl
 		!strings.Contains(res.Body.String(), `"unreadCount":0`) || strings.Contains(res.Body.String(), `"readAt":null`) {
 		t.Fatalf("read notification: %d %s", res.Code, res.Body)
 	}
-	// The same endpoint still rejects access after a role is withdrawn.
-	if _, err := tx.Exec(ctx, "DELETE FROM role_assignments WHERE user_id=(SELECT id FROM users WHERE oidc_subject=$1)", prefix+"a3"); err != nil {
-		t.Fatal(err)
-	}
-	if res := request("a3", "GET", inbox, ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"items":[]`) {
-		t.Fatalf("revoked grant still returns notification: %d %s", res.Code, res.Body)
-	}
+	checkReadAllNotifications(t, ctx, tx, request, prefix, item.ID)
+
 	rules := "/api/v1/workspaces/" + slug + "/notification-rules"
 	if res := request("a2", "GET", rules, ""); res.Code != 403 {
 		t.Fatalf("division officer rule access: %d", res.Code)
@@ -211,6 +208,93 @@ func checkNotificationEndpoints(t *testing.T, ctx context.Context, tx pgx.Tx, sl
 	}
 	if res := request("a2", "GET", inbox+"/preferences", ""); res.Code != 200 || !strings.Contains(res.Body.String(), `"emailMuted":true`) {
 		t.Fatalf("email preferences: %d %s", res.Code, res.Body)
+	}
+}
+
+func checkReadAllNotifications(t *testing.T, ctx context.Context, tx pgx.Tx,
+	request func(string, string, string, string) *httptest.ResponseRecorder, prefix, beatNoticeID string) {
+	t.Helper()
+	const inbox = "/api/v1/notifications"
+	// Fill more than one page with synthetic notices for the division officer.
+	// Keep one unread email and one notice whose recipient loses access.
+	if _, err := tx.Exec(ctx, `
+INSERT INTO notifications(workspace_id,event,event_id,alert_id,recipient_id,channel,status)
+SELECT n.workspace_id,n.event,-i,n.alert_id,u.id,v.channel,'delivered'
+FROM notifications n CROSS JOIN users u
+CROSS JOIN (SELECT generate_series(1,52) AS i,'in_app' AS channel UNION ALL SELECT 1,'email') v
+WHERE n.id=$1::text::bigint AND u.oidc_subject=$2`, beatNoticeID, prefix+"a2"); err != nil {
+		t.Fatal(err)
+	}
+	type page struct {
+		UnreadCount int
+		HasMore     bool
+		Items       []struct {
+			ID     string
+			ReadAt *time.Time
+		}
+	}
+	list := func(subject, query string) page {
+		t.Helper()
+		res := request(subject, "GET", inbox+query, "")
+		var result page
+		if res.Code != 200 || json.Unmarshal(res.Body.Bytes(), &result) != nil {
+			t.Fatalf("inbox %s: %d %s", query, res.Code, res.Body)
+		}
+		return result
+	}
+	first := list("a2", "?view=unread")
+	if len(first.Items) != 50 || !first.HasMore || first.UnreadCount <= 50 {
+		t.Fatalf("expected a full first page with more unread items: %+v", first)
+	}
+	if res := request("a2", "POST", inbox+"/"+first.Items[0].ID+"/read", ""); res.Code != 204 {
+		t.Fatalf("mark first item as read: %d %s", res.Code, res.Body)
+	}
+	second := list("a2", "?view=unread&before="+first.Items[49].ID)
+	if second.UnreadCount != first.UnreadCount-1 || len(second.Items) != first.UnreadCount-50 || second.HasMore {
+		t.Fatalf("cursor skipped or repeated unread items after marking read: %+v", second)
+	}
+	if all := list("a2", "?view=all"); len(all.Items) != 50 || all.Items[0].ID != first.Items[0].ID || all.Items[0].ReadAt == nil {
+		t.Fatalf("read item moved in newest-first view: %+v", all)
+	}
+	if legacy := list("a2", ""); len(legacy.Items) != 50 || legacy.Items[0].ID != first.Items[1].ID {
+		t.Fatalf("legacy view should still list unread items first")
+	}
+	for _, query := range []string{"?view=bad", "?before=10", "?view=all&before=0", "?view=unread&offset=50"} {
+		if res := request("a2", "GET", inbox+query, ""); res.Code != 400 {
+			t.Fatalf("invalid inbox query %s: %d %s", query, res.Code, res.Body)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, "UPDATE notifications SET read_at=NULL WHERE id=$1::text::bigint", beatNoticeID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM role_assignments WHERE user_id=(SELECT id FROM users WHERE oidc_subject=$1)", prefix+"a3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := list("a3", ""); len(got.Items) != 0 || got.UnreadCount != 0 {
+		t.Fatalf("revoked grant still returns notification: %+v", got)
+	}
+	adminUnread := list("a1", "").UnreadCount
+	if adminUnread == 0 {
+		t.Fatal("expected another user to have visible unread notices")
+	}
+	for _, subject := range []string{"a2", "a2", "a3", "a4"} {
+		if res := request(subject, "POST", inbox+"/read-all", ""); res.Code != 204 {
+			t.Fatalf("mark all as read for %s: %d %s", subject, res.Code, res.Body)
+		}
+	}
+	if got := list("a2", "?view=unread"); got.UnreadCount != 0 || len(got.Items) != 0 || got.HasMore {
+		t.Fatalf("bulk update did not clear all pages: %+v", got)
+	}
+	if got := list("a1", "").UnreadCount; got != adminUnread {
+		t.Fatalf("bulk update changed another user's count from %d to %d", adminUnread, got)
+	}
+	var untouched int
+	if err := tx.QueryRow(ctx, `
+SELECT count(*) FROM notifications n JOIN users u ON u.id=n.recipient_id
+WHERE read_at IS NULL AND (n.id=$1::text::bigint OR (u.oidc_subject=$2 AND channel='email' AND event_id=-1))`,
+		beatNoticeID, prefix+"a2").Scan(&untouched); err != nil || untouched != 2 {
+		t.Fatalf("bulk update must leave other users, revoked items and email untouched: count=%d, err=%v", untouched, err)
 	}
 }
 

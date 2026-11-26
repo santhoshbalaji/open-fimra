@@ -804,8 +804,13 @@ All endpoints require a bearer token.
   `offset=50` for the next page. Alert items include `forestClass`, `beatName`
   and `divisionName` from their routing snapshot, and the alert's
   `incidentId`. Missing values are null.
+  Use `view=all` or `view=unread` for newest-first results. For those views,
+  pass the last item's ID as `before` to load older items. The unread count
+  covers the entire inbox in every view.
 - `POST /api/v1/notifications/{id}/read` marks one of the caller's
   notifications read and returns `204`. It is safe to repeat.
+- `POST /api/v1/notifications/read-all` marks all of the caller's visible
+  in-app notifications read and returns `204`. It is safe to repeat.
 - Use `GET /api/v1/notifications/preferences` to read preferences. Use
   `POST` with `{"emailMuted":true}` or `{"emailMuted":false}` to set them.
   In-app notifications stay on when users mute email.

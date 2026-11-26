@@ -7,18 +7,36 @@ import { WEB_CONFIG } from './config';
 import { Notifications } from './notifications';
 
 const endpoint = 'https://api.test/api/v1/notifications';
-const item = {
-  id: '51', alertId: '42', workspace: 'demo', forestClass: 'inside', beatName: 'Beat 05', divisionName: 'Hill Division', event: 'alert_new',
+const alert = {
+  id: '51', alertId: '42', workspace: 'demo', forestClass: 'inside',
+  beatName: 'Beat 05', divisionName: 'Hill Division', event: 'alert_new',
   createdAt: '2026-11-25T00:00:00Z', readAt: null
 };
-const page = { unreadCount: 1, items: [item], hasMore: false };
+const feed = { ...alert, id: '50', event: 'feed_open', alertId: null };
+const readAlert = { ...alert, readAt: alert.createdAt };
+const page = { unreadCount: 2, items: [alert, feed], hasMore: false };
+const empty = { unreadCount: 0, items: [], hasMore: false };
+const unavailable = { status: 503, statusText: 'Unavailable' };
 
 describe('Notifications', () => {
   let fixture: ComponentFixture<Notifications>;
   let http: HttpTestingController;
-  const bell = () => fixture.nativeElement.querySelector('button') as HTMLButtonElement;
-  const list = () => fixture.nativeElement.querySelector('section') as HTMLElement;
-  const flush = (result: object) => http.expectOne(endpoint + '?offset=0').flush(result);
+  const element = <T extends HTMLElement = HTMLElement>(selector: string): T =>
+    fixture.nativeElement.querySelector(selector);
+  const bell = () => element<HTMLButtonElement>('.icon-button');
+  const inbox = () => element('#notification-inbox');
+  const button = (label: string) => Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+    .find(button => button.textContent?.trim() === label)!;
+  const row = (id: string) => element(`[data-notice-id="${id}"]`);
+  const get = (query = 'view=all') => http.expectOne({ method: 'GET', url: endpoint + '?' + query });
+  const post = (path: string) => http.expectOne({ method: 'POST', url: endpoint + '/' + path });
+
+  function open(result = page as object) {
+    bell().click();
+    fixture.detectChanges();
+    get().flush(result);
+    fixture.detectChanges();
+  }
 
   beforeEach(() => {
     TestBed.configureTestingModule({ imports: [Notifications], providers: [
@@ -28,7 +46,7 @@ describe('Notifications', () => {
     ] });
     fixture = TestBed.createComponent(Notifications);
     http = TestBed.inject(HttpTestingController);
-    flush(page);
+    get().flush(page);
     fixture.detectChanges();
   });
 
@@ -37,60 +55,150 @@ describe('Notifications', () => {
     http.verify();
   });
 
-  it('shows the unread count and restores keyboard focus after Escape', () => {
-    expect(bell().getAttribute('aria-label')).toBe('Notifications, 1 unread');
-    expect(list().hidden).toBe(true);
-    bell().click();
-    flush(page);
-    fixture.detectChanges();
+  it('moves focus into the inbox and returns it to the bell on Escape and Close', () => {
+    expect(bell().getAttribute('aria-label')).toBe('Notifications, 2 unread');
+    expect(inbox()).toBeNull();
+    open();
+    expect(document.activeElement).toBe(element('section h2'));
     expect(bell().getAttribute('aria-expanded')).toBe('true');
-    expect(list().textContent).toContain('Unread');
-    list().querySelector('a')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    row(alert.id).querySelector('a')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
     expect(bell().getAttribute('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(bell());
+
+    open();
+    button('Close').click();
+    fixture.detectChanges();
+    expect(inbox()).toBeNull();
+    expect(document.activeElement).toBe(bell());
   });
 
-  it('links to the alert, marks its notification read and updates the count', () => {
-    const open = vi.fn();
-    fixture.componentInstance.openNotice.subscribe(open);
-    bell().click();
-    flush(page);
+  it('filters the entire inbox, keeps the total unread count and handles an empty filter', () => {
+    open({ ...page, unreadCount: 1, items: [readAlert, feed] });
+    expect(button('All').getAttribute('aria-pressed')).toBe('true');
+    button('Unread').click();
     fixture.detectChanges();
-    const link = list().querySelector('a')!;
-    expect(link.textContent).toContain('Inside forest · Beat 05, Hill Division');
-    expect(new URL(link.href).search).toBe('?workspace=demo&alert=42');
-    link.click();
-    expect(open).toHaveBeenCalledWith({ workspace: 'demo', alert: '42' });
-    http.expectOne({ method: 'POST', url: endpoint + '/51/read' }).flush(null);
-    flush({ ...page, unreadCount: 0, items: [{ ...item, readAt: item.createdAt }] });
+    expect(row(alert.id)).toBeTruthy();
+    get('view=unread').flush({ ...page, unreadCount: 1, items: [feed] });
     fixture.detectChanges();
+    expect(button('Unread').getAttribute('aria-pressed')).toBe('true');
+    expect(row(alert.id)).toBeNull();
+    expect(row(feed.id)).toBeTruthy();
+    expect(bell().getAttribute('aria-label')).toBe('Notifications, 1 unread');
+
+    button('Mark all as read').focus();
+    button('Mark all as read').click();
+    post('read-all').flush(null);
+    fixture.detectChanges();
+    expect(inbox().textContent).toContain('You have no unread notifications.');
+    expect(document.activeElement).toBe(button('Mark all as read'));
+
+    button('All').click();
+    get().flush({ ...page, unreadCount: 0, items: [readAlert, { ...feed, readAt: feed.createdAt }] });
+    fixture.detectChanges();
+    expect(row(alert.id)).toBeTruthy();
+    expect(row(feed.id)).toBeTruthy();
+  });
+
+  it('marks a row without navigating and retains position on pending, error and Retry', () => {
+    const follow = vi.fn();
+    fixture.componentInstance.openNotice.subscribe(follow);
+    open({ ...page, hasMore: true });
+    button('Show more').click();
+    get('view=all&before=50').flush({ ...page, items: [{ ...feed, id: '49', readAt: feed.createdAt }] });
+    fixture.detectChanges();
+    const list = element('.notification-list');
+    list.scrollTop = 120;
+    const mark = row(alert.id).querySelector('button')!;
+    mark.focus();
+    mark.click();
+    fixture.detectChanges();
+    expect(inbox().textContent).toContain('Updating notifications');
+    expect(document.activeElement).toBe(mark);
+    expect(list.scrollTop).toBe(120);
+    post('51/read').flush(null, unavailable);
+    fixture.detectChanges();
+    expect(inbox().textContent).toContain('Could not mark the notification as read.');
+    expect(document.activeElement).toBe(mark);
+    expect(list.scrollTop).toBe(120);
+    button('Retry').click();
+    post('51/read').flush(null);
+    fixture.detectChanges();
+    expect(row(alert.id).querySelector('button')).toBeNull();
+    expect(row('49')).toBeTruthy();
+    expect(list.scrollTop).toBe(120);
+    expect(element('#notification-inbox fimra-live-status').textContent?.trim()).toBe('1 unread');
+    expect(element('#notification-inbox fimra-live-status').getAttribute('aria-live')).toBe('polite');
+    expect(follow).not.toHaveBeenCalled();
+  });
+
+  it.each(['all', 'unread'])('moves focus to a nearby link when a mark control disappears in %s', filter => {
+    open();
+    if (filter === 'unread') {
+      button('Unread').click();
+      get('view=unread').flush(page);
+      fixture.detectChanges();
+    }
+    const mark = row(alert.id).querySelector('button')!;
+    mark.focus();
+    mark.click();
+    post('51/read').flush(null);
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(row(filter === 'all' ? alert.id : feed.id).querySelector('a'));
+  });
+
+  it('keeps all loaded rows after a bulk update in All', () => {
+    open();
+    button('Mark all as read').click();
+    post('read-all').flush(null, unavailable);
+    fixture.detectChanges();
+    expect(row(alert.id).querySelector('button')).toBeTruthy();
+    expect(inbox().textContent).toContain('Could not mark all notifications as read.');
+    button('Retry').click();
+    post('read-all').flush(null);
+    fixture.detectChanges();
+    expect(inbox().querySelectorAll('li')).toHaveLength(2);
+    expect(inbox().querySelectorAll('[data-mark-read]')).toHaveLength(0);
     expect(bell().getAttribute('aria-label')).toBe('Notifications, 0 unread');
-    expect(list().hidden).toBe(true);
   });
 
-  it('shows a relative time and keeps a readable title for an unmapped alert', () => {
-    fixture.componentInstance.now.set(Date.parse(item.createdAt) + 7200000);
-    bell().click();
-    flush({ ...page, items: [{ ...item, beatName: null, divisionName: null }] });
+  it.each([
+    { item: alert, search: '?workspace=demo&alert=42', label: 'Inside forest · Beat 05, Hill Division' },
+    { item: feed, search: '?workspace=demo&view=feed-health', label: 'Feed needs attention' }
+  ])('marks $label read and emits the routed destination when following the link', ({ item, search, label }) => {
+    const follow = vi.fn();
+    fixture.componentInstance.openNotice.subscribe(follow);
+    open();
+    const link = row(item.id).querySelector('a')!;
+    expect(link.textContent).toBe(label);
+    expect(new URL(link.href).search).toBe(search);
+    link.click();
+    expect(follow).toHaveBeenCalledWith({ workspace: 'demo', alert: item.alertId });
+    post(item.id + '/read').flush(null);
     fixture.detectChanges();
-    expect(list().querySelector('a')?.textContent).toContain('Inside forest · Unknown unit');
-    expect(list().querySelector('time')?.textContent).toBe('2 hours ago');
+    expect(inbox()).toBeNull();
+    expect(bell().getAttribute('aria-label')).toBe('Notifications, 1 unread');
   });
 
-  it('links feed notifications to feed health', () => {
-    bell().click();
-    flush({ ...page, items: [{ ...item, event: 'feed_open', alertId: null }] });
-    fixture.detectChanges();
-    const link = list().querySelector('a')!;
-    expect(link.textContent).toContain('Feed needs attention');
-    expect(new URL(link.href).search).toBe('?workspace=demo&view=feed-health');
+  it('shows relative age, Indian Standard Time and a title for an unmapped alert', () => {
+    fixture.componentInstance.now.set(new Date(Date.parse(alert.createdAt) + 7200000));
+    open({ ...page, items: [{ ...alert, beatName: null, divisionName: null }] });
+    expect(row(alert.id).querySelector('a')?.textContent).toContain('Inside forest · Unknown unit');
+    const time = row(alert.id).querySelector('time');
+    expect(time?.textContent).toBe('2 hours ago');
+    expect(time?.title).toContain('IST');
   });
 
-  it('shows an empty list when there are no notifications', () => {
+  it('retries the same list request after an error and shows an empty inbox', () => {
     bell().click();
-    flush({ unreadCount: 0, items: [], hasMore: false });
+    get().flush(null, unavailable);
     fixture.detectChanges();
-    expect(list().textContent).toContain('You have no notifications.');
+    expect(inbox().textContent).toContain('Could not load notifications.');
+    expect(row(alert.id)).toBeTruthy();
+    button('Retry').click();
+    get().flush(empty);
+    fixture.detectChanges();
+    expect(inbox().textContent).toContain('You have no notifications.');
+    expect(row(alert.id)).toBeNull();
   });
 });

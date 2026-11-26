@@ -1,39 +1,58 @@
-<div class="notification-bell" tabindex="-1" (keydown.escape)="close($event)">
-  <button #bell hlmBtn variant="ghost" size="icon" class="icon-button" (click)="toggle()"
-          [attr.aria-label]="'Notifications, ' + (inbox()?.unreadCount ?? 0) + ' unread'"
-          [attr.aria-expanded]="open()" aria-controls="notification-inbox">
+<div class="notification-bell">
+  <button #bell type="button" hlmBtn variant="ghost" size="icon" class="icon-button" (click)="toggle(bell)"
+          [attr.aria-label]="bellLabel()" [attr.aria-expanded]="panel.open()"
+          [attr.aria-controls]="panel.open() ? 'notification-inbox' : null">
     <svg fimraIcon="bell" aria-hidden="true"></svg>
-    @if (inbox()?.unreadCount; as count) {
-      <span class="unread-count" aria-hidden="true">{{ count > 99 ? '99+' : count }}</span>
+    @if (count(); as unread) {
+      <span class="unread-count" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
     }
   </button>
-  <section id="notification-inbox" class="inbox" aria-labelledby="notifications-heading" [hidden]="!open()">
-    <h2 id="notifications-heading">Notifications</h2>
-    @if (error()) {
-      <p role="status">{{ error() }}</p>
-      <button hlmBtn variant="outline" (click)="load()">Try again</button>
-    } @else if (inbox()?.items?.length) {
-      <ul>
-        @for (item of inbox()?.items; track item.id) {
-          <li>
-            <a [href]="link(item)" (click)="follow($event, item)">
-              {{ title(item) }}
-            </a>
-            <small>
-              @if (item.alertId) { <span>{{ labels[item.event] }}</span> }
-              <time [title]="date.format(timestamp(item.createdAt))" [attr.datetime]="item.createdAt">{{ relativeAge(timestamp(item.createdAt) / 1000, now()) }}</time>
-              @if (!item.readAt) { <strong>Unread</strong> }
-            </small>
-          </li>
+  <fimra-live-status class="sr-only" [message]="panel.open() ? '' : unreadMessage()" />
+  <fimra-side-panel #panel="fimraSidePanel" class="inbox" heading="Notifications" [fullHeight]="true">
+    <div class="notification-body" id="notification-inbox">
+      <fimra-live-status class="sr-only" [message]="unreadMessage()" />
+      <div class="inbox-actions">
+        <div role="group" aria-label="Filter notifications" class="inbox-filters">
+          <button type="button" hlmBtn [variant]="filter() === 'all' ? 'secondary' : 'ghost'"
+                  [attr.aria-pressed]="filter() === 'all'" [attr.aria-disabled]="busy()" (click)="selectFilter('all')">All</button>
+          <button #unreadFilter type="button" hlmBtn [variant]="filter() === 'unread' ? 'secondary' : 'ghost'"
+                  [attr.aria-pressed]="filter() === 'unread'" [attr.aria-disabled]="busy()" (click)="selectFilter('unread')">Unread</button>
+        </div>
+        <button type="button" hlmBtn variant="outline" [attr.aria-disabled]="busy() || !count()"
+                (click)="markAllRead()">Mark all as read</button>
+      </div>
+      <div #list class="notification-list">
+        @if (inbox()?.items?.length) {
+          <ul>
+            @for (item of inbox()?.items; track item.id) {
+              <li [attr.data-notice-id]="item.id">
+                <div class="notice-title">
+                  <a [href]="link(item)" (click)="follow($event, item)">{{ title(item) }}</a>
+                  @if (!item.readAt) {
+                    <fimra-status-badge icon="unread" label="Unread" />
+                  }
+                </div>
+                <div class="notice-meta">
+                  <small>
+                    @if (item.alertId) { <span>{{ labels[item.event] }}</span> }
+                    <time [title]="dateTime(item.createdAt)" [attr.datetime]="item.createdAt">{{ age(item.createdAt) }}</time>
+                  </small>
+                  @if (!item.readAt) {
+                    <button type="button" hlmBtn variant="ghost" size="sm" data-mark-read
+                            [attr.aria-label]="'Mark as read: ' + title(item)"
+                            [attr.aria-disabled]="busy()" (click)="markRead(item)">Mark as read</button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
         }
-      </ul>
-      @if (inbox()?.hasMore) {
-        <button hlmBtn variant="outline" [disabled]="loading()" (click)="load(true)">Show more</button>
-      }
-    } @else if (loading()) {
-      <hlm-skeleton role="status" aria-label="Loading notifications" class="h-8" />
-    } @else {
-      <fimra-empty-state heading="You have no notifications." detail="New alerts will appear here." />
-    }
-  </section>
+        @if (inbox()?.hasMore) {
+          <button #showMore type="button" hlmBtn variant="outline" [attr.aria-disabled]="busy()"
+                  (click)="loadMore()">Show more</button>
+        }
+      </div>
+      <fimra-state-region [state]="state()" (retry)="retry()" />
+    </div>
+  </fimra-side-panel>
 </div>

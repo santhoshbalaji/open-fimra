@@ -68,6 +68,7 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	authed.Post("/api/v1/workspaces/{slug}/invitations", a.invitations)
 	authed.Delete("/api/v1/workspaces/{slug}/invitations/{id}", a.invitations)
 	authed.Get("/api/v1/notifications", a.notifications)
+	authed.Post("/api/v1/notifications/read-all", a.readAllNotifications)
 	authed.Post("/api/v1/notifications/{id}/read", a.notifications)
 	authed.Get("/api/v1/notifications/preferences", a.notificationPreferences)
 	authed.Post("/api/v1/notifications/preferences", a.notificationPreferences)
