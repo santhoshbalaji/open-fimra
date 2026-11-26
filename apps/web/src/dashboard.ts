@@ -1,72 +1,155 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
-import { KeyValuePipe } from '@angular/common';
-import { timer, switchMap, catchError, EMPTY } from 'rxjs';
-import { AuthService } from './auth';
-import { WEB_CONFIG } from './config';
-import { classes, ForestClass, sourceLabel } from './detections';
-import { WorkspaceService } from './workspace';
-import { ClassChart } from './class-chart';
-import { ShellNavigation } from './shell-navigation';
-import { DashboardFilters } from './dashboard-filters';
-import { queueLabels } from './alert-queue';
+import { Router } from '@angular/router';
+import { EMPTY, Subject, catchError, merge, switchMap, timer } from 'rxjs';
 import { HlmCardImports } from '@spartan-ng/helm/card';
-import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmTableImports } from '@spartan-ng/helm/table';
-import { EmptyState } from './ui/empty-state';
+import { alertGroupLabels, queueLabels, stepLabel } from './alert-queue';
+import { AuthService } from './auth';
+import { ClassChart } from './class-chart';
+import { WEB_CONFIG } from './config';
+import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
+import { detectionCatalog, detectionSeries } from './dashboard.series';
+import { classes, sourceLabel } from './detections';
+import { FilterFields } from './filter-fields';
+import { ShellNavigation } from './shell-navigation';
+import { defaultWorkspaceFormat } from './workspace-format';
+import { WorkspaceService } from './workspace';
+import { FilterBar, FilterControls } from './ui/filter-bar';
+import { PageHeader } from './ui/page-header';
+import { StatTile } from './ui/stat-tile';
+import { DataState, StateRegion } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
-import { Icon } from './ui/icon';
 
-type BadgeIcon = 'step' | 'complete' | 'overdue';
-// The badge always pairs its icon with the visible label.
 const feedLabels = { healthy: 'Healthy', delayed: 'Delayed', quiet: 'Quiet', failing: 'Failing' };
-const finishedSteps = new Set(['closed', 'false_alarm', 'verified']);
+
+interface Feed {
+  source: string;
+  product: string;
+  status: keyof typeof feedLabels;
+  lastSuccessAt: string | null;
+  latestObservationAt: string | null;
+}
+
 interface Summary {
-  detections: Partial<Record<ForestClass, number>>;
-  today: Partial<Record<ForestClass, number>>;
+  detections: Record<string, number>;
+  today: Record<string, number>;
   queues: Partial<Record<keyof typeof queueLabels, number>>;
   steps: Record<string, number>;
   active: number;
   overdue: number;
   pendingReports: number;
-  responseSeconds: Record<string, {median: number | null; p90: number | null}>;
-  feedHealth: {source: string; product: string; status: 'healthy' | 'delayed' | 'quiet' | 'failing'}[] | null;
+  responseSeconds: Record<string, { median: number | null; p90: number | null }>;
+  feedHealth: Feed[] | null;
+  feedHealthUnavailable?: boolean;
 }
+
+const alertTiles = [
+  { key: 'active', group: 'active' },
+  { key: 'overdue', group: 'overdue' },
+  { key: 'pendingReports', group: 'pending_reports' }
+] as const;
+const outcomeSteps = ['controlled', 'extinguished'];
+const milestones = [
+  { key: 'acknowledged', label: 'Acknowledged' },
+  { key: 'reached_site', label: 'Reached site' },
+  { key: 'controlled', label: 'Controlled' }
+];
+
+type FilterKey = 'hours' | 'class' | 'unitPath';
 
 @Component({
   selector: 'fimra-dashboard',
-  imports: [KeyValuePipe, ClassChart, HlmCardImports, HlmSkeleton, HlmTableImports, EmptyState, StatusBadge, Icon],
+  imports: [ClassChart, FilterBar, FilterControls, FilterFields, HlmCardImports, HlmTableImports, PageHeader, StateRegion, StatTile, StatusBadge],
   templateUrl: './dashboard.html'
 })
 export class Dashboard {
   readonly focusFeedHealth = input(false);
   private readonly navigation = inject(ShellNavigation, { optional: true });
+  private readonly router = inject(Router);
   private readonly feedHeading = viewChild<ElementRef<HTMLElement>>('feedHeading');
-  readonly filters = inject(DashboardFilters);
-  readonly summary = signal<Summary | null>(null);
-  readonly message = signal('');
-  readonly classes = classes;
-  readonly sourceLabel = sourceLabel;
-  readonly classKeys = Object.keys(classes) as ForestClass[];
-  readonly queues = queueLabels;
-  readonly queueKeys = Object.keys(queueLabels) as (keyof typeof queueLabels)[];
-  readonly feedLabels = feedLabels;
-  readonly tiles = [
-    {key: 'active', label: 'Active alerts'}, {key: 'overdue', label: 'Overdue alerts'},
-    {key: 'pendingReports', label: 'Pending reports'}
-  ] as const;
-  readonly milestones = {acknowledged: 'Acknowledged', reached_site: 'Reached site', controlled: 'Controlled'};
-  private readonly http = inject(HttpClient);
   private readonly workspace = inject(WorkspaceService);
+  private readonly auth = inject(AuthService);
+  private readonly http = inject(HttpClient);
+  private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
+  private readonly reload = new Subject<void>();
+  private readonly snapshot = signal<{ data: Summary; updated: Date } | null>(null);
+
+  readonly filters = inject(DashboardFilters);
+  readonly workspaceName = computed(() => this.workspace.current()?.name);
+  readonly summary = computed(() => this.snapshot()?.data);
+  readonly lastUpdate = computed(() => this.snapshot()?.updated);
+  readonly state = signal<DataState>({ kind: 'loading', heading: 'Loading dashboard' });
+  readonly sourceLabel = sourceLabel;
+  readonly queueKeys = Object.keys(queueLabels) as (keyof typeof queueLabels)[];
+  readonly queueLabels = queueLabels;
+  readonly feedLabels = feedLabels;
+  readonly alertTiles = alertTiles;
+  readonly alertGroupLabels = alertGroupLabels;
+  readonly outcomeSteps = outcomeSteps;
+  readonly milestones = milestones;
+  readonly stepLabel = stepLabel;
+  readonly format = defaultWorkspaceFormat;
+
+  readonly period = computed(() => {
+    const hours = this.filters.hours();
+    return 'Past ' + this.format.number(hours) + (hours === 1 ? ' hour' : ' hours');
+  });
   readonly jurisdiction = computed(() => {
     const name = this.workspace.current()?.name;
-    const scope = this.workspace.jurisdictions().map(([, label]) => label);
-    if (scope.length === 1 && scope[0] === name) return name;
-    const area = scope.join(', ') || 'Your assigned area';
-    return name ? name + ' · ' + area : area;
+    const grants = this.workspace.jurisdictions().map(([, label]) => label);
+    const scope = [name, ...grants.filter(label => label !== name)].filter(Boolean).join(' · ') || 'Your assigned area';
+    const unit = this.filters.unitPath();
+    return unit ? scope + ' · Units under ' + unit : scope;
   });
-  private readonly auth = inject(AuthService);
-  private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
+  readonly forestScope = computed(() => {
+    const forest = this.filters.forestClass();
+    return forest ? classes[forest] : 'All forest classes';
+  });
+  readonly scope = computed(() => [this.jurisdiction(), this.forestScope(), this.period()].join(' · '));
+
+  readonly activeFilters = computed<{ id: FilterKey; label: string }[]>(() => {
+    const active: { id: FilterKey; label: string }[] = [];
+    if (this.filters.hours() !== defaultDashboardHours) active.push({ id: 'hours', label: this.period() });
+    if (this.filters.forestClass()) active.push({ id: 'class', label: this.forestScope() });
+    if (this.filters.unitPath()) active.push({ id: 'unitPath', label: this.filters.unitPath() });
+    return active;
+  });
+
+  private readonly catalog = computed(() => detectionCatalog(this.summary()?.detections ?? {}, this.summary()?.today ?? {}));
+  readonly chartRows = computed(() => detectionSeries(this.summary()?.detections ?? {}, this.filters.forestClass(), this.catalog()));
+  readonly detectionRows = computed(() => {
+    const data = this.summary();
+    const selected = this.filters.forestClass();
+    return Object.entries(this.catalog()).filter(([id]) => !selected || id === selected)
+      .map(([id, label]) => ({ id, label, count: data?.detections[id] ?? 0, today: data?.today[id] ?? 0 }));
+  });
+  readonly detectionTotal = computed(() => this.detectionRows().reduce((total, row) => total + row.count, 0));
+  readonly todayTotal = computed(() => this.detectionRows().reduce((total, row) => total + row.today, 0));
+  readonly otherSteps = computed(() => Object.keys(this.summary()?.steps ?? {})
+    .filter(step => !outcomeSteps.includes(step)).sort());
+  readonly feedState = computed<DataState>(() => {
+    const data = this.summary();
+    if (data?.feedHealthUnavailable) {
+      return { kind: 'error', heading: 'Feed health could not load', detail: 'Detection counts are still available.' };
+    }
+    if (!data?.feedHealth?.length) {
+      return { kind: 'empty', heading: 'No feed data', detail: 'No live feeds have polled yet.' };
+    }
+    return { kind: 'ready' };
+  });
+  readonly coverage = computed(() => {
+    const data = this.summary();
+    if (!data) return '';
+    if (data.feedHealthUnavailable) return 'Feed health could not load. This window may have missing observations.';
+    const feeds = data.feedHealth;
+    if (!feeds) return 'Ask a workspace administrator to check feed health.';
+    if (!feeds.length) return 'No live feeds have polled yet. This window may have missing observations.';
+    if (feeds.some(feed => feed.status !== 'healthy' || !feed.latestObservationAt || !feed.lastSuccessAt)) {
+      return 'Some feeds are late, quiet, or missing data. This window may have missing observations.';
+    }
+    return this.detectionTotal() === 0 ? 'All monitored feeds are currently reporting.' : '';
+  });
 
   constructor() {
     effect(() => {
@@ -75,36 +158,57 @@ export class Dashboard {
     effect(onCleanup => {
       const workspace = this.workspace.current();
       const params = this.filters.params();
-      this.summary.set(null);
-      this.message.set('');
+      this.snapshot.set(null);
+      this.state.set({ kind: 'loading', heading: 'Loading dashboard' });
       if (!workspace) return;
+
       const url = this.base + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug) + '/summary';
-      const request = timer(0, 60_000).pipe(switchMap(() =>
-        this.http.get<Summary>(url, {params}).pipe(catchError((error: HttpErrorResponse) => {
+      const request = merge(timer(0, 60_000), this.reload).pipe(switchMap(() =>
+        this.http.get<Summary>(url, { params }).pipe(catchError((error: HttpErrorResponse) => {
           if (error.status === 401) this.auth.sessionEnded();
-          if (error.status === 403) this.workspace.deny();
-          this.message.set('Dashboard could not refresh. Trying again in a minute.');
+          if (error.status === 403) {
+            this.snapshot.set(null);
+            this.state.set({ kind: 'forbidden', heading: 'You do not have access to this dashboard' });
+            this.workspace.deny();
+          } else {
+            this.state.set({ kind: 'error', heading: 'Dashboard could not refresh',
+              keepContent: !!this.snapshot(), detail: this.snapshot() ? 'Showing the last successful update.' : undefined });
+          }
           return EMPTY;
         }))
-      )).subscribe(data => { this.message.set(''); this.summary.set(data); });
+      )).subscribe(data => {
+        this.snapshot.set({ data, updated: new Date() });
+        this.state.set({ kind: 'ready' });
+      });
       onCleanup(() => request.unsubscribe());
     });
   }
 
-  detectionTotal(data: Summary): number {
-    return this.classKeys.reduce((total, key) => total + (data.detections[key] ?? 0), 0);
+  retry(): void {
+    this.reload.next();
   }
 
-  stepRows(data: Summary): {key: string; label: string; count: number; icon: BadgeIcon}[] {
-    return Object.entries(data.steps).sort(([a], [b]) => a.localeCompare(b)).map(([key, count]) => {
-      const words = key.replaceAll('_', ' ');
-      return {key, count, label: words.charAt(0).toUpperCase() + words.slice(1),
-        icon: finishedSteps.has(key) ? 'complete' : 'step'};
+  clearFilters(key?: string): void {
+    if (this.navigation) {
+      this.navigation.update(key ? { [key]: null } : { hours: null, class: null, unitPath: null });
+    } else {
+      if (!key || key === 'hours') this.filters.hours.set(defaultDashboardHours);
+      if (!key || key === 'class') this.filters.forestClass.set('');
+      if (!key || key === 'unitPath') this.filters.unitPath.set('');
+    }
+  }
+
+  alertRoute(extra: { queue?: string; group?: string; status?: string }) {
+    return this.router.createUrlTree(['/monitor/alerts'], {
+      queryParams: { workspace: this.workspace.current()?.slug, ...this.filters.params(), queue: 'all', ...extra }
     });
   }
 
-  duration(seconds: number | null): string {
-    if (seconds === null) return 'No data';
-    return seconds < 60 ? Math.round(seconds) + ' s' : Math.round(seconds / 60) + ' min';
+  feedDate(timestamp: string): string {
+    return this.format.dateTime(new Date(timestamp));
+  }
+
+  duration(seconds: number | null | undefined): string {
+    return seconds == null ? 'No data' : this.format.duration(seconds);
   }
 }

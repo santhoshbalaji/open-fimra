@@ -1,19 +1,25 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { RouterLink, UrlTree } from '@angular/router';
 import { defaultWorkspaceFormat, WorkspaceFormat } from '../workspace-format';
 
 @Component({
   selector: 'fimra-stat-tile',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   host: { class: 'block min-w-0' },
   template: `
-    <dl class="grid h-full content-start gap-1 rounded-card border border-divider bg-surface p-4 wrap-anywhere">
+    <dl class="relative grid h-full content-start gap-1 rounded-card border border-divider bg-surface p-4 wrap-anywhere">
       <dt class="text-body font-semibold">
-        @if (href(); as href) {
+        @if (route(); as route) {
+          <a class="text-action underline underline-offset-2 after:absolute after:inset-0 after:rounded-card
+            focus-visible:after:outline-2 focus-visible:after:outline-focus"
+            [routerLink]="route" [attr.aria-describedby]="valueId()">{{ label() }}</a>
+        } @else if (href(); as href) {
           <a class="rounded-control text-action underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-focus"
             [href]="href">{{ label() }}</a>
         } @else { {{ label() }} }
       </dt>
-      <dd class="text-figure tabular-nums">{{ displayValue() }}</dd>
+      <dd class="text-figure tabular-nums" [attr.id]="valueId()">{{ displayValue() }}</dd>
       <dd class="text-body text-text-secondary">{{ scope() }}</dd>
       <dd class="text-label text-text-secondary">
         {{ freshnessLabel() }} <time [attr.datetime]="freshAt().toISOString()">{{ format().dateTime(freshAt()) }}</time>
@@ -28,6 +34,8 @@ export class StatTile {
   readonly freshAt = input.required<Date>();
   readonly freshnessLabel = input('Updated');
   readonly href = input<string>();
+  readonly route = input<UrlTree>();
+  readonly valueId = input<string>();
   readonly format = input<WorkspaceFormat>(defaultWorkspaceFormat);
 
   protected readonly displayValue = computed(() => {

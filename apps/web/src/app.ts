@@ -5,7 +5,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { AuthService } from './auth';
 import { Bootstrap } from './bootstrap';
-import { DashboardFilters } from './dashboard-filters';
+import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
 import { FilterFields } from './filter-fields';
 import { Notifications, type NotificationLink } from './notifications';
 import { ShellNavigation, homePath } from './shell-navigation';
@@ -70,7 +70,7 @@ export class App implements OnInit {
     });
     effect(() => {
       const query = this.navigation.query();
-      this.filters.hours.set(Number(query.get('hours') ?? 168));
+      this.filters.hours.set(Number(query.get('hours') ?? defaultDashboardHours));
       const forest = query.get('class');
       this.filters.forestClass.set(forest && Object.hasOwn(classes, forest) ? forest as ForestClass : '');
       this.filters.unitPath.set(query.get('unitPath') ?? '');

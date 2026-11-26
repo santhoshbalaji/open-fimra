@@ -9,6 +9,8 @@ import { ShellNavigation } from './shell-navigation';
 import { DashboardFilters } from './dashboard-filters';
 
 export const queueLabels = { unit: 'Unit', edge_review: 'Edge review', triage: 'Triage' };
+export const alertGroupLabels = { active: 'Active alerts', overdue: 'Overdue alerts', pending_reports: 'Pending reports' };
+export const stepLabel = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replaceAll('_', ' ');
 type Queue = keyof typeof queueLabels;
 export interface AlertRow extends Detection {
   id: string;
@@ -40,6 +42,14 @@ export class AlertQueue {
   readonly now = signal(Date.now());
   readonly selected = signal<Detection | null>(null);
   readonly active = signal<Queue>('unit');
+  readonly allQueues = computed(() => this.navigation?.query().get('queue') === 'all');
+  private readonly group = computed(() => this.navigation?.query().get('group') || '');
+  private readonly status = computed(() => this.navigation?.query().get('status') || '');
+  readonly listScope = computed(() => {
+    const group = this.group();
+    return [Object.hasOwn(alertGroupLabels, group) ? alertGroupLabels[group as keyof typeof alertGroupLabels] : '',
+      stepLabel(this.status())].filter(Boolean).join(' · ');
+  });
   readonly cursor = signal('');
   readonly page = signal<Page | null>(null);
   readonly message = signal('');
@@ -49,7 +59,8 @@ export class AlertQueue {
   readonly rows = computed(() => {
     const rows = this.page()?.items ?? [];
     const pin = this.pinned();
-    return pin && pin.queue === this.active() && !rows.some(row => row.id === pin.id) ? [pin, ...rows] : rows;
+    return pin && !this.listScope() && (this.allQueues() || pin.queue === this.active()) &&
+      !rows.some(row => row.id === pin.id) ? [pin, ...rows] : rows;
   });
   readonly endpoint = computed(() => {
     const workspace = this.workspace.current();
@@ -85,11 +96,17 @@ export class AlertQueue {
     effect(() => {
       this.active();
       this.cursor();
+      this.allQueues();
+      this.group();
+      this.status();
       this.page.set(null);
     });
     effect(onCleanup => {
       const url = this.endpoint();
-      const params: Record<string, string | number> = { ...this.filters.params(), queue: this.active() };
+      const params: Record<string, string | number> = { ...this.filters.params() };
+      if (!this.allQueues()) params['queue'] = this.active();
+      if (this.group()) params['group'] = this.group();
+      if (this.status()) params['status'] = this.status();
       const cursor = this.cursor();
       if (cursor) params['cursor'] = cursor;
       this.now();
@@ -98,7 +115,7 @@ export class AlertQueue {
         next: page => {
           this.page.set(page);
           this.message.set('');
-          if (!page.canReview && this.active() !== 'unit') {
+          if (!page.canReview && !this.allQueues() && this.active() !== 'unit') {
             if (this.navigation) this.navigation.update({ queue: 'unit', cursor: null }, { replaceUrl: true });
             else this.switchTo('unit');
           }
@@ -120,7 +137,7 @@ export class AlertQueue {
         next: result => {
           const row = result.items[0];
           this.pinned.set(row ?? null);
-          if (row && row.queue !== this.active()) {
+          if (row && !this.allQueues() && row.queue !== this.active()) {
             this.page.set(null);
             if (this.navigation) this.navigation.update({ queue: row.queue, cursor: null });
             else {
@@ -159,15 +176,20 @@ export class AlertQueue {
     this.selected.set({ ...row, id: row.detection_id });
   }
 
-  switchTo(queue: Queue): void {
-    if (this.active() === queue) return;
+  switchTo(queue: Queue | 'all'): void {
+    if (this.allQueues() ? queue === 'all' : this.active() === queue) return;
     if (this.navigation) {
       this.navigation.update({ queue, cursor: null, alert: null, detection: null });
       return;
     }
+    if (queue === 'all') return;
     this.select(null);
     this.active.set(queue);
     this.changePage('');
+  }
+
+  clearListScope(): void {
+    this.navigation?.update({ group: null, status: null, cursor: null, alert: null, detection: null });
   }
 
   changePage(cursor: string): void {
