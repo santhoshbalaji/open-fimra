@@ -21,6 +21,8 @@ The integration tests check sign-in with all four demo users. They also exercise
 | `FIMRA_DATABASE_URL` | `postgres://fimra:fimra-dev@127.0.0.1:15432/fimra?sslmode=disable` |
 | `FIMRA_OIDC_ISSUER` | `http://127.0.0.1:18180/realms/open-fimra` |
 | `FIMRA_OIDC_AUDIENCE` | `open-fimra-api` |
+| `FIMRA_OIDC_DISCOVERY_URL` | The issuer. Where the API reads the identity provider's settings and keys. Set it to the provider's local address when the issuer is a public address the API cannot reach itself, for example behind an access gateway. |
+| `FIMRA_OIDC_EXTRA_ISSUERS` | Empty. Other addresses of the same identity provider whose tokens are also accepted, separated by commas, for example the local address while people also sign in through a public one. |
 | `FIMRA_HTTP_ADDR` | `127.0.0.1:18090` |
 | `FIMRA_FIRMS_MAP_KEY` | Empty, which disables live polling |
 | `FIMRA_UPLOAD_DIR` | `.geo-uploads` (at the repository root when using Make) |

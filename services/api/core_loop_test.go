@@ -254,7 +254,7 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 	}
 	key, signer := testSigner(t)
 	const issuer, audience = "https://issuer.invalid", "open-fimra-api"
-	auth := authenticator{issuer: issuer, verifier: oidc.NewVerifier(issuer,
+	auth := authenticator{issuers: map[string]bool{issuer: true}, verifier: oidc.NewVerifier(issuer,
 		&oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: audience})}
 	handler := api{reader: tx, feedDB: tx, logger: slog.Default()}.handler(auth, devOrigins)
 	const origin = "http://localhost:4200"

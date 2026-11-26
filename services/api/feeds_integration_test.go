@@ -191,7 +191,7 @@ func checkFeedsEndpoint(t *testing.T, tx pgx.Tx, slug, prefix, source string, no
 	t.Helper()
 	key, signer := testSigner(t)
 	const issuer, audience = "https://issuer.invalid", "open-fimra-api"
-	auth := authenticator{issuer: issuer, verifier: oidc.NewVerifier(issuer,
+	auth := authenticator{issuers: map[string]bool{issuer: true}, verifier: oidc.NewVerifier(issuer,
 		&oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: audience})}
 	handler := api{feedDB: tx, logger: slog.Default(), now: func() time.Time { return now }}.handler(auth, devOrigins)
 	request := func(path, subject string) *httptest.ResponseRecorder {

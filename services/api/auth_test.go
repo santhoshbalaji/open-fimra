@@ -88,6 +88,22 @@ func TestRequireBearerToken(t *testing.T) {
 		}
 	})
 
+	t.Run("another address of the same provider", func(t *testing.T) {
+		const public = "https://fimra.example.org/realms/open-fimra"
+		both := newAuthenticator(provider, server.URL, audience, " "+public+" ", "")
+		claims := valid
+		claims.Issuer = public
+		if _, ok := both.verify(t.Context(), signedToken(t, signer, claims)); !ok {
+			t.Fatal("token from an accepted extra issuer was refused")
+		}
+		if _, ok := both.verify(t.Context(), validToken); !ok {
+			t.Fatal("token from the main issuer was refused")
+		}
+		if w := request("Bearer " + signedToken(t, signer, claims)); w.Code != http.StatusUnauthorized {
+			t.Fatalf("token from an issuer that was not accepted returned HTTP %d", w.Code)
+		}
+	})
+
 	for _, tc := range []struct {
 		name   string
 		change func(*jwt.Claims)

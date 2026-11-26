@@ -26,7 +26,7 @@ type identity struct {
 }
 
 type authenticator struct {
-	issuer       string
+	issuers      map[string]bool
 	verifier     *oidc.IDTokenVerifier
 	emailEnabled bool
 }
@@ -35,13 +35,24 @@ func discoverProvider(ctx context.Context, issuer string) (*oidc.Provider, error
 	return oidc.NewProvider(oidc.ClientContext(ctx, &http.Client{Timeout: 5 * time.Second}), issuer)
 }
 
-func newAuthenticator(provider *oidc.Provider, issuer, audience string) authenticator {
+// newAuthenticator accepts tokens from issuer and from any extra issuers,
+// which are other addresses of the same identity provider, such as a public
+// address in front of a local one. The keys come from the discovered provider.
+func newAuthenticator(provider *oidc.Provider, issuer, audience string, extra ...string) authenticator {
+	issuers := map[string]bool{issuer: true}
+	for _, other := range extra {
+		if other = strings.TrimSpace(other); other != "" {
+			issuers[other] = true
+		}
+	}
 	return authenticator{
-		issuer: issuer,
+		issuers: issuers,
 		verifier: provider.Verifier(&oidc.Config{
 			ClientID: audience,
 			// Apply the same clock skew to both time claims below.
 			SkipExpiryCheck: true,
+			// verify checks the issuer against every accepted address.
+			SkipIssuerCheck: true,
 		}),
 	}
 }
@@ -72,7 +83,7 @@ func (a authenticator) require(next http.Handler) http.Handler {
 
 func (a authenticator) verify(ctx context.Context, rawToken string) (identity, bool) {
 	token, err := a.verifier.Verify(ctx, rawToken)
-	if err != nil || token.Issuer != a.issuer || token.Subject == "" {
+	if err != nil || !a.issuers[token.Issuer] || token.Subject == "" {
 		return identity{}, false
 	}
 

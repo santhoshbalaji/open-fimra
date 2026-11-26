@@ -495,7 +495,7 @@ func notificationRequests(t *testing.T, handler func(authenticator, string) http
 	t.Helper()
 	key, signer := testSigner(t)
 	const issuer, audience = "https://issuer.invalid", "open-fimra-api"
-	auth := authenticator{issuer: issuer, verifier: oidc.NewVerifier(issuer,
+	auth := authenticator{issuers: map[string]bool{issuer: true}, verifier: oidc.NewVerifier(issuer,
 		&oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: audience})}
 	h := handler(auth, devOrigins)
 	return func(subject, method, path, body string) *httptest.ResponseRecorder {

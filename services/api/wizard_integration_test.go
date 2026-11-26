@@ -713,7 +713,7 @@ func localTokens(t *testing.T, pool *pgxpool.Pool, logger *slog.Logger) func(sub
 	t.Helper()
 	key, signer := testSigner(t)
 	const issuer, audience = "https://issuer.invalid", "open-fimra-api"
-	auth := authenticator{issuer: issuer, verifier: oidc.NewVerifier(issuer,
+	auth := authenticator{issuers: map[string]bool{issuer: true}, verifier: oidc.NewVerifier(issuer,
 		&oidc.StaticKeySet{PublicKeys: []crypto.PublicKey{&key.PublicKey}}, &oidc.Config{ClientID: audience})}
 	handler := newHandler(pool, auth, logger, devOrigins, "", nil)
 	return func(subject, email string, verified bool) meResponse {
