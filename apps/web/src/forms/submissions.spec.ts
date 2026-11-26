@@ -79,7 +79,7 @@ describe('Field reports queue', () => {
     filtered.flush({ items: [row] });
     fixture.detectChanges();
     expect(element.textContent).toContain('Demo Division');
-    expect(element.querySelector('tbody')!.textContent).toContain('Submitted');
+    expect(element.querySelector('tbody')!.textContent).toContain('Awaiting review');
     expect(element.querySelector('tbody svg')).toBeTruthy();
 
     button('Received').click();

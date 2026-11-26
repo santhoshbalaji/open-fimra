@@ -9,7 +9,7 @@ import { AuthService } from '../auth';
 import { StatusBadge } from '../ui/status-badge';
 import { SidePanel } from '../ui/side-panel';
 import { defaultWorkspaceFormat } from '../workspace-format';
-import { type AssignedForm, type Submission } from './form-api';
+import { decisionLabels, type AssignedForm, type Submission } from './form-api';
 import { FormFill } from './form-fill';
 import { SubmissionView } from './submission-view';
 
@@ -52,7 +52,7 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
                 <button #report hlmBtn variant="link" size="sm" (click)="selected.set(s.id); review.show(report)">{{ titleOf(s.form) }}, version {{ s.version }}</button>
                 <small>{{ s.submittedBy }} · {{ time(s.receivedAt) }}</small>
                 <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
-                  [label]="s.approval?.decision === 'approved' ? 'Approved' : s.approval ? 'Returned' : 'Submitted'" />
+                  [label]="labels[s.approval?.decision ?? 'pending']" />
               </li>
             }
           </ul>
@@ -103,6 +103,7 @@ export class AlertReports {
   readonly open = signal<Draft | null>(null);
   protected readonly selected = signal<string | null>(null);
   protected readonly currentStep = signal('');
+  protected readonly labels = decisionLabels;
   private readonly version = signal(0);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);

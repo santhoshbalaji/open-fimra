@@ -214,14 +214,14 @@
     <section class="report-section grid gap-2" aria-labelledby="report-forms-title">
       <h3 id="report-forms-title" class="report-heading">Field reports</h3>
       <p>Forms submitted for the period's alerts: {{ data.fieldReports.submitted }}. Approved: {{ data.fieldReports.approved }}.
-        Returned: {{ data.fieldReports.returned }}. Waiting for review: {{ data.fieldReports.awaitingReview }}.
+        Returned: {{ data.fieldReports.returned }}. Awaiting review: {{ data.fieldReports.awaitingReview }}.
         Missing: {{ data.fieldReports.missing }}, on {{ data.fieldReports.alertsMissing }}
         {{ data.fieldReports.alertsMissing === 1 ? 'alert' : 'alerts' }}.</p>
       @if (data.fieldReports.forms.length) {
         <div hlmTableContainer tabindex="0" role="region" aria-label="Field reports by form"><table hlmTable><caption class="sr-only">Field reports by form</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Form</th><th hlmTh scope="col" class="text-end">Submitted</th>
             <th hlmTh scope="col" class="text-end">Approved</th><th hlmTh scope="col" class="text-end">Returned</th>
-            <th hlmTh scope="col" class="text-end">Waiting for review</th><th hlmTh scope="col" class="text-end">Missing</th></tr></thead>
+            <th hlmTh scope="col" class="text-end">Awaiting review</th><th hlmTh scope="col" class="text-end">Missing</th></tr></thead>
           <tbody hlmTBody>@for (form of data.fieldReports.forms; track form.form) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ form.title }}</th>
               <td hlmTd class="text-end tabular-nums">{{ form.submitted }}</td><td hlmTd class="text-end tabular-nums">{{ form.approved }}</td>

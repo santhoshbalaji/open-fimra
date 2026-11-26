@@ -1,6 +1,11 @@
 import { classes } from './detections';
 
-const seriesSlots = 8;
+// The first four slots follow the forest classes, away from the map's forest and age colours.
+export const detectionSeriesColors = [
+  '--color-chart-1', '--color-chart-7', '--color-text-secondary', '--color-chart-4',
+  '--color-chart-5', '--color-chart-6', '--color-chart-2', '--color-chart-8'
+];
+const seriesSlots = detectionSeriesColors.length;
 
 export function detectionCatalog(...counts: Readonly<Record<string, number>>[]): Record<string, string> {
   const unknown = [...new Set(counts.flatMap(group => Object.keys(group)))].sort();

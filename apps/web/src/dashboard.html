@@ -17,12 +17,16 @@
     @if (summary(); as data) {
       @if (lastUpdate(); as updated) {
         <div class="grid min-w-0 gap-4">
-          <section class="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Dashboard totals">
+          <section class="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Dashboard totals">
             <fimra-stat-tile label="Detections today" [value]="todayTotal()" scope="Since midnight, India Standard Time" [freshAt]="updated" />
             @for (tile of alertTiles; track tile.key) {
-              <fimra-stat-tile [label]="alertGroupLabels[tile.group]" [value]="data[tile.key]" [scope]="period()"
+              <fimra-stat-tile [label]="alertGroupLabels[tile.group]" [value]="data[tile.key]"
+                [scope]="'Alerts observed · ' + period()"
                 [freshAt]="updated" [route]="alertRoute({ group: tile.group })" [valueId]="'count-' + tile.group" />
             }
+            <fimra-stat-tile [label]="awaitingReviewLabel" [value]="awaitingReviewCount() ?? 'Unavailable'"
+              [scope]="'Field reports received · ' + period()" [freshAt]="updated" [route]="fieldReportRoute()"
+              valueId="count-awaiting-review" />
           </section>
 
           <section hlmCard aria-labelledby="classes-title">

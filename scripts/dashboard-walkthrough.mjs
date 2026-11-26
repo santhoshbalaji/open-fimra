@@ -100,32 +100,71 @@ try {
     await expect(chart).toHaveCount(0);
     assert.deepEqual(await values(), before);
 
-    const countID = await active.getAttribute('aria-describedby');
-    const count = dashboard.locator('#' + countID);
-    const expected = Number(await count.innerText());
-    assert.ok(expected > 0);
-    await count.scrollIntoViewIfNeeded();
-    const bounds = await count.boundingBox();
-    const request = page.waitForResponse(response => {
-      const url = new URL(response.url());
-      return url.origin === API && url.pathname.endsWith('/alerts') && url.searchParams.get('group') === 'active';
-    });
-    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-    await expect(page).toHaveURL(/\/monitor\/alerts\?/);
-    const url = new URL(page.url());
-    assert.equal(url.pathname, '/monitor/alerts');
-    assert.deepEqual(Object.fromEntries(url.searchParams), {
-      workspace: 'demo', hours: '144', class: 'inside', unitPath: 'ds.c1', queue: 'all', group: 'active'
-    });
-    const response = await request;
-    assert.ok(response.ok(), await response.text());
-    const records = await response.json();
-    assert.equal(records.items.length, expected);
-    const queue = page.getByRole('complementary', { name: 'Alert queue' });
-    await expect(queue.locator('[data-alert-id]')).toHaveCount(expected);
-    await page.goBack();
-    await expect(heading).toBeVisible();
-    await expect(chart).toHaveCount(0);
+    const tiles = dashboard.locator('fimra-stat-tile a');
+    for (const label of await tiles.allTextContents()) {
+      const link = dashboard.getByRole('link', { name: label.trim(), exact: true });
+      const countID = await link.getAttribute('aria-describedby');
+      const expected = Number((await dashboard.locator('#' + countID).innerText()).replaceAll(',', ''));
+      const target = new URL(await link.getAttribute('href'), WEB);
+      const fieldReports = label.trim() === 'Awaiting review';
+      assert.equal(target.pathname, fieldReports ? '/reports/field' : '/monitor/alerts');
+      for (const [key, value] of Object.entries({ workspace: 'demo', hours: '144', class: 'inside', unitPath: 'ds.c1' })) {
+        assert.equal(target.searchParams.get(key), value, label);
+      }
+      if (fieldReports) assert.equal(target.searchParams.get('decision'), 'pending');
+      if (label.trim() === 'Waiting for a report') assert.equal(target.searchParams.get('group'), 'pending_reports');
+      const matchesList = url => {
+        if (url.origin !== API || !url.pathname.endsWith(fieldReports ? '/submissions' : '/alerts')) return false;
+        if (fieldReports && url.searchParams.get('limit') === '1') return false;
+        return ['hours', 'class', 'unitPath', 'decision', 'queue', 'group', 'status'].every(key => {
+          const value = target.searchParams.get(key);
+          return url.searchParams.get(key) === (key === 'queue' && value === 'all' ? null : value);
+        });
+      };
+      let records;
+      await page.route(matchesList, async route => {
+        const response = await route.fetch();
+        assert.ok(response.ok(), `${response.status()} for ${response.url()}`);
+        records = await response.json();
+        await route.fulfill({ response });
+      });
+      const request = page.waitForResponse(response => matchesList(new URL(response.url())));
+      await Promise.all([request, link.click()]);
+      await page.unroute(matchesList);
+      target.searchParams.sort();
+      await expect(page).toHaveURL(url => {
+        url.searchParams.sort();
+        return url.href === target.href;
+      });
+      const queue = target.searchParams.get('queue');
+      const total = fieldReports ? (records.counts.pending ?? 0) : queue === 'all'
+        ? Object.values(records.counts).reduce((sum, count) => sum + count, 0) : (records.counts[queue] ?? 0);
+      assert.equal(total, expected, label);
+      if (records.items.length) {
+        const list = fieldReports ? page.locator('fimra-submissions') : page.getByRole('complementary', { name: 'Alert queue' });
+        await expect(list.locator('fimra-data-table tbody tr, fimra-data-table .result-card')).toHaveCount(records.items.length);
+      }
+      if (fieldReports || label.trim() === 'Waiting for a report') {
+        if (fieldReports) {
+          await expect(page.getByRole('list', { name: 'Active filters' })
+            .getByRole('button', { name: 'Remove filter Awaiting review' })).toBeVisible();
+        } else {
+          await expect(page.getByRole('complementary', { name: 'Alert queue' })
+            .getByText('Waiting for a report', { exact: true })).toBeVisible();
+        }
+        for (const theme of ['light', 'dark']) {
+          await page.emulateMedia({ colorScheme: theme });
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+          await check(page, (fieldReports ? 'awaiting-review' : 'waiting-for-report') + '-' + size + '-' + theme);
+        }
+        console.log(label.trim() + ' — ' + expected + ' in both the tile and its destination list');
+      }
+      await page.goBack();
+      await expect(heading).toBeVisible();
+      await expect(active).toBeVisible();
+      await expect(chart).toHaveCount(0);
+    }
+    console.log(size + ' — every linked dashboard count matches its destination list');
     await context.close();
   }
 } finally {

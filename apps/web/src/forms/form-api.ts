@@ -71,7 +71,7 @@ export interface SubmissionRow {
 export type Decision = 'pending' | 'approved' | 'returned';
 
 export const decisionLabels: Record<Decision, string> = {
-  pending: 'Waiting for a decision', approved: 'Approved', returned: 'Returned'
+  pending: 'Awaiting review', approved: 'Approved', returned: 'Returned'
 };
 
 /** A form in the workspace, from GET …/forms. */

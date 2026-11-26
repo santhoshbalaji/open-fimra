@@ -9,7 +9,7 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { Dashboard } from './dashboard';
 import { DashboardFilters } from './dashboard-filters';
-import { detectionSeries } from './dashboard.series';
+import { detectionSeries, detectionSeriesColors } from './dashboard.series';
 import { WorkspaceService } from './workspace';
 
 describe('Control-room dashboard', () => {
@@ -48,13 +48,22 @@ describe('Control-room dashboard', () => {
     const page = fixture.nativeElement as HTMLElement;
     expect(page.textContent).toContain('Loading dashboard');
     vi.advanceTimersByTime(0);
-    const http = TestBed.inject(HttpTestingController);
-    http.expectOne(r => r.url.endsWith('/situation-report/units')).flush({
-      units: [{ path: 'ds.c1', name: 'Demo Circle', levelLabel: 'Circle' }]
-    });
-    http.expectOne(r => r.url.endsWith('/summary')).flush(response);
+    flushSummary(response);
     fixture.detectChanges();
     return { fixture, page };
+  }
+
+  function reviewRequest() {
+    return TestBed.inject(HttpTestingController).expectOne(r => r.url.endsWith('/submissions'));
+  }
+
+  function flushSummary(response: object) {
+    const http = TestBed.inject(HttpTestingController);
+    http.match(r => r.url.endsWith('/situation-report/units')).forEach(request => request.flush({
+      units: [{ path: 'ds.c1', name: 'Demo Circle', levelLabel: 'Circle' }]
+    }));
+    http.expectOne(r => r.url.endsWith('/summary')).flush(response);
+    reviewRequest().flush({ items: [{ id: 'one-page-item' }], counts: { pending: 37, approved: 5 } });
   }
 
   it('keeps jurisdiction, period and last update visible and labels the midnight scope', () => {
@@ -74,7 +83,7 @@ describe('Control-room dashboard', () => {
     expect(active.querySelector('time')?.textContent).toContain('IST');
   });
 
-  it('links each actionable count to the matching alert list and carries workspace filters', () => {
+  it('links each actionable count to its matching list and carries workspace filters', () => {
     const filters = TestBed.inject(DashboardFilters);
     filters.hours.set(72);
     filters.forestClass.set('inside');
@@ -83,7 +92,7 @@ describe('Control-room dashboard', () => {
     for (const [label, matches] of [
       ['Active alerts', { queue: 'all', group: 'active' }],
       ['Overdue alerts', { queue: 'all', group: 'overdue' }],
-      ['Pending reports', { queue: 'all', group: 'pending_reports' }],
+      ['Waiting for a report', { queue: 'all', group: 'pending_reports' }],
       ['Edge review', { queue: 'edge_review' }],
       ['Controlled', { queue: 'all', status: 'controlled' }],
       ['Acknowledged', { queue: 'all', status: 'acknowledged' }]
@@ -95,6 +104,43 @@ describe('Control-room dashboard', () => {
         workspace: 'demo', hours: '72', class: 'inside', unitPath: 'ds.c1', ...matches
       });
     }
+    expect(page.querySelector('#count-pending_reports')?.textContent).toBe('1');
+    expect(page.querySelector('#count-pending_reports + dd')?.textContent).toBe('Alerts observed · Past 72 hours');
+    const link = [...page.querySelectorAll('a')].find(a => a.textContent?.trim() === 'Awaiting review')!;
+    const url = new URL(link.href);
+    expect(url.pathname).toBe('/reports/field');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      workspace: 'demo', hours: '72', class: 'inside', unitPath: 'ds.c1', decision: 'pending'
+    });
+    expect(page.querySelector('#count-awaiting-review')?.textContent).toBe('37');
+    expect(page.querySelector('#count-awaiting-review + dd')?.textContent).toBe('Field reports received · Past 72 hours');
+  });
+
+  it('requests the field reports total for the same filters and distinguishes failure from zero', () => {
+    const filters = TestBed.inject(DashboardFilters);
+    filters.hours.set(72);
+    filters.forestClass.set('inside');
+    filters.unitPath.set('ds.c1');
+    const fixture = TestBed.createComponent(Dashboard);
+    fixture.detectChanges();
+    vi.advanceTimersByTime(0);
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne(r => r.url.endsWith('/summary')).flush(data);
+    const review = reviewRequest();
+    expect(review.request.urlWithParams).toBe(
+      'https://api.test/api/v1/workspaces/demo/submissions?hours=72&class=inside&unitPath=ds.c1&decision=pending&limit=1'
+    );
+    review.flush(null, { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('#count-awaiting-review')?.textContent).toBe('Unavailable');
+    expect(page.querySelector('#count-pending_reports')?.textContent).toBe('1');
+
+    vi.advanceTimersByTime(60_000);
+    http.expectOne(r => r.url.endsWith('/summary')).flush(data);
+    reviewRequest().flush({ items: [], counts: { approved: 5 } });
+    fixture.detectChanges();
+    expect(page.querySelector('#count-awaiting-review')?.textContent).toBe('0');
   });
 
   it('renders the same chart and table totals and keeps every value in low bandwidth', async () => {
@@ -143,15 +189,14 @@ describe('Control-room dashboard', () => {
     expect(page.querySelector('tfoot td')?.textContent?.trim()).toBe('0');
     expect(page.querySelector('fimra-class-chart')).toBeNull();
 
-    const http = TestBed.inject(HttpTestingController);
     vi.advanceTimersByTime(60_000);
-    http.expectOne(r => r.url.endsWith('/summary')).flush({ ...response, feedHealth: data.feedHealth });
+    flushSummary({ ...response, feedHealth: data.feedHealth });
     fixture.detectChanges();
     expect(page.textContent).toContain('Some feeds are late, quiet, or missing data');
     expect(page.querySelector('[aria-labelledby=feeds-title] fimra-status-badge')?.textContent?.trim()).toBe('Quiet');
 
     vi.advanceTimersByTime(60_000);
-    http.expectOne(r => r.url.endsWith('/summary')).flush({
+    flushSummary({
       ...response, feedHealth: null, feedHealthUnavailable: true
     });
     fixture.detectChanges();
@@ -163,13 +208,15 @@ describe('Control-room dashboard', () => {
     const { fixture, page } = open();
     const http = TestBed.inject(HttpTestingController);
     vi.advanceTimersByTime(60_000);
+    const review = reviewRequest();
     http.expectOne(r => r.url.endsWith('/summary')).flush(null, { status: 500, statusText: 'Server error' });
+    expect(review.cancelled).toBe(true);
     fixture.detectChanges();
     expect(page.textContent).toContain('Showing the last successful update');
     expect(page.querySelector('time')?.getAttribute('datetime')).toBe('2026-11-26T12:00:00.000Z');
     expect(page.querySelector('tfoot td')?.textContent?.trim()).toBe('12');
     page.querySelector('fimra-state-region button')?.dispatchEvent(new MouseEvent('click'));
-    http.expectOne(r => r.url.endsWith('/summary')).flush({ ...data, feedHealth: null });
+    flushSummary({ ...data, feedHealth: null });
     fixture.detectChanges();
     expect(page.textContent).not.toContain('Dashboard could not refresh');
     expect(page.querySelector('time')?.getAttribute('datetime')).toBe('2026-11-26T12:01:00.000Z');
@@ -202,6 +249,12 @@ describe('Control-room dashboard', () => {
 });
 
 describe('Detection chart series', () => {
+  it('uses fixed blue, purple, grey and amber slots for the four forest classes', () => {
+    expect(detectionSeries({}).map(({ slot }) => detectionSeriesColors[slot - 1])).toEqual([
+      '--color-chart-1', '--color-chart-7', '--color-text-secondary', '--color-chart-4'
+    ]);
+  });
+
   it('keeps the original slot when earlier series are hidden', () => {
     const all = detectionSeries({ inside: 5, near_edge: 3 });
     const filtered = detectionSeries({ near_edge: 3 }, 'near_edge');
