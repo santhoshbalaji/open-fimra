@@ -49,6 +49,33 @@ function press(fixture: ComponentFixture<Host>, name: string) {
 }
 
 describe('DataTable', () => {
+  it('keeps the first-page Previous button disabled and focusable', () => {
+    const { fixture, element, host } = setup();
+    const previous = element.querySelector<HTMLButtonElement>('[role=group] button')!;
+    expect(previous.textContent?.trim()).toBe('Previous');
+    expect(previous.getAttribute('aria-disabled')).toBe('true');
+    expect(previous.disabled).toBe(false);
+    previous.focus();
+    expect(document.activeElement).toBe(previous);
+    press(fixture, 'Previous');
+    expect(host.request).toBeUndefined();
+  });
+
+  it('shows decorative skeleton rows only during initial loading', () => {
+    const { fixture, element, host } = setup();
+    host.state.set({ kind: 'loading', heading: 'Loading alerts' });
+    fixture.detectChanges();
+    expect(element.querySelectorAll('.skeleton-row')).toHaveLength(3);
+    expect(element.querySelector('.skeleton-rows')?.closest('[aria-hidden=true]')).toBeTruthy();
+    expect(element.querySelector('table')?.closest('[hidden]')).toBeTruthy();
+    expect(element.querySelector('fimra-state-region > fimra-live-status')?.textContent).toContain('Loading alerts');
+
+    host.state.set({ kind: 'ready' });
+    fixture.detectChanges();
+    expect(element.querySelector('.skeleton-rows')).toBeNull();
+    expect(element.querySelector('table')?.closest('[hidden]')).toBeNull();
+  });
+
   it('requests sorting and marks only the successfully sorted header', () => {
     const { fixture, element, host } = setup();
     expect(element.querySelector('[aria-sort]')).toBeNull();
@@ -93,7 +120,7 @@ describe('DataTable', () => {
   });
 
   it('goes back through visited cursors and retains position after a failed request', () => {
-    const { fixture, host } = setup();
+    const { fixture, element, host } = setup();
     press(fixture, 'Next');
     expect(host.request).toEqual({ cursor: 'second', previousCursors: [null] });
     host.page.update(page => ({ ...page, position: host.request!, nextCursor: 'third' }));
@@ -102,6 +129,9 @@ describe('DataTable', () => {
     expect(host.request).toEqual({ cursor: 'third', previousCursors: [null, 'second'] });
     host.state.set({ kind: 'error', keepContent: true });
     fixture.detectChanges();
+    expect(element.querySelector('table')?.closest('[hidden]')).toBeNull();
+    expect(element.querySelector('tbody')?.textContent).toContain('East ridge');
+    expect(element.querySelector('fimra-state-region')?.textContent).toContain('Showing the last available data.');
     expect(host.page().position.cursor).toBe('second');
     press(fixture, 'Next');
     host.page.update(page => ({ ...page, position: host.request!, nextCursor: null }));

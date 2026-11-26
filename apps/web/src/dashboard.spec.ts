@@ -49,9 +49,11 @@ describe('Control-room dashboard', () => {
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
     expect(page.textContent).toContain('Loading dashboard');
+    expect(page.querySelector('[data-dashboard-skeleton]')?.closest('[aria-hidden=true]')).toBeTruthy();
     vi.advanceTimersByTime(0);
     flushSummary(response);
     fixture.detectChanges();
+    expect(page.querySelector('[data-dashboard-skeleton]')).toBeNull();
     return { fixture, page };
   }
 

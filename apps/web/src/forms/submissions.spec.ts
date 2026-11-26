@@ -124,4 +124,53 @@ describe('Field reports queue', () => {
     fixture.detectChanges();
     expect(element.textContent).toContain('No field reports match');
   });
+
+  it('keeps rows on a same-query refresh failure and updates them on Retry', () => {
+    const { fixture, element, button } = render();
+    request().flush({ items: [row] });
+    fixture.detectChanges();
+    const table = element.querySelector('table')!;
+
+    fixture.componentRef.setInput('now', 60_001);
+    fixture.detectChanges();
+    expect(table.closest('[hidden]')).toBeNull();
+    expect(element.textContent).toContain('Refreshing field reports');
+    request().flush(null, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+    expect(table.closest('[hidden]')).toBeNull();
+    expect(table.textContent).toContain('Demo Beat Guard');
+    expect(element.textContent).toContain('Showing the last available data.');
+
+    button('Retry').click();
+    fixture.detectChanges();
+    request().flush({ items: [{ ...row, submitted_by: 'Demo Officer' }] });
+    fixture.detectChanges();
+    expect(table.textContent).toContain('Demo Officer');
+    expect(element.textContent).not.toContain('Field reports could not load');
+  });
+
+  it('clears prior rows when the filters change or access is lost', () => {
+    const { fixture, element } = render();
+    request().flush({ items: [row] });
+    fixture.detectChanges();
+    const table = element.querySelector('table')!;
+
+    setParams({ decision: 'approved' });
+    fixture.detectChanges();
+    request().flush(null, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+    expect(table.closest('[hidden]')).toBeTruthy();
+    expect(table.textContent).not.toContain('Demo Beat Guard');
+
+    setParams({ decision: 'pending' });
+    fixture.detectChanges();
+    request().flush({ items: [row] });
+    fixture.detectChanges();
+    fixture.componentRef.setInput('now', 60_001);
+    fixture.detectChanges();
+    request().flush(null, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+    expect(table.closest('[hidden]')).toBeTruthy();
+    expect(table.textContent).not.toContain('Demo Beat Guard');
+  });
 });

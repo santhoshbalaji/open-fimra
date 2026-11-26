@@ -28,7 +28,7 @@ describe('StateRegion', () => {
       [{ kind: 'forbidden' }, 'You do not have access', false],
       [{ kind: 'stale', observedAt: { dateTime: '14:05:00Z', label: '14:05 UTC' } },
         'Refreshing. Showing the last available data', true],
-      [{ kind: 'error', keepContent: true }, 'Could not load data', true]
+      [{ kind: 'error', keepContent: true }, 'Could not load data. Showing the last available data.', true]
     ];
     for (const [state, announcement, visible] of variants) {
       fixture.componentInstance.state.set(state);

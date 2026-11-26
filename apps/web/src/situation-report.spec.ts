@@ -65,6 +65,38 @@ describe('Situation report', () => {
     return { fixture, http, page: fixture.nativeElement as HTMLElement };
   }
 
+  it('shows unit loading, retries a failed unit list, and restores the default unit', () => {
+    const fixture = TestBed.createComponent(SituationReportView);
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+    const url = 'https://api.test/api/v1/workspaces/demo/situation-report/units';
+    const state = page.querySelector('fimra-state-region')!;
+    const submit = page.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    const firstRequest = http.expectOne(url);
+    expect(state.textContent).toContain('Loading units');
+    expect(page.querySelector('#report-unit')?.closest('[hidden]')).toBeTruthy();
+    expect(submit.disabled).toBe(true);
+
+    firstRequest.flush(null, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+    expect(state.textContent).toContain('Could not load units for the report.');
+    expect(submit.disabled).toBe(true);
+    const retry = state.querySelector<HTMLButtonElement>('button:not(#report-unit)')!;
+    expect(retry.textContent?.trim()).toBe('Retry');
+    retry.click();
+    fixture.detectChanges();
+    expect(state.textContent).toContain('Loading units');
+    expect(state.textContent).not.toContain('Could not load units');
+
+    http.expectOne(url).flush({ units });
+    fixture.detectChanges();
+    expect(page.querySelector('#report-unit')?.textContent).toContain('Hill Division (Division)');
+    expect(page.querySelector('#report-unit')?.closest('[hidden]')).toBeNull();
+    expect(submit.disabled).toBe(false);
+    http.verify();
+  });
+
   it('starts with the highest unit and today, then shows the report with its numbers and map', async () => {
     const { fixture, http, page } = open();
     expect(page.querySelector('#report-unit')?.textContent).toContain('Hill Division (Division)');

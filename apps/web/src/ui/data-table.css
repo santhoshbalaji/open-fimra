@@ -55,7 +55,29 @@ summary:focus-visible, .table-scroll:focus-visible, input:focus-visible {
   gap: calc(var(--spacing) * 2);
 }
 .result-card dt { color: var(--role-text-secondary); }
-button[aria-disabled=true] { color: var(--role-text-secondary); cursor: default; }
+.skeleton-rows {
+  background: var(--role-surface);
+  border: 1px solid var(--table-row-divider);
+  border-radius: var(--role-radius-card);
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  min-block-size: var(--table-row-height);
+  padding: var(--spacing) calc(var(--spacing) * 2);
+}
+.skeleton-row + .skeleton-row { border-block-start: 1px solid var(--table-row-divider); }
+.skeleton-row > div { flex: 1; min-inline-size: 0; }
+.skeleton-cards { display: grid; gap: calc(var(--spacing) * 2); border: 0; background: transparent; }
+.skeleton-cards .skeleton-row {
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--role-surface);
+  border: 1px solid var(--table-row-divider);
+  border-radius: var(--role-radius-card);
+  padding: calc(var(--spacing) * 3);
+}
 th:has(.sort), .selection, .actions { padding-block: 0; }
 .selection { inline-size: 1%; }
 thead .sort:focus-visible { outline-offset: calc(-1 * var(--focus-width)); }

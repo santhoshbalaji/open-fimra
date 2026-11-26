@@ -9,17 +9,19 @@
   <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end" aria-describedby="report-scope"
     (submit)="$event.preventDefault(); show()">
     <div class="grid gap-4 sm:grid-cols-2">
-      <hlm-field><label hlmFieldLabel for="report-unit">Unit</label>
-        <hlm-select #unitControl [value]="unitKey()" (valueChange)="pickUnit($event)">
-          <hlm-select-trigger buttonId="report-unit" class="w-full"><span class="truncate">{{ unitLabel() }}</span></hlm-select-trigger>
-          <hlm-select-content *hlmSelectPortal>
-            @for (unit of units(); track key(unit)) {
-              <hlm-select-item [value]="key(unit)"><span [style.padding-inline-start.px]="unit.depth * 12">{{ unit.name }}
-                <span class="text-muted-foreground">({{ unit.levelLabel }})</span></span></hlm-select-item>
-            }
-          </hlm-select-content>
-        </hlm-select>
-      </hlm-field>
+      <fimra-state-region [state]="unitState()" (retry)="retryUnits()">
+        <hlm-field><label hlmFieldLabel for="report-unit">Unit</label>
+          <hlm-select #unitControl [value]="unitKey()" (valueChange)="pickUnit($event)">
+            <hlm-select-trigger buttonId="report-unit" class="w-full"><span class="truncate">{{ unitLabel() }}</span></hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal>
+              @for (unit of units(); track key(unit)) {
+                <hlm-select-item [value]="key(unit)"><span [style.padding-inline-start.px]="unit.depth * 12">{{ unit.name }}
+                  <span class="text-muted-foreground">({{ unit.levelLabel }})</span></span></hlm-select-item>
+              }
+            </hlm-select-content>
+          </hlm-select>
+        </hlm-field>
+      </fimra-state-region>
       <fieldset class="grid gap-2"><legend class="mb-2 text-label font-medium">Period</legend>
         <hlm-radio-group name="report-period" aria-label="Period" class="flex flex-wrap gap-4" [value]="kind()" (valueChange)="pickKind($event)">
           <label hlmLabel><hlm-radio value="day" aria-label="One day"><hlm-radio-indicator /></hlm-radio> One day</label>

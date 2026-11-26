@@ -16,6 +16,7 @@ import { ShellNavigation } from './shell-navigation';
 import { WorkspaceService } from './workspace';
 import { StatusBadge } from './ui/status-badge';
 import { LiveStatus } from './ui/live-status';
+import { DataState, StateRegion } from './ui/state-region';
 import { ageLabels } from './token-values';
 import { reportingTimeZone } from './workspace-format';
 import { alertSymbol, reportAge, reportClass, reportClasses, SituationReportSymbol } from './situation-report-symbol';
@@ -176,7 +177,7 @@ export function projectMap(map: SituationReport['map'], end = '', width = mapSiz
 @Component({
   selector: 'fimra-situation-report',
   imports: [HlmButtonImports, HlmFieldImports, HlmInput, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports,
-    HlmSkeleton, HlmTableImports, StatusBadge, Icon, LiveStatus, SituationReportSymbol],
+    HlmSkeleton, HlmTableImports, StatusBadge, Icon, LiveStatus, SituationReportSymbol, StateRegion],
   templateUrl: './situation-report.html',
   styleUrl: './situation-report.css'
 })
@@ -190,11 +191,13 @@ export class SituationReportView {
   private readonly injector = inject(Injector);
   private readonly reportTitle = viewChild<ElementRef<HTMLElement>>('reportTitle');
   private readonly unitControl = viewChild<unknown, ElementRef<HTMLElement>>('unitControl', { read: ElementRef });
+  private readonly unitAttempt = signal(0);
   private reportRequest = 0;
   private timer?: ReturnType<typeof setTimeout>;
 
   readonly today = indiaToday();
   readonly units = signal<ReportUnit[]>([]);
+  readonly unitState = signal<DataState>({ kind: 'loading', heading: 'Loading units' });
   readonly unitKey = signal('');
   readonly kind = signal<PeriodKind>('day');
   readonly from = signal(this.today);
@@ -284,15 +287,29 @@ export class SituationReportView {
     this.lifetime.onDestroy(() => { this.reportRequest++; clearTimeout(this.timer); });
     effect(onCleanup => {
       const endpoint = this.endpoint();
+      this.unitAttempt();
       this.clearReport();
       this.units.set([]);
+      this.message.set('');
+      this.unitState.set({ kind: 'loading', heading: 'Loading units' });
       if (!endpoint) return;
       const request = this.http.get<{ units: ReportUnit[] }>(endpoint + '/situation-report/units').subscribe({
         next: ({ units }) => {
           this.units.set(units);
           if (!this.navigation) this.unitKey.set(this.initialUnit(units));
+          this.unitState.set(units.length
+            ? { kind: 'ready', announcement: 'Units loaded' }
+            : { kind: 'empty', heading: 'There are no units you can report on.' });
         },
-        error: (error: HttpErrorResponse) => this.failed(error)
+        error: (error: HttpErrorResponse) => {
+          if (error.status === 401) { this.auth.sessionEnded(); return; }
+          if (error.status === 403 && !serverMessage(error).includes('own area')) {
+            this.unitState.set({ kind: 'forbidden', heading: 'You do not have access to these units.' });
+            this.workspace.deny();
+            return;
+          }
+          this.unitState.set({ kind: 'error', heading: 'Could not load units for the report.' });
+        }
       });
       onCleanup(() => request.unsubscribe());
     });
@@ -319,6 +336,10 @@ export class SituationReportView {
         }
       });
     }
+  }
+
+  retryUnits(): void {
+    this.unitAttempt.update(attempt => attempt + 1);
   }
 
   private initialUnit(units: ReportUnit[]): string {

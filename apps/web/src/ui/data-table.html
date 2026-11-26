@@ -29,7 +29,19 @@
   } @else { {{ column.value(row) }} }
 </ng-template>
 
-<fimra-state-region [state]="state()" (retry)="retry.emit()">
+<ng-template #loadingRows>
+  <div class="skeleton-rows" [class.skeleton-cards]="cards()">
+    @for (row of placeholderRows; track row) {
+      <div class="skeleton-row">
+        @for (column of visibleColumns(); track column.id) {
+          <div><hlm-skeleton class="h-4 w-3/4" /></div>
+        }
+      </div>
+    }
+  </div>
+</ng-template>
+
+<fimra-state-region [state]="state()" [loadingPlaceholder]="loadingRows" (retry)="retry.emit()">
   <div class="grid gap-2">
     <div class="toolbar">
       <details>
@@ -133,10 +145,10 @@
       </div>
     }
     <div role="group" [attr.aria-label]="caption() + ' pages'" class="toolbar">
-      <button type="button" hlmBtn variant="outline" [attr.aria-disabled]="!canGoBack()"
+      <button type="button" hlmBtn variant="outline" [ariaDisabled]="!canGoBack()"
         (click)="previousPage()">Previous</button>
       <fimra-live-status [message]="pageLabel()" class="text-body text-text-secondary" />
-      <button type="button" hlmBtn variant="outline" [attr.aria-disabled]="!canGoNext()"
+      <button type="button" hlmBtn variant="outline" [ariaDisabled]="!canGoNext()"
         (click)="nextPage()">Next</button>
     </div>
   </div>
