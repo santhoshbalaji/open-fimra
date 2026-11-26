@@ -198,6 +198,7 @@ export class SituationReportView {
     return slug ? this.base + '/api/v1/workspaces/' + encodeURIComponent(slug) : '';
   });
   readonly selectedUnit = computed(() => this.units().find(unit => this.key(unit) === this.unitKey()) ?? null);
+  readonly workspaceName = computed(() => this.workspace.current()?.name);
   readonly unitLabel = computed(() => {
     const unit = this.selectedUnit();
     return unit ? `${unit.name} (${unit.levelLabel})` : 'Choose a unit';

@@ -39,13 +39,19 @@ describe('Export dialog', () => {
 
   it('sends the current queue and time window', async () => {
     const { el, fixture, submit } = render();
-    expect(el.querySelector('#export-summary')!.textContent).toContain('observed in the past 3 days · all forest classes · Edge review queue');
+    const summary = el.querySelector('#export-summary')!;
+    const prepare = el.querySelector('button[type=submit]')!;
+    expect(summary.textContent).toContain('Alerts · observed in the past 3 days · all forest classes · all units you can see · Edge review queue');
+    expect(summary.compareDocumentPosition(prepare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(prepare.getAttribute('aria-describedby')).toBe('export-summary');
+    expect(prepare.getAttribute('aria-label')).toBe('Prepare export as GeoPackage (recommended)');
     el.querySelector<HTMLButtonElement>('#export-format')!.click();
     fixture.detectChanges();
     const options = Array.from(document.querySelectorAll<HTMLElement>('[role=option]'));
     expect(options).toHaveLength(8);
     options.find(option => option.textContent.includes('Shapefile'))!.click();
     fixture.detectChanges();
+    expect(prepare.getAttribute('aria-label')).toBe('Prepare export as Shapefile (zipped)');
     submit();
     const post = http.expectOne(endpoint + '/exports');
     expect(post.request.method).toBe('POST');
@@ -53,7 +59,7 @@ describe('Export dialog', () => {
       forestClasses: ['inside', 'near_edge', 'outside', 'fixed_heat_source'] });
     post.flush(pending);
     await vi.waitFor(() => { fixture.detectChanges(); expect(el.querySelector('[role=status]')!.textContent).toContain('Preparing 7 rows'); });
-    expect(el.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled).toBe(true);
+    expect(prepare.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('shows progress, then downloads the finished file with the bearer request', async () => {
@@ -115,7 +121,7 @@ describe('Export dialog', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('#export-summary')!.textContent).toContain(
-      'received in the past 7 days · all forest classes · units under ds.c1.d1 · First report reports, with a column for each answer · approved');
+      'Field reports · received in the past 7 days · all forest classes · units under ds.c1.d1 · First report reports, with a column for each answer · approved');
     el.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
     fixture.detectChanges();
     const post = http.expectOne(endpoint + '/exports');

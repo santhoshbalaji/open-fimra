@@ -50,7 +50,7 @@ describe('Situation report', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(),
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test' } },
-      { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo' }), deny } },
+      { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }), deny } },
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } }] });
   });
   afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); deny.mockReset(); });
@@ -67,6 +67,8 @@ describe('Situation report', () => {
   it('starts with the highest unit and today, then shows the report with its numbers and map', async () => {
     const { fixture, http, page } = open();
     expect(page.querySelector('#report-unit')?.textContent).toContain('Hill Division (Division)');
+    expect(page.querySelector('form')?.getAttribute('aria-describedby')).toBe('report-scope');
+    expect(page.querySelector('#report-scope')?.textContent?.replace(/\s+/g, ' ')).toMatch(/Demo State.*India Standard Time/);
     const shown = fixture.componentInstance.show();
     const request = http.expectOne(r => r.url.endsWith('/situation-report'));
     expect(request.request.params.get('unitPath')).toBe('ds.c1.d1');

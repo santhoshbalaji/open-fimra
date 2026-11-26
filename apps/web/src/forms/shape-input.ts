@@ -49,10 +49,10 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
   host: { class: 'shape-input' },
   template: `
     <textarea hlmTextarea [id]="inputId()" [disabled]="disabled()" [value]="text()" rows="3"
-      [attr.aria-describedby]="inputId() + '-how'" [attr.aria-invalid]="error() ? 'true' : null"
+      [attr.aria-describedby]="description()" [attr.aria-invalid]="invalid() || error() ? 'true' : null"
       (change)="read($any($event.target).value)"></textarea>
     <small [id]="inputId() + '-how'">{{ how() }}</small>
-    @if (error()) { <small class="field-error" role="alert">{{ error() }}</small> }
+    @if (error()) { <small class="field-error" [id]="inputId() + '-shape-error'" role="alert">{{ error() }}</small> }
     @if (!disabled()) {
       <div class="shape-actions">
         <button hlmBtn type="button" variant="outline" size="sm" [disabled]="locating()" (click)="addMine()">
@@ -77,9 +77,13 @@ export class ShapeInput {
   readonly value = input<unknown>(undefined);
   readonly disabled = input(false);
   readonly inputId = input.required<string>();
+  readonly describedBy = input<string | null>(null);
+  readonly invalid = input(false);
   readonly alertPoint = input<Position | null>(null);
   readonly changed = output<Shape | null>();
   readonly error = signal('');
+  readonly description = computed(() => [this.describedBy(), this.inputId() + '-how',
+    this.error() && this.inputId() + '-shape-error'].filter(Boolean).join(' '));
   readonly locating = signal(false);
   readonly positions = computed(() => positionsOf(this.value()));
   readonly text = signal('');

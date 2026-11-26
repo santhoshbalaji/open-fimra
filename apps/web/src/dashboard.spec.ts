@@ -20,7 +20,8 @@ describe('Control-room dashboard', () => {
     vi.useFakeTimers();
     TestBed.configureTestingModule({providers: [provideHttpClient(), provideHttpClientTesting(), AlertQueue,
       {provide: WEB_CONFIG, useValue: {apiBaseUrl: 'https://api.test'}},
-      {provide: WorkspaceService, useValue: {current: signal({slug: 'demo'})}},
+      {provide: WorkspaceService, useValue: {current: signal({slug: 'demo', name: 'Demo State'}),
+        jurisdictions: signal([['ds.c1.d1', 'Hill Division']])}},
       {provide: AuthService, useValue: {sessionEnded: vi.fn()}}
     ]});
   });
@@ -35,6 +36,10 @@ describe('Control-room dashboard', () => {
     http.expectOne(r => r.url.endsWith('/summary')).flush(data);
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('#dashboard-scope')?.textContent).toContain('Jurisdiction: Demo State · Hill Division');
+    expect(page.querySelector('.stat-grid')?.getAttribute('aria-describedby')).toBe('dashboard-scope');
+    expect(page.querySelector('[aria-labelledby=today-title]')?.textContent).toContain('Since midnight, India Standard Time');
+    expect(page.querySelector('[aria-labelledby=tile-active]')?.textContent).toContain('Past 168 hours');
     expect(page.querySelector('.stat-grid dl')?.textContent).toContain('Inside forest4');
     expect([...page.querySelectorAll('.stat-value')].map(el => el.textContent)).toEqual(['3', '2', '1']);
     expect(page.querySelector('tbody')?.textContent).toContain('Inside forest9');

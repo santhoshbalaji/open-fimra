@@ -20,12 +20,14 @@
       </hlm-select-content>
     </hlm-select>
   </hlm-field>
-  <p id="export-summary" class="export-summary">Uses the current filters: {{ summary() }}.</p>
   <p class="export-hint">The file holds only what your role can see, with a note of its source, filters and
     coordinate system. Only you can download it, until it expires.</p>
+  <p id="export-summary" class="export-summary"><strong>{{ datasets[kind()] }}</strong> · {{ summary() }}.</p>
   <div class="export-actions">
     <button hlmBtn variant="outline" type="button" class="secondary" (click)="close()">Close</button>
-    <button hlmBtn type="submit" [disabled]="busy()">{{ status()?.status === 'ready' ? 'Prepare again' : 'Prepare export' }}</button>
+    @let action = status()?.status === 'ready' ? 'Prepare again' : 'Prepare export';
+    <button hlmBtn type="submit" [busy]="busy()" [attr.aria-label]="action + ' as ' + formatLabels[format()]"
+      aria-describedby="export-summary">{{ action }}</button>
   </div>
 </form>
 <p class="export-progress" role="status">{{ progress() }}</p>

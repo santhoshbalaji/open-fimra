@@ -3,7 +3,12 @@
   <h2 id="report-page-title" class="text-display">Situation report</h2>
   <p class="text-muted-foreground">A printable summary of fires, alerts, incidents and field reports for one unit,
     with the same numbers as the dashboard. It shows only what your role can see.</p>
-  <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end" (submit)="$event.preventDefault(); show()">
+  <p id="report-scope" class="text-muted-foreground">
+    @if (workspaceName(); as name) { {{ name }} · The selected unit sets the report area. }
+    Dates and times use India Standard Time.
+  </p>
+  <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end" aria-describedby="report-scope"
+    (submit)="$event.preventDefault(); show()">
     <div class="grid gap-4 sm:grid-cols-2">
       <hlm-field><label hlmFieldLabel for="report-unit">Unit</label>
         <hlm-select [value]="unitKey()" (valueChange)="pickUnit($event)">

@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, effect, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { KeyValuePipe } from '@angular/common';
 import { timer, switchMap, catchError, EMPTY } from 'rxjs';
 import { AuthService } from './auth';
@@ -58,6 +58,13 @@ export class Dashboard {
   readonly milestones = {acknowledged: 'Acknowledged', reached_site: 'Reached site', controlled: 'Controlled'};
   private readonly http = inject(HttpClient);
   private readonly workspace = inject(WorkspaceService);
+  readonly jurisdiction = computed(() => {
+    const name = this.workspace.current()?.name;
+    const scope = this.workspace.jurisdictions().map(([, label]) => label);
+    if (scope.length === 1 && scope[0] === name) return name;
+    const area = scope.join(', ') || 'Your assigned area';
+    return name ? name + ' · ' + area : area;
+  });
   private readonly auth = inject(AuthService);
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
 

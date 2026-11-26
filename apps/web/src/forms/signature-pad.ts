@@ -8,6 +8,7 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
   host: { class: 'signature-pad' },
   template: `
     <canvas #pad width="480" height="160" [id]="inputId()" role="img" tabindex="0"
+      [attr.aria-describedby]="describedBy()"
       [attr.aria-label]="drawn() ? 'Signature drawn. Save it or clear it.' : 'Signature area. Draw your signature here.'"
       (pointerdown)="start($event)" (pointermove)="move($event)" (pointerup)="end()" (pointerleave)="end()"></canvas>
     <div class="shape-actions">
@@ -18,6 +19,7 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
 })
 export class SignaturePad {
   readonly inputId = input.required<string>();
+  readonly describedBy = input<string | null>(null);
   readonly busy = input(false);
   readonly saved = output<Blob>();
   readonly drawn = signal(false);

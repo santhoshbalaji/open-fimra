@@ -13,7 +13,7 @@ import { StatusBadge } from './ui/status-badge';
 import { GeoJSONSource, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
-import { AlertQueue, AlertRow, queueLabels } from './alert-queue';
+import { AlertQueue, AlertRow, alertRowLabel, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
@@ -24,15 +24,16 @@ import { ShellNavigation, recordId } from './shell-navigation';
 import { ShellListScroll } from './shell-list-scroll';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
-import { unavailable, WorkspaceService } from './workspace';
+import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
+import { type DataState, StateRegion } from './ui/state-region';
 
 @Component({
   selector: 'fimra-demo-map',
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, StateRegion],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -61,12 +62,19 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
   readonly error = signal('');
   readonly geographyError = signal('');
+  readonly referenceError = signal('');
   readonly boundary = computed(() => this.geography()?.info.boundary);
   readonly tileError = signal('');
+  readonly mapDataState = computed<DataState>(() => {
+    const [heading, ...otherErrors] = [this.tileError(), this.referenceError(), this.geographyError()].filter(Boolean);
+    return heading ? { kind: 'error', heading, detail: otherErrors.join(' ') } : { kind: 'ready' };
+  });
+  private readonly geographyRetries = signal(0);
   readonly ready = signal(false);
   readonly legend = signal(false);
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
+  readonly alertRowLabel = alertRowLabel;
   readonly hours = this.queue.hours;
   readonly mobileQueue = computed(() => this.navigation.path() === '/monitor/alerts');
   private readonly incidentFocus = signal<IncidentFocus | null>(null);
@@ -108,14 +116,15 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   constructor() {
     effect(onCleanup => {
       const endpoint = this.exportEndpoint();
-      this.geography.set(null);
+      this.geographyRetries();
+      if (untracked(this.geography)?.endpoint !== endpoint) this.geography.set(null);
       this.geographyError.set('');
       if (!endpoint) return;
       const request = timer(0, 60_000).pipe(exhaustMap(() =>
         this.http.get<WorkspaceMap>(endpoint).pipe(catchError(err => {
           if (err.status === 401) this.auth.sessionEnded();
           else if (err.status === 403) this.workspace.deny();
-          else this.geographyError.set('Could not load workspace geography. Trying again in a minute.');
+          else this.geographyError.set('Could not load the workspace boundary and map hierarchy.');
           return EMPTY;
         }))
       )).subscribe(info => {
@@ -147,24 +156,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const low = this.filters.lowBandwidth();
       const theme = this.appearance.theme();
       if (!this.ready() || !this.map) return;
-      const map = this.map;
-      for (const id of this.referenceIds) map.removeLayer(id);
-      this.referenceIds = [];
-      const url = geography ? geography.endpoint + '/tiles/reference/{z}/{x}/{y}.mvt?v=' +
-        encodeURIComponent(geography.info.version) + (low ? '&outline=1' : '') : undefined;
-      if (this.referenceUrl !== url) {
-        if (map.getSource('reference')) map.removeSource('reference');
-        if (url) map.addSource('reference', { type: 'vector', tiles: [url] });
-        this.referenceUrl = url;
-      }
-      map.setPaintProperty('background', 'background-color', mapColours[theme].canvas);
-      if (geography) {
-        const before = map.getLayer('detections') ? 'detections' : 'incident-members';
-        for (const layer of referenceLayers(geography.info, theme, low)) {
-          map.addLayer(layer, before);
-          this.referenceIds.push(layer.id);
-        }
-      }
+      this.updateReference(this.map, geography, theme, low);
     });
     effect(() => {
       const theme = this.appearance.theme();
@@ -267,6 +259,28 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     });
   }
 
+  private updateReference(map: LibreMap, geography: { endpoint: string; info: WorkspaceMap } | null,
+    theme: Theme, low: boolean, retry = false): void {
+    for (const id of this.referenceIds) map.removeLayer(id);
+    this.referenceIds = [];
+    const url = geography ? geography.endpoint + '/tiles/reference/{z}/{x}/{y}.mvt?v=' +
+      encodeURIComponent(geography.info.version) + (low ? '&outline=1' : '') : undefined;
+    if (retry || this.referenceUrl !== url) {
+      this.referenceError.set('');
+      if (map.getSource('reference')) map.removeSource('reference');
+      if (url) map.addSource('reference', { type: 'vector', tiles: [url] });
+      this.referenceUrl = url;
+    }
+    map.setPaintProperty('background', 'background-color', mapColours[theme].canvas);
+    if (geography) {
+      const before = map.getLayer('detections') ? 'detections' : 'incident-members';
+      for (const layer of referenceLayers(geography.info, theme, low)) {
+        map.addLayer(layer, before);
+        this.referenceIds.push(layer.id);
+      }
+    }
+  }
+
   private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
     const changed = theme !== this.appliedTheme;
     if (changed && map.getLayer('incident-members')) {
@@ -347,9 +361,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           const status = tileErrorStatus(event.error);
           if (status === 401) this.auth.sessionEnded();
           else if (status === 403) this.workspace.deny();
-          else if (event.sourceId === 'reference') this.error.set('Could not load reference tiles. Reload to try again.');
-          else this.tileError.set(unavailable);
-        } else this.error.set('Some map data could not load. Reload to try again.');
+          else if (event.sourceId === 'reference') this.referenceError.set(this.filters.lowBandwidth()
+            ? 'Could not load the workspace outline layer.'
+            : 'Could not load reference layers (boundaries, forest and exclusions).');
+          else this.tileError.set('Could not load the fire detections layer.');
+        } else this.error.set('The map display encountered an error. Reload to try again.');
       });
       map.on('click', event => {
         if (!map.getLayer('detections')) return;
@@ -379,19 +395,30 @@ export class DemoMap implements AfterViewInit, OnDestroy {
             'circle-stroke-width': 3, 'circle-stroke-color': interfaceColours[this.appearance.theme()].action }
         });
         this.ready.set(true);
-        this.timer = setInterval(() => {
-          if (map.getSource('detections')) {
-            if (this.tileError()) {
-              this.removeDetections(map);
-              this.tileError.set('');
-              this.updateLayers(map, this.appearance.theme(), this.url());
-            } else map.refreshTiles('detections');
-          }
-        }, 60_000);
+        this.timer = setInterval(() => this.refreshDetections(), 60_000);
       });
     } catch {
       this.error.set('The map needs WebGL. Turn on graphics acceleration in your browser and reload.');
     }
+  }
+
+  retryMapData(): void {
+    if (this.geographyError()) this.geographyRetries.update(count => count + 1);
+    if (this.referenceError() && this.map) {
+      // Recreate the source so failed tiles are requested from scratch.
+      this.updateReference(this.map, this.geography(), this.appearance.theme(), this.filters.lowBandwidth(), true);
+    }
+    if (this.tileError()) this.refreshDetections();
+  }
+
+  private refreshDetections(): void {
+    const map = this.map;
+    if (!map?.getSource('detections')) return;
+    if (this.tileError()) {
+      this.removeDetections(map);
+      this.tileError.set('');
+      this.updateLayers(map, this.appearance.theme(), this.url());
+    } else map.refreshTiles('detections');
   }
 
   private centerSelection(): void {

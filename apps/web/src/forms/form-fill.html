@@ -115,13 +115,15 @@
     @let lock = locked(f);
     @let issues = fieldProblems(f, path);
     @let hint = text(f.node['hint']);
-    <div class="form-field" [class.half]="layout(f)['width'] === 'half'" [class.invalid]="issues.length">
+    @let describedBy = ((hint && !lock ? id + '-hint ' : '') + (issues.length ? id + '-errors' : '')).trim() || null;
+    @let invalid = issues.length ? 'true' : null;
+    <div brnField class="form-field" [class.half]="layout(f)['width'] === 'half'" [class.invalid]="issues.length">
       @if (f.kind === 'multiple-choice' || (f.kind === 'single-choice' && widget(f) !== 'dropdown')) {
         <span class="form-label" [id]="id + '-label'">{{ name(f) }}@if (required(f, path) && !lock) { <span class="required"> (required)</span> }</span>
       } @else {
         <label hlmFieldLabel class="form-label" [for]="id">{{ name(f) }}@if (required(f, path) && !lock) { <span class="required"> (required)</span> }</label>
       }
-      @if (hint && !lock) { <small class="form-hint" [id]="id + '-hint'">{{ hint }}</small> }
+      @if (hint && !lock) { <small hlmFieldDescription class="form-hint" [id]="id + '-hint'">{{ hint }}</small> }
 
       @if (lock && f.kind !== 'photo' && f.kind !== 'file' && f.kind !== 'signature') {
         <p class="form-answer" [id]="id">{{ shown(f, path) }}</p>
@@ -130,11 +132,11 @@
           @case ('text') {
             @if (widget(f) === 'paragraph') {
               <textarea hlmTextarea [id]="id" [value]="textValue(f, path)" [attr.maxlength]="f.node['maxLength'] ?? null"
-                [attr.aria-describedby]="hint ? id + '-hint' : null" [attr.aria-invalid]="issues.length ? 'true' : null"
+                [forceInvalid]="!!issues.length"
                 (input)="set(f, path, $any($event.target).value)"></textarea>
             } @else {
               <input hlmInput [id]="id" [value]="textValue(f, path)" [attr.maxlength]="f.node['maxLength'] ?? null"
-                [attr.aria-describedby]="hint ? id + '-hint' : null" [attr.aria-invalid]="issues.length ? 'true' : null"
+                [forceInvalid]="!!issues.length"
                 (input)="set(f, path, $any($event.target).value)">
             }
           }
@@ -146,7 +148,7 @@
               <input hlmInput [id]="id" type="number" inputmode="decimal" [value]="textValue(f, path)"
                 [attr.min]="f.node['min'] ?? null" [attr.max]="f.node['max'] ?? null"
                 [attr.step]="stepOf(f)"
-                [attr.aria-describedby]="hint ? id + '-hint' : null" [attr.aria-invalid]="issues.length ? 'true' : null"
+                [forceInvalid]="!!issues.length"
                 (input)="setNumber(f, path, $any($event.target).value)">
               @if (widget(f) === 'stepper') {
                 <button hlmBtn type="button" variant="outline" size="sm" [attr.aria-label]="'More ' + name(f)" (click)="nudge(f, path, 1)">+</button>
@@ -155,29 +157,30 @@
             </div>
           }
           @case ('date') {
-            <input hlmInput [id]="id" type="date" [value]="textValue(f, path)" [attr.aria-invalid]="issues.length ? 'true' : null"
+            <input hlmInput [id]="id" type="date" [value]="textValue(f, path)" [forceInvalid]="!!issues.length"
               (change)="set(f, path, $any($event.target).value)">
           }
           @case ('time') {
-            <input hlmInput [id]="id" type="time" [value]="textValue(f, path)" [attr.aria-invalid]="issues.length ? 'true' : null"
+            <input hlmInput [id]="id" type="time" [value]="textValue(f, path)" [forceInvalid]="!!issues.length"
               (change)="set(f, path, $any($event.target).value)">
           }
           @case ('date-time') {
-            <input hlmInput [id]="id" type="datetime-local" [value]="toLocalInput(value(f, path))" [attr.aria-invalid]="issues.length ? 'true' : null"
+            <input hlmInput [id]="id" type="datetime-local" [value]="toLocalInput(value(f, path))" [forceInvalid]="!!issues.length"
               (change)="setDateTime(f, path, $any($event.target).value)">
           }
           @case ('single-choice') {
             @switch (widget(f)) {
               @case ('dropdown') {
                 <hlm-select [value]="textValue(f, path)" (valueChange)="set(f, path, $event || null)">
-                  <hlm-select-trigger [buttonId]="id" class="w-full">{{ value(f, path) ? choiceLabel(f, value(f, path)) : 'Choose one' }}</hlm-select-trigger>
+                  <hlm-select-trigger [buttonId]="id" [aria-invalid]="!!issues.length" class="w-full">{{ value(f, path) ? choiceLabel(f, value(f, path)) : 'Choose one' }}</hlm-select-trigger>
                   <hlm-select-content *hlmSelectPortal>
                     @for (c of choices(f, path); track c['key']) { <hlm-select-item [value]="c['key']">{{ text(c['label']) }}</hlm-select-item> }
                   </hlm-select-content>
                 </hlm-select>
               }
               @case ('buttons') {
-                <div class="choice-buttons" role="group" [attr.aria-labelledby]="id + '-label'" [id]="id" tabindex="-1">
+                <div class="choice-buttons" role="group" [attr.aria-labelledby]="id + '-label'" [id]="id" tabindex="-1"
+                  [attr.aria-describedby]="describedBy" [attr.aria-invalid]="invalid">
                   @for (c of choices(f, path); track c['key']) {
                     <button hlmBtn type="button" size="sm" [variant]="chosen(f, path, c['key']) ? 'primary' : 'outline'"
                       [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="set(f, path, chosen(f, path, c['key']) ? null : c['key'])">{{ text(c['label']) }}</button>
@@ -186,7 +189,7 @@
               }
               @default {
                 <hlm-radio-group [id]="id" tabindex="-1" [attr.aria-labelledby]="id + '-label'" [value]="value(f, path) ?? null"
-                  (valueChange)="set(f, path, $event)">
+                  [attr.aria-describedby]="describedBy" [attr.aria-invalid]="invalid" (valueChange)="set(f, path, $event)">
                   @for (c of choices(f, path); track c['key']) {
                     <label hlmLabel class="choice"><hlm-radio [value]="c['key']" [attr.aria-label]="text(c['label'])"><hlm-radio-indicator /></hlm-radio> {{ text(c['label']) }}</label>
                   }
@@ -196,7 +199,8 @@
             @if (!choices(f, path).length) { <small class="form-hint">Answer “{{ name(t.byKey.get(f.node['parent'])!) }}” first.</small> }
           }
           @case ('multiple-choice') {
-            <div class="choice-list" role="group" [attr.aria-labelledby]="id + '-label'" [id]="id" tabindex="-1">
+            <div class="choice-list" role="group" [attr.aria-labelledby]="id + '-label'" [id]="id" tabindex="-1"
+                  [attr.aria-describedby]="describedBy" [attr.aria-invalid]="invalid">
               @for (c of choices(f, path); track c['key']) {
                 @if (widget(f) === 'buttons') {
                   <button hlmBtn type="button" size="sm" [variant]="chosen(f, path, c['key']) ? 'primary' : 'outline'"
@@ -209,9 +213,9 @@
             </div>
             @if (!choices(f, path).length) { <small class="form-hint">Answer “{{ name(t.byKey.get(f.node['parent'])!) }}” first.</small> }
           }
-          @case ('point') { <fimra-shape-input kind="point" [inputId]="id" [value]="value(f, path)" [alertPoint]="alertPoint()" (changed)="set(f, path, $event)" /> }
-          @case ('track') { <fimra-shape-input kind="track" [inputId]="id" [value]="value(f, path)" (changed)="set(f, path, $event)" /> }
-          @case ('polygon') { <fimra-shape-input kind="polygon" [inputId]="id" [value]="value(f, path)" (changed)="set(f, path, $event)" /> }
+          @case ('point') { <fimra-shape-input kind="point" [inputId]="id" [describedBy]="describedBy" [invalid]="!!issues.length" [value]="value(f, path)" [alertPoint]="alertPoint()" (changed)="set(f, path, $event)" /> }
+          @case ('track') { <fimra-shape-input kind="track" [inputId]="id" [describedBy]="describedBy" [invalid]="!!issues.length" [value]="value(f, path)" (changed)="set(f, path, $event)" /> }
+          @case ('polygon') { <fimra-shape-input kind="polygon" [inputId]="id" [describedBy]="describedBy" [invalid]="!!issues.length" [value]="value(f, path)" (changed)="set(f, path, $event)" /> }
           @case ('calculated') { <output class="form-answer" [id]="id">{{ shown(f, path) }}</output> }
           @case ('alert-value') { <output class="form-answer" [id]="id">{{ shown(f, path) }}</output> }
           @default {
@@ -235,17 +239,21 @@
             @if (!lock) {
               @if (f.kind === 'signature') {
                 @if (!files(f, path).length) {
-                  <fimra-signature-pad [inputId]="id" [busy]="!!uploading()" (saved)="saveSignature(f, path, $event)" />
+                  <fimra-signature-pad [inputId]="id" [describedBy]="describedBy" [busy]="!!uploading()" (saved)="saveSignature(f, path, $event)" />
                 }
               } @else if (canAddFile(f, path)) {
                 <input [id]="id" type="file" class="form-file-input" [accept]="accept(f)" [multiple]="true" [disabled]="!!uploading()"
-                  [attr.aria-describedby]="hint ? id + '-hint' : null" (change)="addFiles(f, path, $any($event.target).files); $any($event.target).value = ''">
+                  [attr.aria-describedby]="describedBy" [attr.aria-invalid]="invalid" (change)="addFiles(f, path, $any($event.target).files); $any($event.target).value = ''">
               }
             }
           }
         }
       }
-      @for (problem of issues; track $index) { <small class="field-error">{{ problem.message }}</small> }
+      @if (issues.length) {
+        <hlm-field-error [id]="id + '-errors'" forceShow [announce]="false" class="grid gap-1">
+          @for (problem of issues; track $index) { <small class="field-error">{{ problem.message }}</small> }
+        </hlm-field-error>
+      }
     </div>
   </ng-template>
 } @else if (loadError()) {

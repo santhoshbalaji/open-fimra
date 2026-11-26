@@ -12,6 +12,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ViewEncapsulation, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { AnswerSession, FormTree, readForm, type EntryPath, type Node, type StoredAttachment } from '@open-fimra/form-schema/answers';
 import { toast } from '@spartan-ng/brain/sonner';
+import { BrnField } from '@spartan-ng/brain/field';
 import { firstValueFrom } from 'rxjs';
 import type { AlertRow } from '../alert-queue';
 import { AuthService } from '../auth';
@@ -77,7 +78,7 @@ export function toLocalInput(value: unknown): string {
  */
 @Component({
   selector: 'fimra-form-fill',
-  imports: [HlmButtonImports, HlmCheckboxImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports,
+  imports: [BrnField, HlmButtonImports, HlmCheckboxImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports,
     HlmSkeletonImports, HlmTextareaImports, NgTemplateOutlet, ShapeInput, SignaturePad],
   templateUrl: './form-fill.html',
   styleUrl: './forms.css',

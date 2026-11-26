@@ -18,9 +18,9 @@ function step(text) {
   console.log('- ' + text);
 }
 
-async function shot(page, name) {
+async function shot(page, name, scale = 'device') {
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  await page.screenshot({ path: `${SHOTS}/${name}.png`, scale });
 }
 
 // Flutter puts some text in the page and some in accessibility labels.
@@ -31,8 +31,9 @@ function shown(page, text, exact = false) {
 async function typeInto(page, label, value) {
   const box = page.getByRole('textbox', { name: label });
   await box.click();
-  await page.keyboard.press('Control+A');
-  await page.keyboard.type(value);
+  // The semantics control can receive the click before Flutter attaches its HTML input.
+  const editor = page.locator('input:focus, textarea:focus');
+  await editor.fill(value);
 }
 
 async function openApp(context) {
@@ -98,6 +99,23 @@ try {
     throw new Error(`Tile requests: ${tileStatuses.join(', ') || 'none'}`);
   }
   step(`The map loaded ${tileStatuses.length} tiles with the beat guard's token (HTTP ${[...new Set(tileStatuses)].join(', ')}).`);
+
+  await page.getByRole('button', { name: 'Map key', exact: true }).click();
+  await shown(page, 'Shape shows the forest class', true).waitFor();
+  const closeKey = page.getByRole('button', { name: 'Close', exact: true });
+  for (const colorScheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme });
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      await closeKey.waitFor();
+      await shot(page, `05-map-key-${colorScheme}-${viewport.width}`, 'css');
+    }
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.setViewportSize(phone.viewport);
+  await closeKey.click();
+  await closeKey.waitFor({ state: 'hidden' });
+  step('The visible Close button dismisses the map key.');
 
   await page.getByRole('tab', { name: 'Alerts' }).or(page.getByRole('button', { name: 'Alerts' })).first().click();
   await cards.first().click();

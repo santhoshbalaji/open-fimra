@@ -1,3 +1,4 @@
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -20,7 +21,7 @@ describe('Report and approval', () => {
   let http: HttpTestingController;
   beforeEach(() => {
     stubLayoutApis();
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(),
+    TestBed.configureTestingModule({ providers: [provideSpartanHlm(), provideHttpClient(), provideHttpClientTesting(),
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } }] });
     http = TestBed.inject(HttpTestingController);
   });
@@ -42,12 +43,35 @@ describe('Report and approval', () => {
     return { fixture, el, button };
   }
 
+  function dialogButton(text: string) {
+    return Array.from(document.querySelectorAll<HTMLButtonElement>('[role=alertdialog] button'))
+      .find(button => button.textContent.trim() === text)!;
+  }
+
   it('lets a supervising officer approve a report once', async () => {
     const { el, fixture, button } = render(report);
     expect(el.textContent).toContain('Version 1 · sent by Demo Beat Guard');
     expect(el.textContent).toContain('Under control');
     expect(el.textContent).toContain('A decision cannot be changed later.');
-    button('Approve')!.click();
+    const approve = button('Approve')!;
+    approve.focus();
+    approve.click();
+    fixture.detectChanges();
+    expect(document.querySelector('[role=alertdialog]')?.textContent).toContain('Approve this report?');
+    http.expectNone(workspace + '/submissions/' + report.id + '/approval');
+    dialogButton('Cancel').click();
+    await vi.waitFor(() => { fixture.detectChanges(); expect(document.activeElement).toBe(approve); });
+    http.expectNone(workspace + '/submissions/' + report.id + '/approval');
+    approve.click();
+    fixture.detectChanges();
+    const confirm = dialogButton('Approve report');
+    confirm.click();
+    confirm.click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    });
+    await fixture.whenStable();
     const post = http.expectOne(workspace + '/submissions/' + report.id + '/approval');
     expect(post.request.body).toEqual({ decision: 'approved', note: '' });
     post.flush({ ...report, approval: { decision: 'approved', note: '', by: 'Demo Division Officer', at: '2026-03-15T10:00:00Z' } });
@@ -56,6 +80,7 @@ describe('Report and approval', () => {
     expect(el.querySelector('.approval')!.textContent).toContain('Approved');
     expect(el.querySelector('.approval')!.textContent).toContain('Demo Division Officer');
     expect(button('Approve')).toBeUndefined();
+    expect(document.activeElement).toBe(el.querySelector('.approval [tabindex="-1"]'));
   });
 
   it('needs a note to return a report', async () => {
@@ -88,6 +113,13 @@ describe('Report and approval', () => {
   it('shows who decided first when another officer was quicker', async () => {
     const { el, fixture, button } = render(report);
     button('Approve')!.click();
+    fixture.detectChanges();
+    dialogButton('Approve report').click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    });
+    await fixture.whenStable();
     http.expectOne(workspace + '/submissions/' + report.id + '/approval').flush(
       { error: 'This submission already has a decision. Decisions never change.' }, { status: 409, statusText: 'Conflict' });
     await fixture.whenStable();

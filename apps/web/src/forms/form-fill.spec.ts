@@ -132,6 +132,27 @@ describe('Form renderer', () => {
     fixture.detectChanges();
     expect(el.textContent).toContain('Area burnt so far');
     expect(el.querySelector('.form-field.invalid')?.textContent).toContain('must be at least 0.');
+    const field = el.querySelector('#field-estimated_area')!;
+    expect(field.getAttribute('aria-describedby')).toBe('field-estimated_area-hint field-estimated_area-errors');
+    expect(el.querySelector('#field-estimated_area-hint')?.textContent).toContain('A rough estimate.');
+    expect(el.querySelector('#field-estimated_area-errors')?.textContent).toContain('must be at least 0.');
+  });
+
+  it('describes a missing dropdown answer on the focusable select button', () => {
+    const { el, press } = render();
+    press('Next');
+    press('Natural');
+    press('Next');
+    press('Next');
+    press('Send report');
+    const problem = Array.from(el.querySelectorAll<HTMLButtonElement>('#form-problems button'))
+      .find(button => button.textContent.includes('“Likely cause”'));
+    expect(problem).toBeDefined();
+    problem!.click();
+    TestBed.tick();
+    const trigger = el.querySelector('button#field-cause')!;
+    expect(trigger.getAttribute('aria-describedby')?.split(' ')).toContain('field-cause-errors');
+    expect(el.querySelector('#field-cause-errors')?.textContent).toContain('“Likely cause” is required.');
   });
 
   it('uploads photos to the alert before the report', async () => {
