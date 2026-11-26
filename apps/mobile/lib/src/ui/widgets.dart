@@ -4,27 +4,16 @@ import 'package:intl/intl.dart';
 
 import '../api/models.dart';
 import '../theme/app_theme.dart';
-
-/// Workflow steps that end an alert without closing it normally.
-const otherOutcomes = {'false_alarm', 'duplicate', 'controlled_burn', 'not_reachable'};
-
-IconData stepIcon(String step) => switch (step) {
-  'new' => Icons.notifications_active_outlined,
-  'closed' || 'verified' => Icons.check_circle_outline,
-  'extinguished' || 'controlled' => Icons.local_fire_department_outlined,
-  'first_report' || 'final_report' => Icons.description_outlined,
-  _ when otherOutcomes.contains(step) => Icons.do_not_disturb_on_outlined,
-  _ => Icons.schedule,
-};
+import '../theme/status_icons.dart';
 
 /// A status shown as an icon and a label, never colour alone.
 class StatusBadge extends StatelessWidget {
   const StatusBadge({super.key, required this.icon, required this.label, this.iconColour});
 
-  factory StatusBadge.step(String step, String label) => StatusBadge(icon: stepIcon(step), label: label);
+  factory StatusBadge.step(String label) => StatusBadge(icon: FimraStatusIcon.step, label: label);
 
   factory StatusBadge.overdue() =>
-      const StatusBadge(icon: Icons.warning_amber_rounded, label: 'Overdue', iconColour: FimraStatus.warning);
+      const StatusBadge(icon: FimraStatusIcon.overdue, label: 'Overdue', iconColour: FimraStatus.warning);
 
   final IconData icon;
   final String label;
@@ -156,8 +145,53 @@ class MessageView extends StatelessWidget {
   }
 }
 
-/// Times in the phone's own time zone, such as "25 Nov, 15:30".
-String formatTime(DateTime time) => DateFormat('d MMM, HH:mm').format(time.toLocal());
+final _reportingTime = DateFormat('d MMM y, h:mm', 'en_US');
+
+/// Times use the same reporting zone as the web app, Asia/Kolkata.
+String formatTime(DateTime time) {
+  final ist = time.toUtc().add(const Duration(hours: 5, minutes: 30));
+  final period = ist.hour < 12 ? 'am' : 'pm';
+  return '${_reportingTime.format(ist)} $period IST';
+}
+
+final _confidencePercentage = RegExp(r'^\d+(\.\d+)?$');
+
+/// VIIRS sends a confidence category and MODIS sends a percentage.
+String confidenceLabel(String value) {
+  final text = value.trim();
+  return switch (text.toLowerCase()) {
+    'l' || 'low' => 'Low',
+    'n' || 'nominal' => 'Nominal',
+    'h' || 'high' => 'High',
+    '' => 'Unknown',
+    _ => _confidencePercentage.hasMatch(text) ? '$text%' : text,
+  };
+}
+
+String sourceLabel(String source) => switch (source) {
+  'firms' => 'NASA FIRMS',
+  'manual' => 'Manual fire report',
+  'demo' => 'Demo data',
+  _ => source,
+};
+
+const _satelliteProducts = {
+  'VIIRS_SNPP': 'VIIRS (Suomi NPP)',
+  'VIIRS_NOAA20': 'VIIRS (NOAA-20)',
+  'VIIRS_NOAA21': 'VIIRS (NOAA-21)',
+  'MODIS': 'MODIS',
+};
+
+String productLabel(String product) {
+  final separator = product.lastIndexOf('_');
+  if (separator == -1) return product;
+  final instrument = _satelliteProducts[product.substring(0, separator)];
+  return switch (product.substring(separator + 1)) {
+    'NRT' when instrument != null => '$instrument, near real time',
+    'SP' when instrument != null => '$instrument, standard processing',
+    _ => product,
+  };
+}
 
 /// A short age such as "2 hours ago".
 String formatAge(DateTime time, DateTime now) {
