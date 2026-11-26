@@ -653,5 +653,20 @@
   "yourOwnAreaHasA": "Your own area has a thick outline.",
   "yourPhones": "Your phones",
   "zoomIn": "Zoom in",
-  "zoomOut": "Zoom out"
+  "zoomOut": "Zoom out",
+  "fireIntakeReport": "Fire intake report",
+  "actionTaken": "Action taken",
+  "damageAssessment": "Damage assessment",
+  "revisedDamageAssessment": "Revised damage assessment",
+  "reviseAssessmentArea": "Revise assessment of {area} ha",
+  "chooseProvisionalAssessment": "Choose a provisional damage assessment for this alert.",
+  "invalidAttributableArea": "The area attributable to this alert cannot exceed the total burnt area.",
+  "@reviseAssessmentArea": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "forestSurveyOfIndia": "Forest Survey of India"
 }

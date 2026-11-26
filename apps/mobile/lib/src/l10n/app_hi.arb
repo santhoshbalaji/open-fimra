@@ -321,5 +321,13 @@
   "yourOwnAreaHasA": "आपके क्षेत्र की सीमा मोटी रेखा में है।",
   "yourPhones": "आपके फ़ोन",
   "zoomIn": "बड़ा करें",
-  "zoomOut": "छोटा करें"
+  "zoomOut": "छोटा करें",
+  "fireIntakeReport": "आग की सूचना का विवरण",
+  "actionTaken": "की गई कार्रवाई",
+  "damageAssessment": "क्षति का आकलन",
+  "revisedDamageAssessment": "संशोधित क्षति आकलन",
+  "reviseAssessmentArea": "{area} हेक्टेयर का आकलन संशोधित करें",
+  "chooseProvisionalAssessment": "इस अलर्ट का अनंतिम क्षति आकलन चुनें।",
+  "invalidAttributableArea": "इस अलर्ट से जुड़ा क्षेत्रफल कुल जले हुए क्षेत्रफल से अधिक नहीं हो सकता।",
+  "forestSurveyOfIndia": "भारतीय वन सर्वेक्षण"
 }

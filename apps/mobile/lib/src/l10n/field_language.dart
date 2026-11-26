@@ -108,6 +108,9 @@ String workflowName(BuildContext context, String label) {
     'Assigned' => text.responseAssigned,
     'Flash update' => text.flashUpdate,
     'Response update' => text.responseUpdate,
+    'Fire intake report' => text.fireIntakeReport,
+    'Action taken' => text.actionTaken,
+    'Damage assessment' => text.damageAssessment,
     'Watch' => text.responseWatch,
     'Reopened' => text.responseReopened,
     'Non-forest' => text.nonForest,
@@ -145,6 +148,8 @@ String phoneStatus(BuildContext context, DeviceStatus status) {
 String fieldProblem(BuildContext context, String message) {
   final text = fieldText(context);
   return switch (message) {
+    'Choose a provisional damage assessment for this alert.' => text.chooseProvisionalAssessment,
+    'The area attributable to this alert cannot exceed the total burnt area.' => text.invalidAttributableArea,
     'No connection. Saved work stays on this phone.' => text.noConnectionSavedWork,
     'Could not save updates on this phone.' => text.couldNotSaveUpdates,
     'Waiting for a connection.' => text.waitingForConnection,

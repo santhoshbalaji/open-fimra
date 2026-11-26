@@ -1,0 +1,79 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "response-flash",
+  "version": 1,
+  "title": {"en": "Flash update", "hi": "मौके की त्वरित रिपोर्ट"},
+  "languages": ["en", "hi"],
+  "sections": [
+    { "key": "site", "title": {"en": "What the team saw", "hi": "दल ने क्या देखा"}, "items": [
+        {"key": "checked_at", "type": "date-time", "label": {"en": "When did the team check the site?", "hi": "दल ने मौके की जाँच कब की?"}, "required": true, "notInFuture": true},
+        {"key": "fire_status", "type": "text", "label": {"en": "What is happening now?", "hi": "अभी क्या हो रहा है?"}, "required": true, "maxLength": 300},
+        {"key": "site_location", "type": "point", "label": {"en": "Location checked", "hi": "जाँच का स्थान"}, "required": true},
+        {
+          "key": "fire_seen",
+          "type": "single-choice",
+          "label": {"en": "Was fire seen at this alert?", "hi": "क्या इस अलर्ट के स्थान पर आग दिखी?"},
+          "required": true,
+          "choices": [
+            {"key": "yes", "label": {"en": "Yes", "hi": "हाँ"}},
+            {"key": "no", "label": {"en": "No", "hi": "नहीं"}},
+            {"key": "unknown", "label": {"en": "Could not verify", "hi": "पुष्टि नहीं हो सकी"}}
+          ]
+        },
+        {
+          "key": "land_class",
+          "type": "single-choice",
+          "label": {"en": "Type of land", "hi": "भूमि का प्रकार"},
+          "required": true,
+          "showWhen": {"op": "equals", "field": "fire_seen", "value": "yes"},
+          "choices": [
+            {"key": "forest", "label": {"en": "Forest", "hi": "वन भूमि"}},
+            {"key": "agriculture", "label": {"en": "Agriculture", "hi": "कृषि भूमि"}},
+            {"key": "revenue", "label": {"en": "Revenue land", "hi": "राजस्व भूमि"}},
+            {"key": "industry", "label": {"en": "Industrial land", "hi": "औद्योगिक भूमि"}},
+            {"key": "other", "label": {"en": "Other", "hi": "अन्य"}}
+          ]
+        },
+        {
+          "key": "fire_type",
+          "type": "single-choice",
+          "label": {"en": "Type of fire", "hi": "आग का प्रकार"},
+          "required": true,
+          "showWhen": {"op": "equals", "field": "fire_seen", "value": "yes"},
+          "choices": [
+            {"key": "ground", "label": {"en": "Ground fire", "hi": "भूमिगत आग"}},
+            {"key": "surface", "label": {"en": "Surface fire", "hi": "सतही आग"}},
+            {"key": "crown", "label": {"en": "Crown fire", "hi": "वृक्षों के ऊपरी भाग में आग"}},
+            {"key": "other", "label": {"en": "Other", "hi": "अन्य"}}
+          ]
+        },
+        {"key": "other_fire_type", "type": "text", "label": {"en": "Describe the fire type", "hi": "आग का प्रकार बताएँ"}, "maxLength": 1000, "required": true, "showWhen": {"op": "all", "conditions": [{"op": "equals", "field": "fire_seen", "value": "yes"}, {"op": "equals", "field": "fire_type", "value": "other"}]}},
+        {
+          "key": "fire_cause",
+          "type": "single-choice",
+          "label": {"en": "Likely cause", "hi": "संभावित कारण"},
+          "required": true,
+          "showWhen": {"op": "equals", "field": "fire_seen", "value": "yes"},
+          "choices": [
+            {"key": "agriculture", "label": {"en": "Agriculture", "hi": "खेती"}},
+            {"key": "jhum", "label": {"en": "Shifting cultivation", "hi": "झूम खेती"}},
+            {"key": "lightning", "label": {"en": "Lightning", "hi": "आकाशीय बिजली"}},
+            {"key": "ntfp", "label": {"en": "Collection of forest produce", "hi": "लघु वनोपज का संग्रह"}},
+            {"key": "control_burn", "label": {"en": "Controlled burn", "hi": "नियंत्रित दहन"}},
+            {"key": "transmission", "label": {"en": "Power line", "hi": "बिजली की लाइन"}},
+            {"key": "unknown", "label": {"en": "Unknown", "hi": "अज्ञात"}},
+            {"key": "other", "label": {"en": "Other", "hi": "अन्य"}}
+          ]
+        },
+        {"key": "remarks", "type": "text", "label": {"en": "Remarks for the alert source", "hi": "अलर्ट भेजने वाले स्रोत के लिए टिप्पणी"}, "maxLength": 1000}
+    ] },
+    { "key": "response", "title": {"en": "Current response", "hi": "मौजूदा कार्रवाई"}, "items": [
+        {"key": "estimated_extent", "type": "text", "label": {"en": "How far has the fire spread?", "hi": "आग कितनी दूर तक फैली है?"}, "maxLength": 300},
+        {"key": "threats", "type": "text", "label": {"en": "What is at risk?", "hi": "किसे खतरा है?"}, "maxLength": 300},
+        {"key": "resources", "type": "text", "label": {"en": "People and equipment on site", "hi": "मौके पर लोग और उपकरण"}, "maxLength": 1000},
+        {"key": "help_needed", "type": "text", "label": {"en": "What help is needed?", "hi": "किस मदद की ज़रूरत है?"}, "maxLength": 300},
+        {"key": "site_photo", "type": "photo", "label": {"en": "Site photo", "hi": "मौके की तस्वीर"}}
+    ] }
+  ]
+}

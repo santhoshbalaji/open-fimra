@@ -1,0 +1,19 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "response-action",
+  "version": 1,
+  "title": {"en": "Action taken", "hi": "की गई कार्रवाई"},
+  "languages": ["en", "hi"],
+  "sections": [
+    { "key": "actions", "title": {"en": "Work completed", "hi": "पूरा किया गया काम"}, "items": [
+        {"key": "extinguished_at", "type": "date-time", "label": {"en": "When was the fire put out?", "hi": "आग कब बुझी?"}, "required": true, "notInFuture": true},
+        {"key": "work_done", "type": "text", "label": {"en": "What did the team do?", "hi": "दल ने क्या किया?"}, "maxLength": 1000, "required": true},
+        {"key": "resources_used", "type": "text", "label": {"en": "People and equipment used", "hi": "काम में लगे लोग और उपकरण"}, "maxLength": 1000},
+        {"key": "remaining_risk", "type": "text", "label": {"en": "What risks remain?", "hi": "कौन से खतरे बाकी हैं?"}, "maxLength": 1000},
+        {"key": "watch_plan", "type": "text", "label": {"en": "Who will watch the site and for how long?", "hi": "मौके की निगरानी कौन करेगा और कितने समय तक?"}, "maxLength": 1000},
+        {"key": "help_needed", "type": "text", "label": {"en": "What help is still needed?", "hi": "अब भी किस मदद की ज़रूरत है?"}, "maxLength": 1000},
+        {"key": "action_photo", "type": "photo", "label": {"en": "Photo after response", "hi": "कार्रवाई के बाद की तस्वीर"}}
+    ] }
+  ]
+}

@@ -84,7 +84,7 @@ SELECT jsonb_build_object('extended',w.extended_incident_response,'targets',COAL
 }
 
 func saveResponseSettings(ctx context.Context, tx pgx.Tx, access workspaceAccess, subject string, in responseSettings) error {
-	extended, err := selectResponseWorkflow(ctx, tx, access, in.Extended)
+	extended, err := selectResponseWorkflow(ctx, tx, access, subject, in.Extended)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ VALUES ($1,'user',$2,'incident.response_settings','workspace',$1::uuid::text,
 	return err
 }
 
-func selectResponseWorkflow(ctx context.Context, tx pgx.Tx, access workspaceAccess, enable bool) (bool, error) {
+func selectResponseWorkflow(ctx context.Context, tx pgx.Tx, access workspaceAccess, subject string, enable bool) (bool, error) {
 	// Serialize with the starter pack so form assignments are copied before
 	// the new version can be used by new alerts or incidents.
 	if _, err := tx.Exec(ctx, workflowFormsLock, access.workspaceID); err != nil {
@@ -119,6 +119,10 @@ func selectResponseWorkflow(ctx context.Context, tx pgx.Tx, access workspaceAcce
 		return false, err
 	}
 	if enable && !extended {
+		packEnabled, err := starterFormsEnabled(ctx, tx, access.workspaceID, false)
+		if err != nil {
+			return false, err
+		}
 		if _, err := tx.Exec(ctx, `
 INSERT INTO form_assignments(form_id,form_version_id,template_id,step,hierarchy_id,unit_paths,assigned_by)
 SELECT fa.form_id,fa.form_version_id,v2.id,fa.step,fa.hierarchy_id,fa.unit_paths,$2
@@ -130,6 +134,11 @@ WHERE f.workspace_id=$1 AND fa.template_id=workspace_workflow_template($1) ON CO
 		}
 		if _, err := tx.Exec(ctx, `UPDATE workspaces SET extended_incident_response=true WHERE id=$1`, access.workspaceID); err != nil {
 			return false, err
+		}
+		if packEnabled {
+			if _, err := enableStarterPack(ctx, tx, access, subject); err != nil {
+				return false, err
+			}
 		}
 	}
 	return extended || enable, nil

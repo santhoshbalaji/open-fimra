@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -83,11 +84,12 @@ func enableStarterPack(ctx context.Context, tx pgx.Tx, access workspaceAccess, s
 		return nil, err
 	}
 	var templateID int64
-	if err := tx.QueryRow(ctx, workspaceTemplate, access.workspaceID).Scan(&templateID); err != nil {
+	var extended bool
+	if err := tx.QueryRow(ctx, `SELECT id, workflow_template_extended(id) FROM (SELECT workspace_workflow_template($1) AS id) t`, access.workspaceID).Scan(&templateID, &extended); err != nil {
 		return nil, err
 	}
 	added := map[string][]packSkip{}
-	for _, form := range starterpack.Forms() {
+	for _, form := range starterForms(extended) {
 		var present bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM forms WHERE workspace_id = $1 AND form_key = $2)`,
 			access.workspaceID, form.Key).Scan(&present); err != nil {
@@ -129,8 +131,9 @@ WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3`, access.worksp
 			switch {
 			case !known:
 				skipped = append(skipped, packSkip{step, "The workspace's workflow has no step " + step + "."})
-			case taken:
-				// Adding a second form would change what the step asks for.
+			case taken && form.Key != starterpack.DamageAssessment:
+				// Damage assessments can share Final report with completion forms.
+				// Other starter forms leave occupied steps alone.
 				skipped = append(skipped, packSkip{step, "Another form is already filled in at this step."})
 			default:
 				if err := saveAssignment(ctx, tx, access, subject, formStep{formID: formID, versionID: versionID,
@@ -157,7 +160,11 @@ VALUES ($1, 'user', $2, 'starter_pack.enable', 'workspace', $3, jsonb_build_obje
 // the forms this request added, with the steps it skipped.
 func readPackState(ctx context.Context, tx pgx.Tx, workspaceID string, added map[string][]packSkip) (packState, error) {
 	state := packState{Enabled: true, Forms: []packForm{}}
-	for _, form := range starterpack.Forms() {
+	extended, err := hasExtendedWorkflow(ctx, tx, workspaceID)
+	if err != nil {
+		return state, err
+	}
+	for _, form := range starterForms(extended) {
 		item := packForm{Form: form.Key, Title: form.Title, Version: form.Version, Steps: form.Steps, Status: "missing"}
 		var present bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM forms WHERE workspace_id = $1 AND form_key = $2),
@@ -179,12 +186,34 @@ func readPackState(ctx context.Context, tx pgx.Tx, workspaceID string, added map
 
 // starterPackEnabled says whether every starter form is in the workspace.
 func starterPackEnabled(ctx context.Context, db rowQuerier, workspaceID string) (bool, error) {
+	extended, err := hasExtendedWorkflow(ctx, db, workspaceID)
+	if err != nil {
+		return false, err
+	}
+	return starterFormsEnabled(ctx, db, workspaceID, extended)
+}
+
+func starterFormsEnabled(ctx context.Context, db rowQuerier, workspaceID string, extended bool) (bool, error) {
 	keys := make([]string, 0)
-	for _, form := range starterpack.Forms() {
+	for _, form := range starterForms(extended) {
 		keys = append(keys, form.Key)
 	}
 	var missing int
 	err := db.QueryRow(ctx, `SELECT count(*) FROM unnest($2::text[]) k(key)
 WHERE NOT EXISTS (SELECT FROM forms f WHERE f.workspace_id = $1 AND f.form_key = k.key)`, workspaceID, keys).Scan(&missing)
 	return missing == 0, err
+}
+
+func hasExtendedWorkflow(ctx context.Context, db rowQuerier, workspaceID string) (bool, error) {
+	var extended bool
+	err := db.QueryRow(ctx, `SELECT COALESCE(workflow_template_extended(workspace_workflow_template($1)), false)`, workspaceID).Scan(&extended)
+	return extended, err
+}
+
+func starterForms(extended bool) []starterpack.Form {
+	forms := starterpack.Forms()
+	if extended {
+		return forms
+	}
+	return slices.DeleteFunc(forms, func(form starterpack.Form) bool { return form.Extended })
 }

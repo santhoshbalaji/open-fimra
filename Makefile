@@ -51,10 +51,10 @@ PSQL := $(DB_COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POST
 recreate-db ?= $(DB_COMPOSE) exec -T db sh -ec 'dropdb -U "$$POSTGRES_USER" --if-exists --force -- "$$1"; createdb -U "$$POSTGRES_USER" -- "$$1"' sh "$(1)"
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
-.PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records
+.PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records demo-response-forms
 .PHONY: backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key wizard-test-integration
 
-api-run api-test-integration ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+api-run api-test-integration ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records demo-response-forms backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 api-run: export FIMRA_OIDC_DISCOVERY_URL := $(FIMRA_OIDC_DISCOVERY_URL)
@@ -72,6 +72,7 @@ api-run: export FIMRA_WEB_URL := $(FIMRA_WEB_URL)
 api-run: export FIMRA_PUSH_SERVERS := $(FIMRA_PUSH_SERVERS)
 api-run: export FIMRA_PUSH_FCM_CREDENTIALS_FILE := $(FIMRA_PUSH_FCM_CREDENTIALS_FILE)
 api-run: export FIMRA_SETUP_CODE := $(FIMRA_SETUP_CODE)
+api-run: export FIMRA_SOURCE_FEEDBACK_CHOICES := $(FIMRA_SOURCE_FEEDBACK_CHOICES)
 api-run: export FIMRA_ATTACHMENT_STORE := $(FIMRA_ATTACHMENT_STORE)
 api-run: export FIMRA_ATTACHMENT_MAX_MB := $(FIMRA_ATTACHMENT_MAX_MB)
 api-run: export FIMRA_S3_ENDPOINT := $(FIMRA_S3_ENDPOINT)
@@ -196,7 +197,7 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: mail-up push-up ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration)$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration|TestResponseFormsIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
@@ -210,6 +211,9 @@ demo-incident-response: ## Replay fictional radio intake, satellite grouping, me
 
 demo-operations-records: ## Add fictional referral and preparedness records to Demo State
 	cd services/api && go run . demo-operations-records
+
+demo-response-forms: ## Load a fictional case with two assessment versions and two source receipts
+	cd services/api && go run . demo-response-forms
 
 demo-dispatch: ## Add the fictional reserve rules, crew shifts and example alerts to the demo workspace
 	$(PSQL) < seed/dispatch.sql

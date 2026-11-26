@@ -1,0 +1,38 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "damage-assessment",
+  "version": 1,
+  "title": {"en": "Damage assessment", "hi": "क्षति का आकलन"},
+  "languages": ["en", "hi"],
+  "description": {"en": "Use this form for the first assessment and any revision. Enter an area for this alert only if you can link it to this alert.", "hi": "पहले आकलन और उसके संशोधन के लिए यह फ़ॉर्म भरें। इस अलर्ट से जुड़ा क्षेत्रफल तभी भरें जब उसका संबंध स्पष्ट हो।"},
+  "sections": [
+    { "key": "area", "title": {"en": "Burnt area", "hi": "जला हुआ क्षेत्र"}, "items": [
+        {"key": "assessed_at", "type": "date-time", "label": {"en": "When was the area assessed?", "hi": "क्षेत्र का आकलन कब किया गया?"}, "required": true, "notInFuture": true},
+        {
+          "key": "measurement",
+          "type": "single-choice",
+          "label": {"en": "How was the area determined?", "hi": "क्षेत्रफल कैसे तय किया गया?"},
+          "required": true,
+          "choices": [
+            {"key": "surveyed", "label": {"en": "Surveyed", "hi": "सर्वेक्षण से"}},
+            {"key": "estimated", "label": {"en": "Estimated", "hi": "अनुमान से"}}
+          ]
+        },
+        {"key": "area_ha", "type": "number", "label": {"en": "Total burnt area in hectares", "hi": "कुल जला हुआ क्षेत्र, हेक्टेयर में"}, "min": 0, "max": 10000000, "decimals": 2, "unit": "ha", "required": true},
+        {"key": "method", "type": "text", "label": {"en": "Survey or estimate method", "hi": "सर्वेक्षण या अनुमान की विधि"}, "maxLength": 1000, "required": true},
+        {"key": "uncertainty", "type": "text", "label": {"en": "How uncertain is the figure?", "hi": "यह आँकड़ा कितना अनिश्चित है?"}, "maxLength": 1000, "required": true},
+        {"key": "alert_area_ha", "type": "number", "label": {"en": "Area attributable to this alert, in hectares", "hi": "इस अलर्ट से जुड़ा क्षेत्रफल, हेक्टेयर में"}, "min": 0, "max": 10000000, "decimals": 2, "unit": "ha"},
+        {"key": "area_basis", "type": "text", "label": {"en": "Why does this area belong to this alert?", "hi": "यह क्षेत्र इस अलर्ट से क्यों जुड़ा है?"}, "maxLength": 1000, "requireWhen": {"op": "answered", "field": "alert_area_ha"}}
+    ] },
+    { "key": "impacts", "title": {"en": "Damage and evidence", "hi": "क्षति और साक्ष्य"}, "items": [
+        {"key": "vegetation", "type": "text", "label": {"en": "Damage to trees and other plants", "hi": "पेड़ों और अन्य पौधों को हुई क्षति"}, "maxLength": 1000},
+        {"key": "wildlife", "type": "text", "label": {"en": "Damage to wildlife or habitat", "hi": "वन्यजीव या उनके आवास को हुई क्षति"}, "maxLength": 1000},
+        {"key": "property", "type": "text", "label": {"en": "Damage to crops, homes or other property", "hi": "फसलों, घरों या अन्य संपत्ति को हुई क्षति"}, "maxLength": 1000},
+        {"key": "people", "type": "text", "label": {"en": "Injuries or deaths", "hi": "घायल या मृत लोगों का विवरण"}, "maxLength": 1000},
+        {"key": "other_impacts", "type": "text", "label": {"en": "Other impacts", "hi": "अन्य प्रभाव"}, "maxLength": 1000},
+        {"key": "area_photo", "type": "photo", "label": {"en": "Photo of the burnt area", "hi": "जले हुए क्षेत्र की तस्वीर"}},
+        {"key": "impact_photo", "type": "photo", "label": {"en": "Photo of the damage", "hi": "क्षति की तस्वीर"}}
+    ] }
+  ]
+}

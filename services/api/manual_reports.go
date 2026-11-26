@@ -84,7 +84,8 @@ func (a api) manualFireReport(w http.ResponseWriter, r *http.Request) {
 	d := json.NewDecoder(strings.NewReader(string(body)))
 	d.DisallowUnknownFields()
 	if d.Decode(&in) != nil || d.Decode(new(any)) != io.EOF || !uuidPattern.MatchString(in.ID) ||
-		(in.Form != "" && in.Form != starterpack.ManualFireReport) || in.Step != "" || in.Version < 1 || len(in.Values) == 0 {
+		(in.Form != "" && in.Form != starterpack.ManualFireReport) || in.Step != "" ||
+		in.ProvisionalSubmissionID != nil || in.Version < 1 || len(in.Values) == 0 {
 		writeError(w, http.StatusBadRequest, "Provide a submission ID, the version of the manual fire report form and the values.")
 		return
 	}

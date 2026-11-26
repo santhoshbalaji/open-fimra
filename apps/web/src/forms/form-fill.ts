@@ -103,6 +103,7 @@ export class FormFill {
   readonly completesRecord = input(false);
   /** Earlier answers to keep. */
   readonly initial = input<Obj>({});
+  readonly provisionalSubmissionId = input<string>();
   /** The form file, when the caller has it already. */
   readonly definition = input<Obj | null>(null);
   readonly stepLabel = input('');
@@ -542,7 +543,7 @@ export class FormFill {
       return;
     }
     const body = { form: this.form(), version: this.version(), step: this.step(), values: session.answers,
-      ...(this.operationsRecord() ? { completesRecord: this.completesRecord() } : {}) };
+      ...(this.operationsRecord() ? { completesRecord: this.completesRecord() } : { provisionalSubmissionId: this.provisionalSubmissionId() }) };
     const sent = JSON.stringify(body);
     // A retry of the same answers keeps its ID, so the server can tell it is the same report.
     if (sent !== this.lastSent) {

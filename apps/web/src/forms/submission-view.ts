@@ -69,6 +69,27 @@ import { FormPresentation } from './form-presentation';
             }
           </fimra-state-region>
 
+          @if (s.provisionalAssessment; as p) {
+            <section class="grid gap-2 border-t border-divider pt-3">
+              <h3 class="font-semibold">{{ msg('Provisional damage assessment') }}</h3>
+              <dl class="submission-facts">
+                @if (p.areaHa !== null) {
+                  <div><dt>{{ msg('Provisional burnt area') }}</dt><dd>{{ msg('{0} ha', [area(p.areaHa)]) }}</dd></div>
+                }
+                @if (p.measurement) {
+                  <div><dt>{{ msg('How the area was measured') }}</dt><dd>{{ msg(p.measurement === 'surveyed' ? 'Surveyed' : 'Estimated') }}</dd></div>
+                }
+                @if (p.method) { <div><dt>{{ msg('Method') }}</dt><dd>{{ p.method }}</dd></div> }
+                @if (p.uncertainty) { <div><dt>{{ msg('Uncertainty') }}</dt><dd>{{ p.uncertainty }}</dd></div> }
+                <div><dt>{{ msg('Review decision') }}</dt><dd>{{ msg(labels[p.decision]) }}</dd></div>
+              </dl>
+              @if (navigation) {
+                <a class="report-alert-link" [routerLink]="navigation.href('/reports/field', { report: p.id, decision: 'all' })">
+                  {{ msg('Open the provisional report') }}
+                </a>
+              }
+            </section>
+          }
           <section [attr.aria-label]=" msg('Report timeline') " class="grid gap-2 border-t border-divider pt-3">
             <h3 class="font-semibold">{{ msg('Timeline') }}</h3>
             <fimra-timeline [events]="timeline()" [now]="nowDate()" />
@@ -246,6 +267,8 @@ export class SubmissionView {
   protected retryForm(): void {
     this.formAttempt.update(attempt => attempt + 1);
   }
+
+  protected area(value: number): string { return workspaceFormat.number(value); }
 
   time(value: string): string {
     return workspaceFormat.dateTime(new Date(value));

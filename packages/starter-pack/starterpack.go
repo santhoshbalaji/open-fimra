@@ -20,6 +20,15 @@ var files embed.FS
 // another source. Saving it makes an alert instead of filling in a step.
 const ManualFireReport = "manual-fire-report"
 
+const (
+	// ResponseFlash records what the team verified at an individual alert.
+	ResponseFlash = "response-flash"
+	// ResponseUpdate can be submitted each time a team checks in.
+	ResponseUpdate = "response-update"
+	// DamageAssessment is used for both the provisional report and its revisions.
+	DamageAssessment = "damage-assessment"
+)
+
 // Form is one starter form.
 type Form struct {
 	// Key is the form's id, such as first-report.
@@ -29,6 +38,8 @@ type Form struct {
 	Title string
 	// Steps are the default workflow steps the form is assigned to.
 	Steps []string
+	// Extended forms apply only to the extended incident workflow.
+	Extended bool
 	// Source is the exact text of the form file.
 	Source []byte
 }
@@ -62,8 +73,9 @@ func load() ([]Form, error) {
 	}
 	var manifest struct {
 		Forms []struct {
-			Form  string   `json:"form"`
-			Steps []string `json:"steps"`
+			Form     string   `json:"form"`
+			Steps    []string `json:"steps"`
+			Extended bool     `json:"extended"`
 		} `json:"forms"`
 	}
 	if err := json.Unmarshal(data, &manifest); err != nil {
@@ -87,7 +99,7 @@ func load() ([]Form, error) {
 			return nil, fmt.Errorf("forms/%s.json has the id %q", entry.Form, head.ID)
 		}
 		out = append(out, Form{Key: head.ID, Version: head.Version, Title: head.Title["en"],
-			Steps: append([]string{}, entry.Steps...), Source: source})
+			Steps: append([]string{}, entry.Steps...), Extended: entry.Extended, Source: source})
 	}
 	return out, nil
 }

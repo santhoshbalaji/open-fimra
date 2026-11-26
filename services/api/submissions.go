@@ -26,13 +26,14 @@ import (
 // queue and the workflow.
 
 type submissionRequest struct {
-	ID         string          `json:"id"`
-	Form       string          `json:"form"`
-	Version    int             `json:"version"`
-	Step       string          `json:"step"`
-	Values     json.RawMessage `json:"values"`
-	DeviceTime *time.Time      `json:"deviceTime"`
-	Location   *struct {
+	ID                      string          `json:"id"`
+	Form                    string          `json:"form"`
+	Version                 int             `json:"version"`
+	Step                    string          `json:"step"`
+	Values                  json.RawMessage `json:"values"`
+	DeviceTime              *time.Time      `json:"deviceTime"`
+	ProvisionalSubmissionID *string         `json:"provisionalSubmissionId"`
+	Location                *struct {
 		Longitude *float64 `json:"longitude"`
 		Latitude  *float64 `json:"latitude"`
 	} `json:"location"`
@@ -48,7 +49,7 @@ const submissionJSON = `jsonb_build_object('id', s.id, 'alertId', s.alert_id::te
     'form', f.form_key, 'version', v.version, 'step', s.step,
     'submittedBy', u.display_name, 'deviceTime', s.device_time, 'receivedAt', s.received_at,
     'location', CASE WHEN s.location IS NOT NULL THEN jsonb_build_object('longitude', ST_X(s.location), 'latitude', ST_Y(s.location)) END,
-    'values', s.answers,
+    'values', s.answers, 'provisionalAssessment', ` + provisionalAssessmentJSON + `,
     'approval', (SELECT jsonb_build_object('decision', ap.decision, 'note', ap.note, 'by', au.display_name, 'at', ap.decided_at)
         FROM approvals ap JOIN users au ON au.id = ap.user_id WHERE ap.submission_id = s.id))`
 
@@ -126,6 +127,10 @@ func (a api) submissions(w http.ResponseWriter, r *http.Request) {
 		if d.Decode(&input) != nil || d.Decode(new(any)) != io.EOF || !uuidPattern.MatchString(input.ID) ||
 			!formKeyPattern.MatchString(input.Form) || input.Version < 1 || (input.Step != "" && !stepSlug.MatchString(input.Step)) || len(input.Values) == 0 {
 			writeError(w, http.StatusBadRequest, "Provide a submission ID, a form, its version and the values.")
+			return
+		}
+		if parent := input.ProvisionalSubmissionID; parent != nil && !uuidPattern.MatchString(*parent) {
+			writeError(w, http.StatusBadRequest, "Provide a valid provisional submission ID.")
 			return
 		}
 		if p := input.Location; p != nil && (p.Latitude == nil || p.Longitude == nil || *p.Latitude < -90 || *p.Latitude > 90 || *p.Longitude < -180 || *p.Longitude > 180) {
@@ -256,8 +261,11 @@ WHERE a.id = $1`, alert, in.Form, in.Version).Scan(&workspaceID, &versionID, &fo
 	if len(problems) > 0 {
 		return false, problem(http.StatusUnprocessableEntity, "The answers do not fit the form.", problems...)
 	}
+	if err := checkAssessment(ctx, tx, in, alert, formID, answers); err != nil {
+		return false, err
+	}
 	return true, storeSubmission(ctx, tx, in, storedSubmission{workspaceID: workspaceID, versionID: versionID, alert: alert,
-		templateID: templateID, step: step, user: user, hash: hash, answers: answers, used: check.used})
+		templateID: templateID, step: step, user: user, hash: hash, answers: answers, used: check.used, provisionalID: in.ProvisionalSubmissionID})
 }
 
 // earlierSubmission takes the lock for a submission ID and looks for a
@@ -340,6 +348,7 @@ type storedSubmission struct {
 	step, user, hash      string
 	operationsRecord      *string
 	completesRecord       bool
+	provisionalID         *string
 	answers               map[string]any
 	used                  map[string][]string
 }
@@ -356,11 +365,11 @@ func storeSubmission(ctx context.Context, tx pgx.Tx, in submissionRequest, s sto
 	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO submissions (id, workspace_id, form_version_id, alert_id, incident_id, template_id, step, user_id,
-    device_time, location, answers, request_hash, operations_record_id, completes_record)
+    device_time, location, answers, request_hash, operations_record_id, completes_record, provisional_submission_id)
 SELECT $1, $2, $3, NULLIF($4, 0), COALESCE((SELECT incident_id FROM incident_members WHERE alert_id = $4),
     (SELECT incident_id FROM operations_records WHERE id = $13)), NULLIF($5::bigint, 0), NULLIF($6::text, ''), $7,
-    $8, CASE WHEN $9::float8 IS NOT NULL THEN ST_SetSRID(ST_Point($9, $10), 4326) END, $11, $12, $13, $14`,
-		in.ID, s.workspaceID, s.versionID, s.alert, s.templateID, s.step, s.user, in.DeviceTime, lon, lat, answerJSON, s.hash, s.operationsRecord, s.completesRecord); err != nil {
+    $8, CASE WHEN $9::float8 IS NOT NULL THEN ST_SetSRID(ST_Point($9, $10), 4326) END, $11, $12, $13, $14, $15`,
+		in.ID, s.workspaceID, s.versionID, s.alert, s.templateID, s.step, s.user, in.DeviceTime, lon, lat, answerJSON, s.hash, s.operationsRecord, s.completesRecord, s.provisionalID); err != nil {
 		return err
 	}
 	for field, ids := range s.used {

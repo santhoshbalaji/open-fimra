@@ -15,20 +15,22 @@ import (
 )
 
 type api struct {
-	pool         *pgxpool.Pool
-	queries      *db.Queries
-	logger       *slog.Logger
-	reader       ingestDB
-	uploadDir    string
-	exports      exportSettings
-	attachments  attachmentSettings
-	feedDB       feedDB
-	jobs         *river.Client[pgx.Tx]
-	emailEnabled bool
-	setup        *setupGuard
-	secrets      *settingsCipher
-	firms        *firmsKeys
-	push         pushSettings
+	pool            *pgxpool.Pool
+	queries         *db.Queries
+	logger          *slog.Logger
+	reader          ingestDB
+	uploadDir       string
+	exports         exportSettings
+	attachments     attachmentSettings
+	feedDB          feedDB
+	jobs            *river.Client[pgx.Tx]
+	emailEnabled    bool
+	setup           *setupGuard
+	secrets         *settingsCipher
+	firms           *firmsKeys
+	push            pushSettings
+	feedbackChoices feedbackChoices
+	feedbackSenders map[string]feedbackSender
 	// now is the clock for feed health. It is nil outside tests.
 	now func() time.Time
 }
@@ -87,6 +89,8 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	authed.Post("/api/v1/workspaces/{slug}/settings/dispatch-rules", a.dispatchRules)
 	authed.Put("/api/v1/workspaces/{slug}/settings/dispatch-rules/{id}/end", a.endDispatchRule)
 	authed.Get("/api/v1/workspaces/{slug}/alerts/{id}/history", a.workflow)
+	authed.Get("/api/v1/workspaces/{slug}/alerts/{id}/source-feedback", a.alertSourceFeedback)
+	authed.Post("/api/v1/workspaces/{slug}/alerts/{id}/source-feedback", a.alertSourceFeedback)
 	authed.Post("/api/v1/workspaces/{slug}/alerts/{id}/steps", a.workflow)
 	authed.Get("/api/v1/workspaces/{slug}/incidents", a.incidents)
 	authed.Get("/api/v1/workspaces/{slug}/incidents/{id}", a.incidents)

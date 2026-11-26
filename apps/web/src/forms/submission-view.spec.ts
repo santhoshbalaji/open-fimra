@@ -10,6 +10,7 @@ import { stubLayoutApis } from '../overlay-testing';
 import type { Submission } from './form-api';
 import { SubmissionView } from './submission-view';
 
+import damageAssessment from '../../../../packages/starter-pack/forms/damage-assessment.json';
 import firstReport from '../../../../packages/form-schema/examples/first-report.json';
 
 const workspace = 'https://api.test/api/v1/workspaces/demo';
@@ -42,8 +43,10 @@ describe('Report and approval', () => {
     fixture.detectChanges();
     http.expectOne(workspace + '/alerts/' + submission.alertId).flush({ beat_name: 'Beat 01', range_name: 'Demo Range' });
     // The report shows with the version it was filled in on.
-    http.expectOne(workspace + '/forms/first-report/versions/' + submission.version).flush({ form: 'first-report', version: 1,
-      status: 'published', definition: firstReport });
+    http.expectOne(workspace + '/forms/' + submission.form + '/versions/' + submission.version).flush({
+      form: submission.form, version: 1, status: 'published',
+      definition: submission.form === 'damage-assessment' ? damageAssessment : firstReport
+    });
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const button = (text: string) => Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent.trim() === text);
@@ -141,6 +144,23 @@ describe('Report and approval', () => {
     expect(el.textContent).toContain('Crew size');
     expect(el.textContent).toContain('4 people');
     expect(el.textContent).not.toContain('Updated report');
+  });
+
+  it('shows the returned provisional area next to revised figures before approval', () => {
+    const { el, button } = render({
+      ...report, form: 'damage-assessment', step: 'final_report',
+      values: { area_ha: 7.25, measurement: 'surveyed', method: 'Walked the perimeter', uncertainty: 'Clear track' },
+      provisionalAssessment: {
+        id: 'provisional', areaHa: 10.5, measurement: 'estimated', method: 'Estimated from the track',
+        uncertainty: 'Far edge hidden', decision: 'returned'
+      }
+    });
+    expect(el.querySelector('fimra-form-presentation')!.textContent).toContain('7.25');
+    expect(el.textContent).toContain('Provisional damage assessment');
+    expect(el.textContent).toContain('10.5 ha');
+    expect(el.textContent).toContain('Far edge hidden');
+    expect(el.textContent).toContain('Returned');
+    expect(button('Approve')).toBeDefined();
   });
 
   it('needs a note to return a report', async () => {

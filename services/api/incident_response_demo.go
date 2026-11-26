@@ -44,7 +44,7 @@ func incidentResponseDemo(ctx context.Context, cfg config) error {
 		if _, err := tx.Exec(ctx, "SET LOCAL jit=off"); err != nil {
 			return err
 		}
-		if _, err := selectResponseWorkflow(ctx, tx, access, true); err != nil {
+		if _, err := selectResponseWorkflow(ctx, tx, access, subject, true); err != nil {
 			return err
 		}
 		// These observations are spaced away from the regular demo replay.
