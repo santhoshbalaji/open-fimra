@@ -256,7 +256,7 @@
    "properties": {
     "code": "B04",
     "name": "Beat 04",
-    "parent_code": "R2"
+    "parent_code": "S02"
    },
    "geometry": {
     "type": "Polygon",
@@ -422,7 +422,7 @@
    "properties": {
     "code": "B06",
     "name": "Beat 06",
-    "parent_code": "R2"
+    "parent_code": "S03"
    },
    "geometry": {
     "type": "Polygon",
@@ -505,7 +505,7 @@
    "properties": {
     "code": "B07",
     "name": "Beat 07",
-    "parent_code": "R3"
+    "parent_code": "S04"
    },
    "geometry": {
     "type": "Polygon",
@@ -671,7 +671,7 @@
    "properties": {
     "code": "B09",
     "name": "Beat 09",
-    "parent_code": "R3"
+    "parent_code": "S05"
    },
    "geometry": {
     "type": "Polygon",
@@ -754,7 +754,7 @@
    "properties": {
     "code": "B10",
     "name": "Beat 10",
-    "parent_code": "R4"
+    "parent_code": "S06"
    },
    "geometry": {
     "type": "Polygon",
@@ -837,7 +837,7 @@
    "properties": {
     "code": "B11",
     "name": "Beat 11",
-    "parent_code": "R4"
+    "parent_code": "S07"
    },
    "geometry": {
     "type": "Polygon",
@@ -920,7 +920,7 @@
    "properties": {
     "code": "B12",
     "name": "Beat 12",
-    "parent_code": "R4"
+    "parent_code": "S08"
    },
    "geometry": {
     "type": "Polygon",
@@ -1003,7 +1003,7 @@
    "properties": {
     "code": "B13",
     "name": "Beat 13",
-    "parent_code": "R5"
+    "parent_code": "S09"
    },
    "geometry": {
     "type": "Polygon",
@@ -1169,7 +1169,7 @@
    "properties": {
     "code": "B15",
     "name": "Beat 15",
-    "parent_code": "R5"
+    "parent_code": "S10"
    },
    "geometry": {
     "type": "Polygon",
@@ -1252,7 +1252,7 @@
    "properties": {
     "code": null,
     "name": "Beat 16",
-    "parent_code": "R6"
+    "parent_code": "S11"
    },
    "geometry": {
     "type": "Polygon",
@@ -1335,7 +1335,7 @@
    "properties": {
     "code": "B17",
     "name": "Beat 17",
-    "parent_code": "R6"
+    "parent_code": "S12"
    },
    "geometry": {
     "type": "Polygon",
@@ -1418,7 +1418,7 @@
    "properties": {
     "code": "B18",
     "name": "Beat 18",
-    "parent_code": "R6"
+    "parent_code": "S13"
    },
    "geometry": {
     "type": "Polygon",
@@ -1584,7 +1584,7 @@
    "properties": {
     "code": "B20",
     "name": "Beat 20",
-    "parent_code": "R7"
+    "parent_code": "S14"
    },
    "geometry": {
     "type": "Polygon",
@@ -1667,7 +1667,7 @@
    "properties": {
     "code": "B21",
     "name": "Beat 21",
-    "parent_code": "R7"
+    "parent_code": "S15"
    },
    "geometry": {
     "type": "Polygon",

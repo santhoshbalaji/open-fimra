@@ -137,7 +137,8 @@ FOR UPDATE OF wi`, subject, slug, target, access.workspaceID).Scan(&active)
 	}
 	var visible bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM alert_roles($1,$2,$3)
-WHERE officer OR $4='staff')`, subject, slug, *alert, in.Source).Scan(&visible); err != nil {
+WHERE officer OR (role_slug='field_staff' AND $4='staff')
+              OR (role_slug='community_caller' AND $4='public'))`, subject, slug, *alert, in.Source).Scan(&visible); err != nil {
 		return 0, err
 	}
 	if !visible {

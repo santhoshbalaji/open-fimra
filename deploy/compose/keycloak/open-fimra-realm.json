@@ -236,6 +236,106 @@
       "firstName": "Demo",
       "lastName": "North Nodal Officer",
       "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b1",
+      "username": "duty.officer",
+      "enabled": true,
+      "email": "duty.officer@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Duty Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b2",
+      "username": "circle.reviewer",
+      "enabled": true,
+      "email": "circle.reviewer@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Circle Reviewer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b3",
+      "username": "division.delegate",
+      "enabled": true,
+      "email": "division.delegate@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Division Delegate",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b4",
+      "username": "range.officer",
+      "enabled": true,
+      "email": "range.officer@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Range Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b5",
+      "username": "section.forester",
+      "enabled": true,
+      "email": "section.forester@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Section Forester",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b6",
+      "username": "beat.alternate",
+      "enabled": true,
+      "email": "beat.alternate@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Beat Guard Alternate",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b7",
+      "username": "squad.leader",
+      "enabled": true,
+      "email": "squad.leader@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Seasonal Squad Leader",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b8",
+      "username": "community.caller",
+      "enabled": true,
+      "email": "community.caller@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Community Caller",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b9",
+      "username": "district.liaison",
+      "enabled": true,
+      "email": "district.liaison@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "District Liaison",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000ba",
+      "username": "river.officer",
+      "enabled": true,
+      "email": "river.officer@example.invalid",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "River Division Officer",
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }]
     }
   ]
 }

@@ -32,6 +32,8 @@ func runCommand(ctx context.Context, cfg config, args []string) error {
 		return nationalDemo(ctx, cfg)
 	case "demo-state-extracts":
 		return stateExtractDemo(ctx, cfg)
+	case "demo-replay":
+		return demoReplayCommand(ctx, cfg)
 	case "demo-response-forms":
 		return responseFormsDemo(ctx, cfg)
 	case "demo-incident-response":

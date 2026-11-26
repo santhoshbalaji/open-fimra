@@ -185,10 +185,21 @@ seed-test: ## Check the demo state is up to date, then load it and run the refer
 	$(GOOSE) up
 	@set -o pipefail; { \
 		$(demo-seed-sql) \
-		cat seed/demo-state/reference.sql seed/tests/reference-check.sql; \
+		cat seed/demo-state/operations-roles.sql seed/demo-state/reference.sql seed/tests/reference-check.sql; \
 		echo 'SET CONSTRAINTS ALL IMMEDIATE;'; \
 		echo 'ROLLBACK;'; \
 	} | $(PSQL)
+
+.PHONY: demo-replay demo-replay-test
+demo-replay demo-replay-test: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+demo-replay: export FIMRA_SETTINGS_KEY := $(FIMRA_SETTINGS_KEY)
+demo-replay: export FIMRA_SETTINGS_OLD_KEYS := $(FIMRA_SETTINGS_OLD_KEYS)
+
+demo-replay: db-migrate ## Populate a fresh demo workspace and check the synthetic operations
+	cd services/api && go run . demo-replay
+
+demo-replay-test: db-migrate ## Check the operations replay on an isolated copy of the demo workspace
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestDemoReplayIntegration$$' -count=1 -v .
 
 api-run: ## Run the core API on the development stack
 	cd services/api && go run .
@@ -197,7 +208,7 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: mail-up push-up ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration|TestResponseFormsIntegration)$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration|TestResponseFormsIntegration|TestDemoReplayIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }

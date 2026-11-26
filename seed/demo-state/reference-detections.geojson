@@ -52,7 +52,7 @@
     "description": "In the clearing inside forest F02, more than 500 m from the forest",
     "expected_forest_class": "outside",
     "expected_beats": [
-     "ds.c1.d2.r4.b11"
+     "ds.c1.d2.r4.s07.b11"
     ],
     "expected_triage": null,
     "expected_forest_code": null,
@@ -73,7 +73,7 @@
     "description": "Inside forest F02, between its hole and its edge",
     "expected_forest_class": "inside",
     "expected_beats": [
-     "ds.c1.d2.r4.b11"
+     "ds.c1.d2.r4.s07.b11"
     ],
     "expected_triage": null,
     "expected_forest_code": "F02",
@@ -136,8 +136,8 @@
     "description": "Inside forest F05, where two beats overlap",
     "expected_forest_class": "inside",
     "expected_beats": [
-     "ds.c2.d3.r6.b17",
-     "ds.c2.d4.r7.b20"
+     "ds.c2.d3.r6.s12.b17",
+     "ds.c2.d4.r7.s14.b20"
     ],
     "expected_triage": "overlapping_units",
     "expected_forest_code": "F05",
@@ -177,7 +177,7 @@
     "description": "Inside the brick kiln exclusion",
     "expected_forest_class": "fixed_heat_source",
     "expected_beats": [
-     "ds.c1.d2.r4.b12"
+     "ds.c1.d2.r4.s08.b12"
     ],
     "expected_triage": null,
     "expected_forest_code": null,

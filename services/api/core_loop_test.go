@@ -148,7 +148,12 @@ func checkReferenceMatches(t *testing.T, ctx context.Context, tx pgx.Tx, workspa
 	        <> ARRAY(SELECT p FROM unnest(r.expected_beats) p ORDER BY p)
 	       OR (m.forest_class = 'inside' AND (m.forest_feature_id IS NULL OR m.forest_distance_m IS DISTINCT FROM 0::real))
 	       OR (m.forest_class = 'near_edge' AND (m.forest_distance_m IS NULL OR m.forest_distance_m NOT BETWEEN 1 AND 500))
-	       OR (m.forest_class IS NOT NULL AND cardinality(m.layer_version_ids) <> 3)
+	       OR (m.forest_class IS NOT NULL AND m.layer_version_ids IS DISTINCT FROM ARRAY(
+	            SELECT v.id FROM layers l JOIN layer_versions v ON v.layer_id=l.id
+	            WHERE l.workspace_id=w.id AND v.status='published'
+	              AND l.slug IN ('territorial-units','forest','exclusions','protected-areas')
+	            ORDER BY v.id))
+	       OR (m.forest_class IS NOT NULL AND m.boundary_snapshot->'overlays' <> '[]'::jsonb)
 	       OR (r.id = 'inside' AND (cardinality(m.unit_paths) <> 5 OR
 	            m.hierarchy #>> '{territorial,beat,code}' IS DISTINCT FROM 'B05'))
 	`, workspace, source)

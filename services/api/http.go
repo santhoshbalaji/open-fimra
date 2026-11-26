@@ -53,7 +53,7 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	// Every signed-in core API call also checks the calling device, so a
 	// wiped phone is told to wipe on its next contact.
 	signedIn := router.With(auth.require, a.deviceGate)
-	authed := signedIn.With(a.stateWorkspaceOnly)
+	authed := signedIn.With(a.stateWorkspaceOnly, a.limitWorkspaceWrites)
 	authed.Get("/api/v1/me", a.me)
 	authed.Get("/api/v1/setup", a.setupInfo)
 	authed.Post("/api/v1/setup/bootstrap", a.bootstrap)
@@ -199,6 +199,38 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 		gis.Get("/collections/{collection}/items/{feature}", a.ogcItem)
 	})
 	return router
+}
+
+// Limited roles can read their assigned area. Community callers can also
+// submit public reports. Keep privileged accounts separate from these roles
+// because some write endpoints use the caller's full set of visible records.
+func (a api) limitWorkspaceWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slug := chi.URLParam(r, "slug")
+		if slug == "" || r.Method == http.MethodGet || r.Method == http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		caller := r.Context().Value(identityKey{}).(identity)
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		var blocked bool
+		err := a.reader.QueryRow(ctx, `
+SELECT COALESCE(bool_or(role_slug = 'district_liaison'
+    OR (role_slug = 'community_caller' AND NOT $3)), false)
+FROM alert_grants WHERE slug = $1 AND oidc_subject = $2`, slug, caller.Subject,
+			r.Method == http.MethodPost && r.URL.Path == "/api/v1/workspaces/"+slug+"/fire-intake").Scan(&blocked)
+		if err != nil {
+			a.logger.Error("Could not check workspace access", "error", err)
+			writeError(w, http.StatusInternalServerError, "Could not check workspace access.")
+			return
+		}
+		if blocked {
+			writeError(w, http.StatusForbidden, "Your role cannot make this change.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (a api) ready(w http.ResponseWriter, r *http.Request) {

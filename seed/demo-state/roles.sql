@@ -2,17 +2,17 @@
 -- Add the demo grants after load.sql. This file can be run again.
 
 INSERT INTO users (oidc_subject, username, display_name) VALUES
-  ('d0000000-0000-4000-8000-0000000000a1', 'state.admin', 'Demo State Administrator'),
+  ('d0000000-0000-4000-8000-0000000000a3', 'beat.guard', 'Demo Beat Guard'),
   ('d0000000-0000-4000-8000-0000000000a2', 'division.officer', 'Demo Division Officer'),
-  ('d0000000-0000-4000-8000-0000000000a3', 'beat.guard', 'Demo Beat Guard')
+  ('d0000000-0000-4000-8000-0000000000a1', 'state.admin', 'Demo State Administrator')
 ON CONFLICT (oidc_subject) DO NOTHING;
 
 INSERT INTO role_assignments (user_id, workspace_id, hierarchy_id, unit_path, role_slug)
-SELECT u.id, 'd0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000010', g.path::ltree, g.role
+SELECT u.id, 'd0000000-0000-4000-8000-000000000001', g.hierarchy::uuid, g.path::ltree, g.role
 FROM (VALUES
-    ('d0000000-0000-4000-8000-0000000000a1', 'state_admin', 'ds'),
-    ('d0000000-0000-4000-8000-0000000000a2', 'division_officer', 'ds.c1.d1'),
-    ('d0000000-0000-4000-8000-0000000000a3', 'field_staff', 'ds.c1.d1.r1.b01')
-) AS g (subject, role, path)
+    ('d0000000-0000-4000-8000-0000000000a1', 'state_admin', 'ds', 'd0000000-0000-4000-8000-000000000010'),
+    ('d0000000-0000-4000-8000-0000000000a2', 'division_officer', 'ds.c1.d1', 'd0000000-0000-4000-8000-000000000010'),
+    ('d0000000-0000-4000-8000-0000000000a3', 'field_staff', 'ds.c1.d1.r1.b01', 'd0000000-0000-4000-8000-000000000010')
+) AS g (subject, role, path, hierarchy)
 JOIN users u ON u.oidc_subject = g.subject
 ON CONFLICT DO NOTHING;
