@@ -3,6 +3,7 @@
 .guide-header, .group-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .guide-header { justify-content: space-between; }
 section { margin-block: 1.5rem; padding: 1.5rem; border: 1px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-card); }
+#workspace-components { padding: clamp(.75rem, 3vw, 1.5rem); }
 h2 { font-size: var(--text-title); font-weight: 600; margin-bottom: .75rem; }
 .group-row { margin-block: .75rem; }
 .group-row h3 { min-width: 5rem; }

@@ -1,0 +1,61 @@
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--spacing) * 2); }
+.table-scroll {
+  overflow: auto;
+  max-block-size: 26rem;
+  scroll-padding-block-start: calc(var(--table-row-height) + var(--spacing) * 2);
+  border: 1px solid var(--table-row-divider);
+  border-radius: var(--role-radius-card);
+}
+table { border-collapse: separate; border-spacing: 0; inline-size: 100%; }
+thead { position: sticky; inset-block-start: 0; z-index: 1; background: var(--role-surface-raised); }
+tr { height: var(--table-row-height); }
+th, td {
+  padding: var(--spacing) calc(var(--spacing) * 2);
+  border-block-end: 1px solid var(--table-row-divider);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+th:not(.selection), td:not(.selection) { min-inline-size: 6rem; }
+tbody tr:last-child > * { border-block-end: 0; }
+td, dd { font-variant-numeric: tabular-nums; }
+.sort { white-space: normal; text-align: start; justify-content: start; height: auto; }
+.selected { background: var(--table-row-selected); }
+summary, .choices label, .pick {
+  box-sizing: border-box;
+  min-block-size: var(--target-web);
+  min-inline-size: var(--target-web);
+  padding: var(--spacing);
+}
+summary {
+  align-content: center;
+  padding-inline: calc(var(--spacing) * 2);
+  border: 1px solid var(--role-control-boundary);
+  border-radius: var(--role-radius-control);
+  cursor: pointer;
+}
+.choices { margin-block-start: var(--spacing); }
+.choices label, .pick { display: flex; align-items: center; gap: var(--spacing); cursor: pointer; }
+.pick { justify-content: center; }
+input[type=checkbox] { accent-color: var(--role-action); inline-size: 1rem; block-size: 1rem; flex-shrink: 0; }
+summary:focus-visible, .table-scroll:focus-visible, input:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus);
+  outline-offset: var(--focus-offset);
+}
+.result-card {
+  display: grid;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 3);
+  border: 1px solid var(--table-row-divider);
+  border-radius: var(--role-radius-card);
+  overflow-wrap: anywhere;
+}
+.result-card dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: calc(var(--spacing) * 2);
+}
+.result-card dt { color: var(--role-text-secondary); }
+button[aria-disabled=true] { color: var(--role-text-secondary); cursor: default; }
+th:has(.sort), .selection, .actions { padding-block: 0; }
+.selection { inline-size: 1%; }
+thead .sort:focus-visible { outline-offset: calc(-1 * var(--focus-width)); }

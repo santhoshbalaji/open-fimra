@@ -17,6 +17,7 @@ try {
   for (const theme of ['light', 'dark']) {
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       const run = `${theme}-${viewport.width}`;
+      const phone = viewport.width < 768;
       const page = await browser.newPage({ viewport, colorScheme: theme, reducedMotion: 'reduce' });
       const errors = [];
       page.setDefaultTimeout(90000);
@@ -60,6 +61,104 @@ try {
       await page.getByText('Demo beat · 2 detections', { exact: true }).filter({ visible: true }).waitFor();
       await scan('guide');
       await save('guide', true);
+
+      const workspace = page.locator('#workspace-components');
+      const comfortable = workspace.getByRole('article', { name: 'Comfortable' });
+      const compact = workspace.getByRole('article', { name: 'Compact' });
+      const alerts = comfortable.locator('fimra-data-table');
+      const filters = comfortable.locator('fimra-filter-bar');
+      const row = id => alerts.getByRole('button', { name: 'View ' + id });
+      const workspaceButton = name => comfortable.getByRole('button', { name, exact: true });
+      const dimensions = example => example.evaluate(node => {
+        const style = getComputedStyle(node);
+        return [style.getPropertyValue('--table-row-height').trim(), style.getPropertyValue('--filter-chip-height').trim()];
+      });
+      assert.deepEqual(await dimensions(comfortable), ['48px', '40px']);
+      assert.deepEqual(await dimensions(compact), ['36px', '32px']);
+      for (const [name, example] of [['comfortable', comfortable], ['compact', compact]]) {
+        await example.screenshot({ path: join(SHOTS, `${run}-workspace-${name}.png`), animations: 'disabled' });
+      }
+
+      const bengali = alerts.locator(phone ? 'p[lang=bn]' : 'th[lang=bn]');
+      await bengali.waitFor();
+      if (phone) {
+        const touch = await page.context().newCDPSession(page);
+        await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+        for (const name of ['Refresh alerts', 'Filters', 'Show all activity']) {
+          const button = workspaceButton(name);
+          const height = await button.evaluate(node => node.getBoundingClientRect().height);
+          assert.ok(height >= 44, `${name} has a 44 px touch target (measured ${height} px).`);
+        }
+        assert.ok(await bengali.evaluate(node => {
+          node.style.fontSize = '200%';
+          node.style.lineHeight = '1.5';
+          const box = node.getBoundingClientRect();
+          const line = parseFloat(getComputedStyle(node).lineHeight);
+          const wraps = box.height >= line * 2 && node.scrollWidth <= node.clientWidth;
+          node.style.removeProperty('font-size');
+          node.style.removeProperty('line-height');
+          return wraps;
+        }), 'The Bengali place label wraps at 200% text size.');
+        assert.equal(await alerts.getByRole('table').count(), 0);
+      } else {
+        assert.equal(await alerts.locator('thead').evaluate(node => getComputedStyle(node).position), 'sticky');
+        assert.equal(await alerts.getByRole('columnheader', { name: /Last seen/ }).getAttribute('aria-sort'), 'descending');
+      }
+
+      await alerts.locator('summary').press('Enter');
+      const statusColumn = alerts.getByRole('checkbox', { name: 'Status', exact: true });
+      await statusColumn.press('Space');
+      assert.equal(await statusColumn.isChecked(), false);
+      if (!phone) await alerts.getByRole('columnheader', { name: 'Status' }).waitFor({ state: 'hidden' });
+      await scan('column choices');
+      await statusColumn.press('Space');
+      await alerts.locator('summary').press('Enter');
+
+      const pick = alerts.getByRole('checkbox', { name: /Select Cedar ridge/ });
+      await pick.press('Space');
+      assert.equal(await pick.isChecked(), true);
+      await workspaceButton('Next').press('Enter');
+      await comfortable.getByText(/Showing data from .*IST, refreshing/).waitFor();
+      assert.ok(await row('A-601').isVisible(), 'Prior rows stay visible during refresh.');
+      await row('A-603').waitFor();
+      await workspaceButton('Next').press('Enter');
+      await row('A-605').waitFor();
+      await workspaceButton('Previous').press('Enter');
+      await row('A-603').waitFor();
+      await workspaceButton('Previous').press('Enter');
+      await row('A-601').waitFor();
+      assert.equal(await pick.isChecked(), true);
+      await comfortable.getByRole('button', { name: /Last seen.*sort ascending/ }).press('Enter');
+      await row('A-606').waitFor();
+      if (!phone) {
+        assert.equal(await alerts.getByRole('columnheader', { name: /Last seen/ }).getAttribute('aria-sort'), 'ascending');
+      }
+      await comfortable.getByText('Sorted by Last seen, ascending', { exact: true }).waitFor();
+
+      let filterFields = filters;
+      if (phone) {
+        await workspaceButton('Filters').press('Enter');
+        filterFields = page.getByRole('dialog', { name: 'Filters' });
+        await focused(filterFields.getByRole('heading', { name: 'Filters' }));
+        await scan('filter sheet');
+      }
+      await filterFields.getByRole('searchbox', { name: 'Find a place' }).fill('Cedar');
+      if (phone) {
+        await page.keyboard.press('Escape');
+        await focused(workspaceButton('Filters'));
+      }
+      await alerts.getByRole('button', { name: 'View A-601' }).waitFor();
+      await filters.getByRole('button', { name: 'Remove filter Place: Cedar' }).press('Enter');
+      await focused(filters.getByRole('button', { name: 'Remove filter Status: Open' }));
+      await filters.getByRole('button', { name: 'Clear all filters' }).press('Enter');
+      await filters.getByText('No active filters', { exact: true }).filter({ visible: true }).first().waitFor();
+
+      await workspaceButton('Show all activity').press('Enter');
+      assert.equal(await workspaceButton('Show milestones').getAttribute('aria-expanded'), 'true');
+      await comfortable.getByText('Field note added', { exact: true }).waitFor();
+      await scan('full activity');
+      await workspaceButton('Show milestones').press('Enter');
+      await comfortable.getByText('Field note added', { exact: true }).waitFor({ state: 'hidden' });
 
       await button('Open dialog').press('Enter');
       await focused(heading('Close this alert?'));

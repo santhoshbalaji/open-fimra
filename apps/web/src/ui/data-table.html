@@ -1,0 +1,137 @@
+<ng-template #sortButton let-column>
+  <button type="button" hlmBtn variant="ghost" class="sort"
+    [attr.aria-disabled]="refreshing() || null" (click)="sortBy(column)">
+    {{ column.label }}
+    <svg [fimraIcon]="direction(column) === 'ascending' ? 'arrow-up' : direction(column) === 'descending' ? 'arrow-down' : 'chevron-down'"
+      aria-hidden="true" class="size-4 shrink-0"></svg>
+    <span class="sr-only">
+      @if (direction(column) === 'ascending') { (sort descending) }
+      @else { (sort ascending) }
+    </span>
+  </button>
+</ng-template>
+<ng-template #pickRow let-row>
+  <label class="pick">
+    <input type="checkbox" [checked]="isSelected(row)" (change)="toggleSelection([row], $any($event.target).checked)">
+    <span class="sr-only">Select <span [attr.lang]="rowLanguage()?.(row) ?? null">{{ rowLabel()(row) }}</span></span>
+  </label>
+</ng-template>
+<ng-template #pickPage>
+  <label class="pick">
+    <input type="checkbox" [checked]="allSelected()" [indeterminate]="pageSelectionCount() > 0 && !allSelected()"
+      [disabled]="!page().rows.length" (change)="toggleSelection(page().rows, $any($event.target).checked)">
+    <span [class.sr-only]="!cards()">Select all rows on this page</span>
+  </label>
+</ng-template>
+<ng-template #cellValue let-column="column" let-row="row">
+  @if (column.cell; as cell) {
+    <ng-container [ngTemplateOutlet]="cell" [ngTemplateOutletContext]="{ $implicit: row }" />
+  } @else { {{ column.value(row) }} }
+</ng-template>
+
+<fimra-state-region [state]="state()" (retry)="retry.emit()">
+  <div class="grid gap-2">
+    <div class="toolbar">
+      <details>
+        <summary>Columns<span class="sr-only"> in {{ caption() }}</span></summary>
+        <fieldset class="choices">
+          <legend class="sr-only">Visible columns</legend>
+          @for (column of columns(); track column.id) {
+            <label>
+              <input type="checkbox" [checked]="isVisible(column)" [disabled]="!canHide(column)"
+                (change)="toggleColumn(column)">
+              {{ column.label }}
+            </label>
+          }
+        </fieldset>
+      </details>
+      @if (cards() && selected()) {
+        <ng-container [ngTemplateOutlet]="pickPage" />
+      }
+      <fimra-live-status [message]="sortLabel()" class="text-body text-text-secondary" />
+      @if (selected()) {
+        <span class="text-body text-text-secondary">{{ selectionLabel() }}</span>
+        <fimra-live-status [message]="selectionStatus()" class="sr-only" />
+      }
+    </div>
+    @if (cards()) {
+      <div class="toolbar">
+        @for (column of columns(); track column.id) {
+          @if (column.sortable) {
+            <ng-container [ngTemplateOutlet]="sortButton" [ngTemplateOutletContext]="{ $implicit: column }" />
+          }
+        }
+      </div>
+      <ul role="list" [attr.aria-label]="caption()" class="grid gap-2">
+        @for (row of page().rows; track rowKey()(row)) {
+          <li class="result-card" [class.selected]="isSelected(row)">
+            <div class="flex items-center gap-2">
+              @if (selected()) { <ng-container [ngTemplateOutlet]="pickRow" [ngTemplateOutletContext]="{ $implicit: row }" /> }
+              <p class="min-w-0 font-semibold" [attr.lang]="rowLanguage()?.(row) ?? null">{{ rowLabel()(row) }}</p>
+            </div>
+            <dl>
+              @for (column of visibleColumns(); track column.id) {
+                @if (!column.rowHeading) {
+                  <div>
+                    <dt>{{ column.label }}</dt>
+                    <dd><ng-container [ngTemplateOutlet]="cellValue" [ngTemplateOutletContext]="{ column, row }" /></dd>
+                  </div>
+                }
+              }
+            </dl>
+            <ng-container [ngTemplateOutlet]="rowActions() ?? null" [ngTemplateOutletContext]="{ $implicit: row }" />
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="table-scroll" role="region" [attr.aria-label]="caption() + ', scrollable table'" tabindex="0">
+        <table>
+          <caption class="sr-only">{{ caption() }}</caption>
+          <thead>
+            <tr>
+              @if (selected()) {
+                <th scope="col" class="selection">
+                  <ng-container [ngTemplateOutlet]="pickPage" />
+                </th>
+              }
+              @for (column of visibleColumns(); track column.id) {
+                <th scope="col" [attr.aria-sort]="direction(column)">
+                  @if (column.sortable) {
+                    <ng-container [ngTemplateOutlet]="sortButton" [ngTemplateOutletContext]="{ $implicit: column }" />
+                  } @else { {{ column.label }} }
+                </th>
+              }
+              @if (rowActions()) { <th scope="col">Actions</th> }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of page().rows; track rowKey()(row)) {
+              <tr [class.selected]="isSelected(row)">
+                @if (selected()) {
+                  <td class="selection"><ng-container [ngTemplateOutlet]="pickRow" [ngTemplateOutletContext]="{ $implicit: row }" /></td>
+                }
+                @for (column of visibleColumns(); track column.id) {
+                  @if (column.rowHeading) {
+                    <th scope="row" [attr.lang]="rowLanguage()?.(row) ?? null"><ng-container [ngTemplateOutlet]="cellValue" [ngTemplateOutletContext]="{ column, row }" /></th>
+                  } @else {
+                    <td><ng-container [ngTemplateOutlet]="cellValue" [ngTemplateOutletContext]="{ column, row }" /></td>
+                  }
+                }
+                @if (rowActions(); as actions) {
+                  <td class="actions"><ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: row }" /></td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <div role="group" [attr.aria-label]="caption() + ' pages'" class="toolbar">
+      <button type="button" hlmBtn variant="outline" [attr.aria-disabled]="!canGoBack()"
+        (click)="previousPage()">Previous</button>
+      <fimra-live-status [message]="pageLabel()" class="text-body text-text-secondary" />
+      <button type="button" hlmBtn variant="outline" [attr.aria-disabled]="!canGoNext()"
+        (click)="nextPage()">Next</button>
+    </div>
+  </div>
+</fimra-state-region>
