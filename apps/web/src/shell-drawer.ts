@@ -10,11 +10,11 @@ import { SidePanel } from './ui/side-panel';
   selector: 'fimra-shell-drawer',
   imports: [NgTemplateOutlet, HlmButton, SidePanel],
   template: `
-    <fimra-side-panel [heading]=" msg('Destinations') " [sheetOnly]="true" (closed)="drawerClosed()">
+    <fimra-side-panel [heading]="msg('Destinations')" [closeLabel]="msg('Close')" [sheetOnly]="true" (closed)="drawerClosed()">
       <div class="shell-drawer">
         <p>{{ scope() }}</p>
         <nav [attr.aria-label]=" msg('Destinations') ">
-          <ng-container *ngTemplateOutlet="links(); context: { close: dismiss }" />
+          <ng-container *ngTemplateOutlet="links(); context: { close: dismiss, rail: false }" />
         </nav>
         <button hlmBtn variant="ghost" (click)="appearance.toggle()" [attr.aria-pressed]="appearance.theme() === 'dark'">{{ msg('Dark theme') }}</button>
       </div>
@@ -25,7 +25,7 @@ export class ShellDrawer {
   protected readonly msg = translate;
   readonly request = input.required<{ trigger: HTMLElement }>();
   readonly scope = input.required<string>();
-  readonly links = input.required<TemplateRef<{ close: (path: DestinationPath, event: MouseEvent) => void }>>();
+  readonly links = input.required<TemplateRef<{ close: (path: DestinationPath, event: MouseEvent) => void; rail: boolean }>>();
   readonly destinationClosed = output<void>();
   readonly appearance = inject(ThemeService);
   private readonly panel = viewChild(SidePanel);

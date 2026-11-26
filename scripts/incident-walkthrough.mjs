@@ -135,13 +135,16 @@ async function checkKeyboardAction(page, context, incident, listResponse) {
   }
   const save = workflow.getByRole('button', { name: 'Save Acknowledged', exact: true });
   await tabTo(page, save);
-  const [saved] = await Promise.all([
-    page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/incidents/' + incident.id + '/steps')),
+  const [alertsMoved] = await Promise.all([
+    page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/incidents/' + incident.id + '/steps'))
+      .then(async response => {
+        assert.equal(response.status(), 200);
+        const result = await response.json();
+        return result.alertsMoved;
+      }),
     page.keyboard.press('Enter')
   ]);
-  assert.equal(saved.status(), 200);
   await expect(workflow.getByText('Saved: Acknowledged.').locator('..')).toBeFocused();
-  const { alertsMoved } = await saved.json();
   assert.equal(alertsMoved, items.filter(item => item.status === 'new' && item.id !== staged?.id).length);
   await expect(workflow.getByText(alertsMoved + (alertsMoved === 1 ? ' alert moved.' : ' alerts moved.'), { exact: true })).toBeVisible();
   await expect(workflow.getByText('Moved from New with the incident.').first()).toBeVisible();

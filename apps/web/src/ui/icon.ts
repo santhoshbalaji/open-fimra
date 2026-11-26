@@ -3,7 +3,8 @@ import {
   lucideArrowDown, lucideArrowUp, lucideGripVertical, lucideTrash2, lucideUndo2, lucideBell, lucideBellOff, lucideCheck, lucideChevronDown, lucideChevronRight, lucideCircleAlert, lucideCircleCheck,
   lucideCircleX, lucideClock, lucideDownload, lucideEye, lucideEyeOff, lucideInfo, lucideKeyRound, lucideLayers,
   lucideFilePenLine, lucideListOrdered, lucideLoaderCircle, lucideLock, lucideLogOut, lucideMailCheck, lucideMailX, lucideMaximize, lucideMinus, lucideMoon,
-  lucidePlus, lucideSettings, lucideSun, lucideTriangleAlert
+  lucideMap, lucideFlame, lucideFileChartColumn, lucideLayoutDashboard, lucidePanelLeftClose, lucidePanelLeftOpen,
+  lucideSmartphone, lucidePlus, lucideSettings, lucideSun, lucideTriangleAlert
 } from '@ng-icons/lucide';
 
 // Only the icons listed here are bundled. Add one by importing it above.
@@ -15,6 +16,8 @@ const icons = {
   'info': lucideInfo, 'key-round': lucideKeyRound, 'layers': lucideLayers, 'loader-circle': lucideLoaderCircle,
   'file-pen-line': lucideFilePenLine, 'list-ordered': lucideListOrdered, 'lock': lucideLock, 'log-out': lucideLogOut, 'mail-check': lucideMailCheck, 'mail-x': lucideMailX,
   'maximize': lucideMaximize, 'minus': lucideMinus, 'moon': lucideMoon, 'plus': lucidePlus, 'settings': lucideSettings,
+  'map': lucideMap, 'flame': lucideFlame, 'file-chart-column': lucideFileChartColumn, 'layout-dashboard': lucideLayoutDashboard,
+  'panel-left-close': lucidePanelLeftClose, 'panel-left-open': lucidePanelLeftOpen, 'smartphone': lucideSmartphone,
   'sun': lucideSun, 'triangle-alert': lucideTriangleAlert
 } as const;
 export type IconName = keyof typeof icons;

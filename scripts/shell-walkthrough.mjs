@@ -5,7 +5,8 @@ import { chromium, expect as playwrightExpect } from 'playwright/test';
 
 const { WEB, API, SHOTS } = process.env;
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-const desktop = { width: 1440, height: 900 };
+const desktop = { width: 1536, height: 864 };
+const laptop = { width: 1366, height: 768 };
 const phone = { width: 390, height: 844 };
 const common = ['Map', 'Alerts', 'Incidents', 'Field reports', 'Situation report', 'Dashboard', 'GIS link', 'Field phones'];
 const expect = playwrightExpect.configure({ timeout: 25_000 });
@@ -13,7 +14,7 @@ const expect = playwrightExpect.configure({ timeout: 25_000 });
 async function signIn(page, username, path = '/') {
   page.setDefaultTimeout(60_000);
   await page.goto(WEB + path);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: /^(Sign in|साइन इन करें)$/u }).click();
   await page.locator('#username').fill(username);
   await page.locator('#password').fill('demo');
   await page.locator('#kc-login').click();
@@ -28,11 +29,137 @@ async function axe(page, label, selectors) {
   console.log(label + ' — zero serious or critical axe violations');
 }
 
-async function openDrawer(page) {
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: 'Destinations' });
-  await expect(drawer.getByRole('heading', { name: 'Destinations' })).toBeVisible();
+async function openDrawer(page, menu = 'Menu', destinations = 'Destinations') {
+  await page.getByRole('button', { name: menu, exact: true }).click();
+  const drawer = page.getByRole('dialog', { name: destinations });
+  await expect(drawer.getByRole('heading', { name: destinations })).toBeVisible();
   return drawer;
+}
+
+async function checkToggle(page, nav) {
+  await page.setViewportSize(laptop);
+  const toggle = nav.locator('.sidebar-toggle');
+  const map = nav.getByRole('link', { name: 'Map', exact: true });
+  const canvas = page.locator('.maplibregl-canvas');
+  const canvasWidth = () => canvas.evaluate(element => element.width);
+  const expectCanvasFit = () => expect.poll(() => canvas.evaluate(element =>
+    Math.abs(element.width - element.closest('.map-pane').clientWidth * devicePixelRatio))).toBeLessThan(2);
+  await expectCanvasFit();
+  const railWidth = await canvasWidth();
+  await expect(toggle).toHaveAccessibleName('Expand sidebar');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(map).toHaveAttribute('aria-current', 'page');
+  await page.locator('.account-trigger').focus();
+  await page.keyboard.press('Tab');
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(map).toBeFocused();
+  const tooltip = page.getByRole('tooltip').filter({ hasText: /^Map$/ });
+  await expect(tooltip).toBeVisible();
+  const hint = await tooltip.boundingBox();
+  const rail = await nav.boundingBox();
+  assert.ok(hint.x >= rail.x + rail.width, 'The tooltip extends outside the scrolling rail');
+  await page.screenshot({ path: join(SHOTS, 'rail-keyboard-tooltip.png') });
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toBeHidden();
+  await expect(map).toBeFocused();
+  await page.keyboard.press('Alt+Shift+S');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(map).toBeFocused();
+  await expect.poll(canvasWidth).toBeLessThan(railWidth);
+  await expectCanvasFit();
+
+  await toggle.press('Enter');
+  await expect(toggle).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(canvasWidth).toBe(railWidth);
+  await expectCanvasFit();
+  await page.keyboard.press('Control+k');
+  const palette = page.getByRole('dialog', { name: 'Search destinations' });
+  const command = palette.getByRole('button', { name: /Toggle sidebar.*Alt\+Shift\+S/ });
+  await palette.getByRole('textbox').fill('sidebar');
+  await expect(command).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toBeFocused();
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(map).toHaveAttribute('aria-current', 'page');
+  await page.evaluate(() => localStorage.removeItem('fimra.sidebar'));
+  await page.reload();
+  await nav.getByRole('link', { name: 'Alerts', exact: true }).press('Enter');
+  const firstAlert = page.locator('.alert-panel .row-open').first();
+  await expect(firstAlert).toBeVisible();
+  assert.ok((await firstAlert.boundingBox()).y < 400, 'The first alert row starts above y=400 at 1366 × 768');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Map', level: 1 })).toBeFocused();
+}
+
+async function checkSidebarMatrix() {
+  const sizes = [
+    [2560, 1440, 1, 'expanded'],
+    [1920, 1080, 1, 'expanded'],
+    [1536, 864, 1.25, 'expanded'],
+    [1366, 768, 1, 'rail'],
+    [1280, 800, 1, 'rail'],
+    [1024, 768, 1, 'rail'],
+    [768, 1024, 1, 'drawer'],
+    [390, 844, 1, 'drawer']
+  ];
+  for (const [locale, lang, map, menu, destinations] of [
+    ['en-IN', 'en', 'Map', 'Menu', 'Destinations'],
+    ['hi-IN', 'hi', 'नक्शा', 'मेनू', 'ऐप के पृष्ठ']
+  ]) {
+    for (const deviceScaleFactor of [1, 1.25]) {
+      const context = await browser.newContext({ viewport: desktop, deviceScaleFactor, locale, reducedMotion: 'reduce' });
+      const page = await context.newPage();
+      await signIn(page, 'state.admin');
+      await expect(page.locator('html')).toHaveAttribute('lang', lang);
+      await expect(page.getByRole('heading', { name: map, level: 1 })).toBeVisible();
+      await expect(page.locator('#detection-picker')).toBeEnabled();
+      for (const [width, height, scale, layout] of sizes.filter(size => size[2] === deviceScaleFactor)) {
+        await page.setViewportSize({ width, height });
+        const sidebar = page.locator('.shell-sidebar');
+        const menuButton = page.getByRole('button', { name: menu, exact: true });
+        if (layout === 'drawer') {
+          await expect(menuButton).toBeVisible();
+          await expect(sidebar).toHaveCount(0);
+        } else {
+          await expect(menuButton).toHaveCount(0);
+          await expect(sidebar.locator('.sidebar-toggle')).toHaveAttribute('aria-expanded', String(layout === 'expanded'));
+          const current = sidebar.getByRole('link', { name: map, exact: true });
+          await expect(current).toHaveAttribute('aria-current', 'page');
+          if (layout === 'expanded') {
+            await expect(current.locator('.destination-name')).toBeVisible();
+            assert.ok(await sidebar.locator('.destination-name').evaluateAll(labels =>
+              labels.every(label => label.scrollWidth <= label.clientWidth + 1)), 'All expanded labels fit');
+          } else {
+            await expect(current.locator('.destination-name')).toBeHidden();
+          }
+        }
+        for (const theme of ['light', 'dark']) {
+          await page.emulateMedia({ colorScheme: theme });
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+          const label = `${width}x${height}-${scale}x-${lang}-${theme}`;
+          assert.deepEqual(await page.evaluate(() => [
+            document.documentElement, ...document.querySelectorAll('.topbar, .shell-layout, .shell-sidebar, main, .page-content')
+          ].filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.className)), [], label);
+          await axe(page, 'Shell ' + label, []);
+          await page.screenshot({ path: join(SHOTS, 'shell-' + label + '.png') });
+          if (layout === 'drawer') {
+            const drawer = await openDrawer(page, menu, destinations);
+            await expect(drawer.getByRole('button', { name: lang === 'hi' ? 'बंद करें' : 'Close', exact: true })).toBeVisible();
+            await expect(drawer.getByRole('link', { name: map, exact: true })).toHaveAttribute('aria-current', 'page');
+            await axe(page, 'Drawer ' + label, ['.shell-drawer']);
+            await page.screenshot({ path: join(SHOTS, 'drawer-' + label + '.png') });
+            await page.keyboard.press('Escape');
+            await expect(menuButton).toBeFocused();
+          }
+        }
+      }
+      await context.close();
+    }
+  }
 }
 
 try {
@@ -52,6 +179,7 @@ try {
       await expect(page.getByText('Ask your workspace administrator', { exact: false })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Switch account' })).toBeVisible();
       await expect(page.locator('fimra-demo-map')).toHaveCount(0);
+      await expect(page.locator('.shell-sidebar')).toHaveCount(0);
       for (const [size, viewport] of [['desktop', desktop], ['phone', phone]]) {
         await page.setViewportSize(viewport);
         for (const theme of ['light', 'dark']) {
@@ -110,7 +238,10 @@ try {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('main')).toBeFocused();
   await expect(page).toHaveURL(originalURL);
-  const alerts = page.getByRole('navigation', { name: 'Destinations' }).getByRole('link', { name: 'Alerts', exact: true });
+  const nav = page.getByRole('navigation', { name: 'Destinations' });
+  await expect(page.locator('.desktop-destinations')).toHaveCount(0);
+  await checkToggle(page, nav);
+  const alerts = nav.getByRole('link', { name: 'Alerts', exact: true });
   await alerts.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeFocused();
   await expect(page).toHaveTitle('Alerts · Open FIMRA');
@@ -123,15 +254,11 @@ try {
       await page.emulateMedia({ colorScheme: theme });
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expect(page.locator('.account-trigger')).toBeVisible();
-      await axe(page, `Shell ${size} ${theme}`, ['.topbar', '.desktop-destinations', 'fimra-monitor-filters']);
-      await page.screenshot({ path: join(SHOTS, `shell-${size}-${theme}.png`) });
       if (size === 'phone') {
         const account = page.locator('.account-trigger');
         await expect(account.locator('.account-initials')).toBeVisible();
         await expect(account.locator('.user-name')).toBeHidden();
         await openDrawer(page);
-        await axe(page, `Drawer ${theme}`, ['.shell-drawer']);
-        await page.screenshot({ path: join(SHOTS, `drawer-phone-${theme}.png`) });
         await page.keyboard.press('Escape');
         await expect(page.getByRole('button', { name: 'Menu', exact: true })).toBeFocused();
       }
@@ -223,6 +350,8 @@ try {
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'You signed out' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await context.close();
+  await checkSidebarMatrix();
 } finally {
   await browser.close();
 }

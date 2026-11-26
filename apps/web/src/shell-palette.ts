@@ -4,7 +4,15 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialog, HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { ShellNavigation, type DestinationPath } from './shell-navigation';
+import { ShellSidebar } from './shell-sidebar';
 import { ThemeService } from './theme';
+
+interface Command {
+  name: string;
+  group: string;
+  run: () => void;
+  shortcut?: string;
+}
 
 @Component({
   selector: 'fimra-shell-palette',
@@ -22,6 +30,7 @@ import { ThemeService } from './theme';
             <button hlmBtn variant="ghost" [class.palette-active]="i === active()" type="button"
                     (click)="choose(i)" (focus)="index.set(i)" (keydown)="key($event)">
               {{ result.name }} <span>{{ result.group }}</span>
+              @if (result.shortcut) { <kbd>{{ result.shortcut }}</kbd> }
             </button>
           } @empty { <p role="status">{{ msg('No matching commands.') }}</p> }
         </div>
@@ -38,6 +47,7 @@ export class ShellPalette {
   readonly index = signal(0);
   private readonly navigation = inject(ShellNavigation);
   private readonly appearance = inject(ThemeService);
+  private readonly sidebar = inject(ShellSidebar);
   private readonly dialog = viewChild.required(HlmDialog);
   private pending?: () => void;
   private readonly actions = [
@@ -49,8 +59,13 @@ export class ShellPalette {
   ];
   readonly results = computed(() => {
     const destinations = this.navigation.authorized().map(item => ({ name: item.name, group: item.group, run: () => this.go(item.path) }));
+    const commands: Command[] = [...destinations, ...this.actions];
+    if (!this.sidebar.drawer()) {
+      commands.push({ name: 'Toggle sidebar', group: 'Action', shortcut: translate('Alt+Shift+S'), run: () => this.sidebar.toggle() });
+    }
     const search = this.search().trim().toLowerCase();
-    return [...destinations, ...this.actions].map(item => ({ ...item, name: translate(item.name), group: translate(item.group) })).filter(item => (item.name + ' ' + item.group).toLowerCase().includes(search));
+    return commands.map(item => ({ ...item, name: translate(item.name), group: translate(item.group) }))
+      .filter(item => (item.name + ' ' + item.group).toLowerCase().includes(search));
   });
   readonly active = computed(() => Math.min(this.index(), this.results().length - 1));
 
