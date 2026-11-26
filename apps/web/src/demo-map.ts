@@ -4,7 +4,7 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
-import tokens from '../../../docs/design-system/tokens.json';
+import { interfaceColours, mapColours } from './token-values';
 import { AfterViewInit, Component, ViewEncapsulation, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, EMPTY, exhaustMap, forkJoin, timer } from 'rxjs';
@@ -157,7 +157,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         if (url) map.addSource('reference', { type: 'vector', tiles: [url] });
         this.referenceUrl = url;
       }
-      map.setPaintProperty('background', 'background-color', tokens.color[theme].mapBackground);
+      map.setPaintProperty('background', 'background-color', mapColours[theme].canvas);
       if (geography) {
         const before = map.getLayer('detections') ? 'detections' : 'incident-members';
         for (const layer of referenceLayers(geography.info, theme, low)) {
@@ -270,14 +270,14 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
     const changed = theme !== this.appliedTheme;
     if (changed && map.getLayer('incident-members')) {
-      map.setPaintProperty('incident-members', 'circle-stroke-color', tokens.color[theme].brand);
+      map.setPaintProperty('incident-members', 'circle-stroke-color', interfaceColours[theme].action);
     }
     if (changed && map.getLayer('linked-alert')) {
-      map.setPaintProperty('linked-alert', 'circle-color', tokens.color[theme].brand);
-      map.setPaintProperty('linked-alert', 'circle-stroke-color', tokens.color[theme].brand);
+      map.setPaintProperty('linked-alert', 'circle-color', interfaceColours[theme].action);
+      map.setPaintProperty('linked-alert', 'circle-stroke-color', interfaceColours[theme].action);
     }
     if (changed && map.getLayer('selected-detection')) {
-      map.setPaintProperty('selected-detection', 'circle-stroke-color', tokens.color[theme].brand);
+      map.setPaintProperty('selected-detection', 'circle-stroke-color', mapColours[theme].selection);
     }
     this.appliedTheme = theme;
     if (url !== this.appliedUrl) {
@@ -302,7 +302,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       map.addLayer(layer);
       map.addLayer({ id: 'selected-detection', type: 'circle', source: 'detections', 'source-layer': 'detections',
         filter: ['==', ['to-string', ['get', 'id']], String(this.selected()?.id ?? '')],
-        paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[theme].brand }
+        paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': mapColours[theme].selection }
       });
       for (const id of ['incident-members', 'linked-alert']) if (map.getLayer(id)) map.moveLayer(id);
     } else if (changed) {
@@ -323,7 +323,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const map = new LibreMap({
         container: this.container().nativeElement,
         style: { version: 8, sources: {}, layers: [{ id: 'background', type: 'background',
-          paint: { 'background-color': tokens.color[this.appliedTheme].mapBackground } }] },
+          paint: { 'background-color': mapColours[this.appliedTheme].canvas } }] },
         transformRequest: url => mapRequest(url, this.base, document.baseURI, () => {
           const user = this.auth.user();
           if (user?.expired) { this.auth.sessionEnded(); return; }
@@ -372,11 +372,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addSource('incident-members', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ id: 'incident-members', type: 'circle', source: 'incident-members',
-          paint: { 'circle-radius': 13, 'circle-opacity': 0, 'circle-stroke-width': 2, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
+          paint: { 'circle-radius': 13, 'circle-opacity': 0, 'circle-stroke-width': 2, 'circle-stroke-color': interfaceColours[this.appearance.theme()].action }
         });
         map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
-          paint: { 'circle-radius': 9, 'circle-color': tokens.color[this.appearance.theme()].brand, 'circle-opacity': 0.2,
-            'circle-stroke-width': 3, 'circle-stroke-color': tokens.color[this.appearance.theme()].brand }
+          paint: { 'circle-radius': 9, 'circle-color': interfaceColours[this.appearance.theme()].action, 'circle-opacity': 0.2,
+            'circle-stroke-width': 3, 'circle-stroke-color': interfaceColours[this.appearance.theme()].action }
         });
         this.ready.set(true);
         this.timer = setInterval(() => {

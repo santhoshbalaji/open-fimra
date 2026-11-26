@@ -16,3 +16,18 @@ small { margin-inline-start: auto; color: var(--color-text-secondary); font-vari
 @media (width >= 48rem) {
   .panel-example { grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); }
 }
+.sample-chip {
+  min-height: var(--target-web);
+  padding-inline: var(--space-12);
+  border: 1px solid var(--filter-chip-border);
+  border-radius: var(--filter-chip-radius);
+  background: var(--filter-chip-background);
+}
+.sample-row {
+  display: grid;
+  align-items: center;
+  min-height: var(--table-row-height);
+  padding-inline: var(--space-12);
+  border-bottom: 1px solid var(--table-row-divider);
+}
+.sample-row[data-state=selected] { background: var(--table-row-selected); }

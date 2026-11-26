@@ -189,14 +189,22 @@ class SituationReportTest(unittest.TestCase):
     @unittest.skipUnless(os.path.exists("/design-tokens.json"), "make geo-test mounts the design tokens")
     def test_colours_follow_the_design_tokens(self):
         with open("/design-tokens.json", encoding="utf-8") as f:
-            tokens = json.load(f)["color"]
+            tokens = json.load(f)
+        paths = {**tokens["semantic"]["color"], **tokens["compatibility"]["color"],
+                 "forest": "map.forest", "active": "map.age.light.0"}
         for name, value in situation_report.TOKENS.items():
-            if name == "forest":
-                self.assertEqual(value, tokens["chart"]["light"][2])
-            elif name == "active":
-                self.assertEqual(value, tokens["fireAge"]["light"][0])
-            else:
-                self.assertEqual(value, tokens["light"][name])
+            path = paths[name].split(".")
+            if path[:2] == ["primitives", "palette"]:
+                path.insert(2, "light")
+            elif path[0] == "semantic":
+                path = tokens["semantic"]["color"][path[-1]].split(".")
+                path.insert(2, "light")
+            elif path[0] == "map" and len(path) == 2:
+                path.insert(1, "light")
+            expected = tokens
+            for key in path:
+                expected = expected[int(key) if isinstance(expected, list) else key]
+            self.assertEqual(value, expected, name)
 
 
 if __name__ == "__main__":

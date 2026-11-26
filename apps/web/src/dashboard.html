@@ -18,7 +18,7 @@
       <section hlmCard size="sm" [attr.aria-labelledby]="'tile-' + tile.key">
         <hlm-card-header><h3 hlmCardTitle [id]="'tile-' + tile.key">{{ tile.label }}</h3></hlm-card-header>
         <div hlmCardContent class="flex flex-wrap items-end justify-between gap-2">
-          <strong class="stat-value text-[2.25rem] leading-none font-semibold tabular-nums">{{ data[tile.key] }}</strong>
+          <strong class="stat-value text-figure font-semibold tabular-nums">{{ data[tile.key] }}</strong>
           @if (tile.key === 'overdue' && data.overdue) { <fimra-status-badge icon="overdue" label="Needs action" /> }
         </div>
       </section>

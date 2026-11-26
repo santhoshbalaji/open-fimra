@@ -187,7 +187,8 @@ void main() {
       final ids = layers.map((l) => l['id']).toList();
       expect(ids, containsAll(detectionLayers));
       final edge = layers.firstWhere((l) => l['id'] == 'detections-near-edge');
-      expect((edge['paint'] as Map)['circle-color'], 'rgba(0,0,0,0)');
+      expect((edge['paint'] as Map)['circle-opacity'], 0);
+      expect(ids.indexOf('detections-near-edge-outline'), lessThan(ids.indexOf('detections-near-edge')));
       final fixed = layers.firstWhere((l) => l['id'] == 'detections-fixed');
       expect((fixed['layout'] as Map)['icon-image'], squareImage);
       // Detections draw above the reference layers.

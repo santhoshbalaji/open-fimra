@@ -255,11 +255,24 @@ starter-pack-test: ## Check the starter forms with the Go validator and against 
 	cd packages/starter-pack && unformatted=$$(gofmt -l .) && if [[ -n "$$unformatted" ]]; then printf '%s\n' "$$unformatted"; exit 1; fi
 	cd packages/starter-pack && go vet ./... && go test -count=1 ./...
 
-check: ## Run the repository checks that continuous integration runs
+check: token-check ## Run the repository checks that continuous integration runs
 	scripts/check-repo.sh
 	python3 seed/generate.py --check
 	$(COMPOSE) config --quiet
 	@echo "Compose file is valid."
+
+# The standalone Dart SDK can check the output without fetching Flutter packages.
+.PHONY: token-check
+token-check: ## Check the generated themes, contrast pairs and colour usage
+	node apps/web/scripts/theme.mjs --check
+	node apps/web/scripts/lint-colors.mjs
+	node --test apps/web/scripts/theme.test.mjs
+	@if command -v dart >/dev/null; then \
+		cd apps/mobile && dart tool/generate_tokens.dart --check; \
+	else \
+		docker run --rm --network none -v "$(CURDIR):/repo:ro" -w /repo/apps/mobile \
+			--entrypoint dart $(FLUTTER_IMAGE) tool/generate_tokens.dart --check; \
+	fi
 
 # Corepack uses the pnpm version pinned in apps/web/package.json.
 PNPM ?= corepack pnpm

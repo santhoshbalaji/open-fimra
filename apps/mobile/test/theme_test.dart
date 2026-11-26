@@ -22,13 +22,13 @@ void main() {
   });
 
   test('colours come from the tokens', () {
-    final colours = tokens['color'] as Map<String, dynamic>;
+    final palette = (tokens['primitives'] as Map)['palette'] as Map;
     expect(generator.colour('#1f5a70'), 'Color(0xFF1F5A70)');
     expect(generator.colour('rgb(0 0 0 / 35%)'), 'Color(0x59000000)');
-    expect(hexOf(lightPalette.brand), (colours['light'] as Map)['brand']);
-    expect(hexOf(darkPalette.brand), (colours['dark'] as Map)['brand']);
-    expect(lightPalette.fireAge.map(hexOf), (colours['fireAge'] as Map)['light']);
-    expect(FimraSize.touchTarget, (tokens['touchTargetMinPx'] as Map)['mobile']);
+    expect(hexOf(lightPalette.brand), (palette['light'] as Map)['petrol']);
+    expect(hexOf(darkPalette.brand), (palette['dark'] as Map)['petrol']);
+    expect(lightPalette.fireAge.map(hexOf), ((tokens['map'] as Map)['age'] as Map)['light']);
+    expect(FimraSize.touchTarget, ((tokens['density'] as Map)['touchTargetMinPx'] as Map)['mobile']);
   });
 
   test('both themes use Inter and 48 px controls', () {
@@ -45,6 +45,29 @@ void main() {
       );
     }
   });
+
+  for (final brightness in Brightness.values) {
+    test('${brightness.name}: the Material theme uses strong boundaries and focus', () {
+      final theme = fimraTheme(brightness, density: FimraDensity.compact);
+      final palette = theme.extension<FimraColours>()!.palette;
+      final input = theme.inputDecorationTheme;
+      final button = theme.outlinedButtonTheme.style!;
+      final border = button.side!.resolve({})!;
+      final focus = input.focusedBorder!.borderSide;
+      expect(theme.extension<FimraColours>()!.density, FimraDensity.compact);
+      expect(button.minimumSize?.resolve({}), const Size(48, 48));
+      expect(theme.dividerTheme.color, palette.divider);
+      expect(input.enabledBorder!.borderSide.color, palette.controlBoundary);
+      expect(border.color, palette.controlBoundary);
+      expect(focus.color, palette.focus);
+      expect(focus.width, 3);
+      for (final surface in [input.fillColor!, theme.scaffoldBackgroundColor, theme.dialogTheme.backgroundColor!]) {
+        expect(contrast(border.color, surface), greaterThanOrEqualTo(3));
+        expect(contrast(focus.color, surface), greaterThanOrEqualTo(3));
+        expect(contrast(palette.successText, surface), greaterThanOrEqualTo(4.5));
+      }
+    });
+  }
 
   test('the logo files are copies of the project logo', () {
     for (final name in ['mark-light.svg', 'mark-dark.svg', 'lockup-light.svg', 'lockup-dark.svg']) {
@@ -66,3 +89,8 @@ void main() {
 }
 
 String hexOf(Color colour) => '#${(colour.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+
+double contrast(Color foreground, Color background) {
+  final values = [foreground.computeLuminance(), background.computeLuminance()]..sort();
+  return (values.last + 0.05) / (values.first + 0.05);
+}

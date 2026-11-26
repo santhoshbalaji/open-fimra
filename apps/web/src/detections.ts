@@ -1,5 +1,5 @@
 import type { ExpressionSpecification, MapGeoJSONFeature, RequestParameters, SymbolLayerSpecification } from 'maplibre-gl';
-import tokens from '../../../docs/design-system/tokens.json';
+import { ageColours, mapColours } from './token-values';
 import { isApiRequest } from './config';
 import type { Theme } from './theme';
 
@@ -8,7 +8,7 @@ export const classes = {
   outside: 'Outside forest', fixed_heat_source: 'Suspected fixed heat source'
 };
 export type ForestClass = keyof typeof classes;
-export const ageLabels = tokens.color.fireAge.steps;
+export { ageLabels } from './token-values';
 export const triageReasons: Record<string, string> = {
   no_unit: 'No mapped unit covers this point.',
   overlapping_units: 'More than one mapped unit covers this point.',
@@ -100,8 +100,8 @@ export function mapRequest(url: string, base: string, page: string, token: () =>
 }
 
 export function symbolStyle(cls: ForestClass, age: number, theme: Theme) {
-  const palette = tokens.color[theme];
-  const color = tokens.color.fireAge[theme][age];
+  const palette = mapColours[theme];
+  const color = ageColours[theme][age];
   switch (cls) {
     case 'inside': return { shape: 'circle', radius: 6, color };
     case 'near_edge': return { shape: 'ring', radius: 6, color };
@@ -123,7 +123,7 @@ export function symbolImage(cls: ForestClass, age: number, theme: Theme): ImageD
   ctx.beginPath();
   if (shape === 'square') ctx.rect(8 - radius, 8 - radius, radius * 2, radius * 2);
   else ctx.arc(8, 8, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = tokens.color[theme].card;
+  ctx.strokeStyle = mapColours[theme].ageOutline;
   ctx.lineWidth = shape === 'ring' ? 4 : 2;
   ctx.stroke();
   if (shape === 'ring') {

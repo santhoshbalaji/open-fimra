@@ -3,7 +3,57 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Open FIMRA design system</title>
+<link rel="stylesheet" href="../../apps/web/src/tokens.css">
+<style>
+  html { background: var(--role-canvas); color: var(--role-text); }
+  body { max-width: 48rem; margin: var(--space-32) auto; padding-inline: var(--space-16); font: 1rem/1.5 var(--type-family); }
+  a { color: var(--role-action); }
+  :focus-visible { outline: var(--focus-width) solid var(--role-focus); outline-offset: var(--focus-offset); }
+  .samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: var(--space-16); }
+  .sample { background: var(--role-surface); padding: var(--space-16); border: 1px solid var(--role-divider); }
+  .sample h3 { margin-block-start: 0; }
+  .chip { min-height: var(--filter-chip-height); padding-inline: var(--space-12); border: 1px solid var(--filter-chip-border); border-radius: var(--filter-chip-radius); background: var(--filter-chip-background); color: inherit; }
+  .row { display: grid; align-items: center; min-height: var(--table-row-height); padding-inline: var(--space-12); border-bottom: 1px solid var(--table-row-divider); }
+  .selected { background: var(--table-row-selected); }
+  @media (any-pointer: coarse) { button, .chip { min-height: var(--target-web); min-width: var(--target-web); } }
+</style>
 <h1>Design system</h1>
 <p>Start the web app and <a href="http://127.0.0.1:4200/design-system">open the living style guide</a>. For a separate development stack, use its web port.</p>
-<p>The user chose Inter only. Hindi and other Indian scripts use the device’s own fonts.</p>
+<button type="button" aria-pressed="false" id="theme">Dark theme</button>
+<h2>Token roles</h2>
+<dl>
+  <dt>Primitives</dt>
+  <dd>Light and dark palettes, a 4 px spacing base, six Inter type steps, corners, shadows and motion.</dd>
+  <dt>Semantic roles</dt>
+  <dd>Canvas, surface, raised surface, text, divider, control boundary, focus, action, danger and selected state. The control boundary is stronger than the divider.</dd>
+  <dt>Component roles</dt>
+  <dd>Table rows, filter chips, overlays, status and map controls use semantic roles. Map colours, chart series and the logo have separate groups.</dd>
+</dl>
+<h2>Density</h2>
+<p>Density and colour theme can be set independently. Primary touch targets stay at least 44 CSS px on the web and 48 logical px in the field app.</p>
+<div class="samples">
+  <section class="sample" data-density="comfortable">
+    <h3>Comfortable</h3>
+    <p>40 px controls and 48 px rows</p>
+    <button type="button" class="chip">Forest</button>
+    <div class="row">Demo range</div>
+    <div class="row selected">Selected range</div>
+  </section>
+  <section class="sample" data-density="compact">
+    <h3>Compact</h3>
+    <p>32 px controls and 36 px rows</p>
+    <button type="button" class="chip">Forest</button>
+    <div class="row">Demo range</div>
+    <div class="row selected">Selected range</div>
+  </section>
+</div>
+<p>The app bundles Inter. Indian scripts use device fonts.</p>
+<script>
+  const button = document.getElementById('theme');
+  button.addEventListener('click', () => {
+    const dark = button.getAttribute('aria-pressed') === 'false';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    button.setAttribute('aria-pressed', String(dark));
+  });
+</script>
 </html>

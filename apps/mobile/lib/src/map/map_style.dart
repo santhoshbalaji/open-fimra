@@ -109,13 +109,13 @@ Map<String, Object?> mapStyle({
           ['get', 'depth'],
           0,
         ],
-        'paint': {'fill-color': hex(p.card)},
+        'paint': {'fill-color': hex(p.mapLand)},
       },
       {
         'id': 'forest',
         'type': 'fill',
         ...forest,
-        'paint': {'fill-color': hex(p.chart[2]), 'fill-opacity': 0.34},
+        'paint': {'fill-color': hex(p.mapForest), 'fill-opacity': mapForestOpacity},
       },
       {
         'id': 'forest-edge',
@@ -218,6 +218,22 @@ Map<String, Object?> mapStyle({
         'layout': {'icon-image': squareImage, 'icon-allow-overlap': true, 'icon-ignore-placement': true},
       },
       {
+        'id': 'detections-near-edge-outline',
+        'type': 'circle',
+        ...detections,
+        'filter': [
+          '==',
+          ['get', 'forest_class'],
+          'near_edge',
+        ],
+        'paint': {
+          'circle-radius': 6,
+          'circle-opacity': 0,
+          'circle-stroke-width': 4,
+          'circle-stroke-color': hex(p.mapAgeOutline),
+        },
+      },
+      {
         'id': 'detections-near-edge',
         'type': 'circle',
         ...detections,
@@ -228,7 +244,7 @@ Map<String, Object?> mapStyle({
         ],
         'paint': {
           'circle-radius': 6,
-          'circle-color': 'rgba(0,0,0,0)',
+          'circle-opacity': 0,
           'circle-stroke-width': 2.5,
           'circle-stroke-color': ageColour,
         },
@@ -246,7 +262,7 @@ Map<String, Object?> mapStyle({
           'circle-radius': 7,
           'circle-color': ageColour,
           'circle-stroke-width': 1.5,
-          'circle-stroke-color': hex(p.card),
+          'circle-stroke-color': hex(p.mapAgeOutline),
         },
       },
     ],

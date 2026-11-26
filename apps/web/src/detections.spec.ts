@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import tokens from '../../../docs/design-system/tokens.json';
+import { ageColours, mapColours } from './token-values';
 import { confidenceLabel, detectionLayer, mapRequest, placesOf, readDetection, sourceLabel, symbolStyle, tileErrorStatus, tileUrl } from './detections';
 
 describe('Detection symbols', () => {
   it.each(['light', 'dark'] as const)('uses the %s palette and distinct class shapes', theme => {
-    for (const [age, color] of tokens.color.fireAge[theme].entries()) {
+    for (const [age, color] of ageColours[theme].entries()) {
       expect(symbolStyle('inside', age, theme)).toMatchObject({ shape: 'circle', color });
       expect(symbolStyle('near_edge', age, theme)).toMatchObject({ shape: 'ring', color });
-      expect(symbolStyle('fixed_heat_source', age, theme)).toMatchObject({ shape: 'square', color: tokens.color[theme].neutralMark });
-      expect(symbolStyle('outside', age, theme)).toEqual({ shape: 'circle', radius: 3, color: tokens.color[theme].neutralMark });
+      expect(symbolStyle('fixed_heat_source', age, theme)).toMatchObject({ shape: 'square', color: mapColours[theme].neutralMark });
+      expect(symbolStyle('outside', age, theme)).toEqual({ shape: 'circle', radius: 3, color: mapColours[theme].neutralMark });
     }
     expect(detectionLayer(theme).layout?.['symbol-sort-key']).toEqual(['get', 'observed_at']);
   });
