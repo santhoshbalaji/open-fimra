@@ -38,22 +38,34 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		return body, res.Header
 	}
 	body, _ := request("", "", 200)
+	type mapLevel struct {
+		Depth     int
+		Slug      string
+		Labels    map[string]string
+		Optional  bool
+		Hierarchy string
+	}
 	var info struct {
 		Boundary     [4]float64
 		Jurisdiction *[4]float64
-		Levels       []struct {
-			Depth    int
-			Slug     string
-			Labels   map[string]string
-			Optional bool
-		}
+		Levels       []mapLevel
 	}
 	if err := json.Unmarshal(body, &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.Boundary != [4]float64{86.195247, 16.293874, 86.686326, 16.548825} || len(info.Levels) != 6 ||
-		info.Levels[4].Slug != "section" || !info.Levels[4].Optional ||
-		info.Levels[5].Depth != 5 || info.Levels[5].Slug != "beat" || info.Levels[5].Labels["en"] != "Beat" || info.Levels[5].Labels["hi"] != "बीट" {
+	var territorial, reserve []mapLevel
+	for _, level := range info.Levels {
+		switch level.Hierarchy {
+		case "territorial":
+			territorial = append(territorial, level)
+		case "reserve-response":
+			reserve = append(reserve, level)
+		}
+	}
+	if info.Boundary != [4]float64{86.195247, 16.293874, 86.686326, 16.548825} || len(territorial) != 6 ||
+		territorial[4].Slug != "section" || !territorial[4].Optional ||
+		territorial[5].Depth != 5 || territorial[5].Slug != "beat" || territorial[5].Labels["en"] != "Beat" || territorial[5].Labels["hi"] != "बीट" ||
+		len(reserve) != 3 || reserve[2].Slug != "zone" {
 		t.Fatalf("unexpected workspace geography: %s", body)
 	}
 	beat := info.Jurisdiction
@@ -80,9 +92,9 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		path   string
 		counts map[string]int
 	}{
-		{fullState, map[string]int{"units": 40, "forest": 5}},
-		{"/tiles/reference/10/757/464.mvt", map[string]int{"units": 26, "forest": 2, "exclusions": 1}},
-		{fullState + "?outline=1", map[string]int{"units": 1}},
+		{fullState, map[string]int{"units": 59, "forest": 5}},
+		{"/tiles/reference/10/757/464.mvt", map[string]int{"units": 35, "forest": 2, "exclusions": 1}},
+		{fullState + "?outline=1", map[string]int{"units": 2}},
 	} {
 		body, headers := request(tc.path, "", 200)
 		if headers.Get("Content-Type") != tileType || headers.Get("Cache-Control") != "private, no-cache" || headers.Get("ETag") == "" {
@@ -108,7 +120,7 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		for y := 928; y <= 930; y++ {
 			body, _ := request(fmt.Sprintf("/tiles/reference/11/%d/%d.mvt", x, y), "", 200, 204)
 			for _, feature := range decodeTileLayers(t, body)["unit_labels"] {
-				if feature["depth"] != uint64(info.Levels[5].Depth) {
+				if feature["depth"] != uint64(territorial[5].Depth) {
 					continue
 				}
 				code := feature["code"].(string)

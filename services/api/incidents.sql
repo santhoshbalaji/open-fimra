@@ -65,7 +65,7 @@ member_places AS (
     LEFT JOIN hierarchies h ON h.id = m.hierarchy_id
     LEFT JOIN LATERAL (
         SELECT value AS levels FROM jsonb_each(m.hierarchy)
-        ORDER BY (key = h.slug) DESC, key LIMIT 1
+        ORDER BY (key = h.slug) DESC NULLS LAST, (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
     ) line ON true
 ),
 details AS (

@@ -25,7 +25,7 @@ JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at)
 LEFT JOIN hierarchies h ON h.id = a.hierarchy_id
 LEFT JOIN LATERAL (
     SELECT key AS hierarchy, value AS levels FROM jsonb_each(a.hierarchy)
-    ORDER BY (key = h.slug) DESC, key LIMIT 1
+    ORDER BY (key = h.slug) DESC NULLS LAST, (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
 ) line ON true
 WHERE a.workspace_id = $2
   AND ($4::float8 IS NULL OR d.geom && ST_MakeEnvelope($4, $5::float8, $6::float8, $7::float8, 4326))

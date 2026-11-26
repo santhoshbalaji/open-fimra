@@ -268,6 +268,7 @@ try {
         await expect(dialog).toBeVisible();
         await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup|Duty roster|Incident response|State return|National portal/ })).toHaveCount(0);
         await dialog.getByRole('textbox').fill('Situation report');
+        await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Enter');
         await expect(page).toHaveURL(/\/reports\/situation/);
         await expect(dialog).toBeHidden();

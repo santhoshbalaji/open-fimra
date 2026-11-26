@@ -43,6 +43,7 @@ VALID_FROM = "2026-01-01T00:00:00Z"
 
 WORKSPACE_ID = "d0000000-0000-4000-8000-000000000001"
 HIERARCHY_ID = "d0000000-0000-4000-8000-000000000010"
+RESERVE_HIERARCHY_ID = "d0000000-0000-4000-8000-000000000011"
 LAYERS = {
     # slug: (layer id, version id, name, role)
     "territorial-units": ("d0000000-0000-4000-8000-000000000020", "d0000000-0000-4000-8000-000000000021",
@@ -53,7 +54,13 @@ LAYERS = {
                    "Known heat sources", "exclusion"),
     "protected-areas": ("d0000000-0000-4000-8000-000000000060", "d0000000-0000-4000-8000-000000000061",
                         "Protected areas", "analysis"),
+    "civil-districts": ("d0000000-0000-4000-8000-000000000070", "d0000000-0000-4000-8000-000000000071",
+                        "Civil districts", "analysis"),
+    "committee-areas": ("d0000000-0000-4000-8000-000000000080", "d0000000-0000-4000-8000-000000000081",
+                        "Committee areas", "analysis"),
 }
+OVERLAY_KINDS = {"protected-areas": "protected_area", "civil-districts": "civil_district",
+                 "committee-areas": "community"}
 
 LEVELS = [  # depth, slug, English label, Hindi label
     (0, "state", "State", "राज्य"),
@@ -72,6 +79,8 @@ OVERLAP_CELL = (5, 1)          # this beat bulges into its eastern neighbour
 OVERLAP_SHIFT = 0.004          # degrees of longitude, about 430 m
 UNCODED_BEAT = 16              # beat with no code in the source layer
 UNPARENTED_BEAT = 22           # beat with no parent code in the source layer
+# Keep the familiar response paths, including all of Range 1 and the mixed branch in Range 8.
+BEATS_WITHOUT_SECTION = {1, 2, 3, 5, 8, 14, 19, 23}
 
 
 def h(*key):
@@ -170,21 +179,23 @@ def build():
         di, ci = ri // 2, ri // 4
         units[3].append({"code": f"R{ri + 1}", "name": f"Range {ri + 1}", "parent": f"D{di + 1}",
                          "path": f"ds.c{ci + 1}.d{di + 1}.r{ri + 1}", "ring": outline(ri, ri + 1, 0, ROWS)})
-    section = {"code": "S01", "name": "Reed Section", "parent": "R8",
-               "path": "ds.c2.d4.r8.s01", "ring": outline(7, 8, 2, 3)}
-    units[4].append(section)
     for c in range(COLS):
         for r in range(ROWS):
             n = c * ROWS + r + 1
-            di, ci = c // 2, c // 4
             bulge = OVERLAP_SHIFT if (c, r) == OVERLAP_CELL else 0.0
-            with_section = (c, r) == (7, 2)
-            parent_path = section["path"] if with_section else f"ds.c{ci + 1}.d{di + 1}.r{c + 1}"
+            territorial_range = units[3][c]
+            parent = territorial_range
+            ring = outline(c, c + 1, r, r + 1, bulge_east=bulge)
+            if n not in BEATS_WITHOUT_SECTION:
+                code = "S01" if n == 24 else f"S{len(units[4]) + 2:02d}"
+                parent = {"code": code, "name": "Reed Section" if n == 24 else f"Section {code[1:]}",
+                          "parent": territorial_range["code"], "path": f"{territorial_range['path']}.{code.lower()}",
+                          "ring": ring}
+                units[4].append(parent)
             units[5].append({
                 "code": f"B{n:02d}", "name": f"Beat {n:02d}",
-                "parent": section["code"] if with_section else f"R{c + 1}",
-                "path": f"{parent_path}.b{n:02d}",
-                "ring": outline(c, c + 1, r, r + 1, bulge_east=bulge),
+                "parent": parent["code"], "path": f"{parent['path']}.b{n:02d}",
+                "ring": ring,
                 "cell": (c, r), "number": n,
             })
 
@@ -283,18 +294,29 @@ def outputs():
 
     # Keep the original beat upload for the standard hierarchy preset.
     files["beats.geojson"] = ("geojson", "beats", [
-        feature({**f["properties"], "parent_code": "R8"} if f["properties"]["parent_code"] == "S01"
-                else f["properties"], f["geometry"])
-        for f in files["beats-with-sections.geojson"][2]
+        feature({**f["properties"], "parent_code": None if u["number"] == UNPARENTED_BEAT else f"R{u['cell'][0] + 1}"},
+                f["geometry"])
+        for f, u in zip(files["beats-with-sections.geojson"][2], units[5])
     ])
     reserve_center = cell_center(6, 0)
+    core = blob(*reserve_center, 0.019, "PA01-core")
+    reserve = blob(*reserve_center, 0.044, "PA01-buffer")
     protected_areas = [
         feature({"code": "PA01-C", "name": "Demo Tiger Reserve", "zone": "core"},
-                polygon(blob(*reserve_center, 0.019, "PA01-core"))),
+                polygon(core)),
         feature({"code": "PA01-B", "name": "Demo Tiger Reserve", "zone": "buffer"},
-                polygon(blob(*reserve_center, 0.044, "PA01-buffer"), blob(*reserve_center, 0.019, "PA01-core")[::-1])),
+                polygon(reserve, core[::-1])),
     ]
-    files["protected-areas.geojson"] = ("geojson", "protected-areas", protected_areas)
+    coverage_center = edge((2, 1), (2, 2))[SEG // 2]
+    overlays = {
+        "protected-areas": protected_areas,
+        "civil-districts": [feature({"code": "CD01", "name": "Demo Ridge District"},
+                                    polygon(outline(1, 3, 0, ROWS)))],
+        "committee-areas": [feature({"code": "CC01", "name": "Demo Ridge Fire Committee"},
+                                     polygon(blob(*coverage_center, 0.024, "CC01")))],
+    }
+    for slug, shapes in overlays.items():
+        files[f"{slug}.geojson"] = ("geojson", slug, shapes)
     files["forest.geojson"] = ("geojson", "forest", [
         feature({"code": code, "name": name, "legal_status": status}, polygon(*rings))
         for code, name, status, rings in forests])
@@ -318,11 +340,14 @@ def outputs():
         f"   '{json.dumps({'nearEdgeMetres': NEAR_EDGE_M, 'areaMarginMetres': AREA_MARGIN_M})}', false);",
         "",
         "INSERT INTO hierarchies (id, workspace_id, slug, name, kind) VALUES",
-        f"  ({sql_str(HIERARCHY_ID)}, {sql_str(WORKSPACE_ID)}, 'territorial', 'Territorial', 'territorial');",
+        f"  ({sql_str(HIERARCHY_ID)}, {sql_str(WORKSPACE_ID)}, 'territorial', 'Territorial', 'territorial'),",
+        f"  ({sql_str(RESERVE_HIERARCHY_ID)}, {sql_str(WORKSPACE_ID)}, 'reserve-response', 'Demo Reserve Response', 'protected_area');",
         "",
         "INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels, optional) VALUES",
         ",\n".join(f"  ({sql_str(HIERARCHY_ID)}, {d}, '{s}', {sql_str(json.dumps({'en': en, 'hi': hi}, ensure_ascii=False))}, {'true' if s == 'section' else 'false'})"
-                   for d, s, en, hi in LEVELS) + ";",
+                   for d, s, en, hi in LEVELS) + ",",
+        ",\n".join(f"  ({sql_str(RESERVE_HIERARCHY_ID)}, {d}, '{slug}', {sql_str(json.dumps({'en': label}))}, false)"
+                   for d, (slug, label) in enumerate([("state", "State"), ("division", "Division"), ("zone", "Zone")])) + ";",
         "",
         "INSERT INTO layers (id, workspace_id, slug, name, role, hierarchy_id) VALUES",
         ",\n".join(f"  ({sql_str(lid)}, {sql_str(WORKSPACE_ID)}, '{slug}', {sql_str(name)}, '{role}', "
@@ -331,7 +356,7 @@ def outputs():
         "",
         "INSERT INTO layer_versions (id, layer_id, version, status, source_file, published_at, effective_from, overlay_kind, overlay_from) VALUES",
         ",\n".join(f"  ({sql_str(vid)}, {sql_str(lid)}, 1, 'published', 'seed/demo-state', {sql_str(VALID_FROM)}, "
-                   f"'-infinity', {'NULL, NULL' if slug != 'protected-areas' else sql_str('protected_area') + ', ' + sql_str(VALID_FROM)})"
+                   f"'-infinity', {sql_str(OVERLAY_KINDS.get(slug))}, {sql_str(VALID_FROM if slug in OVERLAY_KINDS else None)})"
                    for slug, (lid, vid, _, _) in LAYERS.items()) + ";",
         "",
         "-- The source beat layer has one beat without a code. An import would send it",
@@ -344,6 +369,14 @@ def outputs():
             rows.append(f"  ({sql_str(HIERARCHY_ID)}, {depth}, {sql_str(u['code'])}, {sql_str(u['name'])}, "
                         f"'{u['path']}', {sql_geom(polygon(u['ring']), True)}, "
                         f"{sql_str(LAYERS['territorial-units'][1])}, '-infinity')")
+    for depth, code, name, path, geom in [
+        (0, "DR", "Demo Tiger Reserve", "dr", polygon(reserve)),
+        (1, "W1", "Demo Wildlife Division", "dr.w1", polygon(reserve)),
+        (2, "RC", "Demo Reserve Core", "dr.w1.core", polygon(core)),
+        (2, "RB", "Demo Reserve Buffer", "dr.w1.buffer", polygon(reserve, core[::-1])),
+    ]:
+        rows.append(f"  ({sql_str(RESERVE_HIERARCHY_ID)}, {depth}, '{code}', '{name}', '{path}', "
+                    f"{sql_geom(geom, True)}, {sql_str(LAYERS['protected-areas'][1])}, '-infinity')")
     lines.append(",\n".join(rows) + ";")
     lines += ["", "INSERT INTO layer_features (layer_version_id, code, name, attributes, geom) VALUES"]
     rows = []
@@ -353,10 +386,12 @@ def outputs():
     for code, name, kind, rings in exclusions:
         rows.append(f"  ({sql_str(LAYERS['exclusions'][1])}, {sql_str(code)}, {sql_str(name)}, "
                     f"'{json.dumps({'kind': kind})}', {sql_geom(polygon(*rings), True)})")
-    for area in protected_areas:
-        props = area["properties"]
-        rows.append(f"  ({sql_str(LAYERS['protected-areas'][1])}, {sql_str(props['code'])}, {sql_str(props['name'])}, "
-                    f"{sql_str(json.dumps({'zone': props['zone']}))}, {sql_geom(area['geometry'], True)})")
+    for slug, shapes in overlays.items():
+        for area in shapes:
+            props = area["properties"]
+            attrs = {key: value for key, value in props.items() if key not in ("code", "name")}
+            rows.append(f"  ({sql_str(LAYERS[slug][1])}, {sql_str(props['code'])}, {sql_str(props['name'])}, "
+                        f"{sql_str(json.dumps(attrs))}, {sql_geom(area['geometry'], True)})")
     lines.append(",\n".join(rows) + ";")
     files["load.sql"] = ("text", None, "\n".join(lines) + "\n")
 
@@ -367,17 +402,40 @@ def outputs():
         ("division.officer", "division_officer", units[2][0]["path"]),
         ("beat.guard", "field_staff", units[5][0]["path"]),
     ]
-    users = [demo_users[username] for username, _, _ in grants]
+    operations_grants = [
+        ("duty.officer", "field_staff", units[5][0]["path"]),
+        ("circle.reviewer", "division_officer", units[1][0]["path"]),
+        ("division.delegate", "division_officer", units[2][1]["path"]),
+        ("range.officer", "field_staff", units[3][1]["path"]),
+        ("section.forester", "field_staff", "ds.c2.d4.r8.s01"),
+        ("beat.alternate", "field_staff", units[5][4]["path"]),
+        ("squad.leader", "field_staff", "dr.w1"),
+        ("river.officer", "division_officer", units[2][2]["path"]),
+        ("community.caller", "community_caller", units[5][4]["path"]),
+        ("district.liaison", "district_liaison", units[3][1]["path"]),
+        ("district.liaison", "district_liaison", units[3][2]["path"]),
+    ]
+    for name, role_grants, unassigned in [("roles", grants, []),
+                                          ("operations-roles", operations_grants, ["no.role"])]:
+        files[f"{name}.sql"] = ("text", None, render_grants(demo_users, role_grants, unassigned))
+
+    files["reference.sql"] = ("text", None, render_reference(refs))
+    return files
+
+
+def render_grants(demo_users, grants, unassigned):
+    users = [demo_users[username] for username in sorted({user for user, _, _ in grants} | set(unassigned))]
     user_rows = [
         f"  ({sql_str(user['id'])}, {sql_str(user['username'])}, "
         f"{sql_str(user['firstName'] + ' ' + user['lastName'])})"
         for user in users
     ]
     grant_rows = [
-        f"    ({sql_str(demo_users[username]['id'])}, {sql_str(role)}, {sql_str(path)})"
+        f"    ({sql_str(demo_users[username]['id'])}, {sql_str(role)}, {sql_str(path)}, "
+        f"{sql_str(RESERVE_HIERARCHY_ID if path.startswith('dr.') else HIERARCHY_ID)})"
         for username, role, path in grants
     ]
-    files["roles.sql"] = ("text", None, "\n".join([
+    return "\n".join([
         "-- Generated by seed/generate.py. Do not edit by hand.",
         "-- Add the demo grants after load.sql. This file can be run again.",
         "",
@@ -386,21 +444,23 @@ def outputs():
         "ON CONFLICT (oidc_subject) DO NOTHING;",
         "",
         "INSERT INTO role_assignments (user_id, workspace_id, hierarchy_id, unit_path, role_slug)",
-        f"SELECT u.id, {sql_str(WORKSPACE_ID)}, {sql_str(HIERARCHY_ID)}, g.path::ltree, g.role",
+        f"SELECT u.id, {sql_str(WORKSPACE_ID)}, g.hierarchy::uuid, g.path::ltree, g.role",
         "FROM (VALUES",
         ",\n".join(grant_rows),
-        ") AS g (subject, role, path)",
+        ") AS g (subject, role, path, hierarchy)",
         "JOIN users u ON u.oidc_subject = g.subject",
         "ON CONFLICT DO NOTHING;",
-    ]) + "\n")
+    ]) + "\n"
 
+
+def render_reference(refs):
     # Reference detections as SQL, for the reference check.
     ref_rows = []
     for rid, desc, (x, y), cls, beats, triage, fcode in refs:
         beat_arr = "ARRAY[" + ", ".join(f"'{b}'" for b in beats) + "]::ltree[]" if beats else "'{}'::ltree[]"
         ref_rows.append(f"  ({sql_str(rid)}, ST_SetSRID(ST_Point({r6(x)}, {r6(y)}), 4326), {sql_str(cls)}, "
                         f"{beat_arr}, {sql_str(triage)}, {sql_str(fcode)}, {sql_str(expected_queue(cls, triage))})")
-    files["reference.sql"] = ("text", None, "\n".join([
+    return "\n".join([
         "-- Generated by seed/generate.py. Do not edit by hand.",
         "-- Reference detections and the result each one should get.",
         "",
@@ -416,8 +476,7 @@ def outputs():
         "",
         "INSERT INTO reference_detections VALUES",
         ",\n".join(ref_rows) + ";",
-    ]) + "\n")
-    return files
+    ]) + "\n"
 
 
 def render(kind, name, content):

@@ -71,7 +71,7 @@ details AS (
     LEFT JOIN hierarchies h ON h.id = a.hierarchy_id
     LEFT JOIN LATERAL (
         SELECT value AS levels FROM jsonb_each(a.hierarchy)
-        ORDER BY (key = h.slug) DESC, key LIMIT 1
+        ORDER BY (key = h.slug) DESC NULLS LAST, (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
     ) line ON true
 )
 SELECT EXISTS (SELECT 1 FROM grants),

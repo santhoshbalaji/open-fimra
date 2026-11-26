@@ -26,7 +26,8 @@ points AS (
     JOIN detection_matches m ON (m.detection_id, m.observed_at) = (d.id, d.observed_at)
     LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
     LEFT JOIN LATERAL (
-        SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy) ORDER BY key LIMIT 1
+        SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy)
+        ORDER BY (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
     ) line ON true
     WHERE d.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $6) AND now()

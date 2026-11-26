@@ -6,32 +6,15 @@ DECLARE
     workspace uuid;
     wildlife uuid;
     territorial uuid;
-    reserve geometry;
-    core geometry;
-    version uuid;
     buffer_rule bigint;
     shift bigint;
 BEGIN
     SELECT id INTO STRICT workspace FROM workspaces WHERE slug = 'demo';
     SELECT id INTO STRICT territorial FROM hierarchies WHERE workspace_id = workspace AND slug = 'territorial';
-    IF EXISTS (SELECT FROM hierarchies WHERE workspace_id = workspace AND slug = 'reserve-response') THEN
+    IF EXISTS (SELECT FROM dispatch_rules WHERE workspace_id = workspace AND name IN ('Demo reserve core', 'Revised reserve core')) THEN
         RETURN;
     END IF;
-    SELECT v.id INTO STRICT version FROM layer_versions v JOIN layers l ON l.id = v.layer_id
-    WHERE l.workspace_id = workspace AND l.slug = 'protected-areas' AND v.status = 'published';
-    SELECT ST_Multi(ST_Union(geom)) INTO reserve FROM layer_features WHERE layer_version_id = version;
-    SELECT geom INTO STRICT core FROM layer_features WHERE layer_version_id = version AND code = 'PA01-C';
-
-    INSERT INTO hierarchies (workspace_id, slug, name, kind)
-    VALUES (workspace, 'reserve-response', 'Demo Reserve Response', 'protected_area') RETURNING id INTO wildlife;
-    INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels) VALUES
-        (wildlife, 0, 'state', '{"en":"State"}'),
-        (wildlife, 1, 'division', '{"en":"Division"}'),
-        (wildlife, 2, 'beat', '{"en":"Beat"}');
-    INSERT INTO units (hierarchy_id, depth, code, name, path, geom, layer_version_id, valid_from) VALUES
-        (wildlife, 0, 'DR', 'Demo Reserve', 'dr', reserve, version, '-infinity'),
-        (wildlife, 1, 'W1', 'Demo Wildlife Division', 'dr.w1', reserve, version, '-infinity'),
-        (wildlife, 2, 'RC', 'Demo Reserve Core Beat', 'dr.w1.core', core, version, '-infinity');
+    SELECT id INTO STRICT wildlife FROM hierarchies WHERE workspace_id = workspace AND slug = 'reserve-response';
 
     INSERT INTO dispatch_rules (workspace_id, name, priority, effective_from, overlay_layer, overlay_code,
                                 overlay_zone, lead_hierarchy_id, lead_path)

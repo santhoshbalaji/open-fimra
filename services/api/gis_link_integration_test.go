@@ -339,7 +339,7 @@ func TestGISLinkIntegration(t *testing.T) {
 		}
 		for _, user := range users[:3] {
 			key := keys[user].Key
-			for collection, want := range map[string]int64{"layer-forest": forest, "layer-exclusions": exclusions, "units-territorial-beat": beats, "units-territorial-section": 1} {
+			for collection, want := range map[string]int64{"layer-forest": forest, "layer-exclusions": exclusions, "units-territorial-beat": beats, "units-territorial-section": 16, "units-reserve-response-zone": 2} {
 				if got := ogcIDs(key, collection, "limit=7"); int64(len(got)) != want {
 					t.Fatalf("%s %s: %d features, want %d", user, collection, len(got), want)
 				}
@@ -352,7 +352,7 @@ func TestGISLinkIntegration(t *testing.T) {
 				Links []ogcLink `json:"links"`
 			} `json:"collections"`
 		}
-		if a.code != http.StatusOK || json.Unmarshal(a.body, &list) != nil || len(list.Collections) != 10 {
+		if a.code != http.StatusOK || json.Unmarshal(a.body, &list) != nil || len(list.Collections) != 13 {
 			t.Fatalf("collections: HTTP %d %s", a.code, a.body)
 		}
 	})
@@ -553,7 +553,7 @@ ogrinfo -ro -so -al -oo PAGE_SIZE=40 --config GDAL_HTTP_HEADER_FILE /tmp/headers
 		user, body, _ := strings.Cut(section, "\n")
 		names := layer.FindAllStringSubmatch(body, -1)
 		counts := count.FindAllStringSubmatch(body, -1)
-		if len(names) != 10 || len(counts) != len(names) {
+		if len(names) != 13 || len(counts) != len(names) {
 			t.Fatalf("%s: ogrinfo found %d layers and %d counts", user, len(names), len(counts))
 		}
 		for i, name := range names {

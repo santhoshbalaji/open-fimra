@@ -37,6 +37,8 @@ type ingestRun struct {
 	Product     string
 	WindowStart time.Time
 	WindowEnd   time.Time
+	// Synthetic observations belong only to the workspace that replays them.
+	WorkspaceOnly bool
 }
 
 type ingestCounts struct {
@@ -134,8 +136,19 @@ func insertAndMatch(ctx context.Context, tx pgx.Tx, runID int64, run ingestRun, 
 	}
 	records := make([]record, 0, len(observations))
 	months := make(map[time.Time]struct{})
+	var scope *string
+	if run.WorkspaceOnly {
+		if run.WorkspaceID == nil {
+			return errors.New("a scoped import needs a workspace")
+		}
+		scope = run.WorkspaceID
+	}
 	for _, o := range observations {
-		records = append(records, record{o, o.SourceKey(run.Source, run.Product)})
+		key := o.SourceKey(run.Source, run.Product)
+		if scope != nil {
+			key = *scope + ":" + key
+		}
+		records = append(records, record{o, key})
 		year, month, _ := o.ObservedAt.UTC().Date()
 		months[time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)] = struct{}{}
 	}
@@ -154,7 +167,7 @@ func insertAndMatch(ctx context.Context, tx pgx.Tx, runID int64, run ingestRun, 
 			return fmt.Errorf("ensure detection partition for %s: %w", month.Format("2006-01"), err)
 		}
 	}
-	err = tx.QueryRow(ctx, ingestSQL, batch, run.Source, run.Product, firms.Counterpart(run.Product), runID).
+	err = tx.QueryRow(ctx, ingestSQL, batch, run.Source, run.Product, firms.Counterpart(run.Product), runID, scope).
 		Scan(&counts.Inserted, &counts.Matched, &counts.Linked)
 	if err != nil {
 		return fmt.Errorf("insert and match detections: %w", err)

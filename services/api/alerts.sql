@@ -80,7 +80,7 @@ details AS (
     ) next_move ON true
     LEFT JOIN LATERAL (
         SELECT key AS hierarchy, value AS levels FROM jsonb_each(a.hierarchy)
-        ORDER BY (key = h.slug) DESC, key LIMIT 1
+        ORDER BY (key = h.slug) DESC NULLS LAST, (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
     ) line ON true
 )
 SELECT EXISTS (SELECT 1 FROM grants), EXISTS (SELECT 1 FROM grants WHERE can_review),

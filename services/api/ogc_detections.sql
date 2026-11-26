@@ -18,7 +18,8 @@ JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
 LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
 LEFT JOIN layer_features f ON f.id = m.forest_feature_id
 LEFT JOIN LATERAL (
-    SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy) ORDER BY key LIMIT 1
+    SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy)
+    ORDER BY (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
 ) line ON true
 WHERE m.workspace_id = $2
   AND ($4::float8 IS NULL OR d.geom && ST_MakeEnvelope($4, $5::float8, $6::float8, $7::float8, 4326))

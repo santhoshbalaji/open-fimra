@@ -9,11 +9,11 @@ WITH input AS (
 inserted AS (
     INSERT INTO detections (source, product, source_key, satellite, instrument, observed_at,
                             geom, scan_m, track_m, brightness_k, frp_mw, confidence, day_night, raw,
-                            ingest_run_id)
+                            ingest_run_id, workspace_id)
     SELECT $2, $3, source_key, satellite, instrument, observed_at,
            ST_SetSRID(ST_Point(longitude, latitude), 4326), scan_m, track_m,
            brightness_k, frp_mw, NULLIF(confidence, ''), NULLIF(day_night, ''), COALESCE(raw, '{}'),
-           $5
+           $5, $6
     FROM input
     ON CONFLICT DO NOTHING
     RETURNING id, observed_at, geom, satellite, scan_m, track_m
@@ -30,6 +30,7 @@ nearest AS (
         SELECT e.id, e.observed_at, ST_Distance(e.geom::geography, i.geom::geography) AS distance_m
         FROM detections e
         WHERE NULLIF($4::text, '') IS NOT NULL AND e.source = $2 AND e.product = $4::text
+          AND e.workspace_id IS NOT DISTINCT FROM $6::uuid
           AND e.observed_at = i.observed_at AND e.satellite IS NOT DISTINCT FROM i.satellite
           AND ST_DWithin(e.geom::geography, i.geom::geography,
                          GREATEST(COALESCE(i.scan_m, 0), COALESCE(i.track_m, 0), 375) / 2)
@@ -60,7 +61,7 @@ matched AS (
            m.hierarchy_unit_paths, m.triage_reason, m.layer_version_ids, clock_timestamp(),
            m.beat_paths, m.boundary_snapshot
     FROM inserted d
-    CROSS JOIN workspaces w
+    JOIN workspaces w ON $6::uuid IS NULL OR w.id = $6::uuid
     CROSS JOIN LATERAL classify_detection(w.id, d.id, d.observed_at, d.geom) m
     -- A linked record shares the earlier record's matches.
     WHERE NOT EXISTS (SELECT 1 FROM linked l WHERE (l.detection_id, l.observed_at) = (d.id, d.observed_at))

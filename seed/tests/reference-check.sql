@@ -28,8 +28,12 @@ DO $$
 DECLARE
   ws uuid := (SELECT id FROM workspaces WHERE slug = 'demo');
 BEGIN
-  ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
-          WHERE h.workspace_id = ws AND u.depth = 5) = 24, 'the demo state has 24 beats';
+  ASSERT (SELECT array_agg(n ORDER BY depth) FROM (
+            SELECT u.depth, count(*) AS n FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
+            WHERE h.workspace_id = ws AND h.slug = 'territorial' AND u.valid_to IS NULL
+            GROUP BY u.depth
+          ) AS counts) = ARRAY[1, 2, 4, 8, 16, 24]::bigint[],
+    'the demo state has the full territorial hierarchy';
 
   ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
           WHERE h.workspace_id = ws AND u.depth > 0
@@ -42,8 +46,45 @@ BEGIN
     'exactly one pair of beats overlaps';
 
   ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
-          WHERE h.workspace_id = ws AND u.depth = 5 AND nlevel(u.path) = 6) = 1,
-    'one beat has a section and the others skip it';
+          WHERE h.workspace_id = ws AND h.slug = 'territorial' AND u.depth = 5
+            AND u.valid_to IS NULL AND nlevel(u.path) = 6) = 16,
+    'sixteen beats use a section and eight report directly to their range';
+
+  ASSERT EXISTS (SELECT FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
+                 WHERE h.workspace_id = ws AND h.kind = 'protected_area' AND u.code = 'W1'
+                   AND u.valid_to IS NULL),
+    'the reserve has its own wildlife division';
+
+  ASSERT (SELECT count(*) FROM layer_features f JOIN layer_versions v ON v.id = f.layer_version_id
+          JOIN layers l ON l.id = v.layer_id
+          WHERE l.workspace_id = ws AND v.overlay_kind = 'protected_area' AND v.status = 'published'
+            AND f.attributes->>'zone' IN ('core', 'buffer')) = 2,
+    'the reserve has separate core and buffer features';
+
+  ASSERT (SELECT count(*) FROM layer_features f JOIN layer_versions v ON v.id = f.layer_version_id
+          JOIN layers l ON l.id = v.layer_id
+          WHERE l.workspace_id = ws AND v.status = 'published'
+            AND v.overlay_kind IN ('community', 'civil_district')
+            AND 2 = (
+                SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
+                WHERE h.workspace_id = ws AND h.slug = 'territorial' AND u.depth = 2 AND u.valid_to IS NULL
+                  AND ST_Relate(u.geom, f.geom, '2********')
+            )) = 2,
+    'the district and committee each cover parts of two different response divisions';
+
+  ASSERT (SELECT count(*) FROM role_assignments a JOIN users u ON u.id = a.user_id
+          WHERE a.workspace_id = ws AND (u.username, a.role_slug) IN (
+            ('state.admin', 'state_admin'), ('division.officer', 'division_officer'),
+            ('beat.guard', 'field_staff'), ('beat.alternate', 'field_staff'), ('duty.officer', 'field_staff'),
+            ('range.officer', 'field_staff'), ('section.forester', 'field_staff'), ('squad.leader', 'field_staff'),
+            ('division.delegate', 'division_officer'), ('circle.reviewer', 'division_officer'),
+            ('river.officer', 'division_officer'),
+            ('community.caller', 'community_caller'), ('district.liaison', 'district_liaison')
+          )) = 14,
+    'all operations accounts have scoped grants';
+  ASSERT NOT EXISTS (SELECT FROM role_assignments a JOIN users u ON u.id = a.user_id
+                     WHERE a.workspace_id = ws AND u.username = 'no.role'),
+    'the no-access account stays unassigned';
 
   ASSERT (SELECT ST_NumInteriorRings(ST_GeometryN(geom, 1)) FROM layer_features WHERE code = 'F02') = 1,
     'forest F02 has a hole';
