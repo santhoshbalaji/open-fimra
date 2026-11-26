@@ -3,7 +3,7 @@ import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmField, HlmFieldLabel } from '@spartan-ng/helm/field';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
 import { Component, computed, inject, signal } from '@angular/core';
-import { DashboardFilters } from './dashboard-filters';
+import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
 import { ShellNavigation } from './shell-navigation';
 import { WorkspaceService } from './workspace';
 import { classes, ForestClass } from './detections';
@@ -17,7 +17,7 @@ import { classes, ForestClass } from './detections';
   imports: [HlmField, HlmFieldLabel, HlmInput, HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger, HlmSwitch],
   host: { class: 'filter-fields', id: 'map-filters' },
   template: `
-    <hlm-field><label hlmFieldLabel for="hours">Past {{ filters.hours() }} hours</label>
+    <hlm-field><label hlmFieldLabel for="hours">Past {{ filters.hours() }} {{ filters.hours() === 1 ? 'hour' : 'hours' }}</label>
       <input hlmInput id="hours" #hours type="range" min="1" max="720" [value]="filters.hours()" (change)="setFilter('hours', hours.value)">
     </hlm-field>
     <hlm-field><label hlmFieldLabel for="forest">Forest class</label>
@@ -67,7 +67,7 @@ export class FilterFields {
     if (this.navigation) {
       this.navigation.update({ [key]: value || null, cursor: null, alert: null, detection: null, incident: null, report: null });
     } else if (key === 'hours') {
-      this.filters.hours.set(+value);
+      this.filters.hours.set(value ? +value : defaultDashboardHours);
     } else if (key === 'class') {
       this.filters.forestClass.set(value as ForestClass | '');
     } else {

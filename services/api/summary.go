@@ -32,9 +32,11 @@ type responsePercentiles struct {
 	Count int `json:"count"`
 }
 type summaryFeed struct {
-	Source  string `json:"source"`
-	Product string `json:"product"`
-	Status  string `json:"status"`
+	Source              string     `json:"source"`
+	Product             string     `json:"product"`
+	Status              string     `json:"status"`
+	LastSuccessAt       *time.Time `json:"lastSuccessAt"`
+	LatestObservationAt *time.Time `json:"latestObservationAt"`
 }
 
 // summaryCounts are the counts the dashboard and situation reports share.
@@ -51,7 +53,8 @@ type summaryCounts struct {
 
 type workspaceSummary struct {
 	summaryCounts
-	FeedHealth []summaryFeed `json:"feedHealth"`
+	FeedHealth            []summaryFeed `json:"feedHealth"`
+	FeedHealthUnavailable bool          `json:"feedHealthUnavailable,omitempty"`
 }
 
 // countWindow is the time window of the shared counts. A nil start means
@@ -111,7 +114,8 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 		facts, err := loadFeedFacts(ctx, a.feedDB, root, now)
 		if err != nil {
 			a.logger.Error("Could not read dashboard feed health", "error", err)
-			writeError(w, 500, "Could not load feed health.")
+			s.FeedHealthUnavailable = true
+			writeJSON(w, 200, s)
 			return
 		}
 		s.FeedHealth = make([]summaryFeed, 0, len(facts))
@@ -120,7 +124,10 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				a.logger.Warn("Using default feed settings", "workspace", f.WorkspaceSlug, "error", err)
 			}
-			s.FeedHealth = append(s.FeedHealth, summaryFeed{f.Source, f.Product, feedStatus(f, set.Thresholds, now)})
+			s.FeedHealth = append(s.FeedHealth, summaryFeed{
+				Source: f.Source, Product: f.Product, Status: feedStatus(f, set.Thresholds, now),
+				LastSuccessAt: f.LastSuccessAt, LatestObservationAt: f.LatestObservedAt,
+			})
 		}
 	}
 	writeJSON(w, 200, s)

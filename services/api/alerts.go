@@ -27,11 +27,11 @@ type alertPage struct {
 }
 
 type alertFilters struct {
-	queue, status, class string
-	path                 *string
-	hours, limit         int
-	before               *time.Time
-	beforeID             int64
+	queue, status, class, group string
+	path                        *string
+	hours, limit                int
+	before                      *time.Time
+	beforeID                    int64
 }
 
 var stepSlug = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -39,11 +39,14 @@ var stepSlug = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var unitPrefix = regexp.MustCompile(`^[[:alnum:]_-]{1,1000}(\.[[:alnum:]_-]{1,1000})*$`)
 
 func readAlertFilters(q url.Values) (alertFilters, error) {
-	f := alertFilters{queue: q.Get("queue"), status: q.Get("status"), class: q.Get("class"), hours: 168, limit: 100}
+	f := alertFilters{queue: q.Get("queue"), status: q.Get("status"), class: q.Get("class"), group: q.Get("group"), hours: 168, limit: 100}
 	if !slices.Contains([]string{"", "unit", "edge_review", "triage"}, f.queue) ||
 		(f.status != "" && !stepSlug.MatchString(f.status)) ||
 		!slices.Contains([]string{"", "inside", "near_edge", "outside", "fixed_heat_source"}, f.class) {
 		return f, errors.New("Unknown queue, status or forest class.")
+	}
+	if !slices.Contains([]string{"", "active", "overdue", "pending_reports"}, f.group) {
+		return f, errors.New("Unknown alert group.")
 	}
 	if q.Has("unitPath") {
 		path := q.Get("unitPath")
@@ -116,7 +119,7 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 	var allowed, knownStatus bool
 	var page alertPage
 	err = a.reader.QueryRow(ctx, alertsSQL, caller.Subject, chi.URLParam(r, "slug"), id, f.hours,
-		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
+		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID, f.group).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read alerts", "error", err)
 		writeError(w, 500, "Could not load alerts.")

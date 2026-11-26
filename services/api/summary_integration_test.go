@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,29 @@ func checkSummary(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix str
 				check("pending", got.PendingReports, count("SELECT count(*) FROM summary_alerts WHERE current_step IN ('first_report','final_report')"))
 				check("overdue", got.Overdue, count(`SELECT count(*) FROM summary_alerts a WHERE now()-entered_at >
    (SELECT min(time_limit) FROM workflow_transitions WHERE template_id=a.template_id AND from_step=a.current_step)`))
+				for _, link := range []struct {
+					filter string
+					want   int
+				}{
+					{"group=active", got.Active},
+					{"group=overdue", got.Overdue},
+					{"group=pending_reports", got.PendingReports},
+					{"status=first_report", got.Steps["first_report"]},
+					{"queue=unit", got.Queues["unit"]},
+				} {
+					query := "?" + link.filter
+					if filter.query != "" {
+						query += "&" + strings.TrimPrefix(filter.query, "?")
+					}
+					response := request("GET", base+"/alerts"+query, tc.subject, "")
+					var page alertPage
+					if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || response.Code != 200 {
+						t.Fatalf("alerts %s: %d %s (%v)", query, response.Code, response.Body, err)
+					}
+					if len(page.Items) != link.want {
+						t.Fatalf("alerts %s: found %d records, summary counted %d", query, len(page.Items), link.want)
+					}
+				}
 				for _, step := range responseMilestones {
 					var expected responsePercentiles
 					err := tx.QueryRow(ctx, `SELECT percentile_cont(.5) WITHIN GROUP (ORDER BY duration),
@@ -146,9 +170,17 @@ func checkSummary(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix str
 					err := tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY source,product),'[]') FROM (
     SELECT source, product, CASE WHEN now()-coalesce(max(fetched_at) FILTER (WHERE status='succeeded'),min(started_at))>interval '1 hour' THEN 'failing'
     WHEN now()-coalesce(max(latest_observed_at),min(started_at))>interval '36 hours' THEN 'quiet'
-    WHEN now()-coalesce(max(latest_observed_at),min(started_at))>interval '18 hours' THEN 'delayed' ELSE 'healthy' END status
+    WHEN now()-coalesce(max(latest_observed_at),min(started_at))>interval '18 hours' THEN 'delayed' ELSE 'healthy' END status,
+    max(fetched_at) FILTER (WHERE status='succeeded') AS "lastSuccessAt", max(latest_observed_at) AS "latestObservationAt"
     FROM ingest_runs WHERE workspace_id=$1 AND kind='poll' GROUP BY source,product) f`, workspace).Scan(&expected)
-					if err != nil || !reflect.DeepEqual(got.FeedHealth, expected) {
+					sameInstant := func(a, b *time.Time) bool {
+						return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
+					}
+					sameFeed := func(a, b summaryFeed) bool {
+						return a.Source == b.Source && a.Product == b.Product && a.Status == b.Status &&
+							sameInstant(a.LastSuccessAt, b.LastSuccessAt) && sameInstant(a.LatestObservationAt, b.LatestObservationAt)
+					}
+					if err != nil || got.FeedHealth == nil || !slices.EqualFunc(got.FeedHealth, expected, sameFeed) {
 						t.Fatalf("feeds %+v want %+v: %v", got.FeedHealth, expected, err)
 					}
 				} else if got.FeedHealth != nil {

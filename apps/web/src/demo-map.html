@@ -182,7 +182,7 @@
   <aside class="alert-panel" aria-labelledby="queue-title" fimraListScroll>
     <div class="queue-heading">
       <h2 id="queue-title">Alert queue</h2>
-      @if (exportEndpoint(); as endpoint) {
+      @if (!queue.allQueues() && !queue.listScope() && exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
@@ -196,9 +196,18 @@
         </hlm-dialog>
       }
     </div>
+    @if (queue.listScope(); as scope) {
+      <div class="flex flex-wrap items-center gap-2">
+        <p class="font-semibold">{{ scope }}</p>
+        <button hlmBtn variant="outline" (click)="queue.clearListScope()">Clear alert filter</button>
+      </div>
+    }
     <div class="queue-tabs" role="group" aria-label="Alert queues">
+      @if (queue.allQueues() || queue.listScope()) {
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.allQueues()" (click)="queue.switchTo('all')">All queues</button>
+      }
       @for (tab of queue.tabs(); track tab) {
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="!queue.allQueues() && queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
           @if (queue.page(); as page) { <span>{{ page.counts[tab] || 0 }}</span> }
         </button>
       }
@@ -206,7 +215,7 @@
     @if (queue.message()) { <p role="status">{{ queue.message() }}</p> }
     @if (queue.rows().length) {
       <table hlmTable class="alert-table">
-        <caption class="sr-only">{{ queueLabels[queue.active()] }} alerts</caption>
+        <caption class="sr-only">{{ queue.listScope() || 'Alerts' }} · {{ queue.allQueues() ? 'All queues' : queueLabels[queue.active()] }}</caption>
         <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Alert and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
         <tbody hlmTBody>
           @for (row of queue.rows(); track row.id) {

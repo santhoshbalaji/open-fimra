@@ -51,7 +51,8 @@
         }
       }
     </ng-template>
-    @if (navigation.destination(); as destination) {
+    @let destination = navigation.destination();
+    @if (destination && destination.path !== '/dashboard') {
       <div class="workspace-controls" [class.filters-open]="filtersOpen()">
         <h1>{{ destination.name }}</h1>
         @if (showFilters()) {

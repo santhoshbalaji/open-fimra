@@ -58,6 +58,13 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
       params['queue'] = queue;
     }
   }
+  if (path === '/monitor/alerts') {
+    if (queue === 'all') params['queue'] = queue;
+    if (['active', 'overdue', 'pending_reports'].includes(input['group'])) params['group'] = input['group'];
+    if (typeof input['status'] === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(input['status'])) {
+      params['status'] = input['status'];
+    }
+  }
   if ((path === '/monitor/incidents' || path === '/monitor/map') && typeof incident === 'string' && recordId(incident)) params['incident'] = incident;
   if (path === '/reports/field') {
     if (typeof report === 'string' && submissionId(report)) params['report'] = report;

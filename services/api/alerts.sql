@@ -18,6 +18,17 @@ visible AS (
       AND ($7 = '' OR a.forest_class = $7)
       AND ($8::ltree IS NULL OR a.unit_paths <@ $8)
       AND ($12::bigint IS NULL OR a.detection_id = $12)
+      -- Match the dashboard counts across queues before paging.
+      AND CASE $14
+          WHEN 'active' THEN EXISTS (SELECT FROM workflow_steps s
+              WHERE (s.template_id, s.slug) = (i.template_id, i.current_step) AND NOT s.terminal)
+          WHEN 'overdue' THEN EXISTS (SELECT FROM workflow_transitions t
+              WHERE (t.template_id, t.from_step) = (i.template_id, i.current_step)
+                AND now() > i.entered_at + t.time_limit)
+          WHEN 'pending_reports' THEN EXISTS (SELECT FROM workflow_steps s
+              WHERE (s.template_id, s.slug) = (i.template_id, i.current_step) AND s.report_pending)
+          ELSE true
+      END
 ),
 page AS (
     SELECT * FROM visible a

@@ -115,8 +115,8 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
 @media (max-width: 840px) {
   .workspace-controls { justify-content: space-between; padding: 4px 8px; gap: 4px; }
   .filter-toggle { display: block; }
-  .filter-fields { display: none; }
-  .filters-open .filter-fields { display: flex; width: 100%; padding: 8px; }
+  .workspace-controls .filter-fields { display: none; }
+  .workspace-controls.filters-open .filter-fields { display: flex; width: 100%; padding: 8px; }
   .view-switch { width: fit-content; }
   .alert-panel { display: none; }
   .show-queue:not(.show-details) .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }

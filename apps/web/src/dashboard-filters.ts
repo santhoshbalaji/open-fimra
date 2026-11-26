@@ -2,10 +2,11 @@ import { Injectable, computed, signal } from '@angular/core';
 import { classes, ForestClass } from './detections';
 
 const storageKey = 'fimra.lowBandwidth';
+export const defaultDashboardHours = 168;
 
 @Injectable({ providedIn: 'root' })
 export class DashboardFilters {
-  readonly hours = signal(168);
+  readonly hours = signal(defaultDashboardHours);
   readonly forestClass = signal<ForestClass | ''>('');
   readonly unitPath = signal('');
   readonly lowBandwidth = signal(false);
