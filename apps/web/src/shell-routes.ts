@@ -105,6 +105,7 @@ export const shellRoutes: Routes = [
   destinationRoute('/reports/daily', () => import('./daily-return').then(module => module.DailyReturnView)),
   destinationRoute('/reports/state', () => import('./state-return').then(module => module.StateReturnView)),
   destinationRoute('/reports/situation', () => import('./situation-report').then(module => module.SituationReportView)),
+  destinationRoute('/national', () => import('./national/national-portal').then(module => module.NationalPortal)),
   destinationRoute('/dashboard', () => import('./dashboard').then(module => module.Dashboard)),
   destinationRoute('/settings/layers', () => import('./layers').then(module => module.Layers)),
   {

@@ -18,7 +18,7 @@ class Screen {
 }
 
 describe('Shell routes', () => {
-  function prepare(role: string, path: string) {
+  function prepare(role: string, path: string, kind?: 'national') {
     TestBed.configureTestingModule({ providers: [
       provideHttpClient(), provideHttpClientTesting(),
       provideRouter(shellRoutes.map(route => route.loadComponent ?
@@ -30,7 +30,7 @@ describe('Shell routes', () => {
     TestBed.inject(WorkspaceService);
     TestBed.tick();
     TestBed.inject(HttpTestingController).expectOne('https://api.test/api/v1/me').flush({
-      roleAssignments: role ? [{ role, unit: { path }, workspace: { slug: 'demo', name: 'Demo State' } }] : []
+      roleAssignments: role ? [{ role, unit: { path }, workspace: { slug: 'demo', name: 'Demo State', kind } }] : []
     });
     return { router: TestBed.inject(Router), navigation: TestBed.inject(ShellNavigation) };
   }
@@ -65,6 +65,17 @@ describe('Shell routes', () => {
     expect(router.url).toBe(forms ? '/settings/forms?workspace=demo' : role ? '/restricted' : '/');
     await harness.navigateByUrl('/reports/field');
     expect(router.url).toBe(role ? '/reports/field?workspace=demo' : '/');
+  });
+
+  it('opens the national dashboard and hides operational destinations', async () => {
+    const { router, navigation } = prepare('national_public', '', 'national');
+    const harness = await RouterTestingHarness.create('/');
+    expect(router.url).toBe('/national?workspace=demo');
+    expect(navigation.authorized().map(item => item.path)).toEqual(['/national']);
+    await harness.navigateByUrl('/national?view=public&unitPath=hub.demo');
+    expect(router.url).toBe('/national?workspace=demo&view=public');
+    await harness.navigateByUrl('/monitor/incidents');
+    expect(router.url).toBe('/restricted');
   });
 
   it('restores a legacy alert link and permits only in-scope filters', async () => {

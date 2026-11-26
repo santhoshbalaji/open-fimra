@@ -55,7 +55,8 @@ export class ShellAccount {
   private readonly navigation = inject(ShellNavigation);
 
   switchWorkspace(slug: string): void {
-    this.navigation.go('/monitor/map', {
+    const target = this.workspace.workspaces().find(workspace => workspace.slug === slug);
+    this.navigation.go(target?.kind === 'national' ? '/national' : '/monitor/map', {
       workspace: slug, unitPath: null, cursor: null, alert: null, detection: null, incident: null, queue: null
     });
   }

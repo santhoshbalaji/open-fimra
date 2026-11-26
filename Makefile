@@ -573,3 +573,12 @@ demo-state-extracts: export FIMRA_SETTINGS_KEY := $(FIMRA_SETTINGS_KEY)
 demo-state-extracts: export FIMRA_SETTINGS_OLD_KEYS := $(FIMRA_SETTINGS_OLD_KEYS)
 demo-state-extracts: demo-daily-returns ## Sign a fictional state return and its correction
 	cd services/api && go run . demo-state-extracts
+
+
+.PHONY: demo-national-portal national-test-integration
+demo-national-portal national-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+demo-national-portal: ## Load and verify the fictional national portal exchange
+	cd services/api && go run . demo-national-portal
+
+national-test-integration: ## Test the national portal with signed fictional returns
+	cd services/api && FIMRA_NATIONAL_INTEGRATION=1 go test -run '^TestNationalIntegration$$' -count=1 -v .

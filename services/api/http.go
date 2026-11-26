@@ -52,7 +52,8 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	router.Get("/readyz", a.ready)
 	// Every signed-in core API call also checks the calling device, so a
 	// wiped phone is told to wipe on its next contact.
-	authed := router.With(auth.require, a.deviceGate)
+	signedIn := router.With(auth.require, a.deviceGate)
+	authed := signedIn.With(a.stateWorkspaceOnly)
 	authed.Get("/api/v1/me", a.me)
 	authed.Get("/api/v1/setup", a.setupInfo)
 	authed.Post("/api/v1/setup/bootstrap", a.bootstrap)
@@ -173,9 +174,22 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	authed.Get("/api/v1/access-keys", a.accessKeys)
 	authed.Post("/api/v1/access-keys", a.accessKeys)
 	authed.Delete("/api/v1/access-keys/{id}", a.accessKeys)
+	signedIn.Route("/api/v1/workspaces/{slug}/national", func(portal chi.Router) {
+		portal.Get("/", a.nationalPortal)
+		portal.Get("/incidents", a.nationalIncidents)
+		portal.Get("/{view}", a.nationalDashboard)
+		portal.Post("/upload", a.nationalReceive)
+		portal.Post("/push", a.nationalReceive)
+		portal.Put("/states/{state}/sharing", a.nationalSharing)
+		portal.Put("/states/{state}/publication", a.nationalPublication)
+		portal.Put("/states/{state}/satellite", a.nationalSatellite)
+		portal.Put("/states/{state}/feedback", a.nationalFeedback)
+		portal.Put("/states/{state}/incidents/{incident}", a.nationalIncidentPut)
+	})
+	authed.Post("/api/v1/workspaces/{slug}/state-extracts/{id}/{kind}/push", a.nationalLocalPush)
 	// The GIS link is the only place a personal access key is accepted.
 	router.Route("/ogc/workspaces/{slug}", func(gis chi.Router) {
-		gis.Use(a.requireGIS(auth))
+		gis.Use(a.requireGIS(auth), a.stateWorkspaceOnly)
 		gis.Get("/", a.ogcLanding)
 		gis.Get("/conformance", a.ogcConformance)
 		gis.Get("/api", a.ogcAPI)
@@ -200,6 +214,7 @@ func (a api) ready(w http.ResponseWriter, r *http.Request) {
 type workspace struct {
 	Slug string `json:"slug"`
 	Name string `json:"name"`
+	Kind string `json:"kind,omitempty"`
 }
 
 type unit struct {
@@ -284,9 +299,18 @@ func (a api) me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	assignments := make([]roleAssignment, 0, len(rows))
+	publicWorkspaces := make(map[string]bool)
 	for _, row := range rows {
+		space := workspace{Slug: row.WorkspaceSlug, Name: row.WorkspaceName, Kind: row.WorkspaceKind}
+		if row.RoleSlug == "national_public" {
+			if !publicWorkspaces[space.Slug] {
+				assignments = append(assignments, roleAssignment{Workspace: space, Role: row.RoleSlug})
+				publicWorkspaces[space.Slug] = true
+			}
+			continue
+		}
 		assignments = append(assignments, roleAssignment{
-			Workspace: workspace{Slug: row.WorkspaceSlug, Name: row.WorkspaceName},
+			Workspace: space,
 			Hierarchy: row.HierarchySlug,
 			Role:      row.RoleSlug,
 			Unit: unit{Code: row.UnitCode, Name: row.UnitName, LevelSlug: row.LevelSlug, Path: row.UnitPath,

@@ -1,0 +1,237 @@
+<section class="mx-auto grid max-w-6xl min-w-0 gap-5 p-4 sm:p-6 lg:p-8">
+  @if (choices().length > 1) {
+    <nav class="flex flex-wrap gap-2" [attr.aria-label]="msg('National views')">
+      @for (view of choices(); track view.id) {
+        <a hlmBtn variant="outline" [routerLink]="choose(view.id)"
+           [attr.aria-current]="selected()?.id === view.id ? 'page' : null">{{ msg(view.label) }}</a>
+      }
+    </nav>
+  }
+  <fimra-state-region [state]="state()" (retry)="retry()">
+    @if (state().kind === 'ready') {
+      <div class="grid gap-4">
+        <h2 class="text-xl font-semibold">{{ msg(selected()?.label ?? '') }}</h2>
+        @if (selected()?.id === 'incidents') {
+          @if (portal.value()?.submittingStates?.length && base(); as endpoint) {
+            <fimra-national-incident-form [states]="portal.value()!.submittingStates" [base]="endpoint"
+                                         (updated)="incidents.reload()" />
+          }
+          <p>{{ msg('Distinct shared events: {0}', [number(incidents.value()?.eventCount ?? 0)]) }}</p>
+          @for (group of events(); track group[0].sharedEventId) {
+            <article class="grid min-w-0 gap-3 rounded-card border border-border bg-card p-4">
+              <h3 class="break-all font-semibold">{{ msg('Shared event ID') }} · {{ group[0].sharedEventId }}</h3>
+              @for (update of group; track update.state + update.incidentRef) {
+                <section class="grid gap-2 border-t border-border pt-3">
+                  <h4 class="break-words font-semibold">{{ update.geography }} · {{ update.incidentRef }}</h4>
+                  <p>{{ msg(incidentStatuses[update.status]) }} · {{ msg(severities[update.severity]) }} ·
+                    <time [attr.datetime]="update.occurredAt">{{ time(update.occurredAt) }}</time></p>
+                  <dl class="grid gap-2 sm:grid-cols-2">
+                    @if (update.fsiId) { <div><dt>{{ msg('FSI large fire ID') }}</dt><dd>{{ update.fsiId }}</dd></div> }
+                    @if (update.latitude !== null && update.longitude !== null) {
+                      <div><dt>{{ msg('Generalised location') }}
+                        · {{ msg(update.precisionDecimals === 0 ? 'Whole degree' : 'Tenth of a degree') }}</dt>
+                        <dd>{{ number(update.latitude) }}, {{ number(update.longitude) }}</dd></div>
+                    }
+                    @if (update.threats) { <div><dt>{{ msg('Spread or threats') }}</dt><dd>{{ update.threats }}</dd></div> }
+                    @if (update.aidRequested) { <div><dt>{{ msg('Aid requested') }}</dt><dd>{{ update.aidRequested }}</dd></div> }
+                    @if (update.aidAccepted) { <div><dt>{{ msg('Aid accepted') }}</dt><dd>{{ update.aidAccepted }}</dd></div> }
+                    @if (update.provisionalImpacts) { <div><dt>{{ msg('Provisional impacts') }}</dt><dd>{{ update.provisionalImpacts }}</dd></div> }
+                    @if (update.nextUpdateAt; as next) {
+                      <div><dt>{{ msg('Next update') }}</dt><dd><time [attr.datetime]="next">{{ time(next) }}</time></dd></div>
+                    }
+                  </dl>
+                  @if (!update.shared) { <p class="text-text-secondary">{{ msg('State only') }}</p> }
+                </section>
+              }
+            </article>
+          } @empty { <p>{{ msg('No major incident updates are available.') }}</p> }
+        } @else {
+          @if (selected()?.id === 'submissions') {
+            <div class="grid gap-4 rounded-card border border-border bg-card p-4">
+              <form class="flex flex-wrap items-end gap-3" (submit)="upload($event)">
+                <label class="grid min-w-0 gap-1">{{ msg('Signed state extract') }}
+                  <input type="file" name="extract" accept=".json,application/json" required [disabled]="busy()" class="max-w-full" />
+                </label>
+                <button hlmBtn type="submit" [disabled]="busy()">{{ msg('Upload signed extract') }}</button>
+              </form>
+              @if (failure()) { <p role="alert">{{ msg(failure()) }}</p> }
+              @if (notice()) { <p role="status">{{ msg(notice()) }}</p> }
+              @if (receipt(); as item) {
+                <div class="break-all">
+                  <p>{{ item.extractId }} · {{ msg('Revision {0}', [number(item.revision)]) }}</p>
+                  <p>{{ msg('SHA-256 digest') }} · {{ item.sha256 }}</p>
+                </div>
+              }
+            </div>
+            <details class="rounded-card border border-border bg-card p-4">
+              <summary class="font-semibold">{{ msg('Share a reporting window') }}</summary>
+              <form class="mt-3 grid gap-3" (submit)="share($event)">
+                <fieldset [disabled]="busy()" class="flex flex-wrap items-end gap-3">
+                  <label class="grid gap-1">{{ msg('State') }}
+                    <select name="state" required class="rounded-control border border-border bg-card p-2">
+                      @for (code of portal.value()?.submittingStates; track code) { <option [value]="code">{{ code }}</option> }
+                    </select>
+                  </label>
+                  <label class="grid gap-1">{{ msg('From date') }}
+                    <input name="from" type="date" required class="rounded-control border border-border bg-card p-2" />
+                  </label>
+                  <label class="grid gap-1">{{ msg('To date') }}
+                    <input name="to" type="date" required class="rounded-control border border-border bg-card p-2" />
+                  </label>
+                </fieldset>
+                <div class="flex flex-wrap gap-3">
+                  <label class="flex items-center gap-2"><input type="checkbox" name="ministry" [disabled]="busy()" />
+                    {{ msg('State totals for ministry') }}</label>
+                  <label class="flex items-center gap-2"><input type="checkbox" name="preparedness" [disabled]="busy()" />
+                    {{ msg('Scheme returns for ministry') }}</label>
+                  <label class="flex items-center gap-2"><input type="checkbox" name="survey" [disabled]="busy()" />
+                    {{ msg('Detection comparison for FSI') }}</label>
+                  <label class="flex items-center gap-2"><input type="checkbox" name="feedback" [disabled]="busy()" />
+                    {{ msg('Feedback status for FSI') }}</label>
+                </div>
+                <div><button hlmBtn type="submit" [disabled]="busy()">{{ msg('Save sharing') }}</button></div>
+              </form>
+            </details>
+          }
+          @for (row of rows.value(); track row.state + '/' + row.from + '/' + row.to) {
+            <article class="grid min-w-0 gap-3 rounded-card border border-border bg-card p-4">
+              <header>
+                <h3 class="font-semibold">{{ row.geography }} · {{ row.state }}</h3>
+                <p class="text-text-secondary">{{ day(row.from) }} – {{ day(row.to) }}</p>
+              </header>
+              @switch (selected()?.id) {
+                @case ('public') {
+                  <p>{{ msg('Source') }} · {{ msg(sourceNames[row.source ?? ''] ?? '') }}</p>
+                  @if (row.coverage) {
+                    <p>{{ msg('Report status') }} · {{ msg(statuses[row.coverage]) }}</p>
+                  }
+                  <p>{{ msg('New confirmed fires') }} ·
+                    @if (row.confirmedFires !== null && row.confirmedFires !== undefined) {
+                      <strong>{{ number(row.confirmedFires) }}</strong>
+                    } @else {
+                      {{ msg(row.coverage === 'not_reported' ? 'Not reported' : 'Count withheld') }}
+                    }
+                  </p>
+                }
+                @case ('submissions') {
+                  <p>{{ msg('Sharing') }} ·
+                    @if (row.ministry) { {{ msg('State totals for ministry') }} · }
+                    @if (row.preparednessShared) { {{ msg('Scheme returns for ministry') }} · }
+                    @if (row.survey) { {{ msg('Detection comparison for FSI') }} · }
+                    @if (row.feedbackShared) { {{ msg('Feedback status for FSI') }} · }
+                    {{ msg(row.public ? 'Public release approved' : 'No public release') }}
+                  </p>
+                  @if (row.currentIncidentId) {
+                    <div><button hlmBtn variant="outline" type="button" [disabled]="busy()" (click)="publish(row)">
+                      {{ msg(row.public ? 'Withdraw public release' : 'Publish state-level total') }}
+                    </button></div>
+                  }
+                  @for (item of row.receipts; track item.extractId + item.kind) {
+                    <details>
+                      <summary>{{ msg(item.kind === 'incident' ? 'Incident figures' : 'Preparedness and grants') }} ·
+                        {{ msg('Revision {0}', [number(item.revision)]) }} · {{ msg(statuses[item.status]) }}</summary>
+                      <p class="break-all">{{ item.extractId }} · <time [attr.datetime]="item.validatedAt">{{ time(item.validatedAt) }}</time></p>
+                      <p class="break-all">{{ msg('SHA-256 digest') }} · {{ item.sha256 }}</p>
+                    </details>
+                  } @empty { <p>{{ msg('No signed extract received for this window.') }}</p> }
+                }
+                @case ('ministry') {
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <section class="grid content-start gap-2">
+                      <h4 class="font-semibold">{{ msg('State-reported totals') }}</h4>
+                      @if (row.stateReturn; as report) {
+                        <ng-container *ngTemplateOutlet="provenance; context: { $implicit: report }" />
+                        <p>{{ msg('Reporting unit days') }} · {{ coverage(report.coverage) }}</p>
+                        <p>{{ msg(statuses[report.coverage.status]) }}</p>
+                        @if (report.totals; as totals) {
+                          <dl class="grid gap-2 sm:grid-cols-2">
+                            <div><dt>{{ msg('Source detections') }}</dt><dd>{{ number(totals.detections['records']) }}</dd></div>
+                            <div><dt>{{ msg('Deduplicated detections') }}</dt><dd>{{ number(totals.detections['deduplicated']) }}</dd></div>
+                            <div><dt>{{ msg('Routed alerts') }}</dt><dd>{{ number(totals.alerts['routed']) }}</dd></div>
+                            <div><dt>{{ msg('New confirmed fires') }}</dt><dd>{{ number(totals.incidents['new']) }}</dd></div>
+                            <div><dt>{{ msg('Active confirmed fires') }}</dt><dd>{{ number(totals.incidents['active']) }}</dd></div>
+                            <div><dt>{{ msg('Aid requested') }}</dt><dd>{{ number(totals.operations['assistance_requested']) }}</dd></div>
+                            <div><dt>{{ msg('Assistance received') }}</dt><dd>{{ number(totals.operations['assistance_received']) }}</dd></div>
+                            <div><dt>{{ msg('Approved hectares') }}</dt>
+                              <dd>{{ totals.area.hectares === null ? msg('Not reported') : number(totals.area.hectares) }}</dd>
+                              <dd>{{ coverage(totals.area) }}</dd></div>
+                          </dl>
+                        }
+                      } @else if (row.stateReturnShared) { <p>{{ msg('Expected state return · Not reported') }}</p> }
+                      @else { <p>{{ msg('Not shared') }}</p> }
+                    </section>
+                    <section class="grid content-start gap-2 border-t border-border pt-3 md:border-s md:border-t-0 md:ps-4 md:pt-0">
+                      <h4 class="font-semibold">{{ msg('Preparedness and grants') }}</h4>
+                      @if (row.preparedness; as scheme) {
+                        <ng-container *ngTemplateOutlet="provenance; context: { $implicit: scheme }" />
+                        <p>{{ msg('Approved records') }} · {{ number(scheme.figures.approvedRecords) }} · {{ msg(statuses[scheme.figures.status]) }}</p>
+                        <dl class="grid gap-2">
+                          @for (metric of [
+                            { label: 'Target quantity', quantity: scheme.figures.target },
+                            { label: 'Work completed', quantity: scheme.figures.workDone },
+                            { label: 'People trained', quantity: scheme.figures.trained },
+                            { label: 'Expenditure (INR)', quantity: scheme.figures.expenditureINR }
+                          ]; track metric.label) {
+                            <div><dt>{{ msg(metric.label) }}</dt>
+                              <dd>{{ metric.quantity.value === null ? msg('Not reported') : number(metric.quantity.value) }} · {{ coverage(metric.quantity) }}</dd></div>
+                          }
+                        </dl>
+                      } @else { <p>{{ msg(row.preparednessShared ? 'Not reported' : 'Not shared') }}</p> }
+                    </section>
+                  </div>
+                }
+                @case ('survey') {
+                  <div class="grid gap-4 md:grid-cols-2">
+                    <section class="grid content-start gap-2">
+                      <h4 class="font-semibold">{{ msg('State-reported totals') }}</h4>
+                      @if (row.stateReturn; as report) {
+                        <ng-container *ngTemplateOutlet="provenance; context: { $implicit: report }" />
+                        <p>{{ msg('Reporting unit days') }} · {{ coverage(report.coverage) }}</p>
+                        <p>{{ msg(statuses[report.coverage.status]) }}</p>
+                        @if (report.detections; as detections) {
+                          <p>{{ msg('Source detections') }} · {{ number(detections['records']) }}</p>
+                          <p>{{ msg('Deduplicated detections') }} · {{ number(detections['deduplicated']) }}</p>
+                        }
+                      } @else if (row.stateReturnShared) { <p>{{ msg('Expected state return · Not reported') }}</p> }
+                      @else { <p>{{ msg('Not shared') }}</p> }
+                    </section>
+                    <section class="grid content-start gap-2 border-t border-border pt-3 md:border-s md:border-t-0 md:ps-4 md:pt-0">
+                      <h4 class="font-semibold">{{ msg('National satellite measures') }}</h4>
+                      @if (row.satellite; as satellite) {
+                        <p>{{ msg('Source') }} · {{ satellite.source }} · {{ satellite.product }}</p>
+                        <p>{{ time(satellite.startsAt) }} – {{ time(satellite.endsAt) }}</p>
+                        <p>{{ msg('Satellite passes') }} · {{ coverage(satellite) }}</p>
+                        <p>{{ msg('Detections') }} ·
+                          {{ satellite.detections === null ? msg('Not reported') : number(satellite.detections) }}</p>
+                        @if (satellite.samePeriod === false) {
+                          <p>{{ msg('The state and satellite reporting periods differ.') }}</p>
+                        }
+                      } @else { <p>{{ msg(row.stateReturnShared ? 'Not reported' : 'Not shared') }}</p> }
+                    </section>
+                  </div>
+                  <section class="grid gap-2 border-t border-border pt-3">
+                    <h4 class="font-semibold">{{ msg('State-approved FSI feedback status') }}</h4>
+                    @if (row.feedback; as feedback) {
+                      <dl class="flex flex-wrap gap-4">
+                        <div><dt>{{ msg('Prepared for the source') }}</dt><dd>{{ number(feedback.prepared) }}</dd></div>
+                        <div><dt>{{ msg('Submitted') }}</dt><dd>{{ number(feedback.submitted) }}</dd></div>
+                        <div><dt>{{ msg('Accepted') }}</dt><dd>{{ number(feedback.accepted) }}</dd></div>
+                        <div><dt>{{ msg('Rejected by the source') }}</dt><dd>{{ number(feedback.rejected) }}</dd></div>
+                      </dl>
+                    } @else { <p>{{ msg(row.feedbackShared ? 'Not reported' : 'Not shared') }}</p> }
+                  </section>
+                }
+              }
+            </article>
+          } @empty { <p>{{ msg('No returns are available for this view.') }}</p> }
+        }
+      </div>
+    }
+  </fimra-state-region>
+</section>
+<ng-template #provenance let-item>
+  <p>{{ msg('Source') }} · {{ msg(sourceNames[item.source] ?? item.source) }} · {{ msg('Revision {0}', [number(item.revision)]) }}</p>
+  <p>{{ time(item.window.startsAt) }} – {{ time(item.window.endsAt) }}</p>
+  <p>{{ msg('Reporting cutoff') }} · {{ item.window.cutoff }} ({{ item.window.timeZone }})</p>
+  <p>{{ msg('Generated at') }} · <time [attr.datetime]="item.generatedAt">{{ time(item.generatedAt) }}</time></p>
+</ng-template>

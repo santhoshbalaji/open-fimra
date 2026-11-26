@@ -12,7 +12,8 @@ import (
 )
 
 const listRoleAssignments = `-- name: ListRoleAssignments :many
-SELECT w.slug AS workspace_slug, w.name AS workspace_name, h.slug AS hierarchy_slug,
+SELECT w.slug AS workspace_slug, w.name AS workspace_name,
+       (CASE WHEN w.kind='national' THEN w.kind ELSE '' END)::text AS workspace_kind, h.slug AS hierarchy_slug,
        a.role_slug, u.code AS unit_code, u.name AS unit_name,
        level.slug AS level_slug, u.path::text AS unit_path,
        (CASE WHEN u.geom IS NOT NULL THEN
@@ -28,13 +29,19 @@ JOIN workspaces w ON w.id = a.workspace_id
 JOIN hierarchies h ON h.id = a.hierarchy_id
 JOIN units u ON u.hierarchy_id = a.hierarchy_id AND u.current_path = a.unit_path
 JOIN hierarchy_levels level ON level.hierarchy_id = u.hierarchy_id AND level.depth = u.depth
-WHERE a.user_id = $1
+WHERE a.user_id = $1 AND (
+    (w.kind='state' AND a.role_slug NOT LIKE 'national_%')
+    OR EXISTS (SELECT FROM national_states s
+        WHERE (s.workspace_id,s.hierarchy_id,s.unit_path)=(a.workspace_id,a.hierarchy_id,a.unit_path)
+          AND a.role_slug IN ('national_ministry','national_survey','national_disaster','national_nodal','national_public'))
+)
 ORDER BY w.slug, h.slug, a.unit_path, a.role_slug
 `
 
 type ListRoleAssignmentsRow struct {
 	WorkspaceSlug string
 	WorkspaceName string
+	WorkspaceKind string
 	HierarchySlug string
 	RoleSlug      string
 	UnitCode      string
@@ -57,6 +64,7 @@ func (q *Queries) ListRoleAssignments(ctx context.Context, userID pgtype.UUID) (
 		if err := rows.Scan(
 			&i.WorkspaceSlug,
 			&i.WorkspaceName,
+			&i.WorkspaceKind,
 			&i.HierarchySlug,
 			&i.RoleSlug,
 			&i.UnitCode,
