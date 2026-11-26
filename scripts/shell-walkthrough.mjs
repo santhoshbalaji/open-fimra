@@ -152,8 +152,9 @@ try {
   });
   await expect(page).toHaveURL(/hours=144/);
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
-  await page.getByRole('button', { name: 'Older alerts' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page).toHaveURL(/cursor=/);
+  await expect(page.getByText('Page 2', { exact: true })).toBeVisible();
   const listURL = page.url();
   const list = page.locator('.alert-panel');
   const row = list.locator('.row-open').last();

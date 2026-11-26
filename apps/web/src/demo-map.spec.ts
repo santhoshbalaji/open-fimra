@@ -103,8 +103,8 @@ describe('Detection map', () => {
     else geography.flush({}, { status: 503, statusText: 'Unavailable' });
     http.expectOne(req => req.params.has('queue')).flush({
       counts: { unit: 1 }, canReview: true, items: [{
-        id: '14', detection_id: '99', forest_class: 'inside', queue: 'unit', step_label: 'New',
-        step_time: new Date().toISOString(), observed_at: Math.floor(Date.now() / 1000),
+        id: '14', detection_id: '99', forest_class: 'inside', queue: 'unit', step_label: 'New', overdue: true, next_action: 'Next step: Acknowledged',
+        step_time: new Date().toISOString(), observed_at: Math.floor(Date.now() / 1000) - 60,
         places: { beat: { name: 'Beat 05' } }
       }]
     });
@@ -221,12 +221,13 @@ describe('Detection map', () => {
     http.verify();
   });
 
-  it('names the row button for the place and alert ID, with forest class below', () => {
+  it('leads with place and alert ID, then shows overdue, age and the next action', () => {
     render();
     const button = html.querySelector('.row-open')!;
     expect(button.textContent?.trim()).toBe('Beat 05 · Alert #14');
     expect(button.getAttribute('aria-label')).toBeNull();
-    expect(button.nextElementSibling?.textContent).toBe('Inside forest');
+    expect(button.nextElementSibling?.textContent).toMatch(/Overdue.*ago.*Next step: Acknowledged/);
+    expect(html.querySelector('.compact-alerts li .step-meta')?.textContent).toContain('New');
     http.verify();
   });
 });

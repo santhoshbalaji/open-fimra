@@ -1,15 +1,13 @@
-import { HlmTableImports } from '@spartan-ng/helm/table';
-import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
+import { NgTemplateOutlet } from '@angular/common';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { mapColours } from './token-values';
 import { RouterLink } from '@angular/router';
-import { AfterViewInit, Component, ViewEncapsulation, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { afterNextRender, AfterViewInit, Component, ViewEncapsulation, ElementRef, Injector, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, EMPTY, exhaustMap, expand, forkJoin, reduce, timer } from 'rxjs';
-import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
 import { SidePanel } from './ui/side-panel';
 import { StateRegion, type DataState } from './ui/state-region';
@@ -20,7 +18,7 @@ import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, alertRowLabel, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
+import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import type { IncidentFocus, IncidentRow } from './incidents';
 import { AlertReports } from './forms/alert-reports';
@@ -30,6 +28,8 @@ import { exclusionOpacity, referenceGroups, type MapLayerGroup, type WorkspaceMa
 import { ThemeService, type Theme } from './theme';
 import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
+import { DataTable, type TableColumn } from './ui/data-table';
+import { defaultWorkspaceFormat } from './workspace-format';
 import { restoreOverlayFocus } from './ui/overlay-focus';
 
 const detectionGroup: MapLayerGroup = { id: 'detections', label: 'Fire detections', minZoom: 0 };
@@ -50,7 +50,7 @@ function pointCollection(points: [number, number][]): FeatureCollection<Point> {
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, SidePanel, StateRegion, RouterLink],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, NgTemplateOutlet, DataTable, Workflow, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, SidePanel, StateRegion, RouterLink],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -131,9 +131,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   });
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
-  readonly alertRowLabel = alertRowLabel;
   readonly hours = this.queue.hours;
-  readonly mobileQueue = computed(() => this.navigation.path() === '/monitor/alerts');
+  readonly alertsView = computed(() => this.navigation.path() === '/monitor/alerts');
   readonly incidentFocus = signal<IncidentFocus | null>(null);
   readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
@@ -152,12 +151,38 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       ? [point.longitude, point.latitude] as [number, number] : null;
   }, { equal: (a, b) => a?.[0] === b?.[0] && a?.[1] === b?.[1] });
   readonly now = this.queue.now;
-  readonly relativeAge = relativeAge;
   readonly detectionAge = detectionAge;
-  readonly stepDate = Date.parse;
-  readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'long' });
+  readonly dateTime = (value: string | number) => defaultWorkspaceFormat.dateTime(new Date(value));
+  readonly rowAge = (row: AlertRow) => {
+    const observed = row.observed_at * 1000;
+    const now = this.now();
+    return now - observed < 60_000 ? 'Just now' : defaultWorkspaceFormat.age(new Date(observed), new Date(now));
+  };
+  readonly rowKey = (row: AlertRow) => row.id;
+  readonly rowLabel = (row: AlertRow) => alertRowLabel(row, this.places(row).firstName);
+  private readonly rowHeading = viewChild<TemplateRef<{ $implicit: AlertRow }>>('rowHeading');
+  private readonly rowStatus = viewChild<TemplateRef<{ $implicit: AlertRow }>>('rowStatus');
+  readonly queueCaption = computed(() =>
+    (this.queue.listScope() || 'Alerts') + ' · ' + (this.queue.allQueues() ? 'All queues' : queueLabels[this.queue.active()]));
+  readonly queueColumns = computed<TableColumn<AlertRow>[]>(() => [
+    { id: 'alert', label: 'Place and alert', rowHeading: true, value: this.rowLabel, cell: this.rowHeading() },
+    { id: 'workflow', label: 'Workflow', value: row => row.step_label, cell: this.rowStatus() },
+    { id: 'observed', label: 'Observed', sortable: true, value: row => this.dateTime(row.observed_at * 1000) },
+    { id: 'forest', label: 'Forest class', value: row => this.classes[row.forest_class] }
+  ]);
+  readonly dockState = computed<DataState>(() => {
+    const state = this.queue.state();
+    return state.kind === 'empty' && this.queue.rows().length ? { kind: 'ready' } : state;
+  });
+  private readonly workflow = viewChild(Workflow);
+  private readonly reports = viewChild(AlertReports);
+  private readonly reportsHeading = viewChild<ElementRef<HTMLElement>>('reportsHeading');
+  private readonly queueTitle = viewChild<ElementRef<HTMLElement>>('queueTitle');
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
   private selectionTrigger?: HTMLElement;
+  private readonly focusAfterClose = signal<{ alert: string } | null>(null);
+  private readonly injector = inject(Injector);
+  private readonly queuePanel = viewChild<ElementRef<HTMLElement>>('queuePanel');
   private resize?: ResizeObserver;
   private selectedId = '';
   private previousView?: { center: [number, number]; zoom: number };
@@ -280,6 +305,20 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }
     });
     effect(() => this.detailTitle()?.nativeElement.focus({ preventScroll: true }));
+    effect(() => {
+      const closed = this.focusAfterClose();
+      if (!closed || this.alertId() || this.detectionId() || this.selected()) return;
+      this.focusAfterClose.set(null);
+      afterNextRender(() => {
+        const row = closed.alert ? this.queuePanel()?.nativeElement.querySelector<HTMLElement>(
+          `[data-alert-id="${closed.alert}"]`
+        ) : null;
+        const fallback = this.alertsView() ? this.queueTitle()?.nativeElement : this.map?.getCanvas();
+        const trigger = this.selectionTrigger ?? (this.alertsView() ? null : document.getElementById('detection-picker'));
+        restoreOverlayFocus(row ?? trigger, fallback);
+        this.selectionTrigger = undefined;
+      }, { injector: this.injector });
+    });
     effect(onCleanup => {
       const id = this.alertId();
       const endpoint = this.queue.endpoint();
@@ -289,7 +328,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         return;
       }
       if (untracked(this.queue.linked)?.id !== id) this.queue.select(null);
-      this.queue.now();
+      this.queue.revision();
       const request = this.http.get<AlertRow>(endpoint + '/' + id).subscribe({
         next: row => this.queue.selectLinked(row),
         error: err => {
@@ -593,14 +632,24 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   openRow(row: AlertRow, button: HTMLButtonElement): void {
     this.selectionTrigger = button;
-    this.navigation.update({ alert: row.id, detection: null });
+    this.navigation.update({ alert: row.id, detection: null, queue: this.queue.allQueues() ? 'all' : this.queue.active() });
+  }
+
+  openReport(key: string): void {
+    const reports = this.reports();
+    const form = reports?.forms()?.find(form => form.form === key && form.step === this.queue.pinned()?.status);
+    if (reports && form && reports.canFill(form)) reports.fill(form);
+    else this.reportsHeading()?.nativeElement.focus();
+  }
+
+  reportChanged(): void {
+    this.workflow()?.reload();
+    this.queue.refresh();
   }
 
   closeDetails(): void {
+    this.focusAfterClose.set({ alert: this.alertId() });
     this.navigation.update({ alert: null, detection: null });
-    requestAnimationFrame(() => {
-      restoreOverlayFocus(this.selectionTrigger ?? document.getElementById('detection-picker'), this.map?.getCanvas());
-    });
   }
 
   fit(): void {

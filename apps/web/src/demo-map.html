@@ -1,4 +1,4 @@
-<div class="workspace-panes" [class.show-queue]="mobileQueue()" [class.show-details]="!!selected()">
+<div class="workspace-panes" [class.show-queue]="alertsView()" [class.show-details]="!!selected()">
 <section class="map-pane" aria-label="Detection map">
 <div #canvas class="map-canvas"></div>
 <div class="map-actions" role="group" aria-label="Map controls">
@@ -136,11 +136,32 @@
         <p>{{ workspace.current()?.name }}</p>
         <h2 id="detail-title" #detailTitle tabindex="-1">{{ alert ? 'Alert #' + alert.id : 'Detection #' + point.id }}</h2>
       </div>
-      <button type="button" hlmBtn variant="ghost" (click)="closeDetails()" aria-label="Close map details">Close</button>
+      <button type="button" hlmBtn variant="ghost" (click)="closeDetails()" [attr.aria-label]="alertsView() ? 'Close alert details' : 'Close map details'">Close</button>
     </div>
+    <section class="map-detail-block" aria-labelledby="alert-detail-heading">
+      <h3 id="alert-detail-heading">Routed alert</h3>
+      @if (alert) {
+        <div class="step-meta" aria-label="Current step">
+          <fimra-status-badge icon="step" [label]="alert.step_label" />
+          <time [attr.datetime]="alert.step_time">{{ dateTime(alert.step_time) }}</time>
+          @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+        </div>
+        @defer (on immediate) {
+          <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
+            (changed)="queue.refresh()" (reportNeeded)="openReport($event)" />
+        }
+      } @else { <p>No alert available for this detection.</p> }
+    </section>
+    @if (alert) {
+      <section class="map-detail-block" #reportsHeading tabindex="-1" aria-label="Field reports">
+        @defer (on immediate) {
+          <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="reportChanged()" />
+        }
+      </section>
+    }
     <section class="map-detail-block" aria-labelledby="observation-heading">
       <h3 id="observation-heading">{{ point.source === 'manual' ? 'Reported observation' : 'Detected observation' }}</h3>
-      <p>Detection #{{ point.id }} · {{ localTime.format(point.observed_at * 1000) }} · {{ detectionAge(point.observed_at, now()) }}</p>
+      <p>Detection #{{ point.id }} · {{ dateTime(point.observed_at * 1000) }} · {{ detectionAge(point.observed_at, now()) }}</p>
       <dl>
         <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
         @for (place of places(point).all; track place.label; let first = $first) {
@@ -153,23 +174,6 @@
       </dl>
       @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
     </section>
-    <section class="map-detail-block" aria-labelledby="alert-detail-heading">
-      <h3 id="alert-detail-heading">Routed alert</h3>
-      @if (alert) {
-        <div class="step-meta" aria-label="Current step">
-          <fimra-status-badge icon="step" [label]="alert.step_label" />
-          <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
-          @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-        </div>
-        @defer (on immediate) {
-          <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
-            (changed)="queue.refresh()" />
-        }
-        @defer (on immediate) {
-          <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="queue.refresh()" />
-        }
-      } @else { <p>No alert available for this detection.</p> }
-    </section>
     <section class="map-detail-block" aria-labelledby="incident-detail-heading">
       <h3 id="incident-detail-heading">Linked incident</h3>
       @if (alert?.incident_id; as incident) {
@@ -179,9 +183,9 @@
   </section>
 }
 @if (workspace.current()) {
-  <aside class="alert-panel" aria-labelledby="queue-title" fimraListScroll>
+  <aside #queuePanel class="alert-panel" aria-labelledby="queue-title" fimraListScroll>
     <div class="queue-heading">
-      <h2 id="queue-title">Alert queue</h2>
+      <h2 id="queue-title" #queueTitle tabindex="-1">Alert queue</h2>
       @if (!queue.allQueues() && !queue.listScope() && exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
@@ -196,6 +200,7 @@
         </hlm-dialog>
       }
     </div>
+    @if (alertsView() && linkedMessage()) { <p role="status">{{ linkedMessage() }}</p> }
     @if (queue.listScope(); as scope) {
       <div class="flex flex-wrap items-center gap-2">
         <p class="font-semibold">{{ scope }}</p>
@@ -212,41 +217,46 @@
         </button>
       }
     </div>
-    @if (queue.message()) { <p role="status">{{ queue.message() }}</p> }
-    @if (queue.rows().length) {
-      <table hlmTable class="alert-table">
-        <caption class="sr-only">{{ queue.listScope() || 'Alerts' }} · {{ queue.allQueues() ? 'All queues' : queueLabels[queue.active()] }}</caption>
-        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Alert and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
-        <tbody hlmTBody>
+    @if (alertsView()) {
+      <fimra-data-table [caption]="queueCaption()" [columns]="queueColumns()"
+        [page]="queue.table()" [scrollKey]="navigation.url()" [state]="queue.state()" [rowKey]="rowKey" [rowLabel]="rowLabel" [phoneCards]="true"
+        (retry)="queue.refresh()" (pageRequest)="queue.changePage($event)" />
+    } @else {
+      <fimra-state-region [state]="dockState()" (retry)="queue.refresh()">
+        <ul class="compact-alerts" role="list">
           @for (row of queue.rows(); track row.id) {
-            @let active = row.detection_id === selected()?.id?.toString();
-            @let place = places(row);
-            <tr hlmTr [attr.data-state]="active ? 'selected' : null">
-              <td hlmTd><button #rowButton class="row-open" (click)="openRow(row, rowButton)"
-                    [attr.aria-current]="active ? 'true' : null">{{ alertRowLabel(row, place.firstName) }}</button>
+            <li [class.selected]="row.detection_id === selected()?.id?.toString()">
+              <ng-container [ngTemplateOutlet]="rowHeading" [ngTemplateOutletContext]="{ $implicit: row }" />
+              <div class="step-meta">
+                <ng-container [ngTemplateOutlet]="rowStatus" [ngTemplateOutletContext]="{ $implicit: row }" />
                 <small>{{ classes[row.forest_class] }}</small>
-                @if (place.rest) { <small>{{ place.rest }}</small> }
-                <small><time [title]="localTime.format(row.observed_at * 1000)">{{ relativeAge(row.observed_at, now()) }}</time></small>
-                @if (row.triage) { <small>{{ reasons[row.triage] }}</small> }
-              </td>
-              <td hlmTd><div class="step-meta">
-                <fimra-status-badge icon="step" [label]="row.step_label" />
-                <time [attr.datetime]="row.step_time">{{ localTime.format(stepDate(row.step_time)) }}</time>
-                @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-              </div></td>
-            </tr>
+              </div>
+            </li>
           }
-        </tbody>
-      </table>
-    } @else if (!queue.message() && queue.page()) {
-      <fimra-empty-state heading="No alerts on this page" detail="Check another queue or change the filters." />
-    } @else if (!queue.message()) {
-      <div role="status" aria-label="Loading alerts" class="grid gap-2"><hlm-skeleton class="h-12" /><hlm-skeleton class="h-12" /></div>
-    }
-    @if (queue.cursor()) { <button hlmBtn variant="outline" (click)="queue.changePage('')">Newest alerts</button> }
-    @if (queue.page()?.nextCursor; as cursor) {
-      <button hlmBtn variant="outline" (click)="queue.changePage(cursor)">Older alerts</button>
+        </ul>
+        <div class="queue-pages" role="group" aria-label="Alert pages">
+          <button type="button" hlmBtn variant="outline"
+            [disabled]="dockState().kind === 'stale' || !queue.table().position.previousCursors.length" (click)="queue.previous()">Previous</button>
+          <button type="button" hlmBtn variant="outline"
+            [disabled]="dockState().kind === 'stale' || !queue.table().nextCursor" (click)="queue.next()">Next</button>
+        </div>
+      </fimra-state-region>
     }
   </aside>
 }
 </div>
+
+<ng-template #rowHeading let-row>
+  <div class="alert-scan">
+    <button type="button" #rowButton class="row-open" [attr.data-alert-id]="row.id" (click)="openRow(row, rowButton)"
+      [attr.aria-current]="row.detection_id === selected()?.id?.toString() ? 'true' : null">{{ rowLabel(row) }}</button>
+    <p class="scan-line">
+      @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+      <span>{{ rowAge(row) }}</span>
+      @if (row.next_action) { <span class="next-action">{{ row.next_action }}</span> }
+    </p>
+  </div>
+</ng-template>
+<ng-template #rowStatus let-row>
+  <fimra-status-badge icon="step" [label]="row.step_label" />
+</ng-template>

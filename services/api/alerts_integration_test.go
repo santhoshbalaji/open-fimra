@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -51,6 +52,7 @@ func checkAlertAccess(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix
 	}
 	page := list("a1", "?limit=2")
 	seen := map[string]bool{}
+	var newest []string
 	for {
 		for _, row := range page.Items {
 			var alert struct {
@@ -72,6 +74,7 @@ func checkAlertAccess(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix
 				t.Fatal("duplicate cursor row", alert.ID)
 			}
 			seen[alert.ID] = true
+			newest = append(newest, alert.ID)
 			if w := request(http.MethodGet, base+"/"+alert.ID, "a1"); w.Code != 200 {
 				t.Fatalf("detail returned %d", w.Code)
 			}
@@ -89,7 +92,29 @@ func checkAlertAccess(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix
 	if len(seen) != 7 {
 		t.Fatalf("cursor read %d alerts", len(seen))
 	}
-	for _, query := range []string{"?queue=invalid", "?status=old", "?class=bad", "?unitPath=a..b", "?cursor=x", "?hours=0", "?limit=201", "/bad"} {
+	var oldest []string
+	for query := "?sort=oldest&limit=2"; ; {
+		page = list("a1", query)
+		for _, row := range page.Items {
+			var item struct {
+				ID         string `json:"id"`
+				NextAction string `json:"next_action"`
+			}
+			if err := json.Unmarshal(row, &item); err != nil || item.NextAction == "" {
+				t.Fatalf("alert lacks a next action: %s (%v)", row, err)
+			}
+			oldest = append(oldest, item.ID)
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		query = "?sort=oldest&limit=2&cursor=" + url.QueryEscape(page.NextCursor)
+	}
+	slices.Reverse(newest)
+	if !slices.Equal(newest, oldest) {
+		t.Fatalf("oldest pages = %v, want %v", oldest, newest)
+	}
+	for _, query := range []string{"?sort=invalid", "?queue=invalid", "?status=old", "?class=bad", "?unitPath=a..b", "?cursor=x", "?hours=0", "?limit=201", "/bad"} {
 		if w := request(http.MethodGet, base+query, "a1"); w.Code != 400 {
 			t.Fatalf("%s returned %d", query, w.Code)
 		}

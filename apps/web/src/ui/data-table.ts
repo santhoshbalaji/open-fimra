@@ -75,6 +75,7 @@ export class DataTable<Row> {
   );
   protected readonly cards = computed(() => this.phoneCards() && this.phone());
   protected readonly visibleColumns = computed(() => this.columns().filter(column => this.isVisible(column)));
+  protected readonly rowHeadingCell = computed(() => this.columns().find(column => column.rowHeading)?.cell);
   protected readonly sort = computed(() => this.page().position.sort);
   protected readonly sortLabel = computed(() => {
     const sort = this.sort();

@@ -137,3 +137,50 @@ fimra-demo-map { display: flex; flex-direction: column; height: 100%; background
   .fire-controls { inset: 8px auto auto 8px; }
   .map-legend { inset: auto auto 8px 8px; max-width: calc(100% - 16px); }
 }
+
+.workspace-panes.show-queue > .map-pane { display: none; }
+.workspace-panes.show-queue > .alert-panel {
+  display: block;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  border-left: 0;
+}
+.show-queue .detail-card { order: 1; }
+.alert-scan { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
+.alert-scan .row-open {
+  min-height: 36px;
+  text-align: start;
+  color: var(--color-brand);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  overflow-wrap: anywhere;
+}
+.alert-scan .row-open[aria-current=true] { background: var(--color-brand-soft); }
+.scan-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--text-label); font-weight: 400; }
+.scan-line fimra-status-badge, .compact-alerts fimra-status-badge { margin: 0; }
+.alert-panel fimra-status-badge,
+.detail-card fimra-status-badge { max-width: 100%; }
+.alert-panel fimra-status-badge [data-slot="badge"],
+.detail-card fimra-status-badge [data-slot="badge"] {
+  height: auto;
+  min-height: 1.25em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.scan-line .next-action { font-weight: 600; }
+.compact-alerts li { display: grid; gap: 4px; border-bottom: 1px solid var(--color-border); padding: 8px 4px; }
+.compact-alerts li.selected { background: var(--color-brand-soft); }
+.queue-pages { display: flex; gap: 8px; margin-top: 8px; }
+.detail-card { scroll-padding-top: 70px; }
+.workflow-step h3 { margin: 0; }
+.detail-card .workflow-moves button,
+.detail-card .workflow-step button { max-width: 100%; height: auto; min-height: 36px; white-space: normal; }
+@media (max-width: 840px) {
+  .detail-card { flex: 0 1 78%; }
+  .workspace-panes.show-queue > .alert-panel { position: absolute; inset: 0; }
+  .workspace-panes.show-queue.show-details > .alert-panel { visibility: hidden; }
+  .show-queue .detail-card { flex: 1; }
+  .alert-scan .row-open { min-height: 44px; }
+}

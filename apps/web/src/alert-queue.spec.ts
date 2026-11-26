@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
+import { convertToParamMap } from '@angular/router';
+import { ShellNavigation } from './shell-navigation';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertQueue, AlertRow } from './alert-queue';
@@ -25,15 +27,19 @@ describe('Alert queue', () => {
       { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo' }), deny: vi.fn() } },
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } }
     ] });
+  });
+  function start() {
     queue = TestBed.inject(AlertQueue);
     http = TestBed.inject(HttpTestingController);
-  });
+  }
   it('shows counts and only offers review queues to an eligible grant', () => {
+    start();
     request('queue', 'unit').flush({ ...result, canReview: false, counts: {} });
     expect(queue.tabs()).toEqual(['unit']);
     expect(queue.rows()).toEqual([]);
   });
   it('selects a map point in its own queue even when it is beyond the first page', () => {
+    start();
     request('queue', 'unit').flush(result);
     queue.select({ ...edge, id: 17 });
     request('detection', '17').flush({ ...result, items: [edge] });
@@ -47,14 +53,15 @@ describe('Alert queue', () => {
     http.verify();
   });
   it('keeps row selection and the current page across the minute refresh', () => {
+    start();
     vi.useFakeTimers();
     try {
       request('queue', 'unit').flush(result);
       queue.switchTo('edge_review');
       request('queue', 'edge_review').flush({ ...result, nextCursor: 'older' });
-      queue.changePage('older');
+      queue.next();
       request('cursor', 'older').flush({ ...result, items: [edge] });
-      queue.selectRow(queue.rows()[0]);
+      queue.select({ ...edge, id: edge.detection_id });
       request('detection', '17').flush({ ...result, items: [edge] });
       vi.advanceTimersByTime(60_000);
       request('cursor', 'older').flush({ ...result, items: [edge] });
@@ -65,15 +72,61 @@ describe('Alert queue', () => {
     } finally { vi.useRealTimers(); }
   });
   it('cancels stale pages and point lookups when the shared time window changes', () => {
+    start();
     const first = request('hours', '168');
-    queue.selectRow(edge);
+    queue.select({ ...edge, id: edge.detection_id });
     const selection = request('detection', '17');
     queue.hours.set(24);
     request('hours', '24').flush(result);
     expect(first.cancelled).toBe(true);
     expect(selection.cancelled).toBe(true);
     expect(queue.selected()).toBeNull();
-    expect(queue.cursor()).toBe('');
+    expect(queue.table().position.cursor).toBeNull();
+    http.verify();
+  });
+  it('restores URL page history, keeps scope and selection during refresh and retries the same sorted page', () => {
+    let params: Record<string, string | null> = {
+      queue: 'all', group: 'overdue', alert: '3',
+      alertSort: 'oldest', cursor: 'third', alertTrail: '-|second'
+    };
+    const query = signal(convertToParamMap(params));
+    const update = (changes: Record<string, string | null>) => {
+      params = { ...params, ...changes };
+      query.set(convertToParamMap(params));
+    };
+    TestBed.configureTestingModule({ providers: [{ provide: ShellNavigation, useValue: { query, update } }] });
+    start();
+    queue.hours.set(72);
+    const third = request('cursor', 'third');
+    expect(third.request.params.get('sort')).toBe('oldest');
+    expect(third.request.params.get('group')).toBe('overdue');
+    expect(third.request.params.get('hours')).toBe('72');
+    expect(third.request.params.has('queue')).toBe(false);
+    third.flush({ ...result, items: [edge] });
+    queue.selectLinked(edge);
+    expect(queue.table().position.previousCursors).toEqual([null, 'second']);
+
+    queue.refresh();
+    const refresh = request('cursor', 'third');
+    expect(queue.state().kind).toBe('stale');
+    expect(queue.table().rows).toEqual([edge]);
+    refresh.flush({}, { status: 500, statusText: 'Unavailable' });
+    expect(queue.state()).toMatchObject({ kind: 'error', keepContent: true });
+    expect(queue.table().rows).toEqual([edge]);
+    expect(queue.selected()?.id).toBe('17');
+
+    queue.refresh();
+    request('cursor', 'third').flush({ ...result, items: [edge] });
+    queue.previous();
+    request('cursor', 'second').flush({ ...result, items: [edge], nextCursor: 'third' });
+    expect(queue.table().position.previousCursors).toEqual([null]);
+    queue.next();
+    request('cursor', 'third').flush({ ...result, items: [edge] });
+    queue.changePage({ cursor: null, previousCursors: [], sort: { columnId: 'observed', direction: 'descending' } });
+    TestBed.tick();
+    http.expectOne(req => !req.params.has('sort') && !req.params.has('cursor')).flush(result);
+    expect(params).toMatchObject({ queue: 'all', group: 'overdue', alert: '3', cursor: null, alertTrail: null });
+    expect(queue.selected()?.id).toBe('17');
     http.verify();
   });
 });

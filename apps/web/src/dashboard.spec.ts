@@ -180,7 +180,7 @@ describe('Control-room dashboard', () => {
     open();
     const request = TestBed.inject(HttpTestingController).expectOne(r => r.url.endsWith('/alerts'));
     expect(Object.fromEntries(request.request.params.keys().map(key => [key, request.request.params.get(key)])))
-      .toEqual({ hours: '72', class: 'inside', unitPath: 'ds.c1', queue: 'unit' });
+      .toEqual({ hours: '72', class: 'inside', unitPath: 'ds.c1', queue: 'unit', limit: '25' });
     expect(filters.tileClasses()).toBe('inside');
     request.flush({ items: [], counts: {}, canReview: false });
   });
