@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { signal } from '@angular/core';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccessKeys } from './access-keys';
@@ -35,11 +37,12 @@ describe('AccessKeys', () => {
     stubLayoutApis();
     workspace.set({ slug: 'demo' });
     TestBed.configureTestingModule({ imports: [AccessKeys], providers: [
-      provideHttpClient(), provideHttpClientTesting(),
+      provideHttpClient(), provideHttpClientTesting(), provideSpartanHlm(),
       { provide: AuthService, useValue: { sessionEnded } },
       { provide: WorkspaceService, useValue: { current: workspace } },
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test/' } }
     ] });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     fixture = TestBed.createComponent(AccessKeys);
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
@@ -49,11 +52,14 @@ describe('AccessKeys', () => {
     fixture.destroy();
     http.verify();
     sessionEnded.mockReset();
+    vi.restoreAllMocks();
   });
 
   it('shows the workspace address and the saved keys without their secrets', () => {
     http.expectOne(keysURL).flush({ items: [saved, { ...saved, id: 'k2', name: 'Old', expired: true }], limit: 20 });
     fixture.detectChanges();
+    const disclosure = fixture.nativeElement.querySelector('details:has(.service-address)') as HTMLDetailsElement;
+    expect(disclosure.open).toBe(false);
     expect(fixture.nativeElement.querySelector('.service-address').textContent).toBe('https://api.test/ogc/workspaces/demo');
     const rows = [...fixture.nativeElement.querySelectorAll('tbody tr')].map(row => (row as HTMLElement).textContent);
     expect(rows).toHaveLength(2);
@@ -62,7 +68,9 @@ describe('AccessKeys', () => {
     expect(rows[1]).toContain('Expired');
   });
 
-  it('makes a key, shows it once and adds it to the list', () => {
+  it('creates a key, copies it with an announcement and returns focus after dismissal', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     http.expectOne(keysURL).flush({ items: [], limit: 20 });
     fixture.detectChanges();
     expect(text()).toContain('No keys yet');
@@ -75,10 +83,19 @@ describe('AccessKeys', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.new-key').textContent).toBe('fimra_Ab12Cd-secret');
     expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(document.activeElement?.textContent).toBe('Copy the key Office laptop now');
+    button('Copy key')?.click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('fimra-live-status[role=status]:not(:empty)')?.textContent).toContain('Key copied.');
+    });
+    expect(writeText).toHaveBeenCalledWith('fimra_Ab12Cd-secret');
+    Reflect.deleteProperty(navigator, 'clipboard');
     button('I have saved it')?.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.new-key')).toBeNull();
     expect(text()).not.toContain('fimra_Ab12Cd-secret');
+    expect(document.activeElement?.id).toBe('key-name');
   });
 
   it('asks for a name before making a key', () => {
@@ -89,19 +106,33 @@ describe('AccessKeys', () => {
     expect(text()).toContain('Give the key a name');
   });
 
-  it('revokes a key after confirmation', () => {
+  it('returns focus on Escape and revokes only after explicit confirmation', async () => {
     http.expectOne(keysURL).flush({ items: [saved], limit: 20 });
     fixture.detectChanges();
-    (fixture.nativeElement.querySelector('[aria-label="Revoke Office laptop"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
-    expect(text()).toContain('stops working at once');
-    button('Revoke key')?.click();
-    const request = http.expectOne(keysURL + '/k1');
+    const trigger = fixture.nativeElement.querySelector('[aria-label="Revoke Office laptop"]') as HTMLButtonElement;
+    trigger.focus();
+    trigger.click();
+    TestBed.tick();
+    const cancel = button('Cancel')!;
+    expect(document.activeElement).toBe(cancel);
+    cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    TestBed.tick();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+    http.expectNone(keysURL + '/k1');
+    await Promise.resolve();
+
+    trigger.click();
+    TestBed.tick();
+    expect(document.querySelector('[role=alertdialog]')?.textContent).toContain('stops working at once');
+    button('Revoke key')!.click();
+    TestBed.tick();
+    const request = await vi.waitFor(() => http.expectOne(keysURL + '/k1'));
     expect(request.request.method).toBe('DELETE');
     request.flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelectorAll('tbody tr')).toHaveLength(0);
     expect(text()).toContain('No keys yet');
+    expect(document.activeElement?.id).toBe('keys-heading');
   });
 
   it('stops making keys at the limit and reports errors', () => {
