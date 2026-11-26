@@ -87,7 +87,7 @@ case $MODE in
     pids+=($!)
     mkdir -p "$SHOTS" "$HOME/.cache/open-fimra-walkthrough"
     cp scripts/mobile-walkthrough.mjs "$HOME/.cache/open-fimra-walkthrough/mobile-walkthrough.mjs"
-    if ! docker run --rm --network host --init \
+    if ! docker run --rm --network host --init --memory "${MOBILE_MEMORY:-4g}" --cpus "${MOBILE_CPUS:-2}" \
       -v "$HOME/.cache/open-fimra-walkthrough:/work" -v "$SHOTS:/shots" \
       -e WEB="$web_origin" -e API="http://$MOBILE_API_ADDR" -e ISSUER="$FIMRA_OIDC_ISSUER" -e SHOTS=/shots \
       -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 "$PLAYWRIGHT_IMAGE" \

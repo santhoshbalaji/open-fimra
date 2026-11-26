@@ -108,7 +108,10 @@ class AlertListViewState extends State<AlertListView> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(child: _header(context, total)),
-          if (widget.view.services.offline case final repo?) SliverToBoxAdapter(child: FieldSyncStatus(repo: repo)),
+          if (widget.view.services.offline case final repo?)
+            SliverToBoxAdapter(
+              child: FieldSyncStatus(repo: repo, workspace: widget.view.workspace.slug),
+            ),
           if (problem != null)
             SliverFillRemaining(
               hasScrollBody: false,
@@ -168,20 +171,16 @@ class AlertListViewState extends State<AlertListView> {
         children: [
           Text('Alerts', style: text.titleLarge),
           const SizedBox(height: 4),
-          Text(
-            '$total ${total == 1 ? 'alert' : 'alerts'} in the past 7 days · $area',
-            style: text.bodyMedium?.copyWith(color: FimraColours.of(context).textSecondary),
-          ),
+          Text('$total ${total == 1 ? 'alert' : 'alerts'} in the past 7 days · $area', style: text.bodyMedium),
           if (_canReview) ...[
             const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _chip(null, 'All', total),
-                  for (final queue in AlertQueue.values) _chip(queue, queue.label, _counts[queue.slug] ?? 0),
-                ],
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                _chip(null, 'All', total),
+                for (final queue in AlertQueue.values) _chip(queue, queue.label, _counts[queue.slug] ?? 0),
+              ],
             ),
           ],
         ],
@@ -189,15 +188,8 @@ class AlertListViewState extends State<AlertListView> {
     );
   }
 
-  Widget _chip(AlertQueue? queue, String label, int count) => Padding(
-    padding: const EdgeInsets.only(right: 8),
-    child: ChoiceChip(
-      label: Text('$label ($count)'),
-      selected: _queue == queue,
-      onSelected: (_) => _filter(queue),
-      materialTapTargetSize: MaterialTapTargetSize.padded,
-    ),
-  );
+  Widget _chip(AlertQueue? queue, String label, int count) =>
+      ChoiceChip(label: Text('$label ($count)'), selected: _queue == queue, onSelected: (_) => _filter(queue));
 }
 
 class AlertTile extends StatelessWidget {
@@ -212,46 +204,52 @@ class AlertTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = FimraColours.of(context);
     final forest = alert.forest;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: DetectionSymbol(forestClass: forest, age: fireAgeIndex(alert.observedAt, now), size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(alert.placeName(map), style: text.titleMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${forest?.label ?? alert.forestClass} · seen ${formatAge(alert.observedAt, now)}',
-                      style: text.bodyMedium?.copyWith(color: p.textSecondary),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        StatusBadge.step(alert.status, alert.stepLabel),
-                        if (alert.overdue) StatusBadge.overdue(),
-                        if (alert.alertQueue != AlertQueue.unit)
-                          StatusBadge(icon: Icons.rule, label: alert.alertQueue?.label ?? alert.queue),
-                      ],
-                    ),
-                  ],
+    final place = alert.placeName(map);
+    final seen = '${forest?.label ?? alert.forestClass}, seen ${formatAge(alert.observedAt, now)}';
+    final badges = [
+      StatusBadge.step(alert.status, alert.stepLabel),
+      if (alert.overdue) StatusBadge.overdue(),
+      if (alert.alertQueue != AlertQueue.unit)
+        StatusBadge(icon: Icons.rule, label: alert.alertQueue?.label ?? alert.queue),
+    ];
+    return Semantics(
+      button: true,
+      label: [place, ...badges.map((badge) => badge.label), seen].join(', '),
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(FimraSize.radiusCard),
+          side: BorderSide(color: p.controlBoundary),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: DetectionSymbol(forestClass: forest, age: fireAgeIndex(alert.observedAt, now), size: 20),
                 ),
-              ),
-              Icon(Icons.chevron_right, color: p.textSecondary),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(place, style: text.titleMedium),
+                      const SizedBox(height: 2),
+                      Wrap(spacing: 6, runSpacing: 6, children: badges),
+                      const SizedBox(height: 6),
+                      Text(seen, style: text.bodyMedium),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: p.textSecondary),
+              ],
+            ),
           ),
         ),
       ),

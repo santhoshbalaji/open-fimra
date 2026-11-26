@@ -97,7 +97,7 @@ void main() {
     await tester.tap(find.text('Save to outbox'));
     await tester.pumpAndSettle();
     expect(find.textContaining('“Status” is required'), findsOneWidget);
-    await tester.tap(find.text('Status *'));
+    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open').last);
     await tester.pumpAndSettle();

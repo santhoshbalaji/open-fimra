@@ -90,22 +90,42 @@ class _Problem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = FimraColours.of(context);
-    return Semantics(
-      liveRegion: true,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: p.danger),
-          borderRadius: BorderRadius.circular(FimraSize.radiusCard),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.error_outline, color: p.danger),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: Theme.of(context).textTheme.bodyMedium)),
-          ],
-        ),
+    // Discovery and token transport errors can include server addresses or response codes.
+    final serverProblem =
+        message.startsWith('Could not reach the sign-in server') ||
+        message.startsWith('The sign-in server answered ') ||
+        message.startsWith('The sign-in server did not list its ');
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: p.danger),
+        borderRadius: BorderRadius.circular(FimraSize.radiusCard),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            container: true,
+            liveRegion: true,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, color: p.danger),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(serverProblem ? 'Cannot reach the server. Check the address or try again.' : message),
+                ),
+              ],
+            ),
+          ),
+          if (serverProblem)
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Technical details'),
+              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [SelectableText(message)],
+            ),
+        ],
       ),
     );
   }

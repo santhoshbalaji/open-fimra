@@ -12,7 +12,7 @@ The Flutter app for forest staff in the field, Android first. Staff sign in with
 - **Remote wipe.** An administrator can ask a lost phone to delete its field data. The phone does it the next time it contacts the API. See [Remote wipe](#remote-wipe).
 - **Alert details and steps.** An alert shows where and when it was seen, its source and its timeline. The buttons offer only the steps the user's role allows next. Field steps such as **Reached site** save the phone's location, which must be near the fire. Supervising officers can record a reason instead. Each step carries a client ID, so pressing **Save** again after a lost answer records it once.
 
-The interface uses the shared [design tokens](../../docs/design-system/tokens.json) in a light and a dark theme that follow the phone's setting, the Inter font bundled with the app, the [project logo](../../docs/design-system/logo) and touch targets of at least 48 pixels.
+The interface uses the shared [design tokens](../../docs/design-system/tokens.json) in a light and a dark theme that follow the phone's setting, the Inter font bundled with the app, the [project logo](../../docs/design-system/logo) and touch targets of at least 48 logical pixels.
 
 ## Reports without a signal
 
@@ -21,6 +21,26 @@ Open a workspace with a connection and check **Last synced** on the alert list. 
 **Save to outbox** keeps the completed report and its files on the phone. Open **Report outbox** to see reports waiting to send or the reason a report could not send. The app retries temporary failures while it is open, and **Sync now** checks for a connection immediately. It sends each file separately and then sends the report. The server checks any queued workflow step and returns the result. The saved timeline updates when the phone reads it from the server.
 
 The Android app keeps field data in its private SQLite database. The browser test build uses the online alert screens. SQLite uses the BSD-licensed `sqflite` Flutter plugin, and tests use `sqflite_common_ffi` to exercise the same database on Linux. The Flutter team's BSD-licensed `image_picker` and `file_selector` plugins provide camera, gallery and file access. The Flutter team’s BSD-licensed `path_provider` plugin locates the private cache so temporary photo copies can be deleted.
+
+## Readability checks on an Android phone
+
+Use a test build and synthetic alerts and reports. Repeat the checks in the
+light and dark themes.
+
+- Turn on TalkBack. Swipe through the alert list, alert detail, map controls
+  and report outbox. Check that each alert reads place, status and detection
+  details in that order. Check that map controls and report actions say what
+  they do, and that closing the map key returns focus to its button.
+- In bright outdoor light, read the alert age, workflow status, last sync and
+  report failure reason. Check that control outlines are easy to see and that
+  the detection symbols stand out over land and forest.
+- Use Android's layout bounds to check that buttons, queue filters, alert
+  rows and map controls have a touch area of at least 48 by 48 dp.
+- Set the system font size to 200%. Open an alert, record a step, fill and
+  save a report, and use Sync now in the outbox. Check that long Hindi and
+  Bengali labels wrap fully, the keyboard leaves Save reachable by scrolling,
+  and there is no horizontal scrolling. Open the map key and check that
+  Close and some of the map stay visible while the key scrolls.
 
 ## Notifications
 
@@ -86,7 +106,7 @@ Both create their own database, `fimra_mobile_test`, beside the development one 
 
 The integration tests sign the beat guard in through the real `open-fimra-mobile` client with PKCE, with a scripted browser filling in the Keycloak form. They check that the client refuses password sign-in and a request without a proof key, that each demo user sees only their own alerts and tiles, and that the beat guard can acknowledge an alert exactly once. They also register the beat guard's phone, check who can see it, have the division officer wipe it and check that the phone's next call deletes its data and returns it to sign-in. Other demo users get their tokens from the development-only `open-fimra-dev-cli` client.
 
-The walkthrough builds the app for a browser, serves it on `127.0.0.1:4300` (`MOBILE_WEB_PORT`, 4300 to 4303) and signs in as the beat guard at phone size. It sets the server under **Server settings**, checks the list and the map, acknowledges an alert, opens **Notifications and phones**, has the division officer wipe the phone through the API, checks that the next start returns to sign-in with the reason, and saves screenshots to `~/open-fimra-screenshots/field-app` (`MOBILE_SHOTS`). The browser build exists only for these tests. It serves its own copy of MapLibre GL JS, which `make mobile-web` downloads from the npm registry and checks against its published checksum.
+The walkthrough builds the app for a browser, serves it on `127.0.0.1:4300` (`MOBILE_WEB_PORT`, 4300 to 4303) and signs in as the beat guard at phone size. It sets the server under **Server settings**, checks the list and the map, acknowledges an alert, opens **Notifications and phones**, has the division officer wipe the phone through the API, checks that the next start returns to sign-in with the reason, and saves light and dark screenshots to `~/open-fimra-screenshots/field-app` (`MOBILE_SHOTS`). The browser build exists only for these tests. It serves its own copy of MapLibre GL JS, which `make mobile-web` downloads from the npm registry and checks against its published checksum.
 
 ## Run it on a phone or an emulator
 
