@@ -50,6 +50,7 @@ export class Incidents {
   readonly now = input.required<number>();
 
   protected readonly navigation = inject(ShellNavigation);
+  protected readonly alertLink = (id: string) => this.navigation.href('/monitor/alerts', { alert: id });
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly location = inject(Location);

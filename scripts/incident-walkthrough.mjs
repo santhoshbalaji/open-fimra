@@ -6,7 +6,12 @@ import { chromium, expect as playwrightExpect } from 'playwright/test';
 const { WEB, API, SHOTS } = process.env;
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const expect = playwrightExpect.configure({ timeout: 25_000 });
-const viewport = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
+const viewport = {
+  desktop: { width: 1920, height: 1080 },
+  laptop: { width: 1366, height: 768 },
+  tablet: { width: 768, height: 1024 },
+  phone: { width: 390, height: 844 }
+};
 const listRequest = url => url.origin === API && url.pathname.endsWith('/incidents');
 const incidentLink = page => page.locator('[data-incident-id]');
 const results = {};
@@ -31,23 +36,23 @@ async function open(page, row) {
   return heading;
 }
 
+async function checkPhoneCards(page) {
+  const list = page.getByRole('region', { name: 'Incident list' });
+  const cards = list.getByRole('list', { name: 'Incidents', exact: true });
+  await expect(cards.getByRole('listitem').first()).toBeVisible();
+  await expect(list.getByRole('table')).toHaveCount(0);
+  assert.ok(await list.evaluate(element =>
+    [document.documentElement, element, ...element.querySelectorAll('li')].every(node =>
+      node.scrollWidth <= node.clientWidth + 1)), 'The phone cards fit without sideways scrolling');
+}
+
 async function checkMapRoundTrip(page, row, size) {
   const incidentID = await row.getAttribute('data-incident-id');
   const incidentTitle = 'Incident #' + incidentID;
   const incidentHeading = page.getByRole('heading', { name: incidentTitle, exact: true });
   const panel = size === 'phone' ? page.getByRole('dialog', { name: incidentTitle, exact: true })
     : page.locator('fimra-side-panel.incident-panel > section');
-  const table = page.getByRole('region', { name: 'Incidents, scrollable table' });
-  let position;
-  if (size === 'phone') {
-    // Save a nonzero horizontal position to verify history restores the list.
-    await row.focus();
-    position = await table.evaluate(element => {
-      element.scrollLeft = 24;
-      return element.scrollLeft;
-    });
-    assert.ok(position > 0, 'The phone table must scroll for the history check');
-  }
+  if (size === 'phone') await checkPhoneCards(page);
   const listURL = page.url();
   await open(page, row);
   const member = panel.getByRole('button', { name: /Alert #\d+/ }).first();
@@ -87,7 +92,66 @@ async function checkMapRoundTrip(page, row, size) {
   await page.goBack();
   await expect(page).toHaveURL(listURL);
   await expect(row).toBeFocused();
-  if (size === 'phone') await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBe(position);
+  if (size === 'phone') await checkPhoneCards(page);
+}
+
+async function tabTo(page, target) {
+  await expect(target).toBeEnabled();
+  for (let i = 0; i < 16 && !await target.evaluate(element => document.activeElement === element); i++) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(target).toBeFocused();
+}
+
+async function checkKeyboardAction(page, context, incident, listResponse) {
+  const workspace = new URL(listResponse.url()).pathname.replace(/\/incidents$/, '');
+  const headers = await listResponse.request().allHeaders();
+  const auth = { authorization: headers.authorization };
+  const response = await context.request.get(API + workspace + '/alerts?incident=' + incident.id, { headers: auth });
+  assert.equal(response.status(), 200);
+  const { items } = await response.json();
+  // A multi-member fixture lets the same flow check both moved and skipped
+  // alerts. Keep one fresh member eligible to move with the incident.
+  const staged = items.length > 1 ? items.find(item => item.status === 'new') : undefined;
+  if (staged) {
+    const closed = await context.request.post(API + workspace + '/alerts/' + staged.id + '/steps',
+      { headers: auth, data: { step: 'false_alarm' } });
+    assert.equal(closed.status(), 200);
+  }
+  await page.setViewportSize(viewport.tablet);
+  const row = page.locator('[data-incident-id="' + incident.id + '"]');
+  await open(page, row);
+  const workflow = page.locator('fimra-workflow');
+  const action = workflow.getByRole('button', { name: 'Acknowledged', exact: true });
+  await tabTo(page, action);
+  await page.keyboard.press('Enter');
+  await expect(workflow.getByRole('heading', { name: /Record step.*Acknowledged/ })).toBeFocused();
+  await expect(workflow.getByText('Will move from New to Acknowledged.').first()).toBeVisible();
+  if (staged) await expect(workflow.getByText('Will stay at False alarm. Already closed.')).toBeVisible();
+  for (const theme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await capture(page, 'division.officer-tablet-' + theme + '-impact-preview');
+  }
+  const save = workflow.getByRole('button', { name: 'Save Acknowledged', exact: true });
+  await tabTo(page, save);
+  const [saved] = await Promise.all([
+    page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/incidents/' + incident.id + '/steps')),
+    page.keyboard.press('Enter')
+  ]);
+  assert.equal(saved.status(), 200);
+  await expect(workflow.getByText('Saved: Acknowledged.').locator('..')).toBeFocused();
+  const { alertsMoved } = await saved.json();
+  assert.equal(alertsMoved, items.filter(item => item.status === 'new' && item.id !== staged?.id).length);
+  await expect(workflow.getByText(alertsMoved + (alertsMoved === 1 ? ' alert moved.' : ' alerts moved.'), { exact: true })).toBeVisible();
+  await expect(workflow.getByText('Moved from New with the incident.').first()).toBeVisible();
+  if (staged) {
+    const link = workflow.getByRole('link', { name: 'Open alert #' + staged.id, exact: true });
+    await expect(link).toHaveAttribute('href', new RegExp('[?&]alert=' + staged.id + '(&|$)'));
+    await expect(workflow.getByText('Stayed at False alarm. Already closed.')).toBeVisible();
+    await tabTo(page, link);
+  }
+  await capture(page, 'division.officer-tablet-dark-impact-result');
 }
 
 try {
@@ -165,6 +229,22 @@ try {
       }
     }
 
+    step = `${user} — check cards at narrow and wide phone sizes`;
+    for (const dimensions of [{ width: 360, height: 800 }, { width: 412, height: 915 }]) {
+      await page.setViewportSize(dimensions);
+      await checkPhoneCards(page);
+      await capture(page, user + '-phone-dark-' + dimensions.width);
+    }
+    if (user === 'division.officer') {
+      step = 'division.officer — preview and save an incident action by keyboard on tablet';
+      const candidates = results[user].filter(row => row.status === 'new');
+      const incident = candidates.find(row => row.alert_count > 1) ?? candidates[0];
+      assert.ok(incident, 'Seed a new incident for the keyboard walkthrough');
+      await checkKeyboardAction(page, context, incident, firstList);
+      await page.keyboard.press('Escape');
+      await expect(page).not.toHaveURL(/incident=/);
+    }
+    await page.setViewportSize(viewport.phone);
     step = `${user}-phone-dark — wrap long place names at 200% text size`;
     const row = incidentLink(page).first();
     const incidentID = await row.getAttribute('data-incident-id');

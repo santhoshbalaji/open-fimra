@@ -43,3 +43,9 @@
 @media (48rem <= width < 64rem) {
   .has-detail { grid-template-columns: minmax(0, 1fr) minmax(20rem, 42%); }
 }
+
+@media (48rem <= width < 56rem) {
+  /* Keep the cells readable beside the dock. The table owns its scroll. */
+  :host ::ng-deep .has-detail .incident-list :is(th, td) { min-inline-size: 6rem; }
+  :host ::ng-deep .has-detail .incident-list td:has(fimra-status-badge) { min-inline-size: 9rem; }
+}

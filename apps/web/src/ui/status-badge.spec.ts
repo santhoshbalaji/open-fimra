@@ -31,13 +31,26 @@ describe('StatusBadge', () => {
     expect(() => fixture.componentRef.setInput('label', '  ')).toThrow('visible label');
   });
 
-  it.each([['overdue', 'Overdue'], ['step', 'Reached site'], ['complete', 'Closed']])(
-    'shows the %s icon with a visible workflow label', (icon, label) => {
+  it.each([
+    ['overdue', 'Overdue', 'triangle-alert', 'warning'],
+    ['step', 'New', 'circle-alert', 'urgent'],
+    ['step', 'Acknowledged', 'check', 'active'],
+    ['step', 'Team sent', 'chevron-right', 'active'],
+    ['step', 'Reached site', 'circle-check', 'active'],
+    ['step', 'First report', 'file-pen-line', 'active'],
+    ['step', 'Final report', 'list-ordered', 'success'],
+    ['complete', 'Closed', 'lock', 'success'],
+    ['complete', 'False alarm', 'bell-off', 'muted'],
+    ['complete', 'Duplicate', 'layers', 'muted'],
+    ['complete', 'Controlled burn', 'sun', 'success'],
+    ['complete', 'Not reachable', 'circle-x', 'warning']
+  ])(
+    'shows the %s variant for %s with its own icon and a visible label', (icon, label, glyph, tone) => {
       const fixture = TestBed.createComponent(StatusBadge);
       fixture.componentRef.setInput('icon', icon);
       fixture.componentRef.setInput('label', label);
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent.trim()).toBe(label);
-      expect(fixture.nativeElement.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector(`[data-tone="${tone}"] svg[data-icon="${glyph}"][aria-hidden="true"]`)).toBeTruthy();
     });
 });

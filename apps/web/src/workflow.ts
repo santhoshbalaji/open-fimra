@@ -6,6 +6,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { Timeline, type TimelineEvent } from './ui/timeline';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
+import { RouterLink, type UrlTree } from '@angular/router';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { StateRegion, type DataState } from './ui/state-region';
 import { LiveStatus } from './ui/live-status';
@@ -25,10 +26,24 @@ export interface WorkflowEntry {
   incidentId?: string | null;
 }
 interface History { entries: WorkflowEntry[] | null; moves: Move[]; mergedInto?: string | null }
+const unchangedReasons = {
+  already_at_step: 'Already at this step.',
+  closed: 'Already closed.',
+  different_step: 'This move is unavailable from the alert’s current step.',
+  role: 'Your role cannot make this move on this alert.',
+  report_required: 'A required report is missing.'
+};
+interface MemberOutcome {
+  alertId: string;
+  fromLabel: string;
+  reason: keyof typeof unchangedReasons | 'transition_allowed';
+}
+interface IncidentImpact { alerts: MemberOutcome[] }
+interface IncidentReceipt extends IncidentImpact { alertsMoved: number }
 
 @Component({
   selector: 'fimra-workflow',
-  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, StateRegion, Timeline, LiveStatus],
+  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, RouterLink, StateRegion, Timeline, LiveStatus],
   templateUrl: './workflow.html'
 })
 export class Workflow {
@@ -37,6 +52,7 @@ export class Workflow {
   readonly now = input<number>();
   /** What the workflow belongs to, for its wording. */
   readonly subject = input<'alert' | 'incident'>('alert');
+  readonly alertLink = input<(id: string) => UrlTree>();
   readonly changed = output<void>();
   readonly reportNeeded = output<string>();
   readonly history = signal<History | null>(null);
@@ -47,6 +63,17 @@ export class Workflow {
   protected readonly pendingReport = computed(() => this.move()?.missingReports?.[0]);
   protected readonly busy = signal(false);
   protected readonly result = signal('');
+  protected readonly preview = signal<IncidentImpact | 'error' | null>(null);
+  protected readonly previewNotice = computed(() => {
+    const preview = this.preview();
+    if (!preview) return 'Checking member alerts…';
+    if (preview === 'error') return 'Could not check member alerts.';
+    const moving = preview.alerts.filter(alert => alert.reason === 'transition_allowed').length;
+    return `${moving} will move. ${preview.alerts.length - moving} will stay at their current steps.`;
+  });
+  protected readonly receipt = signal<IncidentReceipt | null>(null);
+  protected readonly unchangedReasons = unchangedReasons;
+  private readonly previewAttempt = signal(0);
   protected readonly loadError = signal(false);
   protected readonly loading = signal(true);
   protected readonly historyState = computed<DataState>(() => {
@@ -73,7 +100,7 @@ export class Workflow {
       id: `${entry.at}/${index}`,
       title: entry.label,
       at: new Date(entry.at),
-      milestone: !incident || index === 0 || index === all.length - 1 || milestones.has(entry.step),
+      milestone: index === 0 || index === all.length - 1 || milestones.has(entry.step),
       detail: [
         entry.actor || 'Recorded automatically',
         incident && entry.latitude != null && `${entry.latitude}, ${entry.longitude}`,
@@ -83,7 +110,7 @@ export class Workflow {
         entry.alertsMoved ? `Moved ${defaultWorkspaceFormat.number(entry.alertsMoved)} ${entry.alertsMoved === 1 ? 'alert' : 'alerts'}` : '',
         entry.incidentId && `Recorded on incident #${entry.incidentId}`
       ].filter(Boolean).join('\n')
-    }));
+    })).reverse();
   });
 
   constructor() {
@@ -96,6 +123,7 @@ export class Workflow {
         this.history.set(null);
         this.chosen.set(null);
         this.result.set('');
+        this.receipt.set(null);
         this.trigger = undefined;
         previousUrl = url;
       }
@@ -113,10 +141,27 @@ export class Workflow {
       });
       cleanup(() => sub.unsubscribe());
     });
+    effect(cleanup => {
+      const step = this.chosen();
+      const url = this.url();
+      this.previewAttempt();
+      this.preview.set(null);
+      if (this.subject() !== 'incident' || !step) return;
+      const sub = this.http.get<IncidentImpact>(url + '/history', { params: { preview: step } }).subscribe({
+        next: impact => this.preview.set(impact),
+        error: () => this.preview.set('error')
+      });
+      cleanup(() => sub.unsubscribe());
+    });
   }
 
   reload(): void {
     this.version.update(n => n + 1);
+  }
+
+  protected retryPreview(): void {
+    this.previewAttempt.update(n => n + 1);
+    afterNextRender(() => this.formTitle()?.nativeElement.focus(), { injector: this.injector });
   }
 
   protected choose(move: Move, trigger: HTMLElement): void {
@@ -124,6 +169,8 @@ export class Workflow {
     this.trigger = trigger;
     if (this.chosen() !== move.step) {
       this.formTitle()?.nativeElement.closest('form')?.reset();
+      this.preview.set(null);
+      this.receipt.set(null);
       this.result.set(move.location_required && !move.missingReports?.length ? 'Location required for this step.' : '');
       this.exception.set(false);
       this.chosen.set(move.step);
@@ -142,6 +189,9 @@ export class Workflow {
   protected async save(note: string, reason: string, submit: HTMLElement): Promise<void> {
     const move = this.move();
     if (!move || this.busy() || this.loading() || this.loadError() || this.pendingReport()) return;
+    const preview = this.preview();
+    const incident = this.subject() === 'incident';
+    if (incident && (!preview || preview === 'error')) return;
     const url = this.url();
     const current = () => !this.lifetime.destroyed && this.url() === url;
     const exception = this.exception();
@@ -173,10 +223,11 @@ export class Workflow {
       }
       if (!current()) return;
       this.result.set('Saving ' + move.label + '…');
-      await firstValueFrom(this.http.post(url + '/steps', { step: move.step, note, location,
+      const receipt = await firstValueFrom(this.http.post<IncidentReceipt>(url + '/steps', { step: move.step, note, location,
         reason: exception ? reason.trim() : '', clientId: crypto.randomUUID() }));
       if (!current()) return;
       this.chosen.set(null);
+      if (incident) this.receipt.set(receipt);
       this.result.set('Saved: ' + move.label + '.');
       this.reload();
       this.changed.emit();

@@ -293,6 +293,8 @@ ON CONFLICT(layer_version_id) DO UPDATE SET cursor_time=NULL,cursor_id=NULL,fini
 		call("a4", "GET", base, "", 403, nil)
 		call("a3", "GET", base+"/"+id("units-b05"), "", 404, nil)
 		call("a3", "GET", base+"/"+id("units-b05")+"/history", "", 404, nil)
+		call("a3", "GET", base+"/"+id("units-b05")+"/history?preview=acknowledged", "", 404, nil)
+		call("a4", "GET", base+"/"+id("units-b01")+"/history?preview=acknowledged", "", 404, nil)
 		call("a3", "POST", base+"/"+id("units-b05")+"/steps", `{"step":"acknowledged"}`, 404, nil)
 		call("a4", "GET", base+"/"+id("units-b01"), "", 403, nil)
 
@@ -420,9 +422,22 @@ WHERE a.workspace_id=$1 AND d.source=$2 AND d.raw->>'reference_id'=$3`, workspac
 		}
 		return current, entered
 	}
+	alertPath := func(ref string) string {
+		t.Helper()
+		var id string
+		if err := tx.QueryRow(ctx, `SELECT a.id::text FROM alerts a JOIN detections d ON (d.id,d.observed_at)=(a.detection_id,a.observed_at)
+WHERE a.workspace_id=$1 AND d.source=$2 AND d.raw->>'reference_id'=$3`, workspaceID, source, ref).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return "/api/v1/workspaces/" + slug + "/alerts/" + id
+	}
+	type outcome struct {
+		AlertID, FromLabel, Reason string
+	}
 	type receipt struct {
 		ID, Step, At string
 		AlertsMoved  int
+		Alerts       []outcome
 	}
 	t.Run("incident steps move the members the caller may move", func(t *testing.T) {
 		var r receipt
@@ -430,7 +445,7 @@ WHERE a.workspace_id=$1 AND d.source=$2 AND d.raw->>'reference_id'=$3`, workspac
 		call("a2", "POST", base+"/"+id("group-1")+"/steps", ack, 200, &r)
 		var again receipt
 		call("a2", "POST", base+"/"+id("group-1")+"/steps", ack, 200, &again)
-		if r.AlertsMoved != 3 || again != r {
+		if r.AlertsMoved != 3 || !reflect.DeepEqual(again, r) {
 			t.Fatalf("group acknowledgment %+v, replay %+v", r, again)
 		}
 		for _, ref := range []string{"group-1", "group-2", "group-3"} {
@@ -438,14 +453,18 @@ WHERE a.workspace_id=$1 AND d.source=$2 AND d.raw->>'reference_id'=$3`, workspac
 				t.Fatalf("%s is at %s", ref, current)
 			}
 		}
+		var limited receipt
+		call("a2", "GET", base+"/"+id("units-b05")+"/history?preview=acknowledged", "", 200, &limited)
 		call("a2", "POST", base+"/"+id("units-b05")+"/steps", `{"step":"acknowledged"}`, 200, &r)
-		if b05, _ := step("units-b05"); r.AlertsMoved != 1 || b05 != "acknowledged" {
+		if b05, _ := step("units-b05"); r.AlertsMoved != 1 || len(r.Alerts) != 1 ||
+			!slices.Equal(r.Alerts, limited.Alerts) || b05 != "acknowledged" {
 			t.Fatalf("officer moved %d alerts, B05 at %s", r.AlertsMoved, b05)
 		}
 		if b08, _ := step("units-b08"); b08 != "new" {
 			t.Fatalf("officer moved the hidden B08 alert to %s", b08)
 		}
 		call("a3", "POST", base+"/"+id("units-b01")+"/steps", `{"step":"false_alarm"}`, 403, nil)
+		call("a3", "GET", base+"/"+id("units-b01")+"/history?preview=false_alarm", "", 403, nil)
 		call("a3", "POST", base+"/"+id("units-b01")+"/steps", `{"step":"acknowledged"}`, 200, &r)
 		if b04, _ := step("units-b04"); r.AlertsMoved != 1 || b04 != "new" {
 			t.Fatalf("guard moved %d alerts, B04 at %s", r.AlertsMoved, b04)
@@ -503,6 +522,66 @@ WHERE a.workspace_id=$1 AND d.source=$2 AND d.raw->>'reference_id'='units-b05'`,
 		call("a1", "GET", base+"?status=false_alarm", "", 200, &p)
 		if got := counts(p); !reflect.DeepEqual(got, map[string]int{id("units-b05"): 2}) {
 			t.Fatalf("status filter: %v", got)
+		}
+	})
+
+	t.Run("preview and receipt identify each member with its reason", func(t *testing.T) {
+		path := base + "/" + id("bridge-west")
+		west, east, middle := alertPath("bridge-west"), alertPath("bridge-east"), alertPath("bridge-middle")
+		call("a2", "POST", west+"/steps", `{"step":"acknowledged"}`, 200, nil)
+		call("a2", "POST", west+"/steps", `{"step":"team_sent"}`, 200, nil)
+		call("a2", "POST", east+"/steps", `{"step":"false_alarm"}`, 200, nil)
+		var preview, saved, replay receipt
+		call("a2", "GET", path+"/history?preview=acknowledged", "", 200, &preview)
+		want := map[string]outcome{}
+		for _, alert := range []struct{ path, label, reason string }{
+			{west, "Team sent", "different_step"},
+			{east, "False alarm", "closed"},
+			{middle, "New", "transition_allowed"},
+		} {
+			id := alert.path[strings.LastIndex(alert.path, "/")+1:]
+			want[id] = outcome{id, alert.label, alert.reason}
+		}
+		got := map[string]outcome{}
+		for _, alert := range preview.Alerts {
+			got[alert.AlertID] = alert
+		}
+		if len(preview.Alerts) != len(want) || !reflect.DeepEqual(got, want) {
+			t.Fatalf("preview %+v, want %+v", preview.Alerts, want)
+		}
+		if current, _ := step("bridge-middle"); current != "new" {
+			t.Fatalf("preview moved a member to %s", current)
+		}
+		body := `{"step":"acknowledged","clientId":"mixed-incident"}`
+		call("a2", "POST", path+"/steps", body, 200, &saved)
+		if saved.AlertsMoved != 1 || !slices.Equal(saved.Alerts, preview.Alerts) {
+			t.Fatalf("saved %+v, preview %+v", saved, preview)
+		}
+		for ref, want := range map[string]string{
+			"bridge-west": "team_sent", "bridge-east": "false_alarm", "bridge-middle": "acknowledged",
+		} {
+			if current, _ := step(ref); current != want {
+				t.Fatalf("%s is at %s, want %s", ref, current, want)
+			}
+		}
+		call("a2", "POST", middle+"/steps", `{"step":"team_sent"}`, 200, nil)
+		call("a2", "POST", path+"/steps", body, 200, &replay)
+		if !reflect.DeepEqual(saved, replay) {
+			t.Fatalf("retry returned %+v, want %+v", replay, saved)
+		}
+		call("a2", "GET", path+"/history?preview=acknowledged", "", 409, nil)
+	})
+
+	t.Run("receipt reflects a member change made after preview", func(t *testing.T) {
+		path := base + "/" + id("too-far")
+		var preview, saved receipt
+		call("a2", "GET", path+"/history?preview=acknowledged", "", 200, &preview)
+		call("a2", "POST", alertPath("too-far")+"/steps", `{"step":"acknowledged"}`, 200, nil)
+		call("a2", "POST", path+"/steps", `{"step":"acknowledged"}`, 200, &saved)
+		if len(preview.Alerts) != 1 || preview.Alerts[0].Reason != "transition_allowed" ||
+			saved.AlertsMoved != 0 || len(saved.Alerts) != 1 || saved.Alerts[0].AlertID != preview.Alerts[0].AlertID ||
+			saved.Alerts[0].Reason != "already_at_step" {
+			t.Fatalf("saved %+v, preview %+v", saved, preview)
 		}
 	})
 
