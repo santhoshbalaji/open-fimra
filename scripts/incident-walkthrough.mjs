@@ -10,6 +10,7 @@ const viewport = { desktop: { width: 1440, height: 900 }, phone: { width: 390, h
 const listRequest = url => url.origin === API && url.pathname.endsWith('/incidents');
 const incidentLink = page => page.locator('[data-incident-id]');
 const results = {};
+let step;
 
 async function capture(page, label) {
   const { violations } = await new AxeBuilder({ page })
@@ -30,23 +31,88 @@ async function open(page, row) {
   return heading;
 }
 
+async function checkMapRoundTrip(page, row, size) {
+  const incidentID = await row.getAttribute('data-incident-id');
+  const incidentTitle = 'Incident #' + incidentID;
+  const incidentHeading = page.getByRole('heading', { name: incidentTitle, exact: true });
+  const panel = size === 'phone' ? page.getByRole('dialog', { name: incidentTitle, exact: true })
+    : page.locator('fimra-side-panel.incident-panel > section');
+  const table = page.getByRole('region', { name: 'Incidents, scrollable table' });
+  let position;
+  if (size === 'phone') {
+    // Save a nonzero horizontal position to verify history restores the list.
+    await row.focus();
+    position = await table.evaluate(element => {
+      element.scrollLeft = 24;
+      return element.scrollLeft;
+    });
+    assert.ok(position > 0, 'The phone table must scroll for the history check');
+  }
+  const listURL = page.url();
+  await open(page, row);
+  const member = panel.getByRole('button', { name: /Alert #\d+/ }).first();
+  await expect(member).toBeVisible();
+  const memberId = (await member.textContent()).trim().match(/#(\d+)$/)[1];
+  await member.press('Enter');
+  await expect(member).toHaveAttribute('aria-expanded', 'true');
+  const detailURL = page.url();
+  const link = panel.getByRole('link', { name: 'Show alert #' + memberId + ' on map', exact: true });
+  const [selected] = await Promise.all([
+    page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith('/alerts/' + memberId)),
+    link.press('Enter')
+  ]);
+  assert.equal(selected.status(), 200, 'The selected member alert must load');
+  await expect(page).toHaveURL(url => url.pathname === '/monitor/map'
+    && url.searchParams.get('alert') === memberId && url.searchParams.get('incident') === incidentID);
+  const alertTitle = 'Alert #' + memberId;
+  if (size === 'phone') {
+    // The sheet makes the Map heading inaccessible while it is open.
+    const dialog = page.getByRole('dialog', { name: alertTitle, exact: true });
+    await expect(dialog.getByRole('heading', { name: alertTitle, exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { level: 1, name: 'Map' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: alertTitle, exact: true })).toBeVisible();
+  }
+  // A map with an open phone sheet still updates its legend and tile state.
+  const map = page.locator('.map-pane');
+  await expect(map.getByText('Incident member', { exact: true })).toBeAttached();
+  await expect(map.locator('p').filter({ hasText: /^(Loading fire detections|Some map data is missing)$/ })).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(detailURL);
+  await expect(incidentHeading).toBeFocused();
+  await expect(member).toHaveAttribute('aria-expanded', 'true');
+  await page.goBack();
+  await expect(member).toHaveAttribute('aria-expanded', 'false');
+  await page.goBack();
+  await expect(page).toHaveURL(listURL);
+  await expect(row).toBeFocused();
+  if (size === 'phone') await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBe(position);
+}
+
 try {
   for (const user of ['state.admin', 'division.officer']) {
+    step = `${user} — sign in and load incidents`;
     const context = await browser.newContext({ viewport: viewport.desktop, reducedMotion: 'reduce' });
     const page = await context.newPage();
     await page.goto(WEB + '/monitor/incidents?hours=168');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.locator('#username').fill(user);
     await page.locator('#password').fill('demo');
-    const firstList = page.waitForResponse(response => response.request().method() === 'GET' && listRequest(new URL(response.url())) && response.ok());
-    await page.locator('#kc-login').click();
-    results[user] = (await (await firstList).json()).items;
+    const [firstList] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === 'GET' && listRequest(new URL(response.url()))),
+      page.locator('#kc-login').click()
+    ]);
+    assert.equal(firstList.status(), 200, 'The incident list must load after sign in');
+    results[user] = (await firstList.json()).items;
     await expect(incidentLink(page).first()).toBeVisible();
+    await page.waitForLoadState('networkidle');
 
     for (const [size, dimensions] of Object.entries(viewport)) {
       await page.setViewportSize(dimensions);
       for (const theme of ['light', 'dark']) {
         const prefix = `${user}-${size}-${theme}`;
+        step = `${prefix} — render the incident list`;
         await page.emulateMedia({ colorScheme: theme });
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         const row = incidentLink(page).first();
@@ -59,6 +125,7 @@ try {
             'The pager stays at the bottom of the list');
         }
         await capture(page, prefix + '-loaded');
+        step = `${prefix} — open and dismiss incident details`;
         await open(page, row);
         await expect(page.getByRole('heading', { name: 'Timeline', exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: /Alert #\d+/ }).first()).toBeVisible();
@@ -72,64 +139,36 @@ try {
         await expect(page).not.toHaveURL(/incident=/);
         await expect(row).toBeFocused();
 
+        step = `${prefix} — render the empty incident list`;
         await page.route(listRequest, route => route.fulfill({
           json: { items: [], total: 0 }, headers: { 'Access-Control-Allow-Origin': WEB }
         }));
         await page.reload();
         await expect(page.getByText('No incidents', { exact: true })).toBeVisible();
+        await page.waitForLoadState('networkidle');
         await capture(page, prefix + '-empty');
         await page.unroute(listRequest);
 
+        step = `${prefix} — render the incident list error and retry`;
         await page.route(listRequest, route => route.abort());
         await page.reload();
         await expect(page.getByRole('paragraph').filter({ hasText: 'Could not load incidents' })).toBeVisible();
+        await page.waitForLoadState('networkidle');
         await capture(page, prefix + '-error');
         await page.unroute(listRequest);
         await page.getByRole('button', { name: 'Retry', exact: true }).click();
         await expect(row).toBeVisible();
+
+        step = `${prefix} — follow the member alert to the map and restore history`;
+        await checkMapRoundTrip(page, row, size);
+        console.log(prefix + ' — map round trip, member selection and list restored');
       }
     }
 
-    // The table overflows horizontally on a phone. Save a nonzero position
-    // before a member opens the Map, then return through browser history.
+    step = `${user}-phone-dark — wrap long place names at 200% text size`;
     const row = incidentLink(page).first();
     const incidentID = await row.getAttribute('data-incident-id');
-    await row.focus();
-    const table = page.getByRole('region', { name: 'Incidents, scrollable table' });
-    await table.evaluate(element => { element.scrollLeft = 24; });
-    const position = await table.evaluate(element => element.scrollLeft);
-    assert.ok(position > 0, 'The table must scroll for the history check');
-    const listURL = page.url();
-    await page.keyboard.press('Enter');
-    const panel = page.getByRole('dialog', { name: 'Incident #' + incidentID });
-    await expect(panel.getByRole('heading', { name: 'Incident #' + incidentID })).toBeFocused();
-    const member = panel.getByRole('button', { name: /Alert #\d+/ }).first();
-    const memberId = (await member.textContent()).trim().match(/#(\d+)$/)[1];
-    await member.press('Enter');
-    await expect(member).toHaveAttribute('aria-expanded', 'true');
-    const detailURL = page.url();
-    const link = panel.getByRole('link', { name: 'Show alert #' + memberId + ' on map' });
-    const selected = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith('/alerts/' + memberId) && response.ok());
-    await link.press('Enter');
-    await expect(page).toHaveURL(/\/monitor\/map\?/);
-    const query = new URL(page.url()).searchParams;
-    assert.equal(query.get('alert'), memberId);
-    assert.equal(query.get('incident'), incidentID);
-    await selected;
-    await expect(page.getByRole('heading', { level: 1, name: 'Map' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Alert #' + memberId, exact: true })).toBeVisible();
-
-    await page.goBack();
-    await expect(page).toHaveURL(detailURL);
-    await expect(panel.getByRole('heading', { name: 'Incident #' + incidentID })).toBeFocused();
-    await expect(member).toHaveAttribute('aria-expanded', 'true');
-    await page.goBack();
-    await expect(member).toHaveAttribute('aria-expanded', 'false');
-    await page.goBack();
-    await expect(page).toHaveURL(listURL);
-    await expect(row).toBeFocused();
-    await expect.poll(() => table.evaluate(element => element.scrollLeft)).toBe(position);
-    console.log(user + ' — map round trip, member selection, row focus and table position restored');
+    const panel = page.getByRole('dialog', { name: 'Incident #' + incidentID, exact: true });
 
     // Long synthetic place names exercise wrapping on the same list and sheet.
     const labels = ['উত্তর পাহাড় সংরক্ষিত বনাঞ্চলের পূর্ব প্রান্তের পর্যবেক্ষণ কেন্দ্র',
@@ -154,15 +193,19 @@ try {
       const box = element.getBoundingClientRect();
       return box.height >= parseFloat(getComputedStyle(element).lineHeight) * 2 && element.scrollWidth <= element.clientWidth;
     }), 'Long place names wrap in the sheet at 200% text size');
+    await page.waitForLoadState('networkidle');
     await capture(page, user + '-phone-dark-large-text');
     await context.close();
   }
 
+  step = 'compare incident membership for both roles';
   const adminRows = new Map(results['state.admin'].map(row => [row.id, row.alert_count]));
   const officerRows = results['division.officer'];
   for (const row of officerRows) assert.ok(row.alert_count <= adminRows.get(row.id), 'Officer membership exceeds admin visibility');
   assert.ok(adminRows.size > officerRows.length || officerRows.some(row => row.alert_count < adminRows.get(row.id)),
     'Synthetic data must exercise narrower officer scope');
+} catch (cause) {
+  throw new Error(`Incident walkthrough failed during ${step}`, { cause });
 } finally {
   await browser.close();
 }
