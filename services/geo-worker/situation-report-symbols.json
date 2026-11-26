@@ -1,0 +1,11 @@
+{
+  "forestClasses": {
+    "inside": { "shape": "circle", "radius": 6, "palette": "age" },
+    "near_edge": { "shape": "ring", "radius": 6, "palette": "age" },
+    "outside": { "shape": "circle", "radius": 3, "palette": "neutralMark" },
+    "fixed_heat_source": { "shape": "square", "radius": 5, "palette": "neutralMark" }
+  },
+  "incident": { "shape": "diamond", "radius": 6, "palette": "selection", "offset": [9, -9] },
+  "ageHours": [6, 24, 72],
+  "closedStroke": { "start": [-0.85, 0.85], "end": [0.85, -0.85], "width": 1.4 }
+}

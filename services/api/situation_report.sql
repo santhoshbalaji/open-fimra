@@ -92,7 +92,7 @@
                     (SELECT ST_Union(geom) FROM units u WHERE u.valid_to IS NULL
                        AND (u.hierarchy_id,u.path) IN (SELECT hierarchy_id,unit_path FROM grants))) AS geom
 ), map_points AS (
-    SELECT id, geom, forest_class, terminal FROM period_alerts ORDER BY observed_at DESC, id DESC LIMIT $10
+    SELECT id, geom, forest_class, terminal, observed_at FROM period_alerts ORDER BY observed_at DESC, id DESC LIMIT $10
 ), extent AS (
     SELECT ST_Extent(g) AS box FROM (SELECT geom AS g FROM outline UNION ALL SELECT geom FROM map_points) x
 ), tolerance AS (
@@ -151,7 +151,7 @@ SELECT jsonb_build_object(
             FROM unit_rows WHERE geom IS NOT NULL AND EXISTS (SELECT FROM report_unit)),
         'forest', (SELECT coalesce(jsonb_agg(ST_AsGeoJSON(geom,5)::jsonb),'[]') FROM forest WHERE NOT ST_IsEmpty(geom)),
         'alerts', (SELECT coalesce(jsonb_agg(jsonb_build_array(round(ST_X(geom)::numeric,5),round(ST_Y(geom)::numeric,5),
-            forest_class,NOT terminal) ORDER BY id),'[]') FROM map_points),
+            forest_class,NOT terminal,observed_at) ORDER BY observed_at, id),'[]') FROM map_points),
         'alertsShown', (SELECT count(*) FROM map_points),
         'incidents', (SELECT coalesce(jsonb_agg(jsonb_build_object('id',i.id::text,'active',NOT r.terminal,
             'bounds',jsonb_build_array(ST_XMin(b),ST_YMin(b),ST_XMax(b),ST_YMax(b)))),'[]')

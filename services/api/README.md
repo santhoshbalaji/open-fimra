@@ -72,7 +72,7 @@ A situation report is a printable summary of one unit for one day, a range of da
 | `GET /api/v1/workspaces/{slug}/situation-report/units` | Lists the units the caller may report on, with each unit's hierarchy, path, name, depth and level label |
 | `GET /api/v1/workspaces/{slug}/situation-report` | Returns a report as JSON, for the web page |
 | `POST /api/v1/workspaces/{slug}/situation-reports` | Saves a report and queues its PDF. Returns 202 with the status and a `Location` header. |
-| `GET /api/v1/workspaces/{slug}/situation-reports/{id}` | Returns the status: `pending`, `ready`, `failed` or `expired`, with the page count, file size and file name |
+| `GET /api/v1/workspaces/{slug}/situation-reports/{id}` | Returns the status: `draft`, `pending`, `ready`, `failed` or `expired`, with the page count, file size and file name |
 | `GET /api/v1/workspaces/{slug}/situation-reports/{id}/file` | Downloads a ready PDF |
 
 The GET takes query parameters and the POST takes a JSON object with the same names:
@@ -93,14 +93,16 @@ A unit outside the caller's units gets 403 and an unknown unit 404. A caller wit
 - `fieldReports`: the forms submitted for the period's alerts, approved, returned and waiting for review, and the forms missing: an alert is at a step whose assigned form has no submission that counts. `forms` breaks these down by form.
 - `overdueAlerts`: up to 200 alerts past their time limit, with their step, when they entered it and by how much they are late.
 - `units`: alerts, active, overdue, waiting for a report and forms missing for each unit one level below the report's unit, labelled with the workspace's own level name in `unitLevel`.
-- `map`: the unit's outline, the units below it, published forest, the period's alerts (the latest 5,000) and boxes around their incidents, as GeoJSON geometry and points in WGS 84.
+- `map`: the unit's outline, the units below it, published forest, the period's alerts (the latest 5,000 with their observation times) and the bounds of their incidents, as GeoJSON geometry and points in WGS 84.
 - `labels` and `notes`: the words for each code, and how the numbers are worked out. The web page and the PDF print both as they are.
 
 Places are named with the levels below the report's unit, such as `Range 2 › Beat 05`, using the names saved with each alert.
 
 ### PDF files
 
-The POST works out the report in the request's transaction and saves it in `situation_reports` with the requester's subject. The [geo worker](../geo-worker/README.md#how-situation-reports-are-drawn) draws the saved report as a PDF and stores it in the same row, so the file holds exactly what the requester saw and nothing the worker chose. Only the requester can read the status or download the PDF, and they still need a role in the workspace. A report and its file are kept until `FIMRA_EXPORT_TTL` (24 hours by default) has passed. After that the download returns 410 and the API clears the content and the file every ten minutes. The database refuses any change to a saved report's request or content.
+To draw the exact report shown on screen, add `snapshot=1` to the GET, then send the returned `snapshotId` in the POST body. The GET saves a draft containing the report. The POST queues that draft or retries a failed job for it. A POST with a unit and period still works out and queues a new report in one request.
+
+The [geo worker](../geo-worker/README.md#how-situation-reports-are-drawn) draws the saved report as a PDF. Only the requester can read the status or download the PDF. For a saved view, their grants must still match the ones used to make it. A report and its file are kept for `FIMRA_EXPORT_TTL` (24 hours by default). After that the download returns 410 and the API clears the content and file. The database refuses changes to a saved report's request or content.
 
 Making a report, preparing a PDF and downloading it are recorded in the audit log as `report.view`, `report.create` and `report.download`, with the period, unit and number of alerts.
 

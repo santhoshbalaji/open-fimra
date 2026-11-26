@@ -8,7 +8,12 @@ WORKDIR /src
 COPY --from=form-schema . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags=-s -o /formcheck ./cmd/formcheck
 
-FROM ghcr.io/osgeo/gdal:ubuntu-small-3.11.5@sha256:5557af93bbedb58f69481c6c4a147e49eae2ce7d590a26c64b586195da65fb5b
+FROM ghcr.io/osgeo/gdal:ubuntu-small-3.11.5@sha256:5557af93bbedb58f69481c6c4a147e49eae2ce7d590a26c64b586195da65fb5b AS gdal
+
+FROM gdal AS fonts
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-core
+
+FROM gdal
 
 WORKDIR /app
 ENV PATH="/opt/geo-worker/bin:${PATH}" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PROJ_NETWORK=OFF
@@ -19,5 +24,8 @@ RUN --mount=from=uv,source=/uv,target=/bin/uv \
     uv pip install --python /opt/geo-worker/bin/python --no-deps --no-cache -r requirements.lock
 
 COPY --from=formcheck /formcheck /opt/geo-worker/bin/formcheck
-COPY *.py .
+COPY --from=fonts /usr/share/fonts/truetype/noto/NotoSans-Regular.ttf /usr/share/fonts/truetype/noto/NotoSans-Bold.ttf /usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf /usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf /app/fonts/
+COPY --from=fonts /usr/share/doc/fonts-noto-core/copyright /app/fonts/COPYRIGHT
+COPY --from=design-system tokens.json .
+COPY *.py situation-report-symbols.json ./
 CMD ["python", "worker.py"]

@@ -53,7 +53,7 @@
       }
     </ng-template>
     @let destination = navigation.destination();
-    @if (destination && destination.path !== '/dashboard') {
+    @if (destination && destination.path !== '/dashboard' && destination.path !== '/reports/situation') {
       <div class="workspace-controls" [class.filters-open]="filtersOpen()">
         <h1>{{ destination.name }}</h1>
         @if (showFilters()) {

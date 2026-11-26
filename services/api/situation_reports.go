@@ -78,9 +78,10 @@ type reportRequest struct {
 	To   string `json:"to"`
 	// Hours is the other kind of period: the hours before now, as on the
 	// dashboard.
-	Hours     *int    `json:"hours"`
-	UnitPath  *string `json:"unitPath"`
-	Hierarchy string  `json:"hierarchy"`
+	Hours      *int    `json:"hours"`
+	UnitPath   *string `json:"unitPath"`
+	Hierarchy  string  `json:"hierarchy"`
+	SnapshotID string  `json:"snapshotId"`
 }
 
 type reportPeriod struct {
@@ -136,6 +137,7 @@ type reportAlerts struct {
 // situationReport is the whole report. The web page shows it, and the geo
 // worker draws exactly this as a PDF.
 type situationReport struct {
+	SnapshotID    string                       `json:"snapshotId,omitempty"`
 	Workspace     workspace                    `json:"workspace"`
 	Unit          *reportUnit                  `json:"unit"`
 	Scope         string                       `json:"scope"`
@@ -428,6 +430,9 @@ func (a api) situationReport(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	rep, err := buildSituationReport(ctx, tx, caller.Subject, slug, readReportQuery(r.URL.Query()))
+	if err == nil && r.URL.Query().Get("snapshot") == "1" {
+		rep.SnapshotID, err = a.saveSituationReport(ctx, tx, caller.Subject, slug, rep, "draft")
+	}
 	if err == nil {
 		_, err = tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
  SELECT id, 'user', $2, 'report.view', 'workspace', id::text, $3 FROM workspaces WHERE slug=$1`, slug, caller.Subject, reportAuditDetails(rep))
@@ -478,6 +483,10 @@ func (a api) createSituationReport(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
+	if req.SnapshotID != "" {
+		a.prepareSituationReport(w, ctx, slug, caller.Subject, req.SnapshotID)
+		return
+	}
 	tx, err := a.reportTx(ctx)
 	if err != nil {
 		a.reportFailure(w, err)
@@ -487,20 +496,7 @@ func (a api) createSituationReport(w http.ResponseWriter, r *http.Request) {
 	rep, err := buildSituationReport(ctx, tx, caller.Subject, slug, req)
 	var id string
 	if err == nil {
-		var content []byte
-		content, err = json.Marshal(rep)
-		if err == nil {
-			var hierarchy, path *string
-			if rep.Unit != nil {
-				hierarchy, path = &rep.Unit.Hierarchy, &rep.Unit.Path
-			}
-			err = tx.QueryRow(ctx, `INSERT INTO situation_reports (workspace_id, requested_by, hierarchy_id, unit_path,
-    period_from, period_to, content, expires_at)
-SELECT w.id, $2, h.id, $4::ltree, $5::date, $6::date, $7, now() + $8::interval
-FROM workspaces w LEFT JOIN hierarchies h ON h.workspace_id=w.id AND h.slug=$3
-WHERE w.slug=$1 RETURNING id::text`, slug, caller.Subject, hierarchy, path, rep.Period.From, rep.Period.To, content,
-				pgtype.Interval{Microseconds: a.reportTTL().Microseconds(), Valid: true}).Scan(&id)
-		}
+		id, err = a.saveSituationReport(ctx, tx, caller.Subject, slug, rep, "pending")
 	}
 	if err == nil {
 		_, err = tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
@@ -523,6 +519,66 @@ WHERE w.slug=$1 RETURNING id::text`, slug, caller.Subject, hierarchy, path, rep.
 	writeJSON(w, http.StatusAccepted, status)
 }
 
+// The same grants must still be in force when a saved view is queued or downloaded.
+const situationReportGrants = `(SELECT jsonb_agg(DISTINCT jsonb_build_array(hierarchy_id, unit_path::text, role_slug, depth, can_review)
+    ORDER BY jsonb_build_array(hierarchy_id, unit_path::text, role_slug, depth, can_review))
+    FROM alert_grants WHERE slug=$1 AND oidc_subject=$2)`
+
+func (a api) saveSituationReport(ctx context.Context, tx pgx.Tx, subject, slug string, rep situationReport, status string) (string, error) {
+	content, err := json.Marshal(rep)
+	if err != nil {
+		return "", err
+	}
+	var hierarchy, path *string
+	if rep.Unit != nil {
+		hierarchy, path = &rep.Unit.Hierarchy, &rep.Unit.Path
+	}
+	var id string
+	err = tx.QueryRow(ctx, `INSERT INTO situation_reports (workspace_id, requested_by, hierarchy_id, unit_path,
+    period_from, period_to, content, expires_at, status, snapshot_grants)
+SELECT w.id, $2, h.id, $4::ltree, $5::date, $6::date, $7, now() + $8::interval, $9,
+    CASE WHEN $9='draft' THEN `+situationReportGrants+` END
+FROM workspaces w LEFT JOIN hierarchies h ON h.workspace_id=w.id AND h.slug=$3
+WHERE w.slug=$1 RETURNING id::text`, slug, subject, hierarchy, path, rep.Period.From, rep.Period.To, content,
+		pgtype.Interval{Microseconds: a.reportTTL().Microseconds(), Valid: true}, status).Scan(&id)
+	return id, err
+}
+
+func (a api) prepareSituationReport(w http.ResponseWriter, ctx context.Context, slug, subject, id string) {
+	var uuid pgtype.UUID
+	if err := uuid.Scan(id); err != nil {
+		writeError(w, http.StatusNotFound, "The saved report was not found. Show the report again.")
+		return
+	}
+	_, err := a.reader.Exec(ctx, `WITH queued AS (
+    UPDATE situation_reports r SET status='pending', finished_at=NULL, error_message=NULL
+    FROM workspaces w WHERE r.workspace_id=w.id AND w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid
+      AND r.status IN ('draft','failed') AND r.expires_at > now() AND r.snapshot_grants=`+situationReportGrants+`
+    RETURNING r.id, r.workspace_id, r.period_from, r.period_to, r.content)
+INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
+SELECT workspace_id, 'user', $2, 'report.create', 'situation_report', id::text,
+    jsonb_strip_nulls(jsonb_build_object('from', period_from, 'to', period_to, 'alerts', content->'alerts'->'total',
+    'hierarchy', content->'unit'->'hierarchy', 'unitPath', content->'unit'->'path')) FROM queued`, slug, subject, uuid)
+	if err != nil {
+		a.reportFailure(w, err)
+		return
+	}
+	status, err := a.readSituationReport(ctx, slug, uuid.String(), subject)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		writeError(w, http.StatusNotFound, "The saved report was not found. Show the report again.")
+	case err != nil:
+		a.reportFailure(w, err)
+	case status.Status == "expired" || !time.Now().Before(status.ExpiresAt):
+		writeError(w, http.StatusGone, "The saved report has expired. Show the report again.")
+	case status.Status == "draft":
+		writeError(w, http.StatusConflict, "The saved report could not be queued. Try again.")
+	default:
+		w.Header().Set("Location", "/api/v1/workspaces/"+slug+"/situation-reports/"+status.ID)
+		writeJSON(w, http.StatusAccepted, status)
+	}
+}
+
 // readSituationReport returns the caller's own report. Other users' reports are not found.
 func (a api) readSituationReport(ctx context.Context, slug, id, subject string) (reportStatus, error) {
 	var s reportStatus
@@ -531,7 +587,8 @@ func (a api) readSituationReport(ctx context.Context, slug, id, subject string) 
     coalesce(r.content->>'scope',''), r.page_count, octet_length(r.pdf), r.created_at, r.finished_at, r.expires_at,
     r.error_message, w.slug
 FROM situation_reports r JOIN workspaces w ON w.id=r.workspace_id
-WHERE r.id=$1::uuid AND w.slug=$2 AND r.requested_by=$3`, id, slug, subject).Scan(&s.ID, &s.Status, &s.From, &s.To,
+WHERE w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid
+  AND (r.snapshot_grants IS NULL OR r.snapshot_grants=`+situationReportGrants+`)`, slug, subject, id).Scan(&s.ID, &s.Status, &s.From, &s.To,
 		&s.Scope, &s.PageCount, &s.FileBytes, &s.CreatedAt, &s.FinishedAt, &s.ExpiresAt, &s.Error, &workspaceSlug)
 	if err != nil {
 		return s, err
@@ -595,7 +652,7 @@ func (a api) situationReportFile(w http.ResponseWriter, r *http.Request) {
 	case status.Status == "expired" || !time.Now().Before(status.ExpiresAt):
 		writeError(w, http.StatusGone, "This report has expired. Make it again.")
 		return
-	case status.Status == "pending":
+	case status.Status == "draft" || status.Status == "pending":
 		writeError(w, http.StatusConflict, "This report is still being prepared.")
 		return
 	case status.Status == "failed":
@@ -604,13 +661,17 @@ func (a api) situationReportFile(w http.ResponseWriter, r *http.Request) {
 	}
 	caller := r.Context().Value(identityKey{}).(identity)
 	var pdf []byte
-	err := a.reader.QueryRow(r.Context(), `WITH logged AS (
+	err := a.reader.QueryRow(r.Context(), `WITH ready AS MATERIALIZED (
+    SELECT r.id, r.workspace_id, r.period_from, r.period_to, r.page_count, r.pdf
+    FROM situation_reports r JOIN workspaces w ON w.id=r.workspace_id
+    WHERE w.slug=$1 AND r.requested_by=$2 AND r.id=$3::uuid AND r.status='ready' AND r.expires_at > now()
+      AND (r.snapshot_grants IS NULL OR r.snapshot_grants=`+situationReportGrants+`)
+), logged AS (
     INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
     SELECT workspace_id, 'user', $2, 'report.download', 'situation_report', id::text,
            jsonb_build_object('from', period_from, 'to', period_to, 'pages', page_count)
-    FROM situation_reports WHERE id=$1::uuid AND status='ready' RETURNING 1)
-SELECT pdf FROM situation_reports WHERE id=$1::uuid AND status='ready' AND EXISTS (SELECT FROM logged)`,
-		status.ID, caller.Subject).Scan(&pdf)
+    FROM ready RETURNING 1)
+SELECT pdf FROM ready WHERE EXISTS (SELECT FROM logged)`, chi.URLParam(r, "slug"), caller.Subject, status.ID).Scan(&pdf)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusGone, "This report has expired. Make it again.")
 		return
@@ -670,7 +731,7 @@ SELECT EXISTS (SELECT FROM grants), coalesce((SELECT jsonb_agg(jsonb_build_objec
 func expireSituationReports(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
 	tag, err := pool.Exec(ctx, `UPDATE situation_reports SET status='expired', content='{}', pdf=NULL, page_count=NULL,
     error_message=NULL, finished_at=coalesce(finished_at, now())
-WHERE status IN ('pending','ready','failed') AND expires_at <= now()`)
+WHERE status <> 'expired' AND expires_at <= now()`)
 	if err != nil {
 		return 0, fmt.Errorf("expire situation reports: %w", err)
 	}

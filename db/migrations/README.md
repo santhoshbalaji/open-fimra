@@ -31,6 +31,7 @@ Plain SQL migrations for PostgreSQL with PostGIS, run with [goose](https://githu
 | `00026_submission_exports` | Exports of field reports, whose frozen rows each name a submission of their alert |
 | `00027_situation_reports` | Situation report jobs, holding the report the API worked out and the PDF the geo worker draws from it, and response times to every workflow milestone |
 | `00028_field_devices` | Field phones with their push address, push as a notification channel with one message per phone, and the wipe flag the API checks on every call |
+| `00029_situation_report_snapshots` | Saves report views as drafts so the PDF uses the same data as the screen |
 
 ## Commands
 
