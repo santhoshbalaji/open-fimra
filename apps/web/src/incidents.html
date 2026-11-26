@@ -24,7 +24,7 @@
       }
       {{ scope() }}
     </p>
-    <fimra-data-table caption="Incidents" [columns]="columns()" [page]="page()" [state]="listState()"
+    <fimra-data-table caption="Incidents" [phoneCards]="true" [columns]="columns()" [page]="page()" [state]="listState()"
       [scrollKey]="tableKey()" [rowKey]="rowKey" [rowLabel]="places" (pageRequest)="changePage($event)" (retry)="retryList()" />
     @if (cursor() && listState().kind === 'empty') {
       <button hlmBtn variant="outline" class="self-start" (click)="firstPage()">First page</button>
@@ -52,7 +52,7 @@
                 <button hlmBtn variant="link" class="justify-self-start px-0" (click)="open(target)">Open incident #{{ target }}</button>
               }
               <fimra-workflow #workflow class="m-0!" subject="incident" [url]="incidentsUrl() + '/' + row.id"
-                [stepTime]="row.step_time" (changed)="changed()" />
+                [stepTime]="row.step_time" [alertLink]="alertLink" (changed)="changed()" />
               <a hlmBtn variant="outline" class="justify-self-start"
                 [routerLink]="navigation.href('/monitor/map', { incident: row.id })">Show incident on map</a>
             </section>

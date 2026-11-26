@@ -19,6 +19,9 @@ import (
 //go:embed incidents.sql
 var incidentsSQL string
 
+//go:embed incidents_step_outcomes.sql
+var incidentMemberOutcomesSQL string
+
 type incidentPage struct {
 	Items      []json.RawMessage `json:"items"`
 	Total      int               `json:"total"`
@@ -98,8 +101,8 @@ func (a api) incidents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, page)
 }
 
-// incidentWorkflow reads an incident's timeline or records a step on it. A
-// step moves every member alert that the caller could move the same way.
+// incidentWorkflow reads an incident's timeline, previews a step on request,
+// or records a step and returns its effect on the visible members.
 func (a api) incidentWorkflow(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -113,8 +116,11 @@ func (a api) incidentWorkflow(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	var result json.RawMessage
 	if r.Method == http.MethodGet {
-		// The moved count includes only member alerts that the caller can see.
-		err = a.reader.QueryRow(ctx, `WITH visible AS (SELECT DISTINCT alert_id FROM incident_alert_roles($1,$2,$3))
+		if r.URL.Query().Has("preview") {
+			err = a.previewIncidentStep(ctx, subject, slug, id, r.URL.Query().Get("preview"), &result)
+		} else {
+			// The moved count includes only member alerts that the caller can see.
+			err = a.reader.QueryRow(ctx, `WITH visible AS (SELECT DISTINCT alert_id FROM incident_alert_roles($1,$2,$3))
 SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY terminal,label)
  FROM incident_moves($1,$2,$3) m),'[]'),
  'mergedInto',(SELECT merged_into::text FROM incidents WHERE id=$3),
@@ -127,6 +133,7 @@ SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER B
  FROM step_log l JOIN workflow_steps s ON (s.template_id,s.slug)=(l.template_id,l.to_step)
  LEFT JOIN users u ON u.id=l.user_id WHERE l.incident_id=$3))
 WHERE EXISTS (SELECT FROM visible)`, subject, slug, id).Scan(&result)
+		}
 	} else {
 		var input stepRequest
 		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
@@ -158,7 +165,61 @@ WHERE EXISTS (SELECT FROM visible)`, subject, slug, id).Scan(&result)
 	}
 }
 
+func (a api) previewIncidentStep(ctx context.Context, subject, slug string, id int64, step string, result *json.RawMessage) error {
+	if !stepSlug.MatchString(step) {
+		return &stepError{400, "Provide a step to preview."}
+	}
+	var merged, available, allowed bool
+	err := a.reader.QueryRow(ctx, `WITH `+incidentMemberOutcomesSQL+`
+SELECT i.merged_into IS NOT NULL,
+ EXISTS (SELECT FROM workflow_transitions WHERE template_id=wi.template_id AND from_step=wi.current_step AND to_step=$4),
+ EXISTS (SELECT FROM incident_moves($1,$2,$3) WHERE step=$4),
+ jsonb_build_object('alerts',o.alerts)
+FROM incidents i JOIN workflow_instances wi ON wi.incident_id=i.id CROSS JOIN member_outcomes o
+WHERE i.id=$3 AND EXISTS (SELECT FROM incident_alert_roles($1,$2,$3))`,
+		subject, slug, id, step).Scan(&merged, &available, &allowed, result)
+	if err != nil {
+		return err
+	}
+	return checkIncidentMove(merged, available, allowed)
+}
+
+func checkIncidentMove(merged, available, allowed bool) error {
+	switch {
+	case merged:
+		return &stepError{409, "This incident was merged into another incident. Record steps there."}
+	case !available:
+		return &stepError{409, "This move is unavailable from the current step."}
+	case !allowed:
+		return &stepError{403, "Your role cannot record this step."}
+	}
+	return nil
+}
+
+// The stored outcomes are the original decisions. Recheck visibility on
+// replay, and use the alert logs for saves made before outcomes were stored.
+func readIncidentReceipt(ctx context.Context, tx pgx.Tx, subject, slug string, id, logID int64, result *json.RawMessage) error {
+	return tx.QueryRow(ctx, `WITH visible AS (
+ SELECT DISTINCT alert_id FROM incident_alert_roles($1,$2,$3)
+), outcomes AS (
+ SELECT o.item FROM step_log l
+ CROSS JOIN LATERAL jsonb_array_elements(l.incident_outcomes) o(item)
+ JOIN visible v ON v.alert_id=(o.item->>'alertId')::bigint
+ WHERE l.id=$4
+)
+SELECT jsonb_build_object('id',l.id::text,'step',l.to_step,'at',l.occurred_at,
+ 'alertsMoved',(SELECT count(*) FROM step_log x JOIN visible v USING (alert_id) WHERE x.incident_step_id=l.id),
+ 'alerts',(SELECT COALESCE(jsonb_agg(item ORDER BY (item->>'alertId')::bigint),'[]') FROM outcomes))
+FROM step_log l WHERE l.id=$4`, subject, slug, id, logID).Scan(result)
+}
+
 func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id int64, in stepRequest, result *json.RawMessage) error {
+	// Serialize with alert grouping so a merge or a new member cannot change
+	// the incident while its step is being recorded.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('open-fimra:incidents:' || w.id::text, 0))
+ FROM workspaces w WHERE w.slug=$2 AND EXISTS (SELECT FROM incident_alert_roles($1,$2,$3))`, subject, slug, id); err != nil {
+		return err
+	}
 	var current, user string
 	var entered time.Time
 	var template int64
@@ -176,26 +237,22 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 		lon = in.Location.Longitude
 		lat = in.Location.Latitude
 	}
-	const receipt = `jsonb_build_object('id',id::text,'step',to_step,'at',occurred_at,
- 'alertsMoved',(SELECT count(*) FROM step_log x WHERE x.incident_step_id=step_log.id))`
+	var logID int64
 	if in.ClientID != "" {
 		var same bool
 		err = tx.QueryRow(ctx, `SELECT user_id=$3 AND to_step=$4 AND note=$5 AND override_reason=$6
    AND client_time IS NOT DISTINCT FROM $7::timestamptz AND ST_X(location) IS NOT DISTINCT FROM $8::float8
-   AND ST_Y(location) IS NOT DISTINCT FROM $9::float8,`+receipt+`
-   FROM step_log WHERE incident_id=$1 AND client_id=$2`, id, in.ClientID, user, in.Step, in.Note, in.Reason, in.ClientTime, lon, lat).Scan(&same, result)
+   AND ST_Y(location) IS NOT DISTINCT FROM $9::float8,id
+   FROM step_log WHERE incident_id=$1 AND client_id=$2`, id, in.ClientID, user, in.Step, in.Note, in.Reason, in.ClientTime, lon, lat).Scan(&same, &logID)
 		if err == nil {
 			if !same {
 				return &stepError{409, "This client ID already belongs to another step request."}
 			}
-			return nil
+			return readIncidentReceipt(ctx, tx, subject, slug, id, logID, result)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-	}
-	if merged {
-		return &stepError{409, "This incident was merged into another incident. Record steps there."}
 	}
 	var available, allowed, required, override, near bool
 	var now time.Time
@@ -210,11 +267,8 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 	if err != nil {
 		return err
 	}
-	if !available {
-		return &stepError{409, "This move is unavailable from the current step."}
-	}
-	if !allowed {
-		return &stepError{403, "Your role cannot record this step."}
+	if err = checkIncidentMove(merged, available, allowed); err != nil {
+		return err
 	}
 	if in.Reason != "" && (!override || !required) {
 		return &stepError{403, "Only a supervising officer may give a location exception for a field step."}
@@ -229,41 +283,42 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 			return &stepError{422, "The client time must fall between the current step and now."}
 		}
 	}
-	var logID int64
-	err = tx.QueryRow(ctx, `INSERT INTO step_log(incident_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,client_id,client_time,report_pending)
- SELECT $1,$2,$3,$4,$5,$6,ST_SetSRID(ST_Point($7,$8),4326),$9,$10,NULLIF($11,''),$12,report_pending
- FROM workflow_steps WHERE template_id=$2 AND slug=$4 RETURNING id`, id, template, current, in.Step, user, at, lon, lat, in.Note, in.Reason, in.ClientID, in.ClientTime).Scan(&logID)
+	if _, err = tx.Exec(ctx, `SELECT 1 FROM incident_members m JOIN workflow_instances wi ON wi.alert_id=m.alert_id
+ WHERE m.incident_id=$1 ORDER BY wi.alert_id FOR UPDATE OF wi`, id); err != nil {
+		return err
+	}
+	var outcomes json.RawMessage
+	if err = tx.QueryRow(ctx, `WITH `+incidentMemberOutcomesSQL+`SELECT alerts FROM member_outcomes`,
+		subject, slug, id, in.Step).Scan(&outcomes); err != nil {
+		return err
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO step_log(incident_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,client_id,client_time,report_pending,incident_outcomes)
+ SELECT $1,$2,$3,$4,$5,$6,ST_SetSRID(ST_Point($7,$8),4326),$9,$10,NULLIF($11,''),$12,report_pending,$13
+ FROM workflow_steps WHERE template_id=$2 AND slug=$4 RETURNING id`, id, template, current, in.Step, user, at, lon, lat, in.Note, in.Reason, in.ClientID, in.ClientTime, outcomes).Scan(&logID)
 	if err != nil {
 		return err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE workflow_instances SET current_step=$2,entered_at=$3 WHERE incident_id=$1`, id, in.Step, at); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `SELECT 1 FROM incident_members m JOIN workflow_instances wi ON wi.alert_id=m.alert_id
- WHERE m.incident_id=$1 ORDER BY wi.alert_id FOR UPDATE OF wi`, id); err != nil {
-		return err
-	}
-	// Members follow when the caller may make the same move on them and they
-	// have the forms their current step needs. The incident's location check
+	// Use the saved decisions for the write. The incident's location check
 	// stands for the members it moves.
-	if _, err = tx.Exec(ctx, `WITH targets AS (
-    SELECT wi.alert_id,wi.template_id,wi.current_step,wi.entered_at
-    FROM incident_members m JOIN workflow_instances wi ON wi.alert_id=m.alert_id
-    WHERE m.incident_id=$1 AND EXISTS (SELECT FROM alert_moves($2,$3,m.alert_id) mv WHERE mv.step=$4)
-      AND NOT EXISTS (SELECT FROM alert_missing_forms(m.alert_id,$4))
-), logged AS (
+	if _, err = tx.Exec(ctx, `WITH logged AS (
     INSERT INTO step_log(alert_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,report_pending,incident_step_id)
-    SELECT t.alert_id,t.template_id,t.current_step,$4,$5,GREATEST($6::timestamptz,t.entered_at),
-           ST_SetSRID(ST_Point($7,$8),4326),$9,$10,s.report_pending,$11
-    FROM targets t JOIN workflow_steps s ON (s.template_id,s.slug)=(t.template_id,$4)
-    ORDER BY t.alert_id
+    SELECT wi.alert_id,wi.template_id,wi.current_step,$2,$3,GREATEST($4::timestamptz,wi.entered_at),
+           ST_SetSRID(ST_Point($5,$6),4326),$7,$8,s.report_pending,$9
+    FROM jsonb_to_recordset($1::jsonb) AS o("alertId" bigint,reason text)
+    JOIN workflow_instances wi ON wi.alert_id=o."alertId"
+    JOIN workflow_steps s ON (s.template_id,s.slug)=(wi.template_id,$2)
+    WHERE o.reason='transition_allowed'
+    ORDER BY wi.alert_id
     RETURNING alert_id,occurred_at
 )
-UPDATE workflow_instances wi SET current_step=$4,entered_at=l.occurred_at FROM logged l WHERE wi.alert_id=l.alert_id`,
-		id, subject, slug, in.Step, user, at, lon, lat, in.Note, in.Reason, logID); err != nil {
+UPDATE workflow_instances wi SET current_step=$2,entered_at=l.occurred_at FROM logged l WHERE wi.alert_id=l.alert_id`,
+		outcomes, in.Step, user, at, lon, lat, in.Note, in.Reason, logID); err != nil {
 		return err
 	}
-	return tx.QueryRow(ctx, `SELECT `+receipt+` FROM step_log WHERE id=$1`, logID).Scan(result)
+	return readIncidentReceipt(ctx, tx, subject, slug, id, logID, result)
 }
 
 type incidentRule struct {

@@ -128,9 +128,12 @@ describe('Incidents', () => {
     expect(timeline.textContent).toContain('Reached site');
     expect(timeline.textContent).toContain('Moved 1 alert');
     expect(timeline.textContent).not.toContain('Team sent');
+    const titles = () => Array.from(timeline.querySelectorAll('li p:first-child'), e => e.textContent?.trim());
+    expect(titles()).toEqual(['Reached site', 'New']);
     click(button('Show full history', timeline));
     expect(timeline.textContent).toContain('Team sent');
     expect(timeline.textContent).toContain('Demo team notified');
+    expect(titles()).toEqual(['Reached site', 'Team sent', 'New']);
     http.verify();
   });
 

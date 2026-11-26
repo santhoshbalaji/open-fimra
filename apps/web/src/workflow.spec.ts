@@ -16,10 +16,11 @@ describe('Workflow panel', () => {
     vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
-  function render(moves: (typeof fieldMove & { missingReports?: string[] })[]) {
+  function render(moves: (typeof fieldMove & { missingReports?: string[] })[], subject = 'alert') {
     const fixture = TestBed.createComponent(Workflow);
     fixture.componentRef.setInput('url', url);
     fixture.componentRef.setInput('stepTime', '2026-01-01T12:00:00Z');
+    fixture.componentRef.setInput('subject', subject);
     fixture.detectChanges();
     const http = TestBed.inject(HttpTestingController);
     http.expectOne(url + '/history').flush({moves, entries: [
@@ -32,11 +33,11 @@ describe('Workflow panel', () => {
   it('shows the ordered timeline with the actor, time and pending reports without repeating coordinates', () => {
     const {el} = render([]);
     const entries = Array.from(el.querySelectorAll('fimra-timeline li'));
-    expect(entries[0].textContent).toContain('New');
-    expect(entries[0].textContent).not.toContain('16, 86');
-    expect(entries[1].textContent).toContain('Demo Guard');
-    expect(entries[1].textContent).toContain('Report pending');
-    expect(entries[1].querySelector('time')?.dateTime).toBe('2026-01-01T12:00:00.000Z');
+    expect(entries[1].textContent).toContain('New');
+    expect(entries[1].textContent).not.toContain('16, 86');
+    expect(entries[0].textContent).toContain('Demo Guard');
+    expect(entries[0].textContent).toContain('Report pending');
+    expect(entries[0].querySelector('time')?.dateTime).toBe('2026-01-01T12:00:00.000Z');
     expect(el.querySelector('button')).toBeNull();
   });
   it('only offers the returned moves and hides the field location exception', () => {
@@ -92,6 +93,40 @@ describe('Workflow panel', () => {
     fixture.detectChanges();
     expect(document.activeElement?.textContent).toContain('Saved: Reached site.');
     expect(el.querySelector('form')).toBeNull();
+  });
+  it('waits for an incident preview and displays the actual member outcomes after saving', async () => {
+    const {el, fixture, http} = render([{...fieldMove, location_required: false}], 'incident');
+    el.querySelector('button')!.click();
+    fixture.detectChanges();
+    const submit = el.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    expect(submit.disabled).toBe(true);
+    const request = url + '/history?preview=reached_site';
+    http.expectOne(request).flush({}, { status: 500, statusText: 'Server error' });
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(true);
+    Array.from(el.querySelectorAll('button')).find(button => button.textContent.trim() === 'Retry preview')!.click();
+    fixture.detectChanges();
+    const alerts = [
+      { alertId: '1', fromLabel: 'Team sent', reason: 'transition_allowed' },
+      { alertId: '2', fromLabel: 'False alarm', reason: 'closed' }
+    ];
+    http.expectOne(request).flush({ alerts });
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Will move from Team sent to Reached site.');
+    expect(el.textContent).toContain('Will stay at False alarm. Already closed.');
+    submit.click();
+    http.expectOne(url + '/steps').flush({
+      alertsMoved: 0,
+      alerts: [{ alertId: '1', fromLabel: 'Reached site', reason: 'already_at_step' }, alerts[1]]
+    });
+    await fixture.whenStable();
+    http.expectOne(url + '/history').flush({ moves: [], entries: [] });
+    fixture.detectChanges();
+    expect(document.activeElement?.textContent).toContain('0 alerts moved.');
+    expect(document.activeElement?.textContent).toContain('Stayed at Reached site. Already at this step.');
+    expect(document.activeElement?.textContent).toContain('Stayed at False alarm. Already closed.');
+    expect(el.querySelector('form')).toBeNull();
+    http.verify();
   });
   it('announces a browser location refusal and the server’s reason for a refused step', async () => {
     const mockNavigator = Object.create(navigator);
