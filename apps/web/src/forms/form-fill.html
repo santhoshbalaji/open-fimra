@@ -16,7 +16,7 @@
     }
   </header>
 
-  @if (!readonly() && (tried() && problems().length || serverMessage() || serverProblems().length)) {
+  @if (tried() && problems().length || serverMessage() || serverProblems().length) {
     <div id="form-problems" class="form-problems" role="alert" tabindex="-1">
       @if (serverMessage()) { <p>{{ serverMessage() }}</p> }
       @if (tried() && problems().length) {
@@ -34,12 +34,7 @@
   }
 
   <form (submit)="$event.preventDefault(); submit()" novalidate>
-    @if (readonly()) {
-      @for (p of pages(); track p.key) {
-        @if (p.title) { <h4 class="form-page-title">{{ p.title }}</h4> }
-        @for (section of p.sections; track section.key) { <ng-container *ngTemplateOutlet="sectionTpl; context: { $implicit: section }" /> }
-      }
-    } @else if (currentPage(); as p) {
+    @if (currentPage(); as p) {
       @if (pages().length > 1) {
         <p class="form-page-count">Page {{ pages().indexOf(p) + 1 }} of {{ pages().length }}</p>
       }
@@ -62,7 +57,7 @@
 
   <ng-template #sectionTpl let-section>
     @let collapsed = layout(section)['collapsed'] === true;
-    <details class="form-section" [open]="!collapsed || readonly()">
+    <details class="form-section" [open]="!collapsed">
       <summary><h4>{{ name(section) }}</h4></summary>
       @if (text(section.node['description'])) { <p class="form-hint">{{ text(section.node['description']) }}</p> }
       <div class="form-items">
@@ -76,14 +71,14 @@
       @if (visible(item, path)) {
         @switch (item.kind) {
           @case ('group') {
-            <details class="form-group" [open]="layout(item)['collapsed'] !== true || readonly()">
+            <details class="form-group" [open]="layout(item)['collapsed'] !== true">
               <summary>{{ name(item) }}</summary>
               @if (text(item.node['description'])) { <p class="form-hint">{{ text(item.node['description']) }}</p> }
               <div class="form-items"><ng-container *ngTemplateOutlet="itemsTpl; context: { $implicit: item.children, path: path }" /></div>
             </details>
           }
           @case ('repeat') {
-            <details class="form-group form-repeat" [open]="layout(item)['collapsed'] !== true || readonly()">
+            <details class="form-group form-repeat" [open]="layout(item)['collapsed'] !== true">
               <summary>{{ name(item) }}</summary>
               @if (text(item.node['description'])) { <p class="form-hint">{{ text(item.node['description']) }}</p> }
               @for (entry of entries(item, path); track $index; let i = $index) {
@@ -225,12 +220,8 @@
                 @let fileName = f.kind === 'signature' ? 'signature' : (f.kind === 'photo' ? 'photo ' : 'file ') + (n + 1);
                 <li>
                   @if (preview(fileId); as src) { <img [src]="src" [alt]="name(f) + ', ' + fileName"> }
-                  @if (readonly()) {
-                    <button hlmBtn type="button" variant="link" size="sm" (click)="download(fileId)">Download {{ fileName }}</button>
-                  } @else {
-                    <span>{{ fileLabel(fileId) }}</span>
-                    @if (!lock) { <button hlmBtn type="button" variant="ghost" size="sm" (click)="removeFile(f, path, fileId)">Remove</button> }
-                  }
+                  <span>{{ fileLabel(fileId) }}</span>
+                  @if (!lock) { <button hlmBtn type="button" variant="ghost" size="sm" (click)="removeFile(f, path, fileId)">Remove</button> }
                 </li>
               } @empty {
                 @if (lock) { <li>No answer</li> }

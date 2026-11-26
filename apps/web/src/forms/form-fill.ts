@@ -71,7 +71,7 @@ export function toLocalInput(value: unknown): string {
 }
 
 /**
- * Fills in or shows a form version (form format, sections 6 to 12): every
+ * Fills in a form version (form format, sections 6 to 12): every
  * field type, conditions, repeating groups, stages, pages, widgets and
  * translated labels. Answers are checked with the server's rules as people
  * type; photos, signatures and files upload to the alert first.
@@ -94,11 +94,8 @@ export class FormFill {
   readonly step = input.required<string>();
   /** The alert, when filling in. It gives the alert values and where files upload. */
   readonly alert = input<AlertRow | null>(null);
-  /** The alert's ID, when only showing a report. */
-  readonly alertId = input<string>('');
-  /** Answers to start from: a report to show, or earlier stages to keep. */
+  /** Earlier answers to keep. */
   readonly initial = input<Obj>({});
-  readonly readonly = input(false);
   /** The form file, when the caller has it already. */
   readonly definition = input<Obj | null>(null);
   readonly submitted = output<Submission>();
@@ -115,7 +112,6 @@ export class FormFill {
   readonly busy = signal(false);
   readonly serverMessage = signal('');
   readonly serverList = signal<string[]>([]);
-  readonly previews = signal<Record<string, string>>({});
 
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
@@ -136,7 +132,7 @@ export class FormFill {
     const stages = this.file()?.['stages'] as Obj[] | undefined;
     return tree?.hasStages && stages ? textIn(stages[this.stage()]?.['title'], this.language()) : '';
   });
-  readonly alertKey = computed(() => this.alert()?.id ?? this.alertId());
+  readonly alertKey = computed(() => this.alert()?.id);
   readonly session = computed(() => {
     const tree = this.tree();
     if (!tree) return null;
@@ -191,7 +187,7 @@ export class FormFill {
       if (!tree) return;
       untracked(() => {
         this.language.set(startLanguage(this.languages()));
-        this.values.set(this.readonly() ? initial : this.startValues(tree, initial));
+        this.values.set(this.startValues(tree, initial));
         // Attachments in the starting answers were uploaded earlier for this alert.
         const known: Record<string, Upload | null> = {};
         for (const id of this.attachmentIds(initial)) known[id] = null;
@@ -199,12 +195,8 @@ export class FormFill {
         this.page.set(0);
       });
     });
-    effect(() => {
-      if (this.readonly()) untracked(() => this.loadPreviews(this.values()));
-    });
     this.lifetime.onDestroy(() => {
       for (const upload of Object.values(this.uploads())) if (upload?.preview) URL.revokeObjectURL(upload.preview);
-      for (const url of Object.values(this.previews())) URL.revokeObjectURL(url);
     });
   }
 
@@ -281,12 +273,11 @@ export class FormFill {
   /** Answers from an earlier stage are kept and shown read-only. */
   locked(node: Node): boolean {
     const tree = this.tree();
-    return this.readonly() || (!!tree?.hasStages && node.stage < this.stage());
+    return !!tree?.hasStages && node.stage < this.stage();
   }
 
   value(node: Node, path: Path): unknown {
-    // A sent report keeps the server's own calculations and alert values.
-    if ((node.kind === 'calculated' || node.kind === 'alert-value') && !this.readonly()) return this.session()?.value(node.key, path);
+    if (node.kind === 'calculated' || node.kind === 'alert-value') return this.session()?.value(node.key, path);
     return scopeAt(this.values(), path)[node.key];
   }
 
@@ -420,7 +411,7 @@ export class FormFill {
   }
 
   preview(id: string): string | undefined {
-    return this.uploads()[id]?.preview ?? this.previews()[id];
+    return this.uploads()[id]?.preview;
   }
 
   accept(node: Node): string {
@@ -472,47 +463,6 @@ export class FormFill {
       return null;
     } finally {
       this.uploading.set(null);
-    }
-  }
-
-  /** Downloads an attachment with the signed-in user's token. */
-  async download(id: string): Promise<void> {
-    try {
-      const response = await firstValueFrom(this.http.get(this.workspaceUrl() + '/attachments/' + id, { responseType: 'blob', observe: 'response' }));
-      const named = /filename\*=UTF-8''([^;]+)/i.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(response.body as Blob);
-      link.download = this.uploads()[id]?.fileName ?? (named ? decodeURIComponent(named) : id);
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
-    } catch (error) {
-      if ((error as HttpErrorResponse).status === 401) this.auth.sessionEnded();
-      this.serverMessage.set('The file could not download. Try again.');
-    }
-  }
-
-  /** Loads the photos and signatures of a shown report, to show them. */
-  private loadPreviews(values: Obj): void {
-    const tree = this.tree();
-    if (!tree) return;
-    const ids: string[] = [];
-    const walk = (scope: Obj) => {
-      for (const [key, value] of Object.entries(scope)) {
-        const kind = tree.byKey.get(key)?.kind;
-        if (kind === 'repeat' && Array.isArray(value)) value.forEach(entry => walk(entry as Obj));
-        if (kind === 'photo' && Array.isArray(value)) ids.push(...(value as string[]));
-        if (kind === 'signature' && typeof value === 'string') ids.push(value);
-      }
-    };
-    walk(values);
-    for (const id of ids.slice(0, 40)) {
-      if (this.previews()[id]) continue;
-      this.http.get(this.workspaceUrl() + '/attachments/' + id, { responseType: 'blob' }).subscribe({
-        next: blob => {
-          if (!this.lifetime.destroyed) this.previews.update(all => ({ ...all, [id]: URL.createObjectURL(blob) }));
-        },
-        error: () => undefined
-      });
     }
   }
 

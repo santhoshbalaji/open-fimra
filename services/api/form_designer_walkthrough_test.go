@@ -86,6 +86,9 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 		t.Fatal(err)
 	}
 	national["id"] = "national-fire-report"
+	items := national["sections"].([]any)[1].(map[string]any)["items"].([]any)
+	crew := items[1].(map[string]any)["items"].([]any)[0].(map[string]any)
+	crew["showWhen"] = map[string]any{"op": "equals", "field": "cause", "value": "lightning"}
 	call("POST", "/forms", "state.admin", map[string]any{"level": "national", "definition": national,
 		"template": templateRules{AllowExtension: true, Locked: []string{"basics", "crew_size"}}}, 201)
 	call("PUT", "/forms/national-fire-report/assignments/first_report", "state.admin", map[string]any{"version": 1}, 200)
