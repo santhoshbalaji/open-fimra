@@ -20,12 +20,16 @@ import 'package:fimra_field/src/auth/session.dart';
 import 'package:fimra_field/src/auth/tokens.dart';
 import 'package:fimra_field/src/config.dart';
 import 'package:fimra_field/src/data/alert_repository.dart';
+import 'package:fimra_field/src/data/field_store.dart';
+import 'package:fimra_field/src/data/offline_repository.dart';
 import 'package:fimra_field/src/device/device_manager.dart';
 import 'package:fimra_field/src/device/device_store.dart';
 import 'package:fimra_field/src/device/local_data.dart';
 import 'package:fimra_field/src/device/push.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 final api = Platform.environment['FIMRA_TEST_API'];
 final issuer = Platform.environment['FIMRA_TEST_ISSUER'];
@@ -39,6 +43,7 @@ void main() {
     clientId: 'open-fimra-mobile',
     redirectUri: AppConfig.mobileRedirectUri,
   );
+  sqfliteFfiInit();
   final client = http.Client();
   tearDownAll(client.close);
 
@@ -221,6 +226,207 @@ void main() {
       expect(receipt.step, 'reached_site');
     });
 
+    test('a photo draft survives a restart and follows the queued field steps once', () async {
+      final adminToken = await passwordToken(client, 'state.admin');
+      const ws = '/api/v1/workspaces/demo';
+      const form = 'offline-inspection';
+      const definition = {
+        'formatVersion': 1,
+        'id': form,
+        'version': 1,
+        'title': {'en': 'Offline inspection'},
+        'sections': [
+          {
+            'key': 'site',
+            'title': {'en': 'Site'},
+            'items': [
+              {
+                'key': 'note',
+                'type': 'text',
+                'label': {'en': 'Site note'},
+                'required': true,
+              },
+              {
+                'key': 'photos',
+                'type': 'photo',
+                'label': {'en': 'Site photo'},
+                'required': true,
+              },
+            ],
+          },
+        ],
+      };
+      Future<void> setup(String method, String path, int status, [Json? data]) async {
+        final req = http.Request(method, Uri.parse('$api$ws$path'))
+          ..headers.addAll({'Authorization': 'Bearer $adminToken', 'Content-Type': 'application/json'});
+        if (data != null) req.body = jsonEncode(data);
+        final response = await http.Response.fromStream(await client.send(req));
+        expect(response.statusCode, status, reason: response.body);
+      }
+
+      await setup('POST', '/forms', 201, definition);
+      await setup('POST', '/forms/$form/versions/1/publish', 200);
+      await setup('PUT', '/forms/$form/assignments/first_report', 200, {'version': 1});
+
+      final directory = await Directory.systemTemp.createTemp('fimra-offline');
+      FieldStore openStore() => FieldStore(factory: databaseFactoryFfi, path: '${directory.path}/field.sqlite');
+      var store = openStore();
+      final token = await pkceToken(config, client, 'beat.guard');
+      var connected = true;
+      var loseReachedResponse = true;
+      final transport = MockClient((request) async {
+        if (!connected) throw http.ClientException('No signal');
+        final withNetwork = http.Request(request.method, request.url)
+          ..headers.addAll(request.headers)
+          ..bodyBytes = request.bodyBytes;
+        final response = await http.Response.fromStream(await client.send(withNetwork));
+        if (loseReachedResponse &&
+            request.url.path.endsWith('/steps') &&
+            request.body.contains('"step":"reached_site"') &&
+            response.statusCode == 200) {
+          loseReachedResponse = false;
+          throw http.ClientException('Signal lost after arrival was recorded');
+        }
+        return response;
+      });
+      final fieldApi = FimraApi(
+        baseUrl: config.apiBaseUrl,
+        token: ({forceRefresh = false}) async => token,
+        httpClient: transport,
+      );
+      var repository = OfflineAlertRepository(fieldApi, store, () => 'beat.guard');
+      addTearDown(() async {
+        repository.dispose();
+        await store.wipe();
+        await directory.delete(recursive: true);
+        transport.close();
+      });
+      final alert = (await repository.alerts('demo')).items.singleWhere((alert) => alert.status == 'new');
+      repository.activate('demo');
+      await repository.sync(refresh: true);
+      expect(repository.lastSynced, isNotNull);
+
+      connected = false;
+      await repository.sync();
+      expect(repository.offline, isTrue);
+      final history = await repository.history('demo', alert.id);
+      final assignment = objects((await repository.reportsForAlert('demo', alert.id))['forms']).single;
+      final id = newDeviceId();
+      final photoId = newDeviceId();
+      final photo = ReportFile(
+        photoId,
+        'site.png',
+        'image/png',
+        base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jzAAAAABJRU5ErkJggg=='),
+      );
+      await repository.saveDraft(
+        'demo',
+        alert.id,
+        'Offline inspection',
+        {
+          'id': id,
+          'form': form,
+          'step': 'first_report',
+          'assignment': assignment,
+          'values': {
+            'photos': [photo.id],
+          },
+        },
+        [photo],
+        store.generation,
+      );
+
+      Future<void> take(String from, String to) async {
+        final move = history.offlineMoves[from]!.singleWhere((move) => move.step == to);
+        await repository.queueStep(
+          'demo',
+          alert.id,
+          move,
+          from,
+          StepRequest(
+            step: to,
+            clientId: newDeviceId(),
+            clientTime: DateTime.now(),
+            note: to == 'reached_site' ? 'At the site' : '',
+            latitude: move.locationRequired ? alert.latitude : null,
+            longitude: move.locationRequired ? alert.longitude : null,
+          ),
+        );
+      }
+
+      await take('new', 'acknowledged');
+      await take('acknowledged', 'team_sent');
+      await take('team_sent', 'reached_site');
+      await take('reached_site', 'controlled');
+      await take('controlled', 'extinguished');
+      expect((await guard.alert('demo', alert.id)).status, 'new');
+
+      repository.dispose();
+      await store.close();
+      store = openStore();
+      repository = OfflineAlertRepository(fieldApi, store, () => 'beat.guard');
+      final rows = await repository.reportStatus(alert: alert.id);
+      final draft = rows.singleWhere((row) => row['kind'] == 'draft');
+      expect(draft['id'], id);
+      expect(object(jsonDecode(draft['body'] as String)['values'])['photos'], [photoId]);
+      final files = await store.draftFiles(id);
+      expect(files.single.bytes, photo.bytes);
+      repository.activate('demo');
+      await repository.sync(refresh: true);
+      expect(repository.offline, isTrue);
+
+      await repository.queueReport(
+        'demo',
+        alert.id,
+        'Offline inspection',
+        {
+          'id': id,
+          'form': form,
+          'step': 'first_report',
+          'version': 1,
+          'deviceTime': DateTime.now().toUtc().toIso8601String(),
+          'values': {
+            'photos': [photoId],
+            'note': 'The area is secure.',
+          },
+        },
+        files,
+        step: StepRequest(step: 'first_report', clientId: newDeviceId(), clientTime: DateTime.now()),
+        fromStep: 'extinguished',
+        generation: store.generation,
+      );
+      expect((await repository.reportStatus(alert: alert.id)).map((row) => row['kind']), [
+        'step',
+        'step',
+        'step',
+        'step',
+        'step',
+        'report',
+      ]);
+
+      connected = true;
+      await repository.sync(retry: true, refresh: true);
+      expect(loseReachedResponse, isFalse);
+      expect((await guard.alert('demo', alert.id)).status, 'reached_site');
+      await repository.sync(retry: true, refresh: true);
+      await repository.sync(retry: true, refresh: true);
+      final confirmed = await guard.history('demo', alert.id);
+      expect(confirmed.entries.map((entry) => entry.step), [
+        'new',
+        'acknowledged',
+        'team_sent',
+        'reached_site',
+        'controlled',
+        'extinguished',
+        'first_report',
+      ]);
+      expect(confirmed.entries.singleWhere((entry) => entry.step == 'reached_site').note, 'At the site');
+      final received = (await guard.api.submissions('demo', alert.id)).single;
+      expect(received['id'], id);
+      expect(object(received['values'])['photos'], [photoId]);
+      expect((await repository.reportStatus(alert: alert.id)).every((row) => row['received_at'] != null), isTrue);
+    });
+
     test('map tiles follow the same grants', () async {
       final guardToken = await pkceToken(config, client, 'beat.guard');
       final nobodyToken = await passwordToken(client, 'no.role');
@@ -252,6 +458,16 @@ void main() {
       final ids = MemoryDeviceStore();
       final push = _NoPushApp();
       final deleted = <String>[];
+      final field = FieldStore(factory: databaseFactoryFfi, path: inMemoryDatabasePath);
+      await field.saveDraft(
+        'guard',
+        'demo',
+        '1',
+        'First report',
+        {'id': 'draft', 'form': 'demo', 'step': 'first_report'},
+        [],
+        generation: field.generation,
+      );
       final session = Session(
         oidc: OidcClient(config: config, httpClient: client),
         store: tokens,
@@ -280,6 +496,7 @@ void main() {
           notifications: record('notifications', () async {}),
           pushRegistration: record('push', push.stop),
           offlineMaps: record('maps', () async {}),
+          offlineReports: record('field data', field.wipe),
           deviceId: record('device', ids.clear),
           signInTokens: record('tokens', tokens.clear),
         ),
@@ -318,7 +535,9 @@ void main() {
         OnlineAlertRepository(api).alerts('demo'),
         throwsA(isA<DeviceActionException>().having((e) => e.action, 'action', DeviceAction.wipe)),
       );
-      expect(deleted, ['notifications', 'push', 'maps', 'device', 'tokens']);
+      expect(deleted, ['notifications', 'push', 'maps', 'field data', 'device', 'tokens']);
+      expect(await field.reports('guard'), isEmpty);
+      await field.wipe();
       expect(tokens.tokens, isNull);
       expect(ids.id, isNull);
       expect(session.status, SessionStatus.signedOut);

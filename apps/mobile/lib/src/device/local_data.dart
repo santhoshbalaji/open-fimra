@@ -45,7 +45,7 @@ LocalData fieldDataOnPhone({
   WipeStep('Alert notifications shown on the phone', notifications),
   WipeStep('The push registration with the push app', pushRegistration),
   WipeStep('Map areas saved for offline use', offlineMaps),
-  if (offlineReports != null) WipeStep('Saved alerts, maps, forms and queued reports', offlineReports),
+  if (offlineReports != null) WipeStep('Saved alerts, maps, forms, drafts and queued work', offlineReports),
   if (mediaCache != null) WipeStep('Temporary photo copies', mediaCache),
   WipeStep("This phone's registration ID", deviceId),
   WipeStep('Sign-in tokens', signInTokens),

@@ -360,17 +360,24 @@ class HistoryEntry {
 }
 
 class AlertHistory {
-  const AlertHistory({required this.entries, required this.moves});
+  const AlertHistory({required this.entries, required this.moves, this.offlineMoves = const {}});
   factory AlertHistory.fromJson(Map<String, dynamic> json) => AlertHistory(
     entries: [
       for (final item in (json['entries'] as List? ?? const [])) HistoryEntry.fromJson(item as Map<String, dynamic>),
     ],
-    moves: [
-      for (final item in (json['moves'] as List? ?? const [])) WorkflowMove.fromJson(item as Map<String, dynamic>),
-    ],
+    moves: _moves(json['moves']),
+    offlineMoves: {
+      for (final entry in (json['offlineMoves'] as Map<String, dynamic>? ?? const {}).entries)
+        entry.key: _moves(entry.value),
+    },
   );
   final List<HistoryEntry> entries;
   final List<WorkflowMove> moves;
+  final Map<String, List<WorkflowMove>> offlineMoves;
+
+  static List<WorkflowMove> _moves(Object? data) => [
+    for (final item in data as List? ?? const []) WorkflowMove.fromJson(item as Map<String, dynamic>),
+  ];
 }
 
 /// A workflow step to record. [clientId] makes a retry safe: the server
@@ -385,6 +392,19 @@ class StepRequest {
     this.longitude,
     this.clientTime,
   });
+  factory StepRequest.fromJson(Map<String, dynamic> json) {
+    final location = json['location'] as Map<String, dynamic>?;
+    return StepRequest(
+      step: _string(json['step']),
+      clientId: _string(json['clientId']),
+      clientTime: DateTime.tryParse(_string(json['clientTime'])),
+      note: _string(json['note']),
+      reason: _string(json['reason']),
+      latitude: _double(location?['latitude']),
+      longitude: _double(location?['longitude']),
+    );
+  }
+
   final String step;
   final String clientId;
   final String note;

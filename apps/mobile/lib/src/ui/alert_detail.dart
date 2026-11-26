@@ -36,7 +36,7 @@ Future<void> ensureLocationPermission() async {
   var permission = await Geolocator.checkPermission();
   if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
   if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-    throw const LocationProblem('The app needs your location for this step. Allow location access and try again.');
+    throw const LocationProblem('Location access is off. Allow location access and try again.');
   }
 }
 
@@ -64,6 +64,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
   Json? _reportData;
   String? _reportsProblem;
   DateTime? _lastSynced;
+  bool _formOpen = false;
 
   String get _slug => widget.view.workspace.slug;
 
@@ -113,16 +114,49 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     }
   }
 
-  Future<void> _fill(Json assignment, WorkflowMove? move) async {
+  Future<void> _fill(
+    Json assignment, {
+    required bool canSend,
+    required String fromStep,
+    WorkflowMove? move,
+    Json? draft,
+    DateTime? reachedAt,
+  }) async {
+    if (_formOpen) return;
+    _formOpen = true;
+    try {
+      await _openForm(assignment, canSend: canSend, fromStep: fromStep, move: move, draft: draft, reachedAt: reachedAt);
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the report.')));
+      }
+    } finally {
+      _formOpen = false;
+    }
+  }
+
+  Future<void> _openForm(
+    Json assignment, {
+    required bool canSend,
+    required String fromStep,
+    WorkflowMove? move,
+    Json? draft,
+    DateTime? reachedAt,
+  }) async {
     final repo = widget.view.services.offline!;
     final generation = repo.store.generation;
+    final draftBody = _body(draft);
+    if (draft != null) assignment = object(draftBody['assignment']);
     final definition = object(assignment['definition']);
+    final id = draft?['id'] as String? ?? newDeviceId();
     final step = assignment['step'] as String;
     final form = assignment['form'] as String;
     final stages = objects(definition['stages']);
     final stage = stages.indexWhere((row) => row['workflowStep'] == step);
     final earlierSteps = stages.take(stage < 0 ? 0 : stage).map((row) => row['workflowStep']).toList();
     final reports = objects(_reportData?['submissions']);
+    final queued = earlierSteps.isEmpty ? <Json>[] : await repo.reportStatus(workspace: _slug, alert: _alert.id);
+    final attachments = {...object(_reportData?['attachments'])};
     final initial = <String, dynamic>{};
     for (final earlier in earlierSteps) {
       final report = reports
@@ -130,9 +164,24 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             (row) => row['form'] == form && row['step'] == earlier && object(row['approval'])['decision'] != 'returned',
           )
           .lastOrNull;
-      initial.addAll(object(report?['values']));
+      if (report != null) {
+        initial.addAll(object(report['values']));
+        continue;
+      }
+      final pending = queued.where((row) {
+        if (row['kind'] != 'report' || row['received_at'] != null) return false;
+        final body = _body(row);
+        return body['form'] == form && body['step'] == earlier;
+      }).lastOrNull;
+      if (pending != null) {
+        initial.addAll(object(_body(pending)['values']));
+        attachments.addAll(await repo.store.reportFileMetadata(pending['id'] as String));
+      }
     }
-    final reference = await repo.savedReference(_slug);
+    final (reference, files) = await (
+      repo.savedReference(_slug),
+      draft == null ? Future.value(<ReportFile>[]) : repo.store.draftFiles(id),
+    ).wait;
     if (!mounted || repo.store.generation != generation) return;
     final raised = _alert.raisedAt;
     final title = assignment['title'] as String;
@@ -142,7 +191,20 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
           definition: definition,
           step: step,
           initial: initial,
-          attachments: object(_reportData?['attachments']),
+          reachedAt: reachedAt,
+          canSend: canSend,
+          draftValues: object(draftBody['values']),
+          draftFiles: files,
+          draftLanguage: draftBody['language'] as String?,
+          saveDraft: (values, files, language) => repo.saveDraft(
+            _slug,
+            _alert.id,
+            title,
+            {'id': id, 'form': form, 'step': step, 'assignment': assignment, 'values': values, 'language': language},
+            files,
+            generation,
+          ),
+          attachments: attachments,
           reference: reference,
           move: move,
           locate: widget.locate,
@@ -165,7 +227,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             _alert.id,
             title,
             {
-              'id': newDeviceId(),
+              'id': id,
               'form': form,
               'version': assignment['version'],
               'step': step,
@@ -175,6 +237,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             },
             files,
             step: queuedStep,
+            fromStep: queuedStep == null ? null : fromStep,
             generation: generation,
           ),
         ),
@@ -186,81 +249,189 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     }
   }
 
-  Widget _reports(AlertHistory? history) {
-    final repo = widget.view.services.offline!;
+  Json _body(Json? row) => row == null ? {} : jsonDecode(row['body'] as String) as Json;
+
+  Widget _actions(List<Json> queue) {
+    final history = _history;
+    final forms = objects(_reportData?['forms']);
+    final reached = {for (final entry in history?.entries ?? <HistoryEntry>[]) entry.step: entry.at};
+    var current = _alert.status;
+    for (final row in queue) {
+      if (row['from_step'] != current) continue;
+      if (row['error'] != null && row['retry_at'] == null) break;
+      final body = _body(row);
+      final step = body['step'] as String;
+      current = step;
+      final at = body['clientTime'] as String? ?? (row['received_at'] as String?) ?? body['deviceTime'] as String?;
+      if (at != null) reached[step] = DateTime.parse(at);
+    }
+    final moves = (current == _alert.status ? history?.moves : history?.offlineMoves[current]) ?? const [];
+    Json? savedFor(Json assignment, {required bool draft}) => queue.where((row) {
+      if ((row['kind'] == 'draft') != draft || row['kind'] == 'step') return false;
+      final body = _body(row);
+      return body['form'] == assignment['form'] && body['step'] == assignment['step'];
+    }).lastOrNull;
+
+    final reportActions = <Widget>[];
+    final otherReports = <Widget>[];
+    final assignedSteps = forms.map((form) => form['step']).toSet();
+    final needsCurrentReport = forms.any((form) {
+      if (form['step'] != current || form['submitted'] == true) return false;
+      final saved = savedFor(form, draft: false);
+      return saved == null || (saved['error'] != null && saved['retry_at'] == null);
+    });
+    for (final assignment in forms) {
+      final step = assignment['step'] as String;
+      final title = assignment['title'] as String;
+      final saved = savedFor(assignment, draft: false);
+      final draft = savedFor(assignment, draft: true);
+      final sent = assignment['submitted'] == true || saved?['received_at'] != null;
+      final atStep = reached.containsKey(step) || step == current;
+      final move = moves.where((move) => move.step == step).firstOrNull;
+      final canSend = atStep || (move != null && !needsCurrentReport);
+      final canDraft = canSend || step == 'first_report' || draft != null;
+      if (sent || saved != null) {
+        otherReports.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                ReportDelivery(item: saved, sent: sent),
+              ],
+            ),
+          ),
+        );
+      } else if (canDraft && _problem == null) {
+        final name = title == 'First report' ? 'first report' : title;
+        final buttonLabel = draft != null
+            ? 'Resume $name draft'
+            : canSend
+            ? 'File $name'
+            : 'Start $name draft';
+        void open() => _fill(
+          assignment,
+          canSend: canSend,
+          fromStep: current,
+          move: atStep ? null : move,
+          draft: draft,
+          reachedAt: reached['reached_site'],
+        );
+        if (canSend) {
+          reportActions.add(
+            FilledButton.icon(onPressed: open, icon: const Icon(Icons.edit_note), label: Text(buttonLabel)),
+          );
+        } else {
+          otherReports.add(OutlinedButton(onPressed: open, child: Text(buttonLabel)));
+        }
+      }
+    }
+
+    final pending = queue.where((row) => row['kind'] == 'step' && row['received_at'] == null);
+    final nextMoves = moves.where((move) => !move.terminal && !assignedSteps.contains(move.step));
+    final outcomes = moves.where((move) => move.terminal && !assignedSteps.contains(move.step));
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_problem == null && _reportsProblem == null) ...[
+          if (reportActions.isNotEmpty || (!needsCurrentReport && nextMoves.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Next action', style: text.titleMedium),
+            ),
+          ...reportActions,
+          if (!needsCurrentReport)
+            for (final move in nextMoves)
+              FilledButton.icon(
+                onPressed: () => _take(move, current),
+                icon: Icon(move.locationRequired ? Icons.my_location : FimraStatusIcon.step),
+                label: Text(_actionLabel(move)),
+              ),
+          if (moves.isEmpty && history != null && reportActions.isEmpty && pending.isEmpty)
+            const Text('There are no steps you can take on this alert.'),
+        ],
+        const SizedBox(height: 8),
+        _mapButton(),
+        if (pending.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          for (final row in pending)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${row['title']}', style: text.titleSmall),
+                  ReportDelivery(item: row),
+                ],
+              ),
+            ),
+        ],
+        if (queue.any((row) => row['kind'] != 'draft' && row['received_at'] == null))
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: widget.view.services.offline!))),
+              icon: const Icon(Icons.outbox_outlined),
+              label: const Text('Report outbox'),
+            ),
+          ),
+        if (_reportsProblem != null) const StatusBadge(icon: Icons.error_outline, label: 'Could not load the forms'),
+        ...otherReports,
+        if (outcomes.isNotEmpty && _problem == null && _reportsProblem == null)
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Other outcomes'),
+            children: [
+              for (final move in outcomes)
+                OutlinedButton(onPressed: () => _take(move, current), child: Text(_actionLabel(move))),
+            ],
+          ),
+        for (final report in objects(_reportData?['submissions']))
+          if (object(report['approval'])['decision'] case final String decision)
+            StatusBadge(
+              icon: decision == 'approved' ? Icons.check_circle_outline : Icons.assignment_return_outlined,
+              label: 'Report version ${report['version']} · ${decision == 'approved' ? 'Approved' : 'Returned'}',
+            ),
+      ],
+    );
+  }
+
+  Widget _mapButton() => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: OutlinedButton.icon(
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Alert map')),
+            body: AlertMapView(view: widget.view, focus: _alert, onOpen: (_) {}),
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.map_outlined),
+      label: const Text('Show on map'),
+    ),
+  );
+
+  Widget _actionPanel() {
+    final repo = widget.view.services.offline;
+    if (repo == null) return _actions(const []);
     return ValueListenableBuilder(
       valueListenable: repo.changes,
       builder: (context, _, _) => FutureBuilder<List<Json>>(
         future: repo.reportStatus(workspace: _slug, alert: _alert.id),
-        builder: (context, snapshot) {
-          final forms = objects(_reportData?['forms']);
-          final queue = (snapshot.data ?? []);
-          final submissions = objects(_reportData?['submissions']);
-          final problem = _reportsProblem;
-          if (forms.isEmpty && queue.isEmpty && submissions.isEmpty && problem == null) return const SizedBox.shrink();
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Text('Reports', style: Theme.of(context).textTheme.titleMedium),
-              if (problem != null) StatusBadge(icon: Icons.error_outline, label: problem),
-              for (final assignment in forms) ...[
-                Builder(
-                  builder: (context) {
-                    final step = assignment['step'] as String;
-                    final entry = history?.entries.where((entry) => entry.step == step).lastOrNull;
-                    final move = history?.moves.where((move) => move.step == step).firstOrNull;
-                    final saved = queue.where((row) {
-                      final body = jsonDecode(row['body'] as String) as Json;
-                      return body['form'] == assignment['form'] && body['step'] == step;
-                    }).lastOrNull;
-                    final sent = assignment['submitted'] == true || saved?['received_at'] != null;
-                    final label = entry?.label ?? move?.label ?? step.replaceAll('_', ' ');
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${assignment['title']}', style: Theme.of(context).textTheme.titleSmall),
-                          Text(label),
-                          ReportDelivery(item: saved, sent: sent),
-                          if (!sent && saved != null)
-                            OutlinedButton.icon(
-                              label: const Text('Report outbox'),
-                              icon: const Icon(Icons.outbox_outlined),
-                              onPressed: () => Navigator.of(
-                                context,
-                              ).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: repo))),
-                            )
-                          else if (!sent && snapshot.hasData && (entry != null || move != null))
-                            OutlinedButton(
-                              onPressed: () => _fill(assignment, entry != null ? null : move),
-                              child: const Text('Fill in'),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-              for (final report in submissions)
-                if (object(report['approval'])['decision'] case final String decision)
-                  StatusBadge(
-                    icon: decision == 'approved' ? Icons.check_circle_outline : Icons.assignment_return_outlined,
-                    label: 'Report version ${report['version']} · ${decision == 'approved' ? 'Approved' : 'Returned'}',
-                  ),
-            ],
-          );
-        },
+        builder: (context, snapshot) => snapshot.hasData ? _actions(snapshot.data!) : _mapButton(),
       ),
     );
   }
 
   Future<void> _load() async {
     final repo = widget.view.services.repository;
-    unawaited(_loadReports());
     try {
-      final results = await Future.wait([repo.alert(_slug, _alert.id), repo.history(_slug, _alert.id)]);
+      final results = await Future.wait([repo.alert(_slug, _alert.id), repo.history(_slug, _alert.id), _loadReports()]);
       if (!mounted) return;
       setState(() {
         _alert = results[0] as Alert;
@@ -272,17 +443,21 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     }
   }
 
-  Future<void> _take(WorkflowMove move) async {
+  Future<void> _take(WorkflowMove move, String fromStep) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => StepSheet(view: widget.view, alert: _alert, move: move, locate: widget.locate),
+      builder: (_) =>
+          StepSheet(view: widget.view, alert: _alert, move: move, fromStep: fromStep, locate: widget.locate),
     );
     if (saved != true || !mounted) return;
     _changed = true;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${move.label} recorded.')));
+    final message = widget.view.services.offline == null
+        ? '${move.label} recorded.'
+        : '${move.label} saved to the outbox.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     await _load();
   }
 
@@ -313,39 +488,37 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                 children: [StatusBadge.step(_alert.stepLabel), if (_alert.overdue) StatusBadge.overdue()],
               ),
               const SizedBox(height: 8),
+              Text('Seen ${formatTime(_alert.observedAt)}'),
+              const SizedBox(height: 8),
               if (widget.view.services.offline case final repo?)
-                FieldSyncStatus(repo: repo, workspace: _slug, alert: _alert.id),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('Alert map')),
-                        body: AlertMapView(view: widget.view, focus: _alert, onOpen: (_) {}),
-                      ),
-                    ),
+                FieldSyncStatus(repo: repo, workspace: _slug, alert: _alert.id)
+              else
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: StatusBadge(
+                    icon: _problem == null ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                    label: _problem != null
+                        ? 'Could not connect'
+                        : history == null
+                        ? 'Connecting'
+                        : 'Connected',
                   ),
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text('Show on map'),
                 ),
-              ),
+              const SizedBox(height: 8),
+              _actionPanel(),
               const SizedBox(height: 8),
               _Facts(alert: _alert, map: widget.view.map),
-              if (widget.view.services.offline != null) _reports(history),
               const SizedBox(height: 24),
               if (_problem != null)
                 MessageView(
                   icon: Icons.cloud_off_outlined,
                   title: 'Could not load the timeline',
-                  body: _problem,
+                  body: 'Check your connection and try again.',
                   action: FilledButton(onPressed: _load, child: const Text('Retry')),
                 )
               else if (history == null)
                 const Center(child: CircularProgressIndicator())
               else ...[
-                _Moves(history: history, onTake: _take),
-                const SizedBox(height: 24),
                 Text('Timeline', style: text.titleMedium),
                 const SizedBox(height: 8),
                 for (final entry in history.entries.reversed) _TimelineEntry(entry),
@@ -366,7 +539,6 @@ class _Facts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <(String, String)>[
-      ('Seen', formatTime(alert.observedAt)),
       ('Forest class', alert.forest?.label ?? alert.forestClass),
       for (final level in map.placeOrder(alert.placeHierarchy))
         if (alert.places[level.slug] case final place?) (level.label, '${place.name} (${place.code})'),
@@ -379,88 +551,53 @@ class _Facts extends StatelessWidget {
     ];
     final text = Theme.of(context).textTheme;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final (label, value) in rows)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: MergeSemantics(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final heading = Text(label, style: text.titleSmall);
-                      final detail = Text(value, style: text.bodyMedium);
-                      if (constraints.maxWidth < 280 || MediaQuery.textScalerOf(context).scale(16) > 20) {
-                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [heading, detail]);
-                      }
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(width: 110, child: heading),
-                          Expanded(child: detail),
-                        ],
-                      );
-                    },
+      child: ExpansionTile(
+        title: const Text('Details'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (label, value) in rows)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: MergeSemantics(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final heading = Text(label, style: text.titleSmall);
+                          final detail = Text(value, style: text.bodyMedium);
+                          if (constraints.maxWidth < 280 || MediaQuery.textScalerOf(context).scale(16) > 20) {
+                            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [heading, detail]);
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(width: 110, child: heading),
+                              Expanded(child: detail),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
-              ),
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _Moves extends StatelessWidget {
-  const _Moves({required this.history, required this.onTake});
-  final AlertHistory history;
-  final void Function(WorkflowMove move) onTake;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final steps = history.moves.where((m) => !m.terminal).toList();
-    final outcomes = history.moves.where((m) => m.terminal).toList();
-    if (history.moves.isEmpty) {
-      return Text('There are no steps you can take on this alert.', style: text.bodyMedium);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Next step', style: text.titleMedium),
-        const SizedBox(height: 8),
-        for (final move in steps)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: FilledButton.icon(
-              onPressed: () => onTake(move),
-              icon: Icon(move.locationRequired ? Icons.my_location : FimraStatusIcon.step),
-              label: Text(move.label),
-            ),
-          ),
-        if (outcomes.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text('Other outcomes', style: text.titleSmall),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final move in outcomes)
-                OutlinedButton.icon(
-                  onPressed: () => onTake(move),
-                  icon: const Icon(FimraStatusIcon.step),
-                  label: Text(move.label),
-                ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
+String _actionLabel(WorkflowMove move) => switch (move.step) {
+  'acknowledged' => 'Acknowledge',
+  'reached_site' => 'Mark reached',
+  'team_sent' => 'Mark team sent',
+  'controlled' => 'Mark controlled',
+  'extinguished' => 'Mark extinguished',
+  _ => move.label,
+};
 
 class _TimelineEntry extends StatelessWidget {
   const _TimelineEntry(this.entry);
@@ -502,10 +639,18 @@ class _TimelineEntry extends StatelessWidget {
 
 /// Confirms one step, with an optional note, and records it.
 class StepSheet extends StatefulWidget {
-  const StepSheet({super.key, required this.view, required this.alert, required this.move, required this.locate});
+  const StepSheet({
+    super.key,
+    required this.view,
+    required this.alert,
+    required this.move,
+    required this.fromStep,
+    required this.locate,
+  });
   final WorkspaceView view;
   final Alert alert;
   final WorkflowMove move;
+  final String fromStep;
   final Locate locate;
 
   @override
@@ -542,25 +687,32 @@ class _StepSheetState extends State<StepSheet> {
     try {
       ({double latitude, double longitude})? point;
       if (move.locationRequired && !_exception) point = await widget.locate();
-      await widget.view.services.repository.recordStep(
-        widget.view.workspace.slug,
-        widget.alert.id,
-        StepRequest(
-          step: move.step,
-          clientId: _clientId,
-          note: _note.text.trim(),
-          reason: _exception ? _reason.text.trim() : '',
-          latitude: point?.latitude,
-          longitude: point?.longitude,
-        ),
+      if (!mounted) return;
+      final request = StepRequest(
+        step: move.step,
+        clientId: _clientId,
+        clientTime: widget.view.services.offline == null ? null : DateTime.now(),
+        note: _note.text.trim(),
+        reason: _exception ? _reason.text.trim() : '',
+        latitude: point?.latitude,
+        longitude: point?.longitude,
       );
+      final slug = widget.view.workspace.slug;
+      final repo = widget.view.services.offline;
+      if (repo == null) {
+        await widget.view.services.repository.recordStep(slug, widget.alert.id, request);
+      } else {
+        await repo.queueStep(slug, widget.alert.id, move, widget.fromStep, request);
+      }
       if (mounted) Navigator.of(context).pop(true);
     } on LocationProblem catch (error) {
-      setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = error.message);
     } on ApiException catch (error) {
-      setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = error.message);
+    } on StateError {
+      if (mounted) setState(() => _problem = 'Could not save this step on the phone.');
     } on Exception {
-      setState(() => _problem = 'Could not get your location. Try again outside or near a window.');
+      if (mounted) setState(() => _problem = 'Could not save this step. Check your location and try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -621,6 +773,8 @@ class _StepSheetState extends State<StepSheet> {
                 ),
               ],
               const SizedBox(height: 16),
+              if (widget.view.services.offline != null)
+                const Text('The server will confirm this step when it receives it.'),
               FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving' : 'Save')),
               const SizedBox(height: 8),
               TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),

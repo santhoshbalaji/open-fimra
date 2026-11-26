@@ -110,6 +110,68 @@ void main() {
     expect((await repository.savedReference('demo'))?['type'], 'FeatureCollection');
   });
 
+  test('a refused step retains its input and holds later steps for the same alert', () async {
+    final posted = <Json>[];
+    final api = FimraApi(
+      baseUrl: 'http://example.invalid',
+      token: ({forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Json;
+        posted.add(body);
+        if (body['clientId'] == 'refused') {
+          return http.Response('{"error":"Record a location near the detection."}', 422);
+        }
+        return http.Response('{"id":"1","step":"acknowledged","at":"2026-01-01T12:00:00Z"}', 200);
+      }),
+    );
+    final generation = store.generation;
+    final arrival = {
+      'step': 'reached_site',
+      'clientId': 'refused',
+      'note': 'At the gate',
+      'clientTime': '2026-01-01T12:00:00.000Z',
+      'location': {'latitude': 16.347, 'longitude': 86.2264},
+    };
+    await store.enqueueStep(
+      'guard',
+      'demo',
+      '42',
+      'Reached site',
+      arrival,
+      fromStep: 'team_sent',
+      generation: generation,
+    );
+    await store.enqueueStep(
+      'guard',
+      'demo',
+      '42',
+      'Controlled',
+      {'step': 'controlled', 'clientId': 'later'},
+      fromStep: 'reached_site',
+      generation: generation,
+    );
+    await store.enqueueStep(
+      'guard',
+      'demo',
+      '43',
+      'Acknowledged',
+      {'step': 'acknowledged', 'clientId': 'other'},
+      fromStep: 'new',
+      generation: generation,
+    );
+    final outbox = ReportOutbox(api, store);
+    await outbox.send('guard');
+    await outbox.send('guard');
+    expect(posted.map((body) => body['clientId']), ['refused', 'other']);
+    expect(posted.first, arrival);
+    final failed = (await store.reports('guard', alert: '42')).first;
+    expect(failed['error'], 'Record a location near the detection.');
+    expect(failed['retry_at'], isNull);
+    expect(object(jsonDecode(failed['body'] as String)['location']), arrival['location']);
+    expect(jsonDecode(failed['body'] as String)['note'], 'At the gate');
+    expect((await store.reports('other')), isEmpty);
+  });
+
   test('lost upload and report responses resume with three files and one report', () async {
     final storedFiles = <String, Json>{};
     final submissions = <String, String>{};

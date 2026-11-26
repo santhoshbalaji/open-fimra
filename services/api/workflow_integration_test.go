@@ -64,6 +64,23 @@ func checkWorkflow(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix st
 		}
 	}()
 	call("POST", "/steps", "a3", `{"step":"false_alarm"}`, 403)
+	var fieldHistory struct {
+		OfflineMoves map[string][]struct {
+			Step             string
+			LocationRequired bool `json:"location_required"`
+			CanOverride      bool `json:"can_override"`
+		}
+	}
+	if err := json.Unmarshal([]byte(call("GET", "/history", "a3", "", 200)), &fieldHistory); err != nil {
+		t.Fatal(err)
+	}
+	if teamSent := fieldHistory.OfflineMoves["team_sent"]; len(teamSent) != 1 ||
+		teamSent[0].Step != "reached_site" || !teamSent[0].LocationRequired || teamSent[0].CanOverride {
+		t.Fatalf("field staff offline moves from team sent: %+v", teamSent)
+	}
+	if moves := fieldHistory.OfflineMoves["final_report"]; len(moves) != 0 {
+		t.Fatalf("field staff should not see officer moves: %+v", moves)
+	}
 	ack := fmt.Sprintf(`{"step":"acknowledged","clientId":"phone-1","clientTime":%q,"note":"On duty"}`, time.Now().UTC().Format(time.RFC3339Nano))
 	first := call("POST", "/steps", "a3", ack, 200)
 	call("POST", "/steps", "a3", `{"step":"team_sent"}`, 200)

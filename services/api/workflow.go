@@ -29,7 +29,19 @@ type stepRequest struct {
 const historySQL = `
 SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) || jsonb_build_object(
  'missingReports', ARRAY(SELECT f.form_key FROM alert_missing_forms($3,m.step) f)) ORDER BY terminal,label,step)
- FROM alert_moves($1,$2,$3) m),'[]'),'entries',(
+ FROM alert_moves($1,$2,$3) m),'[]'),
+ 'offlineMoves',COALESCE((
+ SELECT jsonb_object_agg(from_step,moves) FROM (
+  SELECT from_step,jsonb_agg(to_jsonb(m) - 'from_step' ORDER BY terminal,label,step) AS moves FROM (
+   SELECT t.from_step,t.to_step AS step,s.label,t.location_required,bool_or(r.officer) AS can_override,s.terminal
+   FROM workflow_instances i JOIN workflow_transitions t ON t.template_id=i.template_id
+   JOIN workflow_steps s ON (s.template_id,s.slug)=(t.template_id,t.to_step)
+   JOIN alert_roles($1,$2,$3) r ON r.role_slug=ANY(t.allowed_roles)
+     AND (r.role_slug <> 'division_officer' OR r.officer)
+   WHERE i.alert_id=$3 GROUP BY t.from_step,t.to_step,s.label,t.location_required,s.terminal
+  ) m GROUP BY from_step
+ ) by_step
+ ),'{}'),'entries',(
  SELECT jsonb_agg(jsonb_build_object('from',l.from_step,'step',l.to_step,'label',s.label,
   'at',l.occurred_at,'actor',u.display_name,'note',l.note,'reason',l.override_reason,
   'longitude',ST_X(l.location),'latitude',ST_Y(l.location),'reportPending',l.report_pending,

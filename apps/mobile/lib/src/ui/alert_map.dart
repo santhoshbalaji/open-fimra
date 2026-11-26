@@ -15,6 +15,7 @@ import '../data/field_store.dart';
 import '../map/map_auth.dart';
 import '../map/map_style.dart';
 import '../theme/app_theme.dart';
+import 'alert_detail.dart';
 import 'home.dart';
 import 'widgets.dart';
 
@@ -36,6 +37,28 @@ class _AlertMapViewState extends State<AlertMapView> {
   late final Future<void> _ready = _setToken();
   String? _problem;
   Brightness? _imageBrightness;
+  bool _showLocation = false;
+  bool _locating = false;
+
+  Future<void> _locate() async {
+    if (_locating) return;
+    setState(() {
+      _locating = true;
+      _problem = null;
+    });
+    try {
+      final point = await deviceLocation();
+      if (!mounted) return;
+      setState(() => _showLocation = true);
+      await _controller?.animateCamera(CameraUpdate.newLatLng(LatLng(point.latitude, point.longitude)));
+    } on LocationProblem catch (error) {
+      if (mounted) setState(() => _problem = error.message);
+    } on Exception {
+      if (mounted) setState(() => _problem = 'Could not find your location. Try again outside.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
 
   String get _slug => widget.view.workspace.slug;
 
@@ -123,7 +146,9 @@ class _AlertMapViewState extends State<AlertMapView> {
         widget.onOpen(alert);
       }
     } on ApiException catch (error) {
-      if (mounted) setState(() => _problem = error.message);
+      if (mounted) {
+        setState(() => _problem = error.offline ? 'No connection. Try again when you have a signal.' : error.message);
+      }
     }
   }
 
@@ -184,7 +209,7 @@ class _AlertMapViewState extends State<AlertMapView> {
                       ? 13
                       : bounds == null
                       ? 4
-                      : 10,
+                      : _areaZoom(bounds),
                 ),
                 onMapCreated: (controller) => _controller = controller,
                 onStyleLoadedCallback: () {
@@ -196,16 +221,25 @@ class _AlertMapViewState extends State<AlertMapView> {
                 compassEnabled: false,
                 rotateGesturesEnabled: false,
                 tiltGesturesEnabled: false,
-                myLocationEnabled: false,
+                myLocationEnabled: _showLocation,
                 attributionEnabled: false,
               ),
             ),
-            Positioned(right: 12, top: 12, child: AlertMapControls(onFit: _fit)),
+            Positioned(
+              right: 12,
+              bottom: 12 + MediaQuery.paddingOf(context).bottom,
+              child: AlertMapControls(
+                onFit: _fit,
+                onLocate: _locate,
+                onZoomIn: () => _controller?.animateCamera(CameraUpdate.zoomIn()),
+                onZoomOut: () => _controller?.animateCamera(CameraUpdate.zoomOut()),
+              ),
+            ),
             if (_problem != null)
               Positioned(
                 left: 12,
                 right: 12,
-                bottom: 12,
+                top: 12,
                 child: Card(
                   child: ListTile(
                     leading: Icon(Icons.error_outline, color: p.danger),
@@ -225,9 +259,18 @@ class _AlertMapViewState extends State<AlertMapView> {
   }
 }
 
+// Start near the granted units while the map loads and fits the exact viewport.
+double _areaZoom(Bounds bounds) {
+  final span = max(bounds.east - bounds.west, bounds.north - bounds.south);
+  return (log(180 / max(span, 0.0001)) / ln2).clamp(0.0, 16.0);
+}
+
 class AlertMapControls extends StatelessWidget {
-  const AlertMapControls({super.key, required this.onFit});
+  const AlertMapControls({super.key, required this.onFit, this.onLocate, this.onZoomIn, this.onZoomOut});
   final VoidCallback onFit;
+  final VoidCallback? onLocate;
+  final VoidCallback? onZoomIn;
+  final VoidCallback? onZoomOut;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -235,9 +278,13 @@ class AlertMapControls extends StatelessWidget {
     explicitChildNodes: true,
     sortKey: const OrdinalSortKey(0),
     child: Column(
+      spacing: 8,
       children: [
+        if (onZoomIn case final zoomIn?) _MapButton(icon: Icons.add, tooltip: 'Zoom in', onPressed: zoomIn),
+        if (onZoomOut case final zoomOut?) _MapButton(icon: Icons.remove, tooltip: 'Zoom out', onPressed: zoomOut),
+        if (onLocate case final locate?)
+          _MapButton(icon: Icons.my_location, tooltip: 'Show my location', onPressed: locate),
         _MapButton(icon: Icons.center_focus_strong, tooltip: 'Show my area', onPressed: onFit),
-        const SizedBox(height: 8),
         _MapButton(
           icon: Icons.info_outline,
           tooltip: 'Map key',

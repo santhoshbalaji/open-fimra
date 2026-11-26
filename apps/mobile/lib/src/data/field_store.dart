@@ -44,7 +44,8 @@ class FieldStore {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
+        onUpgrade: (db, _, _) => _addOutboxKinds(db),
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, _) async {
           await db.execute(
@@ -61,9 +62,17 @@ class FieldStore {
           await db.execute('''CREATE TABLE file_parts (
             file TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE, part INTEGER NOT NULL,
             data BLOB NOT NULL, PRIMARY KEY (file, part))''');
+          await _addOutboxKinds(db);
         },
       ),
     );
+  }
+
+  Future<void> _addOutboxKinds(Database db) async {
+    await db.execute("ALTER TABLE reports ADD COLUMN kind TEXT NOT NULL DEFAULT 'report'");
+    await db.execute('ALTER TABLE reports ADD COLUMN draft_key TEXT');
+    await db.execute('ALTER TABLE reports ADD COLUMN from_step TEXT');
+    await db.execute('CREATE UNIQUE INDEX draft_scope ON reports(owner, workspace, alert, draft_key)');
   }
 
   Future<Json?> read(String owner, String workspace, String key) async {
@@ -129,27 +138,141 @@ class FieldStore {
     Json body,
     List<ReportFile> files, {
     Json? step,
+    String? fromStep,
+    required int generation,
+  }) => _save(
+    owner,
+    workspace,
+    alert,
+    title,
+    body,
+    files,
+    kind: 'report',
+    step: step,
+    fromStep: fromStep,
+    generation: generation,
+  );
+
+  Future<void> saveDraft(
+    String owner,
+    String workspace,
+    String alert,
+    String title,
+    Json body,
+    List<ReportFile> files, {
+    required int generation,
+  }) => _save(owner, workspace, alert, title, body, files, kind: 'draft', generation: generation);
+
+  Future<void> enqueueStep(
+    String owner,
+    String workspace,
+    String alert,
+    String title,
+    Json request, {
+    required String fromStep,
+    required int generation,
+  }) => _save(
+    owner,
+    workspace,
+    alert,
+    title,
+    {'id': request['clientId'], ...request},
+    const [],
+    kind: 'step',
+    fromStep: fromStep,
+    generation: generation,
+  );
+
+  Future<void> _save(
+    String owner,
+    String workspace,
+    String alert,
+    String title,
+    Json body,
+    List<ReportFile> files, {
+    required String kind,
+    Json? step,
+    String? fromStep,
     required int generation,
   }) async {
     if (generation != _generation) throw StateError('The field data was cleared.');
     await (await _open()).transaction((tx) async {
       if (generation != _generation) throw StateError('The field data was cleared.');
       final id = body['id'] as String;
-      await tx.insert('reports', {
+      final existing = await tx.query('reports', where: 'id = ?', whereArgs: [id]);
+      final row = existing.firstOrNull;
+      if (row != null && (row['owner'] != owner || row['workspace'] != workspace || row['alert'] != alert)) {
+        throw StateError('This item belongs to another alert or account.');
+      }
+      // A request already in the outbox is immutable, including after a lost response.
+      if (row != null && row['kind'] != 'draft') {
+        if (kind != 'draft') return;
+        throw StateError('This report is already in the outbox.');
+      }
+      final record = {
         'id': id,
         'owner': owner,
         'workspace': workspace,
         'alert': alert,
         'title': title,
         'body': jsonEncode(body),
+        'kind': kind,
+        'draft_key': kind == 'draft' ? jsonEncode([body['form'], body['step']]) : null,
+        'from_step': fromStep,
         'step': step == null ? null : jsonEncode(step),
-      });
+      };
+      if (row == null) {
+        await tx.insert('reports', record);
+      } else if (kind == 'report') {
+        // Give the report its place at the end of the queue when the user sends it.
+        // Keep the files attached through the same transaction.
+        final last = await tx.rawQuery('SELECT max(rowid) + 1 AS next FROM reports');
+        await tx.update('reports', {...record, 'rowid': last.single['next']}, where: 'id = ?', whereArgs: [id]);
+      } else {
+        await tx.update('reports', record, where: 'id = ?', whereArgs: [id]);
+      }
+
+      final savedFiles = (await tx.query(
+        'files',
+        columns: ['id'],
+        where: 'report = ?',
+        whereArgs: [id],
+      )).map((row) => row['id'] as String).toSet();
       final batch = tx.batch();
+      for (final removed in savedFiles.difference(files.map((file) => file.id).toSet())) {
+        batch.delete('files', where: 'id = ?', whereArgs: [removed]);
+      }
       for (final file in files) {
+        if (savedFiles.contains(file.id)) continue;
         batch.insert('files', {'id': file.id, 'report': id, 'name': file.name, 'type': file.type});
         _insertParts(batch, 'file_parts', {'file': file.id}, file.bytes);
       }
       await batch.commit(noResult: true);
+    });
+  }
+
+  Future<Json> reportFileMetadata(String id) async => {
+    for (final row in await (await _open()).rawQuery(
+      'SELECT f.id, f.name, f.type, sum(length(p.data)) AS size '
+      'FROM files f JOIN file_parts p ON p.file = f.id WHERE f.report = ? GROUP BY f.id',
+      [id],
+    ))
+      row['id'] as String: {'fileName': row['name'], 'contentType': row['type'], 'sizeBytes': row['size']},
+  };
+
+  Future<List<ReportFile>> draftFiles(String id) async => [
+    for (final fileId in await pendingFiles(id)) ?await file(id, fileId),
+  ];
+
+  Future<void> removeRefusedStep(String owner, String id, int generation) async {
+    await (await _open()).transaction((tx) async {
+      if (generation != _generation) return;
+      await tx.delete(
+        'reports',
+        where:
+            "id = ? AND owner = ? AND kind = 'step' AND received_at IS NULL AND error IS NOT NULL AND retry_at IS NULL",
+        whereArgs: [id, owner],
+      );
     });
   }
 
@@ -161,7 +284,7 @@ class FieldStore {
           FROM reports WHERE owner = ?
           ${workspace == null ? '' : ' AND workspace = ?'}
           ${alert == null ? '' : ' AND alert = ?'}
-          ${pendingOnly ? ' AND received_at IS NULL' : ''} ORDER BY rowid''',
+          ${pendingOnly ? " AND received_at IS NULL AND kind <> 'draft'" : ''} ORDER BY rowid''',
         [owner, ?workspace, ?alert],
       )).map(Json.from).toList();
 
@@ -195,7 +318,6 @@ class FieldStore {
     await (await _open()).transaction((tx) async {
       if (generation != _generation) return;
       await tx.update('files', {'sent': 1}, where: 'id = ?', whereArgs: [id]);
-      await tx.delete('file_parts', where: 'file = ?', whereArgs: [id]);
     });
   }
 
@@ -221,7 +343,13 @@ class FieldStore {
 
   Future<void> updateReport(String id, Json changes, int generation) async {
     if (generation != _generation) return;
-    await (await _open()).update('reports', changes, where: 'id = ?', whereArgs: [id]);
+    await (await _open()).transaction((tx) async {
+      if (generation != _generation) return;
+      await tx.update('reports', changes, where: 'id = ?', whereArgs: [id]);
+      if (changes['received_at'] != null) {
+        await tx.rawDelete('DELETE FROM file_parts WHERE file IN (SELECT id FROM files WHERE report = ?)', [id]);
+      }
+    });
   }
 
   Future<void> pruneReceipts(String owner, String workspace, Iterable<String> cachedIds) async {
@@ -237,6 +365,12 @@ class FieldStore {
     await batch.commit(noResult: true);
   }
 
+  Future<void> close() async {
+    final opening = _opening;
+    _opening = null;
+    if (opening != null) await (await opening).close();
+  }
+
   /// Invalidates writes already in flight, then deletes the database and its
   /// journals. A later sign-in can open a fresh database.
   Future<void>? _wiping;
@@ -245,13 +379,11 @@ class FieldStore {
 
   Future<void> _wipe() async {
     _generation++;
-    final opened = _opening;
     final factory = this.factory ?? databaseFactory;
     final path = this.path ?? '${await factory.getDatabasesPath()}/field.sqlite';
     try {
-      if (opened != null) await (await opened).close();
+      await close();
     } finally {
-      _opening = null;
       await factory.deleteDatabase(path);
     }
   }

@@ -21,17 +21,35 @@ class ReportOutbox {
   Future<Set<String>> _send(String owner, bool retry, bool Function() active) async {
     final generation = store.generation;
     final changed = <String>{};
+    final blocked = <(String, String)>{};
     bool current() => active() && generation == store.generation;
     for (final item in await store.reports(owner, pendingOnly: true)) {
       if (!current()) break;
-      final due = item['retry_at'] as int?;
-      if (!retry && item['error'] != null && (due == null || due > clock().millisecondsSinceEpoch)) continue;
       final id = item['id'] as String;
       final slug = item['workspace'] as String;
       final alert = item['alert'] as String;
+      final scope = (slug, alert);
+      if (blocked.contains(scope)) continue;
+      final due = item['retry_at'] as int?;
+      if (!retry && item['error'] != null && (due == null || due > clock().millisecondsSinceEpoch)) {
+        blocked.add(scope);
+        continue;
+      }
       final body = jsonDecode(item['body'] as String) as Json;
       String? filename;
       try {
+        if (item['kind'] == 'step') {
+          final receipt = await api.recordStep(slug, alert, StepRequest.fromJson(body));
+          if (!current()) return changed;
+          await store.updateReport(id, {
+            'received_at': receipt.at.toUtc().toIso8601String(),
+            'error': null,
+            'retry_at': null,
+            'body': jsonEncode({'step': body['step'], 'clientTime': body['clientTime']}),
+          }, generation);
+          changed.add(slug);
+          continue;
+        }
         for (final fileId in await store.pendingFiles(id)) {
           if (!current()) return changed;
           final file = await store.file(id, fileId);
@@ -56,18 +74,7 @@ class ReportOutbox {
           final history = await api.history(slug, alert);
           if (!current()) return changed;
           if (!history.entries.any((entry) => entry.step == request['step'])) {
-            final location = object(request['location']);
-            await api.recordStep(
-              slug,
-              alert,
-              StepRequest(
-                step: request['step'] as String,
-                clientId: request['clientId'] as String,
-                clientTime: DateTime.parse(request['clientTime'] as String),
-                longitude: (location['longitude'] as num?)?.toDouble(),
-                latitude: (location['latitude'] as num?)?.toDouble(),
-              ),
-            );
+            await api.recordStep(slug, alert, StepRequest.fromJson(request));
           }
         }
         if (!current()) return changed;
@@ -90,12 +97,19 @@ class ReportOutbox {
         final transient = error.offline || error.status >= 500 || [408, 425, 429].contains(error.status);
         await store.updateReport(id, {
           'attempts': attempts,
-          'error': [if (filename != null) 'File: $filename', error.message, ...error.problems].join('\n'),
+          'error': [
+            if (filename != null) 'File: $filename',
+            error.offline ? 'Waiting for a connection.' : error.message,
+            ...error.problems,
+          ].join('\n'),
           'retry_at': transient
               ? clock().add(Duration(seconds: 15 * (1 << min(attempts - 1, 5)))).millisecondsSinceEpoch
               : null,
         }, generation);
+        blocked.add(scope);
         if (error.offline || error.status == 401) break;
+        // Refresh confirmed state when a request was refused.
+        if (!transient) changed.add(slug);
       }
     }
     return changed;
