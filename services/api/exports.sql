@@ -6,7 +6,7 @@
 -- $1 subject, $2 workspace slug, $3 kind, $4 format, $5 hours, $6 forest classes,
 -- $7 queue ('' for all), $8 unit path prefix (or NULL), $9 workflow step ('' for all),
 -- $10 maximum rows, $11 lifetime of the file, $12 form key ('' for all),
--- $13 approval decision: pending, approved, returned or '' for all.
+-- $13 approval decision, $14 alert group ('' for all).
 WITH grants AS MATERIALIZED (
     SELECT g.*, u.code, u.name, level.slug AS level
     FROM alert_grants g
@@ -40,7 +40,15 @@ alert_rows AS (
             AND (a.queue = 'unit' OR g.can_review)
             AND match_under_grant(a.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
       )
-      AND a.observed_at BETWEEN now() - make_interval(hours => $5) AND now()
+      AND a.observed_at <= now() AND ($5 = 0 OR a.observed_at >= now() - make_interval(hours => $5))
+      AND CASE $14
+          WHEN 'overdue' THEN alert_due_at(i.template_id, i.current_step, i.entered_at) < now()
+          WHEN 'active' THEN EXISTS (SELECT FROM workflow_steps s
+              WHERE (s.template_id, s.slug) = (i.template_id, i.current_step) AND NOT s.terminal)
+          WHEN 'pending_reports' THEN EXISTS (SELECT FROM workflow_steps s
+              WHERE (s.template_id, s.slug) = (i.template_id, i.current_step) AND s.report_pending)
+          ELSE true
+      END
       AND ($7 = '' OR a.queue = $7)
       AND ($9 = '' OR i.current_step = $9)
       AND a.forest_class = ANY($6::text[])
@@ -89,11 +97,13 @@ created AS (
     INSERT INTO exports (workspace_id, requested_by, kind, format, filters, requester_roles, row_count, expires_at)
     SELECT w.id, $1, $3, $4,
            jsonb_build_object(
-               'hours', $5,
-               'from', to_char((now() - make_interval(hours => $5)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+               'hours', NULLIF($5, 0),
+               'from', CASE WHEN $5 <> 0 THEN
+                   to_char((now() - make_interval(hours => $5)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END,
                'to', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
                'forestClasses', to_jsonb($6::text[]), 'queue', NULLIF($7, ''),
                'unitPath', $8::text, 'step', NULLIF($9, ''))
+           || CASE WHEN $14 <> '' THEN jsonb_build_object('group', $14) ELSE '{}' END
            || CASE WHEN $3 = 'submissions' THEN jsonb_build_object('form', NULLIF($12, ''), 'decision', NULLIF($13, ''))
                    ELSE '{}' END,
            (SELECT jsonb_agg(DISTINCT jsonb_build_object('role', g.role_slug, 'level', g.level,

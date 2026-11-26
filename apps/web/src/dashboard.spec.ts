@@ -15,7 +15,7 @@ import { WorkspaceService } from './workspace';
 describe('Control-room dashboard', () => {
   const data = {
     today: { inside: 4, near_edge: 2 }, detections: { inside: 9, near_edge: 3 },
-    active: 3, overdue: 2, pendingReports: 1, queues: { unit: 2, edge_review: 1 },
+    active: 3, overdue: 2, backlogOverdue: 7, pendingReports: 1, queues: { unit: 2, edge_review: 1 },
     steps: { acknowledged: 2, controlled: 1 },
     responseSeconds: { acknowledged: { median: 120, p90: 240 } },
     feedHealth: [{ source: 'Demo', product: 'sample', status: 'quiet',
@@ -30,7 +30,7 @@ describe('Control-room dashboard', () => {
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting(), AlertQueue,
         { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test' } },
         { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }),
-          jurisdictions: signal([['ds.c1', 'Demo Circle']]), allowsScope: () => true, deny: vi.fn() } },
+          canManageLayers: signal(true), jurisdictions: signal([['ds.c1', 'Demo Circle']]), allowsScope: () => true, deny: vi.fn() } },
         { provide: AuthService, useValue: { sessionEnded: vi.fn() } }]
     });
   });
@@ -84,7 +84,7 @@ describe('Control-room dashboard', () => {
     const [today, active] = page.querySelectorAll('fimra-stat-tile');
     expect(today.textContent).toContain('Since midnight, India Standard Time');
     expect(active.textContent).toContain('Last 3 days');
-    expect(active.querySelector('time')?.textContent).toContain('IST');
+    expect(page.querySelectorAll('fimra-stat-tile time')).toHaveLength(0);
   });
 
   it('links each actionable count to its matching list and carries workspace filters', () => {
@@ -95,9 +95,9 @@ describe('Control-room dashboard', () => {
     const { page } = open();
     for (const [label, matches] of [
       ['Active alerts', { queue: 'all', group: 'active' }],
-      ['Overdue alerts', { queue: 'all', group: 'overdue' }],
+      ['Overdue alerts', { queue: 'all', group: 'overdue', alertSort: 'overdue' }],
       ['Waiting for a report', { queue: 'all', group: 'pending_reports' }],
-      ['Edge review', { queue: 'edge_review' }],
+      ['Near forest edge', { queue: 'edge_review' }],
       ['Controlled', { queue: 'all', status: 'controlled' }],
       ['Acknowledged', { queue: 'all', status: 'acknowledged' }]
     ] as const) {
@@ -105,9 +105,10 @@ describe('Control-room dashboard', () => {
       const url = new URL(link!.href);
       expect(url.pathname).toBe('/monitor/alerts');
       expect(Object.fromEntries(url.searchParams)).toEqual({
-        workspace: 'demo', hours: '72', class: 'inside', unitPath: 'ds.c1', ...matches
+        workspace: 'demo', ...(label === 'Overdue alerts' ? {} : { hours: '72', class: 'inside', unitPath: 'ds.c1' }), ...matches
       });
     }
+    expect(page.querySelector('#count-overdue')?.textContent).toBe('7');
     expect(page.querySelector('#count-pending_reports')?.textContent).toBe('1');
     expect(page.querySelector('#count-pending_reports + dd')?.textContent).toBe('Alerts observed · Last 3 days');
     const link = [...page.querySelectorAll('a')].find(a => a.textContent?.trim() === 'Awaiting review')!;
@@ -206,6 +207,14 @@ describe('Control-room dashboard', () => {
     fixture.detectChanges();
     expect(page.textContent).toContain('Feed health could not load');
     expect(page.querySelector('tfoot td')?.textContent?.trim()).toBe('0');
+  });
+
+  it('shows a neutral coverage note for users who cannot manage feeds', () => {
+    Object.assign(TestBed.inject(WorkspaceService), { canManageLayers: signal(false) });
+    const { page } = open();
+    expect(page.textContent).toContain('Counts reflect the observations recorded so far.');
+    expect(page.textContent).not.toContain('Some feeds are late');
+    expect(page.querySelector('#feeds-title')).toBeNull();
   });
 
   it('keeps the last successful summary on refresh errors and retries on request', () => {

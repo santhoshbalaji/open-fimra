@@ -69,7 +69,8 @@ type exportRequest struct {
 	UnitPath      *string  `json:"unitPath"`
 	// Step is a workflow step, such as new or acknowledged. It is the status
 	// filter of the alert queue.
-	Step string `json:"step"`
+	Step  string `json:"step"`
+	Group string `json:"group"`
 	// Form and Decision narrow a submission export to one form, and to
 	// submissions waiting for a decision (pending), approved or returned.
 	Form     string `json:"form"`
@@ -107,8 +108,14 @@ func readExportRequest(body io.Reader) (exportRequest, error) {
 	if _, ok := exportFormats[req.Format]; !ok {
 		return req, errors.New("format must be gpkg, shapefile, kml, geojson, flatgeobuf, csv_wkt, csv_lonlat or xlsx.")
 	}
+	if !slices.Contains(alertGroups, req.Group) || (req.Group != "" && req.Kind != "alerts") {
+		return req, errors.New("Choose a valid alert group.")
+	}
 	if req.Hours == nil {
 		hours := 168
+		if req.Group == "overdue" {
+			hours = 0
+		}
 		req.Hours = &hours
 	} else if *req.Hours < 1 || *req.Hours > 720 {
 		return req, errors.New("hours must be an integer from 1 to 720.")
@@ -183,7 +190,7 @@ func (a api) createExport(w http.ResponseWriter, r *http.Request) {
 	var frozen int64
 	err = tx.QueryRow(ctx, exportsSQL, caller.Subject, slug, req.Kind, req.Format, *req.Hours,
 		req.ForestClasses, req.Queue, req.UnitPath, req.Step, maxExportRows,
-		pgtype.Interval{Microseconds: a.exports.ttl.Microseconds(), Valid: true}, req.Form, req.Decision,
+		pgtype.Interval{Microseconds: a.exports.ttl.Microseconds(), Valid: true}, req.Form, req.Decision, req.Group,
 	).Scan(&allowed, &knownStep, &total, &id, &filters, &frozen)
 	if err != nil {
 		a.exportError(w, "Could not freeze the export rows", err)

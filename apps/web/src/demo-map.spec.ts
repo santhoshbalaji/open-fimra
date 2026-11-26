@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   addSource: vi.fn((id: string) => mocks.sources.set(id, { setData: vi.fn(), setTiles: vi.fn() })),
   removeSource: vi.fn((id: string) => mocks.sources.delete(id)),
   features: vi.fn(),
+  fitBounds: vi.fn(),
   zoom: 5
 }));
 
@@ -40,7 +41,7 @@ vi.mock('maplibre-gl', () => ({
     once(name: string, handler: () => void) { this.on(name, handler); }
     getCenter() { return { toArray: () => [81, 20] }; }
     getZoom() { return mocks.zoom; }
-    fitBounds() {}
+    fitBounds = mocks.fitBounds;
     jumpTo() {}
     resize() {}
     remove() {}
@@ -90,7 +91,7 @@ describe('Detection map', () => {
     mocks.zoom = 5;
   });
 
-  function render(geographyAvailable = true) {
+  function render(geographyAvailable = true, jurisdiction?: [number, number, number, number]) {
     fixture = TestBed.createComponent(DemoMap);
     html = fixture.nativeElement;
     fixture.detectChanges();
@@ -98,7 +99,7 @@ describe('Detection map', () => {
     vi.advanceTimersByTime(0);
     const geography = http.expectOne(endpoint);
     if (geographyAvailable) geography.flush({
-      version: 'test', boundary: [80, 19, 82, 21],
+      version: 'test', boundary: [80, 19, 82, 21], jurisdiction,
       levels: [
         { hierarchy: 'territorial', depth: 0, slug: 'state', labels: { en: 'Region' } },
         { hierarchy: 'territorial', depth: 2, slug: 'beat', labels: { en: 'Beat' } }
@@ -132,6 +133,15 @@ describe('Detection map', () => {
     fixture.detectChanges();
   }
 
+  it('fits the granted area on open and when resetting the map', () => {
+    const jurisdiction: [number, number, number, number] = [80.4, 19.5, 80.6, 19.9];
+    render(true, jurisdiction);
+    expect(mocks.fitBounds).toHaveBeenCalledWith(jurisdiction, expect.anything());
+    mocks.fitBounds.mockClear();
+    fixture.componentInstance.fit();
+    expect(mocks.fitBounds).toHaveBeenCalledWith(jurisdiction, expect.anything());
+  });
+
   it('keeps the legend in step with map visibility, zoom and low bandwidth', () => {
     render();
     html.querySelector<HTMLButtonElement>('.map-legend button')!.click();
@@ -149,10 +159,10 @@ describe('Detection map', () => {
     expect(mocks.layers.get('forest-edge')?.layout?.visibility).toBe('none');
     toggle('Reported incidents');
     expect(legend.textContent).toContain('Reported incidents');
-    expect(html.querySelector('.map-key')?.textContent).toContain('Reported incident');
+    expect(html.querySelector('.map-key')).toBeNull();
     expect(mocks.layers.get('reported-incidents')?.layout?.visibility).toBe('visible');
     toggle('Fire detections');
-    expect(html.querySelector('.map-key [aria-label="Detection age"]')).toBeNull();
+    expect(legend.querySelector('[aria-label="Detection age"]')).toBeNull();
     expect(mocks.layers.get('detections')?.layout?.visibility).toBe('none');
 
     TestBed.inject(DashboardFilters).lowBandwidth.set(true);

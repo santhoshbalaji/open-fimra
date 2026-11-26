@@ -36,6 +36,8 @@ type alertFilters struct {
 
 var stepSlug = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
+var alertGroups = []string{"", "active", "overdue", "pending_reports"}
+
 var unitPrefix = regexp.MustCompile(`^[[:alnum:]_-]{1,1000}(\.[[:alnum:]_-]{1,1000})*$`)
 
 func readAlertFilters(q url.Values) (alertFilters, error) {
@@ -45,7 +47,7 @@ func readAlertFilters(q url.Values) (alertFilters, error) {
 		!slices.Contains([]string{"", "inside", "near_edge", "outside", "fixed_heat_source"}, f.class) {
 		return f, errors.New("Unknown queue, status or forest class.")
 	}
-	if !slices.Contains([]string{"", "active", "overdue", "pending_reports"}, f.group) {
+	if !slices.Contains(alertGroups, f.group) {
 		return f, errors.New("Unknown alert group.")
 	}
 	if q.Has("unitPath") {
@@ -87,8 +89,11 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err.Error())
 		return
 	}
+	if f.group == "overdue" && !r.URL.Query().Has("hours") {
+		f.hours = 0
+	}
 	sort := r.URL.Query().Get("sort")
-	if sort != "" && sort != "newest" && sort != "oldest" {
+	if sort != "" && sort != "newest" && sort != "oldest" && sort != "overdue" {
 		writeError(w, 400, "Unknown alert sort order.")
 		return
 	}
@@ -124,7 +129,7 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 	var allowed, knownStatus bool
 	var page alertPage
 	err = a.reader.QueryRow(ctx, alertsSQL, caller.Subject, chi.URLParam(r, "slug"), id, f.hours,
-		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID, f.group, sort == "oldest").Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
+		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID, f.group, sort).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read alerts", "error", err)
 		writeError(w, 500, "Could not load alerts.")
@@ -149,13 +154,17 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 	if len(page.Items) > f.limit {
 		page.Items = page.Items[:f.limit]
 		var last struct {
-			Time string `json:"observed_time"`
-			ID   string `json:"id"`
+			Time            string `json:"observed_time"`
+			ID              string `json:"id"`
+			OverdueSortTime string `json:"overdue_sort_time"`
 		}
 		if err := json.Unmarshal(page.Items[f.limit-1], &last); err != nil {
 			a.logger.Error("Could not read alert cursor", "error", err)
 			writeError(w, 500, "Could not load alerts.")
 			return
+		}
+		if sort == "overdue" {
+			last.Time = last.OverdueSortTime
 		}
 		page.NextCursor = last.Time + "," + last.ID
 	}

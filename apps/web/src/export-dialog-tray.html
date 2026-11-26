@@ -37,7 +37,7 @@
                   }
                   <div class="sm:contents">
                     <dt class="font-medium">Covered period</dt>
-                    <dd>{{ date(job.filters.from) }} to {{ date(job.filters.to) }}</dd>
+                    <dd>@if (job.filters.from; as from) { {{ date(from) }} to {{ date(job.filters.to) }} } @else { All dates up to {{ date(job.filters.to) }} }</dd>
                   </div>
                 </dl>
                 @if (job.status !== 'ready' || !job.fileName) {

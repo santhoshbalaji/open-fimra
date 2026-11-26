@@ -2,16 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 )
 
 func testWorkspaceGeography(t *testing.T, base string, client *http.Client, tokenURL string) {
 	// A leaf grant sees the same published geography as an administrator.
 	token := demoToken(t, client, tokenURL, "beat.guard")
-	request := func(path, tag string, status int) ([]byte, http.Header) {
+	request := func(path, tag string, statuses ...int) ([]byte, http.Header) {
 		t.Helper()
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, base+"/api/v1/workspaces/demo"+path, nil)
 		if err != nil {
@@ -30,15 +32,16 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.StatusCode != status {
+		if !slices.Contains(statuses, res.StatusCode) {
 			t.Fatalf("%s: HTTP %d: %s", path, res.StatusCode, body)
 		}
 		return body, res.Header
 	}
 	body, _ := request("", "", 200)
 	var info struct {
-		Boundary [4]float64
-		Levels   []struct {
+		Boundary     [4]float64
+		Jurisdiction *[4]float64
+		Levels       []struct {
 			Depth  int
 			Slug   string
 			Labels map[string]string
@@ -51,6 +54,24 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		info.Levels[4].Depth != 4 || info.Levels[4].Slug != "beat" || info.Levels[4].Labels["en"] != "Beat" || info.Levels[4].Labels["hi"] != "बीट" {
 		t.Fatalf("unexpected workspace geography: %s", body)
 	}
+	beat := info.Jurisdiction
+	info.Jurisdiction = nil
+	token = demoToken(t, client, tokenURL, "division.officer")
+	divisionBody, _ := request("", "", 200)
+	if err := json.Unmarshal(divisionBody, &info); err != nil {
+		t.Fatal(err)
+	}
+	division := info.Jurisdiction
+	area := func(b [4]float64) float64 { return (b[2] - b[0]) * (b[3] - b[1]) }
+	if beat == nil || division == nil || area(*beat) <= 0 || area(*beat) >= area(*division) || area(*division) >= area(info.Boundary) {
+		t.Fatalf("invalid jurisdiction extents: beat %v, division %v, state %v", beat, division, info.Boundary)
+	}
+	token = demoToken(t, client, tokenURL, "state.admin")
+	stateBody, _ := request("", "", 200)
+	if err := json.Unmarshal(stateBody, &info); err != nil || info.Jurisdiction != nil {
+		t.Fatalf("root grant should fit the workspace: %s (%v)", stateBody, err)
+	}
+	token = demoToken(t, client, tokenURL, "beat.guard")
 	const fullState = "/tiles/reference/6/47/29.mvt"
 	var tag string
 	for _, tc := range []struct {
@@ -77,6 +98,27 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 			tag = headers.Get("ETag")
 		}
 		request(tc.path, headers.Get("ETag"), 304)
+	}
+	// This tile grid covers the demo workspace, including polygons clipped into
+	// several tiles. Each beat's label anchor must appear exactly once.
+	labels := make(map[string]bool)
+	for x := 1514; x <= 1517; x++ {
+		for y := 928; y <= 930; y++ {
+			body, _ := request(fmt.Sprintf("/tiles/reference/11/%d/%d.mvt", x, y), "", 200, 204)
+			for _, feature := range decodeTileLayers(t, body)["unit_labels"] {
+				if feature["depth"] != uint64(4) {
+					continue
+				}
+				code := feature["code"].(string)
+				if labels[code] {
+					t.Fatalf("beat label %q appeared in more than one tile", code)
+				}
+				labels[code] = true
+			}
+		}
+	}
+	if len(labels) != 24 {
+		t.Fatalf("got %d beat labels, want 24", len(labels))
 	}
 	offline, headers := request("/offline-reference", "", 200)
 	var reference struct {

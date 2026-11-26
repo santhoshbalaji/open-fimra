@@ -11,10 +11,13 @@ import type { TablePage, TablePosition } from './ui/data-table';
 import type { DataState } from './ui/state-region';
 import { defaultWorkspaceFormat } from './workspace-format';
 
-export const queueLabels = { unit: 'My area', edge_review: 'Edge review', triage: 'Triage' };
+export const queueLabels = { unit: 'My area', edge_review: 'Near forest edge', triage: 'Needs a unit' };
 export const alertGroupLabels = { active: 'Active alerts', overdue: 'Overdue alerts', pending_reports: 'Waiting for a report' };
 export const stepLabel = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replaceAll('_', ' ');
+export const alertSortLabels = { newest: 'Newest observation', oldest: 'Oldest observation', overdue: 'Most overdue first' };
+type AlertSort = keyof typeof alertSortLabels;
 type Queue = keyof typeof queueLabels;
+export interface AlertAssignment { unitId: string; unitName: string; reason: string; actor: string; at: string }
 export interface AlertRow extends Detection {
   id: string;
   detection_id: string;
@@ -23,6 +26,9 @@ export interface AlertRow extends Detection {
   step_label: string;
   step_time: string;
   overdue: boolean;
+  due_at?: string | null;
+  can_assign?: boolean;
+  assignment?: AlertAssignment | null;
   next_action?: string;
   queue: Queue;
   longitude: number;
@@ -63,8 +69,8 @@ export class AlertQueue {
     return this.navigation ? this.linked()?.queue ?? 'unit' : this.localQueue();
   });
   readonly allQueues = computed(() => this.navigation?.query().get('queue') === 'all');
-  private readonly group = computed(() => this.navigation?.query().get('group') || '');
-  private readonly status = computed(() => this.navigation?.query().get('status') || '');
+  readonly group = computed(() => this.navigation?.query().get('group') || '');
+  readonly status = computed(() => this.navigation?.query().get('status') || '');
   readonly listScope = computed(() => {
     const group = this.group();
     return [Object.hasOwn(alertGroupLabels, group) ? alertGroupLabels[group as keyof typeof alertGroupLabels] : '',
@@ -72,9 +78,11 @@ export class AlertQueue {
   });
   private readonly cursor = computed(() => this.navigation ? this.navigation.query().get('cursor') : this.localPosition().cursor);
   private readonly trail = computed(() => this.navigation?.query().get('alertTrail'));
-  private readonly sortOrder = computed(() => {
+  readonly allObservationDates = computed(() => this.group() === 'overdue' && !this.navigation?.query().has('hours'));
+  readonly sortOrder = computed<AlertSort>(() => {
     if (!this.navigation) return this.localPosition().sort?.direction === 'ascending' ? 'oldest' : 'newest';
-    return this.navigation.query().get('alertSort') === 'oldest' ? 'oldest' : 'newest';
+    const sort = this.navigation.query().get('alertSort');
+    return sort === 'oldest' || sort === 'overdue' ? sort : 'newest';
   });
   private readonly position = computed<TablePosition>(() => {
     if (!this.navigation) return this.localPosition();
@@ -82,7 +90,8 @@ export class AlertQueue {
     return {
       cursor,
       previousCursors: cursor ? (this.trail() || '-').split('|').map(value => value === '-' ? null : value) : [],
-      sort: { columnId: 'observed', direction: this.sortOrder() === 'oldest' ? 'ascending' : 'descending' }
+      sort: this.sortOrder() === 'overdue' ? undefined :
+        { columnId: 'observed', direction: this.sortOrder() === 'oldest' ? 'ascending' : 'descending' }
     };
   });
   readonly page = computed(() => this.saved()?.page);
@@ -150,7 +159,8 @@ export class AlertQueue {
       const queue = this.active();
       const allQueues = this.allQueues();
       const params: Record<string, string | number> = { ...this.filters.params(), limit: 25 };
-      if (this.sortOrder() === 'oldest') params['sort'] = 'oldest';
+      if (this.sortOrder() !== 'newest') params['sort'] = this.sortOrder();
+      if (this.allObservationDates()) delete params['hours'];
       if (!allQueues) params['queue'] = queue;
       if (this.group()) params['group'] = this.group();
       if (this.status()) params['status'] = this.status();
@@ -225,8 +235,23 @@ export class AlertQueue {
     }
   }
 
+  toggleOverdue(): void {
+    if (this.group() === 'overdue') {
+      this.clearListScope();
+    } else {
+      this.navigation?.update({ queue: 'all', group: 'overdue', status: null, alertSort: 'overdue', cursor: null, alertTrail: null });
+    }
+  }
+
+  setSort(value: string): void {
+    if (value !== this.sortOrder() && Object.hasOwn(alertSortLabels, value)) {
+      this.navigation?.update({ alertSort: value === 'newest' ? null : value, cursor: null, alertTrail: null });
+    }
+  }
+
   clearListScope(): void {
-    this.navigation?.update({ group: null, status: null, cursor: null, alertTrail: null, alert: null, detection: null });
+    this.navigation?.update({ group: null, status: null, cursor: null, alertTrail: null,
+      alertSort: this.group() === 'overdue' && this.sortOrder() === 'overdue' ? null : this.sortOrder() });
   }
 
   changePage(position: TablePosition): void {
@@ -235,7 +260,7 @@ export class AlertQueue {
         queue: this.allQueues() ? 'all' : this.active(),
         cursor: position.cursor,
         alertTrail: position.previousCursors.map(cursor => cursor ?? '-').join('|') || null,
-        alertSort: position.sort?.direction === 'ascending' ? 'oldest' : null
+        alertSort: position.sort ? (position.sort.direction === 'ascending' ? 'oldest' : null) : this.sortOrder()
       });
     } else {
       this.localPosition.set(position);

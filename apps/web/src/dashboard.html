@@ -32,24 +32,23 @@
   </ng-template>
   <fimra-state-region [state]="state()" [loadingPlaceholder]="loadingDashboard" (retry)="retry()">
     @if (summary(); as data) {
-      @if (lastUpdate(); as updated) {
+      @if (lastUpdate()) {
         <div class="grid min-w-0 gap-4">
           <section class="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Dashboard totals">
-            <fimra-stat-tile label="Detections today" [value]="todayTotal()" scope="Since midnight, India Standard Time" [freshAt]="updated" />
+            <fimra-stat-tile label="Detections today" [value]="todayTotal()" scope="Since midnight, India Standard Time" />
             @for (tile of alertTiles; track tile.key) {
-              <fimra-stat-tile [label]="alertGroupLabels[tile.group]" [value]="data[tile.key]"
-                [scope]="'Alerts observed · ' + period()"
-                [freshAt]="updated" [route]="alertRoute({ group: tile.group })" [valueId]="'count-' + tile.group" />
+              <fimra-stat-tile [label]="alertGroupLabels[tile.group]" [value]="tile.group === 'overdue' ? (data.backlogOverdue ?? data.overdue) : data[tile.key]"
+                [scope]="tile.group === 'overdue' ? 'All assigned units · Any observation date' : ('Alerts observed · ' + period())"
+                [route]="alertRoute({ group: tile.group })" [valueId]="'count-' + tile.group" />
             }
             <fimra-stat-tile [label]="awaitingReviewLabel" [value]="awaitingReviewCount() ?? 'Unavailable'"
-              [scope]="'Field reports received · ' + period()" [freshAt]="updated" [route]="fieldReportRoute()"
+              [scope]="'Field reports received · ' + period()" [route]="fieldReportRoute()"
               valueId="count-awaiting-review" />
           </section>
 
           <section hlmCard aria-labelledby="classes-title">
             <hlm-card-header>
               <h2 hlmCardTitle id="classes-title">Detections by forest class</h2>
-              <p hlmCardDescription>{{ scope() }}</p>
             </hlm-card-header>
             <div hlmCardContent class="grid min-w-0 gap-4">
               @if (!detectionTotal() || coverage()) {
@@ -57,6 +56,9 @@
                   @if (!detectionTotal()) { <p class="font-semibold">Zero detections recorded in this window</p> }
                   @if (coverage(); as detail) { <p class="text-text-secondary">{{ detail }}</p> }
                 </div>
+              }
+              @if (!canManageFeeds()) {
+                <p class="text-label text-text-secondary">Counts reflect the observations recorded so far.</p>
               }
               @let showChart = !!detectionTotal() && !filters.lowBandwidth();
               <div class="grid min-w-0 items-start gap-4" [class.md:grid-cols-2]="showChart">
@@ -91,7 +93,7 @@
             </div>
           </section>
 
-          @if (data.feedHealth || data.feedHealthUnavailable) {
+          @if (canManageFeeds() && (data.feedHealth || data.feedHealthUnavailable)) {
             <section hlmCard aria-labelledby="feeds-title">
               <hlm-card-header>
                 <h2 hlmCardTitle id="feeds-title" #feedHeading tabindex="-1">Feed health</h2>
@@ -131,7 +133,7 @@
             <div hlmCardContent class="grid gap-3 sm:grid-cols-2">
               @for (step of outcomeSteps; track step) {
                 @let count = data.steps[step] ?? 0;
-                <fimra-stat-tile [label]="stepLabel(step)" [value]="count" [scope]="period()" [freshAt]="updated"
+                <fimra-stat-tile [label]="stepLabel(step)" [value]="count" [scope]="period()"
                   [route]="alertRoute({ status: step })" [valueId]="'count-step-' + step" />
               }
             </div>
@@ -146,7 +148,7 @@
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 @for (key of queueKeys; track key) {
                   @let count = data.queues[key] ?? 0;
-                  <fimra-stat-tile [label]="queueLabels[key]" [value]="count" [scope]="period()" [freshAt]="updated"
+                  <fimra-stat-tile [label]="queueLabels[key]" [value]="count" [scope]="period()"
                     [route]="key === 'unit' || count ? alertRoute({ queue: key }) : undefined" [valueId]="'count-queue-' + key" />
                 }
               </div>
@@ -154,7 +156,7 @@
                 <h3 class="font-semibold">Other current steps</h3>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   @for (step of otherSteps(); track step) {
-                    <fimra-stat-tile [label]="stepLabel(step)" [value]="data.steps[step]" [scope]="period()" [freshAt]="updated"
+                    <fimra-stat-tile [label]="stepLabel(step)" [value]="data.steps[step]" [scope]="period()"
                       [route]="alertRoute({ status: step })" [valueId]="'count-step-' + step" />
                   }
                 </div>
@@ -172,9 +174,9 @@
                 <section class="grid grid-cols-2 gap-2" [attr.aria-labelledby]="'response-' + step.key">
                   <h3 class="col-span-2 font-semibold" [id]="'response-' + step.key">{{ step.label }}</h3>
                   <fimra-stat-tile label="Median" [value]="duration(data.responseSeconds[step.key]?.median)"
-                    [scope]="period()" [freshAt]="updated" />
+                    [scope]="period()" />
                   <fimra-stat-tile label="90th percentile" [value]="duration(data.responseSeconds[step.key]?.p90)"
-                    [scope]="period()" [freshAt]="updated" />
+                    [scope]="period()" />
                 </section>
               }
             </div>

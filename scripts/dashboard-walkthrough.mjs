@@ -20,7 +20,8 @@ async function check(page, label) {
 
 try {
   for (const [size, viewport] of [
-    ['desktop', { width: 1440, height: 900 }],
+    ['wall', { width: 1920, height: 1080 }],
+    ['desktop', { width: 1366, height: 768 }],
     ['phone', { width: 390, height: 844 }]
   ]) {
     const context = await browser.newContext({ viewport, colorScheme: 'light', reducedMotion: 'reduce' });
@@ -41,6 +42,7 @@ try {
     await expect(active).toBeVisible();
     await expect(dashboard.locator('fimra-page-header')).toContainText(/\(Circle\) · Inside forest · Last 6 days/);
     await expect(dashboard.locator('fimra-page-header time')).toContainText('IST');
+    await expect(dashboard.locator('fimra-stat-tile time')).toHaveCount(0);
     for (const theme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme: theme });
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -107,15 +109,18 @@ try {
       const expected = Number((await dashboard.locator('#' + countID).innerText()).replaceAll(',', ''));
       const target = new URL(await link.getAttribute('href'), WEB);
       const fieldReports = label.trim() === 'Awaiting review';
+      const overdue = label.trim() === 'Overdue alerts';
       assert.equal(target.pathname, fieldReports ? '/reports/field' : '/monitor/alerts');
       for (const [key, value] of Object.entries({ workspace: 'demo', hours: '144', class: 'inside', unitPath: 'ds.c1' })) {
-        assert.equal(target.searchParams.get(key), value, label);
+        assert.equal(target.searchParams.get(key), overdue && key !== 'workspace' ? null : value, label);
       }
+      if (overdue) assert.equal(target.searchParams.get('alertSort'), 'overdue');
       if (fieldReports) assert.equal(target.searchParams.get('decision'), 'pending');
       if (label.trim() === 'Waiting for a report') assert.equal(target.searchParams.get('group'), 'pending_reports');
       const matchesList = url => {
         if (url.origin !== API || !url.pathname.endsWith(fieldReports ? '/submissions' : '/alerts')) return false;
         if (fieldReports && url.searchParams.get('limit') === '1') return false;
+        if (overdue && url.searchParams.get('sort') !== 'overdue') return false;
         return ['hours', 'class', 'unitPath', 'decision', 'queue', 'group', 'status'].every(key => {
           const value = target.searchParams.get(key);
           return url.searchParams.get(key) === (key === 'queue' && value === 'all' ? null : value);
@@ -143,6 +148,17 @@ try {
       if (records.items.length) {
         const list = fieldReports ? page.locator('fimra-submissions') : page.getByRole('complementary', { name: 'Alert queue' });
         await expect(list.locator('fimra-data-table tbody tr, fimra-data-table .result-card')).toHaveCount(records.items.length);
+      }
+      if (overdue) {
+        const deadlines = records.items.map(row => Date.parse(row.due_at));
+        assert.deepEqual(deadlines, [...deadlines].sort((a, b) => a - b));
+        await page.getByRole('button', { name: 'Export', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Export', exact: true });
+        await expect(dialog.getByText('Overdue alerts', { exact: true })).toBeVisible();
+        await expect(dialog.getByText('Any observation date', { exact: true })).toBeVisible();
+        await expect(dialog.getByRole('status')).toHaveText(expected.toLocaleString('en-IN'));
+        await expect(dialog.getByRole('button', { name: 'Prepare export as Excel workbook' })).toBeEnabled();
+        await page.keyboard.press('Escape');
       }
       if (fieldReports || label.trim() === 'Waiting for a report') {
         if (fieldReports) {

@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { EMPTY, Subject, catchError, exhaustMap, firstValueFrom, merge, of, tap, timer } from 'rxjs';
+import { alertGroupLabels, queueLabels, stepLabel } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { classes, ForestClass } from './detections';
@@ -23,11 +24,12 @@ export const datasets: Record<ExportKind, string> = { alerts: 'Alerts', detectio
 export const allClasses = Object.keys(classes) as ForestClass[];
 
 interface ExportFilters {
-  hours: number;
+  hours?: number | null;
   forestClasses: readonly ForestClass[];
   unitPath?: string | null;
   queue?: string | null;
   step?: string | null;
+  group?: string | null;
   form?: string | null;
   decision?: string | null;
 }
@@ -39,7 +41,7 @@ export interface ExportStatus {
   id: string;
   kind: ExportKind;
   format: ExportFormat;
-  filters: ExportFilters & { from: string; to: string };
+  filters: ExportFilters & { from: string | null; to: string };
   status: 'pending' | 'ready' | 'failed' | 'expired';
   rowCount: number;
   featureCount: number | null;
@@ -50,16 +52,17 @@ export interface ExportStatus {
 }
 
 export function exportRequestFromJob(job: ExportStatus): ExportRequest {
-  const { hours, forestClasses, unitPath, queue, step, form, decision } = job.filters;
-  return { kind: job.kind, format: job.format, hours, forestClasses, unitPath,
+  const { hours, forestClasses, unitPath, queue, step, group, form, decision } = job.filters;
+  return { kind: job.kind, format: job.format, hours, forestClasses, unitPath, group: group ?? undefined,
     queue: queue ?? undefined, step: step ?? undefined, form: form ?? undefined, decision: decision ?? undefined };
 }
 
 const format = defaultWorkspaceFormat;
 export const exportDate = (iso: string) => format.dateTime(new Date(iso));
-export const exportPeriod = (hours: number) => 'Past ' + format.duration(hours * 3600);
+export const exportPeriod = (hours?: number | null) => hours ? 'Past ' + format.duration(hours * 3600) : 'Any observation date';
 export const decisions: Record<string, string> = { pending: 'Waiting for a decision', approved: 'Approved', returned: 'Returned' };
-const queues: Record<string, string> = { unit: 'Unit', edge_review: 'Edge review', triage: 'Triage' };
+const queues: Record<string, string> = queueLabels;
+const groups: Record<string, string> = alertGroupLabels;
 
 export function exportReview(request: ExportRequest, queueLabel?: string, formLabel?: string, unitLabel?: string): [string, string][] {
   const rows: [string, string][] = [
@@ -71,7 +74,8 @@ export function exportReview(request: ExportRequest, queueLabel?: string, formLa
   ];
   if (request.kind === 'alerts' || request.queue) rows.push(['Queue', request.queue ?
     queueLabel || queues[request.queue] || request.queue : 'All queues you can see']);
-  if (request.step) rows.push(['Workflow step', request.step]);
+  if (request.group) rows.push(['Alert filter', groups[request.group] || request.group]);
+  if (request.step) rows.push(['Workflow step', stepLabel(request.step)]);
   if (request.kind === 'submissions') {
     rows.push(['Form', request.form ? (formLabel || request.form) + ' (one column per answer)' : 'All forms']);
     rows.push(['Decision', request.decision ? decisions[request.decision] ?? request.decision : 'All decisions']);

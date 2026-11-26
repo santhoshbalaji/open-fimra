@@ -79,9 +79,9 @@ fimra-demo-map { display: flex; flex-direction: column; height: 100%; background
 .layers-panel {
   position: absolute;
   z-index: 1;
-  inset: 16px 64px auto auto;
-  width: min(330px, calc(100% - 80px));
-  max-height: calc(100% - 32px);
+  inset: auto auto 64px 16px;
+  width: min(330px, calc(100% - 32px));
+  max-height: calc(100% - 80px);
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -168,3 +168,21 @@ fimra-workflow .workflow-moves button,
   .workspace-panes.show-queue > .alert-panel { position: static; }
   .workspace-panes:not(.show-queue) .record-detail.detail-open { flex-basis: 42%; }
 }
+
+@media (width >= 1600px) {
+  .map-key, .layer-options { font-size: max(14px, var(--text-label)); }
+}
+
+.alert-filters, .alert-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.alert-filters button[aria-pressed="true"] { border-color: var(--color-action); color: var(--color-action); }
+.alert-filters select, .assignment-form select, .assignment-form textarea {
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+.assignment-form, .assignment-receipt { display: grid; gap: 6px; overflow-wrap: anywhere; }
+.assignment-form label { font-weight: 500; }

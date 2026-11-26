@@ -4,7 +4,7 @@
 <div class="map-actions" role="group" aria-label="Map controls">
   <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(true)" title="Zoom in" aria-label="Zoom in"><svg fimraIcon="plus"></svg></button>
   <button hlmBtn variant="ghost" [disabled]="!ready()" (click)="zoom(false)" title="Zoom out" aria-label="Zoom out"><svg fimraIcon="minus"></svg></button>
-  <button hlmBtn variant="ghost" [disabled]="!ready() || !boundary()" (click)="fit()" title="Fit workspace to map" aria-label="Fit workspace to map"><svg fimraIcon="maximize"></svg></button>
+  <button hlmBtn variant="ghost" [disabled]="!ready() || !boundary()" (click)="fit()" title="Fit assigned area to map" aria-label="Fit assigned area to map"><svg fimraIcon="maximize"></svg></button>
 </div>
 <div class="fire-controls">
   @if (mapOnly() && selected()) {
@@ -32,11 +32,7 @@
 </div>
 @if (workspace.current()) {
   <div class="map-legend">
-    <button #layersButton type="button" hlmBtn variant="outline" (click)="layersPanel.show(layersButton)"
-      [attr.aria-expanded]="layersPanel.open()">
-      <svg fimraIcon="layers" aria-hidden="true"></svg> Layers and legend
-    </button>
-    @if (showDetections() || showIncidents() || incidentFocus()) {
+    @if (!layersPanel.open() && (showDetections() || showIncidents() || incidentFocus())) {
       <section class="map-key" aria-label="Map legend">
         @if (showDetections()) {
           @let ages = keyAges();
@@ -61,6 +57,10 @@
         }
       </section>
     }
+    <button #layersButton type="button" hlmBtn variant="outline" (click)="layersPanel.show(layersButton)"
+      [attr.aria-expanded]="layersPanel.open()">
+      <svg fimraIcon="layers" aria-hidden="true"></svg> Layers and legend
+    </button>
   </div>
   <fimra-side-panel #layersPanel="fimraSidePanel" class="layers-panel" heading="Layers and legend">
     <div class="layer-options" [style.--map-exclusion-opacity]="exclusionOpacity">
@@ -137,14 +137,15 @@
       @if (queue.lastUpdated(); as updated) {
         <p class="queue-freshness">Updated <time [attr.datetime]="updated.toISOString()">{{ dateTime(updated.getTime()) }}</time></p>
       }
-      @if (!queue.allQueues() && !queue.listScope() && exportEndpoint(); as endpoint) {
+      @if (exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
           <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
             <h2 hlmDialogTitle>Export</h2>
             @defer (on immediate) {
               <fimra-export-dialog [endpoint]="endpoint" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
-                [unitPath]="filters.unitPath()" [queue]="queue.active()" [queueLabel]="queueLabels[queue.active()]"
+                [unitPath]="filters.unitPath()" [queue]="queue.allQueues() ? '' : queue.active()" [queueLabel]="queueLabels[queue.active()]"
+                [group]="queue.group()" [step]="queue.status()" [allObservationDates]="queue.allObservationDates()"
                 (closed)="dialog.close()" />
             }
           </hlm-dialog-content>
@@ -152,17 +153,27 @@
       }
     </div>
     @if (alertsView() && linkedMessage()) { <p role="status">{{ linkedMessage() }}</p> }
-    @if (queue.listScope(); as scope) {
-      <div class="flex flex-wrap items-center gap-2">
-        <p class="font-semibold">{{ scope }}</p>
-        <button hlmBtn variant="outline" (click)="queue.clearListScope()">Clear alert filter</button>
-      </div>
-    }
-    @if (queue.tabs().length > 1 || queue.allQueues() || queue.listScope()) {
+    <div class="alert-filters">
+      <button type="button" hlmBtn variant="outline" [attr.aria-pressed]="queue.group() === 'overdue'"
+        (click)="queue.toggleOverdue()">Overdue</button>
+      @if (alertsView()) {
+        <label class="alert-sort">Sort by
+          <select [value]="queue.sortOrder()" (change)="queue.setSort($any($event.target).value)">
+            @for (option of sortOptions; track option[0]) {
+              <option [value]="option[0]" [selected]="option[0] === queue.sortOrder()">{{ option[1] }}</option>
+            }
+          </select>
+        </label>
+      }
+      @if (queue.listScope() && (queue.group() !== 'overdue' || queue.status())) {
+        <span>{{ queue.listScope() }}</span>
+        <button type="button" hlmBtn variant="outline" (click)="queue.clearListScope()">Clear alert filter</button>
+      }
+    </div>
+    @if (queue.allObservationDates()) { <p class="text-label text-text-secondary">Any observation date</p> }
+    @if (queue.tabs().length > 1) {
       <div class="queue-tabs" role="group" aria-label="Alert queues">
-        @if (queue.allQueues() || queue.listScope()) {
-          <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.allQueues()" (click)="queue.switchTo('all')">All queues</button>
-        }
+        <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.allQueues()" (click)="queue.switchTo('all')">All queues</button>
         @for (tab of queue.tabs(); track tab) {
           <button hlmBtn variant="ghost" [attr.aria-pressed]="!queue.allQueues() && queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
             @if (queue.page(); as page) { <span>{{ page.counts[tab] || 0 }}</span> }
@@ -212,7 +223,55 @@
           <time [attr.datetime]="alert.step_time">Updated {{ dateTime(alert.step_time) }}</time>
         </div>
       } @else { <p>No alert available for this detection.</p> }
-      <a hlmBtn variant="outline" class="justify-self-start" [routerLink]="mapLink()">Show on map</a>
+      @if (alert?.assignment; as receipt) {
+        <div #assignmentReceipt class="assignment-receipt" tabindex="-1">
+          <p class="font-semibold">Assigned to {{ receipt.unitName }}</p>
+          <p>{{ receipt.actor }} · <time [attr.datetime]="receipt.at">{{ dateTime(receipt.at) }}</time></p>
+          <p>{{ receipt.reason }}</p>
+        </div>
+      } @else if (alert?.queue === 'edge_review') {
+        <p>{{ edgeReason }}</p>
+      } @else if (point.triage) {
+        <p>{{ reasons[point.triage] }}</p>
+      }
+      @if (alert?.can_assign) {
+        @if (assignmentOpen()) {
+          <form #assignmentForm tabindex="-1" aria-label="Assign alert to a unit" class="assignment-form" (submit)="assign($event)" (keydown.escape)="$event.stopPropagation(); cancelAssignment()">
+            @if (assignmentChoices(); as choices) {
+              @if (choices.length) {
+                <label for="assignment-unit">Receiving unit</label>
+                <select id="assignment-unit" #assignmentSelect required [value]="assignmentUnit()"
+                  (change)="assignmentUnit.set($any($event.target).value)" [disabled]="assignmentSaving()">
+                  <option value="">Choose a unit</option>
+                  @for (unit of choices; track unit.id) {
+                    <option [value]="unit.id" [selected]="unit.id === assignmentUnit()">{{ unit.name }} ({{ unit.level }})@if (unit.parent) { · {{ unit.parent }} }@if (unit.suggested) { · Suggested }</option>
+                  }
+                </select>
+                <label for="assignment-reason">Reason for assignment</label>
+                <textarea id="assignment-reason" required rows="2" maxlength="500" [value]="assignmentReason()"
+                  (input)="assignmentReason.set($any($event.target).value)" [disabled]="assignmentSaving()"></textarea>
+              } @else {
+                <p>No units are available for assignment.</p>
+              }
+            } @else if (!assignmentError()) {
+              <p role="status">Loading units</p>
+            }
+            @if (assignmentError()) { <p class="text-danger" role="alert">{{ assignmentError() }}</p> }
+            <div class="flex flex-wrap gap-2">
+              @if (assignmentChoices()?.length) {
+                <button type="submit" hlmBtn [disabled]="!assignmentUnit() || !assignmentReason().trim()"
+                  [busy]="assignmentSaving()">Confirm assignment</button>
+              }
+              <button type="button" hlmBtn variant="outline" [disabled]="assignmentSaving()" (click)="cancelAssignment()">Cancel</button>
+            </div>
+          </form>
+        } @else {
+          <button #assignmentTrigger type="button" hlmBtn class="justify-self-start" (click)="openAssignment()">Assign to unit</button>
+        }
+      }
+      @if (alertsView()) {
+        <a hlmBtn variant="outline" class="justify-self-start" [routerLink]="mapLink()">Show on map</a>
+      }
       @if (alert) {
         @defer (on immediate) {
           <fimra-workflow class="m-0!" [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
@@ -235,15 +294,14 @@
           <dt>Location</dt><dd>{{ point.latitude }}, {{ point.longitude }}</dd>
         }
         <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
-        @for (place of places(point).all; track place.label; let first = $first) {
-          <dt>{{ place.label }}</dt><dd>{{ place.name || place.code || 'Unknown' }} @if (first && place.name && place.code) { ({{ place.code }}) }</dd>
+        @for (place of places(point).all; track place.label) {
+          <dt>{{ place.label }}</dt><dd [attr.title]="place.code || null">{{ place.name || 'Unknown' }}</dd>
         }
         <dt>Source</dt><dd>{{ sourceLabel(point.source) }}</dd>
         <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
         <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
         <dt>Confidence</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>
       </dl>
-      @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
     </section>
     <section class="map-detail-block" aria-labelledby="incident-detail-heading">
       <h3 id="incident-detail-heading">Linked incident</h3>
@@ -261,6 +319,9 @@
       [attr.aria-current]="row.detection_id === selected()?.id?.toString() ? 'true' : null">{{ rowLabel(row) }}</button>
     <p class="scan-line">
       @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+      @if (row.overdue && row.due_at && queue.sortOrder() === 'overdue') {
+        <time [attr.datetime]="row.due_at">Due {{ dateTime(row.due_at) }}</time>
+      }
       <span>{{ rowAge(row) }}</span>
       @if (row.next_action) { <span class="next-action">{{ row.next_action }}</span> }
     </p>

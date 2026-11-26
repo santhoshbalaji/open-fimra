@@ -18,7 +18,7 @@ describe('Workspace reference layers', () => {
       expect(group.layers[0]).toMatchObject({ type: 'line', minzoom: group.minZoom, source: 'reference' });
     }
     expect(groups.find(group => group.id === 'label-territorial-2')).toMatchObject({
-      label: 'Sub-district names', minZoom: 11, layers: [{ type: 'symbol', minzoom: 11, 'source-layer': 'units' }]
+      label: 'Sub-district names', minZoom: 11, layers: [{ type: 'symbol', minzoom: 11, 'source-layer': 'unit_labels' }]
     });
   });
 });

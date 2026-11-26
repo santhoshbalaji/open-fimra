@@ -211,19 +211,25 @@ def note_items(meta, fields, rows, generated_at):
     sources = sorted({f"{r['source']} ({r['product']})" for r in rows})
     roles = "; ".join(f"{r['role']} at {r['level']} {r['unitCode']} ({r['unitName']})"
                       for r in sorted(meta["requester_roles"] or [], key=lambda r: (r["role"], r["unitCode"])))
+    observed = "Received" if reports else "Observed"
+    window = (f"{observed} from {filters['from']} to {filters['to']} "
+              f"(the past {filters['hours']} hours when the export was requested)."
+              if filters.get("from") else f"{observed} on any date up to {filters['to']}.")
     items = [
         ("title", f"Open FIMRA {meta['kind']} export"),
         ("workspace", f"{meta['workspace_name']} ({meta['workspace_slug']})"),
         ("source", ("Field reports filed in Open FIMRA for alerts on " if reports else "") +
                    "Satellite fire detections matched by Open FIMRA to the workspace's forest and unit layers. "
                    f"Sources in this file: {', '.join(sources) if sources else 'none'}."),
-        ("time_window", f"{'Received' if reports else 'Observed'} from {filters['from']} to {filters['to']} "
-                        f"(the past {filters['hours']} hours when the export was requested)."),
+        ("time_window", window),
         ("forest_classes", ", ".join(filters["forestClasses"])),
     ]
     if meta["kind"] in ("alerts", "submissions"):
         items += [("queue", filters.get("queue") or "all queues the role may see"),
                   ("workflow_step", filters.get("step") or "any")]
+    if filters.get("group"):
+        items += [("alert_filter", {"overdue": "Overdue alerts", "active": "Active alerts",
+                                    "pending_reports": "Waiting for a report"}[filters["group"]])]
     if reports:
         items += [("form", filters.get("form") or "all forms"),
                   ("decision", filters.get("decision") or "any"),

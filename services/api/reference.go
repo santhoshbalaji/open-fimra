@@ -42,6 +42,11 @@ func (a api) workspaceMap(w http.ResponseWriter, r *http.Request) {
         'version', `+publishedReferenceVersion+`,
         'boundary', CASE WHEN w.boundary IS NOT NULL THEN ARRAY[ST_XMin(w.boundary), ST_YMin(w.boundary),
             ST_XMax(w.boundary), ST_YMax(w.boundary)] END,
+        'jurisdiction', (SELECT CASE WHEN NOT bool_or(g.depth = 0) THEN
+            ARRAY[ST_XMin(ST_Extent(u.geom)), ST_YMin(ST_Extent(u.geom)),
+                  ST_XMax(ST_Extent(u.geom)), ST_YMax(ST_Extent(u.geom))] END
+            FROM alert_grants g JOIN units u ON u.hierarchy_id = g.hierarchy_id AND u.current_path = g.unit_path
+            WHERE g.workspace_id = w.id AND g.oidc_subject = $1 HAVING ST_Extent(u.geom) IS NOT NULL),
         'levels', COALESCE((SELECT jsonb_agg(jsonb_build_object('hierarchy', h.slug, 'depth', l.depth,
             'slug', l.slug, 'labels', l.labels) ORDER BY h.slug, l.depth)
             FROM hierarchies h JOIN hierarchy_levels l ON l.hierarchy_id = h.id
@@ -77,7 +82,7 @@ func (a api) referenceTile(w http.ResponseWriter, r *http.Request) {
 		a.referenceError(w, err)
 		return
 	}
-	etag := `W/"ref1-` + version + `"`
+	etag := `W/"ref2-` + version + `"`
 	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Add("Vary", "Authorization")
 	w.Header().Set("ETag", etag)
