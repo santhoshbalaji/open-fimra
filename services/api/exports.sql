@@ -24,14 +24,16 @@ detection_rows AS (
            NULL::jsonb AS dispatch
     FROM detection_matches m
     JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
+    LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
     WHERE $3 = 'detections'
       AND d.observed_at BETWEEN now() - make_interval(hours => $5) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $5) AND now()
       AND m.forest_class = ANY($6::text[])
-      AND ($8::ltree IS NULL OR m.unit_paths <@ $8)
       AND EXISTS (
           SELECT 1 FROM grants g WHERE g.workspace_id = m.workspace_id AND
-              match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
+              ((($8::ltree IS NULL OR m.unit_paths <@ $8) AND match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth))
+              OR (($8::ltree IS NULL OR routed.unit_paths <@ $8)
+                  AND dispatch_detection_visible(routed, g.can_review, g.hierarchy_id, g.unit_path, g.depth)))
       )
 ),
 alert_snapshots AS NOT MATERIALIZED (
@@ -41,7 +43,7 @@ alert_snapshots AS NOT MATERIALIZED (
                'forestFeatureId', (SELECT m.forest_feature_id FROM detection_matches m
                    WHERE (m.workspace_id, m.detection_id, m.observed_at) = (a.workspace_id, a.detection_id, a.observed_at)))
            ) AS export_boundary,
-           jsonb_build_object('queue', a.queue, 'hierarchyId', a.hierarchy_id, 'unitPath', a.unit_path) AS export_dispatch
+           (a.original_dispatch - 'candidatePaths') || jsonb_build_object('currentLead', a.dispatch_lead, 'currentSupporting', a.dispatch_support) AS export_dispatch
     FROM alerts a
 ),
 alert_rows AS (
@@ -109,7 +111,7 @@ step AS (
     )) AS known
 ),
 created AS (
-    INSERT INTO exports (workspace_id, requested_by, kind, format, filters, requester_roles, row_count, expires_at)
+    INSERT INTO exports (workspace_id, requested_by, kind, format, filters, requester_roles, row_count, expires_at, duty_grants)
     SELECT w.id, $1, $3, $4,
            jsonb_build_object(
                'hours', NULLIF($5, 0),
@@ -124,7 +126,7 @@ created AS (
            (SELECT jsonb_agg(DISTINCT jsonb_build_object('role', g.role_slug, 'level', g.level,
                                                         'unitCode', g.code, 'unitName', g.name))
             FROM grants g),
-           total.n, now() + $11::interval
+           total.n, now() + $11::interval, dispatch_grant_keys(w.id, $1, true)
     FROM workspaces w, total
     WHERE w.slug = $2 AND EXISTS (SELECT 1 FROM grants) AND total.n <= $10 AND (SELECT known FROM step)
     RETURNING id, filters

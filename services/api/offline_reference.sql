@@ -5,7 +5,7 @@ WITH workspace AS (
 ), grants AS MATERIALIZED (
     SELECT DISTINCT a.hierarchy_id, a.unit_path, u.geom
     FROM workspace w
-    JOIN role_assignments a ON a.workspace_id = w.id
+    JOIN operational_role_assignments a ON a.workspace_id = w.id
     JOIN users usr ON usr.id = a.user_id AND usr.oidc_subject = $1
     JOIN units u ON u.hierarchy_id = a.hierarchy_id AND u.path = a.unit_path AND u.valid_to IS NULL
 ), extent AS (

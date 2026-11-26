@@ -63,10 +63,15 @@ try {
     ['layers', '/settings/layers', 'परतें'],
     ['gis', '/settings/gis', 'जीआईएस लिंक'],
     ['devices', '/settings/devices', 'फ़ील्ड फ़ोन'],
+    ['duty', '/settings/duty', 'ड्यूटी सूची'],
   ];
   for (const [slug, path, title] of screens) {
     await page.goto(WEB + path);
     await expect(page.getByRole('heading', { name: title, level: 1, exact: true })).toBeVisible();
+    if (slug === 'duty') {
+      await expect(page.getByRole('heading', { name: 'ड्यूटी का समय तय करें' })).toBeVisible();
+      await expect(page.getByRole('option', { name: 'वन अग्निशमन दल' })).toHaveCount(1);
+    }
     if (slug === 'map') await expect(page.locator('.maplibregl-canvas')).toBeVisible();
     if (slug === 'situation') {
       await expect(page.locator('#report-alerts-title')).toBeVisible();
@@ -78,6 +83,32 @@ try {
       await checkPage(page, slug, name);
     }
   }
+  const alerts = await context.request.get(`${API}/api/v1/workspaces/${workspace}/alerts?queue=unit`, {
+    headers: { authorization: headers.authorization },
+  });
+  assert.ok(alerts.ok());
+  const { items } = await alerts.json();
+  assert.ok(items.length, 'Seed a routed alert for the dispatch walkthrough');
+  await page.goto(WEB + '/monitor/alerts?alert=' + items[0].id);
+  await expect(page.getByText(/मुख्य इकाई: .*सहायक इकाइयाँ: .*नियम:/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ज़िम्मेदारी सौंपें', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'सहायता माँगें', exact: true }).click();
+  const sendSupport = page.getByRole('button', { name: 'अनुरोध भेजें', exact: true });
+  await expect(sendSupport).toBeVisible();
+  await page.getByLabel('अलर्ट पाने वाली इकाई', { exact: true }).selectOption({ index: 1 });
+  await page.getByLabel('कारण', { exact: true }).fill('वन अग्निशमन दल की सहायता चाहिए।');
+  const supportUrl = `${API}/api/v1/workspaces/${workspace}/alerts/${items[0].id}/support`;
+  await page.route(supportUrl, route => route.request().method() === 'POST'
+    ? route.fulfill({
+      status: 409, headers: { 'Access-Control-Allow-Origin': WEB },
+      json: { error: 'This unit already leads the alert.' }
+    }) : route.continue());
+  await sendSupport.click();
+  await expect(page.getByRole('alert').filter({ hasText: 'इस अलर्ट की मुख्य ज़िम्मेदारी पहले से इसी इकाई के पास है।' })).toBeVisible();
+  await page.unroute(supportUrl);
+  await sendSupport.click();
+  await expect(page.getByRole('status').filter({ hasText: /से सहायता माँगी गई/ })).toBeVisible();
+
   await page.goto(WEB + '/settings/forms');
   const firstReport = page.getByRole('article', { name: 'पहली रिपोर्ट', exact: true });
   await firstReport.getByRole('button', { name: /संस्करण देखें/ }).click();

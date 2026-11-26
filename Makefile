@@ -51,10 +51,10 @@ PSQL := $(DB_COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POST
 recreate-db ?= $(DB_COMPOSE) exec -T db sh -ec 'dropdb -U "$$POSTGRES_USER" --if-exists --force -- "$$1"; createdb -U "$$POSTGRES_USER" -- "$$1"' sh "$(1)"
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
-.PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections
+.PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections demo-dispatch
 .PHONY: backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key wizard-test-integration
 
-api-run api-test-integration ingest-fixture demo-detections backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+api-run api-test-integration ingest-fixture demo-detections demo-dispatch backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 api-run api-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 api-run: export FIMRA_OIDC_DISCOVERY_URL := $(FIMRA_OIDC_DISCOVERY_URL)
@@ -196,7 +196,7 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: mail-up push-up ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration)$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration)$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
@@ -204,6 +204,10 @@ ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 
 demo-detections: ## Load the synthetic workspace and detections at four ages
 	cd services/api && go run . ingest-firms -demo -file ../../packages/connectors/firms/fixtures/demo.csv
+
+demo-dispatch: ## Add the fictional reserve rules, crew shifts and example alerts to the demo workspace
+	$(PSQL) < seed/dispatch.sql
+	cd services/api && go run . ingest-firms -demo -file ../../packages/connectors/firms/fixtures/demo-dispatch.csv
 
 backfill-firms: ## Backfill FIRMS standard-processing data given FROM, TO and optional WORKSPACE and PRODUCTS
 	@test -n "$(FROM)" -a -n "$(TO)" || { echo "Set FROM and TO, for example FROM=2024-01-01 TO=2024-06-30."; exit 1; }

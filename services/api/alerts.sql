@@ -46,7 +46,14 @@ details AS (
     SELECT p.id::text AS id, p.detection_id::text AS detection_id, p.queue, i.current_step AS status, s.label AS step_label, i.entered_at AS step_time,
            COALESCE(p.due_at < now(), false) AS overdue, p.due_at, p.overdue_sort_time, a.created_at,
            a.assignment - 'auditId' AS assignment,
-           p.queue <> 'unit' AND EXISTS (SELECT FROM alert_roles($1, $2, p.id) WHERE officer) AS can_assign,
+           p.queue <> 'unit' AND EXISTS (SELECT FROM grants g WHERE can_dispatch_alert(a, g)) AS can_assign,
+           a.original_dispatch - 'candidatePaths' AS original_dispatch, a.dispatch_lead, a.dispatch_support,
+           p.queue = 'unit' AND EXISTS (
+               SELECT FROM grants g WHERE can_dispatch_alert(a, g)
+           ) AS can_transfer,
+           COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id::text, 'unit', r.target, 'reason', r.reason,
+                    'at', r.requested_at) ORDER BY r.id)
+                     FROM alert_support_requests r WHERE r.alert_id = a.id), '[]') AS support_requests,
            a.hierarchy_id, a.unit_path::text, a.hierarchy,
            COALESCE(a.boundary_snapshot->'overlays', '[]') AS overlay_matches,
            COALESCE(a.boundary_snapshot->'layerVersionIds', to_jsonb(a.layer_version_ids)) AS boundary_version_ids, p.observed_at AS observed_time,
@@ -57,7 +64,7 @@ details AS (
            line.levels #>> '{beat,name}' AS beat_name, line.levels #>> '{beat,code}' AS beat_code,
            line.levels #>> '{range,name}' AS range_name, line.levels #>> '{division,name}' AS division_name,
            line.hierarchy AS place_hierarchy, line.levels AS places, m.incident_id::text AS incident_id,
-           CASE WHEN p.queue <> 'unit' AND EXISTS (SELECT FROM alert_roles($1, $2, p.id) WHERE officer) THEN 'Assign to unit'
+           CASE WHEN p.queue <> 'unit' AND EXISTS (SELECT FROM grants g WHERE can_dispatch_alert(a, g)) THEN 'Assign to unit'
                 WHEN s.terminal THEN 'Workflow complete'
                 WHEN next_move.label IS NULL THEN 'No action available'
                 WHEN EXISTS (SELECT FROM alert_missing_forms(p.id, next_move.step)) THEN 'Complete required reports'

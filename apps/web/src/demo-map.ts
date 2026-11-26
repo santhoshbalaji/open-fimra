@@ -18,7 +18,7 @@ import type { FeatureCollection, Point } from 'geojson';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
-import { AlertQueue, AlertRow, alertRowLabel, alertSortLabels, queueLabels, type AlertAssignment } from './alert-queue';
+import { AlertQueue, AlertRow, alertRowLabel, alertSortLabels, queueLabels, type AlertAssignment, type SupportRequest } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, incidentOffset, mapRequest, placesOf, readDetection, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
@@ -142,7 +142,13 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
   readonly sortOptions = Object.entries(alertSortLabels);
+  readonly unitName = (unit: { name: string }) => unit.name;
   readonly assignmentOpen = signal(false);
+  readonly assignmentMode = signal<'assign' | 'transfer' | 'support'>('assign');
+  readonly assignmentLabel = computed(() => ({
+    assign: translate('Assign alert to a unit'), transfer: translate('Hand over'), support: translate('Request support')
+  }[this.assignmentMode()]));
+  readonly dispatchNotice = signal('');
   readonly assignmentChoices = signal<AssignmentUnit[] | null>(null);
   readonly assignmentUnit = signal('');
   readonly assignmentReason = signal('');
@@ -151,12 +157,14 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly assignmentForm = viewChild<ElementRef<HTMLFormElement>>('assignmentForm');
   private readonly assignmentSelect = viewChild<ElementRef<HTMLSelectElement>>('assignmentSelect');
   private readonly assignmentTrigger = viewChild<ElementRef<HTMLButtonElement>>('assignmentTrigger');
+  private readonly supportTrigger = viewChild<ElementRef<HTMLButtonElement>>('supportTrigger');
+  private readonly dispatchReceipt = viewChild<ElementRef<HTMLElement>>('dispatchReceipt');
   private readonly assignmentReceipt = viewChild<ElementRef<HTMLElement>>('assignmentReceipt');
   private readonly lifetime = inject(DestroyRef);
   private readonly assignmentURL = computed(() => {
     const alert = this.queue.pinned();
     const endpoint = this.queue.endpoint();
-    return alert && endpoint ? endpoint + '/' + alert.id + '/assignment' : '';
+    return alert && endpoint ? endpoint + '/' + alert.id : '';
   });
   readonly hours = this.queue.hours;
   readonly alertsView = computed(() => this.navigation.path() === '/monitor/alerts');
@@ -260,6 +268,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     effect(() => {
       this.assignmentURL();
       this.assignmentOpen.set(false);
+      this.dispatchNotice.set('');
     });
     effect(onCleanup => {
       const url = this.assignmentURL();
@@ -268,7 +277,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       this.assignmentUnit.set('');
       this.assignmentReason.set('');
       this.assignmentError.set('');
-      const request = this.http.get<AssignmentUnit[]>(url).subscribe({
+      const request = this.http.get<AssignmentUnit[]>(url + (this.assignmentMode() === 'support' ? '/support' : '/assignment')).subscribe({
         next: choices => {
           this.assignmentChoices.set(choices);
           const suggested = choices.filter(choice => choice.suggested);
@@ -708,14 +717,15 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     this.navigation.update({ alert: row.id, detection: null, queue: this.queue.allQueues() ? 'all' : this.queue.active() });
   }
 
-  openAssignment(): void {
+  openAssignment(mode: 'assign' | 'transfer' | 'support'): void {
+    this.assignmentMode.set(mode);
     this.assignmentOpen.set(true);
     afterNextRender(() => (this.assignmentSelect() ?? this.assignmentForm())?.nativeElement.focus(), { injector: this.injector });
   }
 
   cancelAssignment(): void {
     this.assignmentOpen.set(false);
-    afterNextRender(() => this.assignmentTrigger()?.nativeElement.focus(), { injector: this.injector });
+    afterNextRender(() => (this.assignmentMode() === 'support' ? this.supportTrigger() : this.assignmentTrigger())?.nativeElement.focus(), { injector: this.injector });
   }
 
   assign(event: SubmitEvent): void {
@@ -727,15 +737,28 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     if (!url || !alert || !reason || !unitId || this.assignmentSaving()) return;
     this.assignmentError.set('');
     this.assignmentSaving.set(true);
-    this.http.post<AlertAssignment>(url, { unitId, reason }).pipe(takeUntilDestroyed(this.lifetime)).subscribe({
-      next: assignment => {
+    const mode = this.assignmentMode();
+    const action = mode === 'support' ? '/support' : '/assignment';
+    this.http.post<AlertAssignment | SupportRequest>(url + action, { unitId, reason }).pipe(takeUntilDestroyed(this.lifetime)).subscribe({
+      next: receipt => {
         this.assignmentSaving.set(false);
         if (this.assignmentURL() === url) {
-          const row: AlertRow = { ...alert, queue: 'unit', can_assign: false, assignment };
-          if (this.queue.linked()) this.queue.selectLinked(row);
-          else this.queue.pinned.set(row);
           this.assignmentOpen.set(false);
-          afterNextRender(() => this.assignmentReceipt()?.nativeElement.focus(), { injector: this.injector });
+          this.dispatchNotice.set('unit' in receipt ? translate('Support requested from {0}', [receipt.unit.name])
+            : mode === 'transfer' ? translate('Handed over to {0}', [receipt.unitName]) : translate('Assigned to {0}', [receipt.unitName]));
+          this.http.get<AlertRow>(url).pipe(takeUntilDestroyed(this.lifetime)).subscribe({
+            next: row => {
+              if (this.assignmentURL() !== url) return;
+              if (this.queue.linked()) this.queue.selectLinked(row);
+              else this.queue.pinned.set(row);
+              afterNextRender(() => (mode === 'support' ? this.dispatchReceipt() : this.assignmentReceipt())?.nativeElement.focus(), { injector: this.injector });
+            },
+            error: (error: HttpErrorResponse) => {
+              if (this.assignmentURL() !== url) return;
+              if (error.status === 404) this.closeDetails();
+              else this.showAssignmentError(error);
+            }
+          });
         }
         this.queue.refresh();
       },
@@ -748,7 +771,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   private showAssignmentError(error: HttpErrorResponse): void {
     if (error.status === 401) this.auth.sessionEnded();
-    this.assignmentError.set(error.error?.error || translate('Could not load or save this assignment. Try again.'));
+    this.assignmentError.set(typeof error.error?.error === 'string' && error.error.error || 'Could not load or save this assignment. Try again.');
   }
 
   openReport(key: string): void {

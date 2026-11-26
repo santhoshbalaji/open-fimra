@@ -537,7 +537,8 @@ func (a api) saveSituationReport(ctx context.Context, tx pgx.Tx, subject, slug s
 	err = tx.QueryRow(ctx, `INSERT INTO situation_reports (workspace_id, requested_by, hierarchy_id, unit_path,
     period_from, period_to, content, expires_at, status, snapshot_grants)
 SELECT w.id, $2, h.id, $4::ltree, $5::date, $6::date, $7, now() + $8::interval, $9,
-    CASE WHEN $9='draft' THEN `+situationReportGrants+` END
+    CASE WHEN $9='draft' OR cardinality(dispatch_grant_keys(w.id, $2, true)) > 0
+         THEN `+situationReportGrants+` END
 FROM workspaces w LEFT JOIN hierarchies h ON h.workspace_id=w.id AND h.slug=$3
 WHERE w.slug=$1 RETURNING id::text`, slug, subject, hierarchy, path, rep.Period.From, rep.Period.To, content,
 		pgtype.Interval{Microseconds: a.reportTTL().Microseconds(), Valid: true}, status).Scan(&id)

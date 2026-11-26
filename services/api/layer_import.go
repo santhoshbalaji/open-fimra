@@ -71,7 +71,7 @@ func (a api) layerAdmin(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bo
 	w.Header().Set("Cache-Control", "private, no-store")
 	caller := r.Context().Value(identityKey{}).(identity)
 	var workspaceID pgtype.UUID
-	err := a.pool.QueryRow(r.Context(), layerAdminSQL, chi.URLParam(r, "slug"), caller.Subject).Scan(&workspaceID)
+	err := a.reader.QueryRow(r.Context(), layerAdminSQL, chi.URLParam(r, "slug"), caller.Subject).Scan(&workspaceID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		writeError(w, http.StatusForbidden, "A state administrator role at the workspace root is required.")

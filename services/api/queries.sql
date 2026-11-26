@@ -19,7 +19,7 @@ SELECT w.slug AS workspace_slug, w.name AS workspace_name, h.slug AS hierarchy_s
           ON beat_level.hierarchy_id = beat.hierarchy_id AND beat_level.depth = beat.depth
         WHERE beat.hierarchy_id = a.hierarchy_id AND beat_level.slug = 'beat'
           AND beat.valid_to IS NULL AND beat.path <@ a.unit_path) AS beat_count
-FROM role_assignments a
+FROM operational_role_assignments a
 JOIN workspaces w ON w.id = a.workspace_id
 JOIN hierarchies h ON h.id = a.hierarchy_id
 JOIN units u ON u.hierarchy_id = a.hierarchy_id AND u.current_path = a.unit_path
