@@ -8,6 +8,43 @@ html, body, fimra-root { height: 100%; margin: 0; }
 body { font: var(--text-body)/var(--text-body--line-height) var(--font-sans); color: var(--color-text); background: var(--color-background); }
 fimra-root { display: flex; flex-direction: column; height: 100dvh; }
 main { flex: 1; min-height: 0; }
+.skip-link { position: fixed; z-index: 10; inset: 8px auto auto 8px; translate: 0 calc(-100% - 16px); }
+.skip-link:focus { translate: none; }
+.shell-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--target-web);
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--color-action);
+  color: var(--color-action-text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.shell-button[data-variant] { background: transparent; color: var(--color-text); }
+.shell-button[data-variant=outline] { border-color: var(--color-control-boundary); }
+.shell-button[aria-current=page] { background: var(--color-selected); color: var(--color-action); }
+.shell-button:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+.shell-button:not([data-variant]):hover { background: color-mix(in srgb, var(--color-action) 92%, var(--color-text)); }
+.shell-button[data-variant]:hover { background: var(--color-selected); color: var(--color-action); }
+.page-frame {
+  --page-width: var(--page-max);
+  --page-gutter: clamp(1rem, 3vw, 2rem);
+  display: flex;
+  flex-direction: column;
+}
+.page-frame.page-full { --page-width: none; --page-gutter: 1rem; }
+.page-frame > :is(.shell-page-header, .page-content) {
+  width: 100%;
+  max-width: var(--page-width);
+  margin-inline: auto;
+}
+.shell-page-header { padding: 0.75rem var(--page-gutter); }
+.shell-page-header h1:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+.page-frame > .page-content { flex: 1; min-height: 0; overflow: auto; }
 .topbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); }
 .header-actions { display: flex; align-items: center; gap: 4px; margin-inline-start: auto; }
 .destination-drawer { display: none; }
@@ -30,15 +67,16 @@ main { flex: 1; min-height: 0; }
 button:not([role=checkbox], [role=switch]) { cursor: pointer; min-height: var(--target-web); min-width: var(--target-web); }
 button:disabled { cursor: default; opacity: .55; }
 button[data-busy]:not(:disabled) { cursor: wait; }
-button:not([data-slot], [role]):focus-visible, canvas:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+button:not([data-slot], [role], .shell-button):focus-visible, canvas:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
 /* The map fills its clipping container. Draw its focus ring inside the canvas. */
 canvas:focus-visible { outline-offset: calc(-1 * var(--focus-width)); }
-button:not([data-slot], [role]):hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
+button:not([data-slot], [role], .shell-button):hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
 button svg { width: 18px; height: 18px; flex: none; }
 button .chevron { width: 14px; }
 .icon-button, .user-trigger { border-radius: var(--radius-control); padding: 8px; }
 .user-trigger { max-width: 32vw; }
 .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-initials { display: none; }
 .welcome { display: grid; align-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; }
 .welcome h1, .welcome h2 { font-size: var(--text-title); font-weight: 600; }
 .welcome p { max-width: 48ch; }
@@ -52,12 +90,26 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 
 
 .workspace-controls, .filter-fields, .view-switch, .queue-tabs, .workflow-moves, .export-actions, .step-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.workspace-controls { padding: 8px 16px; background: var(--color-card); border-bottom: 1px solid var(--color-border); }
-.workspace-controls { gap: 8px 20px; }
-.workspace-controls h1 { font-size: var(--text-subhead); font-weight: 600; }
 .shell-list { display: block; height: 100%; overflow: auto; }
-.shell-list-body { max-width: 960px; margin-inline: auto; padding: 16px; }
+.shell-list-body { padding: 16px var(--page-gutter, 16px); }
 #task { overflow: auto; }
+
+/* Keep existing screen actions and metadata until the screens use the shell header. */
+@media screen {
+  .page-content > :is(fimra-dashboard, fimra-situation-report, fimra-layers, fimra-devices, fimra-access-keys, fimra-forms-screen) > :first-child,
+  .page-content > fimra-shell-setup > fimra-setup-wizard > :first-child {
+    max-width: none;
+    padding-inline: var(--page-gutter);
+    padding-top: 0;
+  }
+  .page-content > :is(fimra-dashboard, fimra-layers) fimra-page-header > header [role=heading],
+  .page-content > fimra-dashboard fimra-page-header h1,
+  .page-content > fimra-situation-report #report-title,
+  .page-content > :is(fimra-devices, fimra-forms-screen) > div > div:first-child > h2,
+  .page-content > fimra-shell-setup fimra-setup-wizard > div > div:first-child > h2 { display: none; }
+  .page-content > fimra-layers fimra-page-header > header > div:first-child { display: none; }
+  .page-content > fimra-layers fimra-page-header > header { justify-content: flex-end; }
+}
 .view-switch { gap: 4px; padding: 4px; border-radius: var(--radius-card); background: var(--color-background); }
 .view-switch [aria-pressed=true] { color: var(--color-brand); background: var(--color-card); box-shadow: var(--shadow-panel); }
 .filter-fields { gap: 8px 16px; }
@@ -112,8 +164,11 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
   .header-actions { gap: 0; }
   .search-trigger { padding-inline: 4px; }
 }
+@media (width < 480px) {
+  .account-trigger .user-name { display: none; }
+  .account-trigger .account-initials { display: inline; }
+}
 @media (max-width: 840px) {
-  .workspace-controls { justify-content: space-between; padding: 4px 8px; gap: 4px; }
   .filter-toggle { display: block; }
   .workspace-controls .filter-fields { display: none; }
   .workspace-controls.filters-open .filter-fields { display: flex; width: 100%; padding: 8px; }
@@ -126,6 +181,6 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
 @page { size: A4; margin: 12mm; }
 @media print {
   html, body, fimra-root { height: auto; display: block; background: var(--color-card); }
-  .topbar, .desktop-destinations, .workspace-controls, hlm-toaster { display: none; }
-  main, #task { overflow: visible; }
+  .skip-link, .topbar, .desktop-destinations, .shell-page-header, hlm-toaster { display: none; }
+  main, #task, .page-frame > .page-content { display: block; overflow: visible; }
 }

@@ -43,7 +43,7 @@ try {
       await page.locator('#password').fill('demo');
       await page.locator('#kc-login').click();
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      await expect(page.getByRole('heading', { name: 'Layer catalog', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Layers', exact: true })).toBeVisible();
       const row = page.locator('fimra-data-table').getByRole('button', { name: / for Forest$/ });
       await expect(row).toBeVisible();
       await capture(page, label + '-catalog');

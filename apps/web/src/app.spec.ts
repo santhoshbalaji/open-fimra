@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { Component, signal } from '@angular/core';
+import { Component, signal, viewChild, type TemplateRef } from '@angular/core';
 import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,11 +10,20 @@ import { WEB_CONFIG } from './config';
 import { ThemeService } from './theme';
 import { WorkspaceService } from './workspace';
 
-@Component({ template: '' })
-class Screen {}
+@Component({
+  template: `
+    <ng-template #freshness><p>Updated just now</p></ng-template>
+    <ng-template #primary><button type="button">Page action</button></ng-template>
+  `
+})
+class Screen {
+  readonly pageFreshness = viewChild<TemplateRef<unknown>>('freshness');
+  readonly pagePrimary = viewChild<TemplateRef<unknown>>('primary');
+}
 
 describe('App shell', () => {
   function open(hasWorkspace = true) {
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
     const workspace = {
       current: signal(hasWorkspace ? {slug: 'demo', name: 'Demo'} : null),
       loaded: signal(true), failed: signal(false), canManageLayers: signal(false), canDesignForms: signal(false),
@@ -39,7 +48,20 @@ describe('App shell', () => {
     return {fixture, auth, workspace, page: fixture.nativeElement as HTMLElement};
   }
 
-  afterEach(() => localStorage.removeItem('fimra.lowBandwidth'));
+  afterEach(() => {
+    localStorage.removeItem('fimra.lowBandwidth');
+    vi.unstubAllGlobals();
+  });
+
+  it('renders a screen’s freshness and actions in the shared page header', async () => {
+    const {fixture, page} = open();
+    await TestBed.inject(Router).navigateByUrl('/monitor/map?workspace=demo');
+    fixture.detectChanges();
+    const header = page.querySelector('main > fimra-page-header');
+    expect(header?.querySelector('h1')?.textContent).toBe('Map');
+    expect(header?.textContent).toContain('Updated just now');
+    expect(header?.textContent).toContain('Page action');
+  });
 
   it('reads and saves the low-bandwidth preference through the labelled switch', async () => {
     localStorage.setItem('fimra.lowBandwidth', 'true');
@@ -62,7 +84,7 @@ describe('App shell', () => {
   it('explains restricted access and offers an account switch', () => {
     const {auth, page} = open(false);
     expect(page.querySelector('main h1')?.textContent).toBe('Restricted access');
-    expect(page.querySelector('main')?.textContent).toContain('Signed in as Demo Officer');
+    expect(page.querySelector('main')?.textContent).toContain('Signed in as Demo Officer (officer@example.invalid).');
     expect(page.querySelector('main')?.textContent).toContain('Ask your workspace administrator');
     expect(page.querySelector('router-outlet')).toBeNull();
     Array.from(page.querySelectorAll('button')).find(button => button.textContent.trim() === 'Switch account')!.click();
@@ -74,6 +96,7 @@ describe('App shell', () => {
     for (const block of await fixture.getDeferBlocks()) await block.render(DeferBlockState.Complete);
     const account = page.querySelector('button.account-trigger')!;
     expect(account.getAttribute('aria-label')).toContain(account.querySelector('.user-name')?.textContent);
-    expect(account.textContent?.trim()).toBe('Demo Officer');
+    expect(account.querySelector('.user-name')?.textContent).toBe('Demo Officer');
+    expect(account.querySelector('.account-initials')?.textContent).toBe('DO');
   });
 });

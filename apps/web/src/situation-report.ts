@@ -411,7 +411,10 @@ export class SituationReportView {
       if (request === this.reportRequest) {
         this.report.set(report);
         afterNextRender(() => {
-          if (request === this.reportRequest) this.reportTitle()?.nativeElement.focus();
+          if (request !== this.reportRequest) return;
+          const title = this.reportTitle()?.nativeElement;
+          const pageHeading = title?.closest('main')?.querySelector<HTMLElement>('.shell-page-header h1');
+          (pageHeading ?? title)?.focus();
         }, { injector: this.injector });
       }
     } catch (error) {

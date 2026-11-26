@@ -33,7 +33,7 @@ try {
     await page.locator('#kc-login').click();
 
     const dashboard = page.locator('fimra-dashboard');
-    const heading = dashboard.getByRole('heading', { level: 1, name: 'Control-room dashboard' });
+    const heading = page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true });
     const active = dashboard.getByRole('link', { name: 'Active alerts', exact: true });
     const chart = dashboard.locator('fimra-class-chart');
     const tables = dashboard.locator('table');
@@ -121,7 +121,8 @@ try {
     assert.ok(response.ok(), await response.text());
     const records = await response.json();
     assert.equal(records.items.length, expected);
-    await expect(page.getByRole('table', { name: 'Active alerts · All queues' }).locator('tbody tr')).toHaveCount(expected);
+    const queue = page.getByRole('complementary', { name: 'Alert queue' });
+    await expect(queue.locator('[data-alert-id]')).toHaveCount(expected);
     await page.goBack();
     await expect(heading).toBeVisible();
     await expect(chart).toHaveCount(0);

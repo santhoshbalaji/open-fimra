@@ -54,7 +54,7 @@ try {
   await page.locator('#password').fill('demo');
   await page.locator('#kc-login').click();
   await page.locator('.maplibregl-canvas').waitFor();
-  await page.locator('.alert-table .row-open').first().waitFor();
+  await page.locator('.compact-alerts .row-open').first().waitFor();
   for (const theme of ['dark', 'light']) {
     const toggle = page.getByRole('button', { name: 'Dark theme' });
     if ((await toggle.getAttribute('aria-pressed') === 'true') !== (theme === 'dark')) await toggle.click();

@@ -46,7 +46,8 @@ try {
     const context = await browser.newContext({ viewport: desktop, colorScheme: 'light', reducedMotion: 'reduce' });
     const page = await context.newPage();
     await signIn(page, username, start);
-    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 1, name: heading })).toBeFocused();
+    await expect(page).toHaveTitle(heading + ' · Open FIMRA');
     if (username === 'no.role') {
       await expect(page.getByText('Ask your workspace administrator', { exact: false })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Switch account' })).toBeVisible();
@@ -69,7 +70,8 @@ try {
       await expect(page.locator('.workspace-scope')).not.toBeEmpty();
       const account = page.locator('.account-trigger');
       const visibleName = await account.locator('.user-name').textContent();
-      await expect(account).toHaveAccessibleName('Account for ' + visibleName.trim());
+      const initials = await account.locator('.account-initials').textContent();
+      await expect(account).toHaveAccessibleName(`Account for ${visibleName.trim()}, ${initials.trim()}`);
       if (username !== 'state.admin') {
         await page.goto(WEB + '/settings/layers');
         await expect(page.getByRole('heading', { name: 'Restricted access' })).toBeVisible();
@@ -85,6 +87,7 @@ try {
         await page.keyboard.press('Enter');
         await expect(page).toHaveURL(/\/reports\/situation/);
         await expect(dialog).toBeHidden();
+        await expect(page.getByRole('heading', { level: 1, name: 'Situation report' })).toBeFocused();
       }
     }
     await context.close();
@@ -95,6 +98,19 @@ try {
   await signIn(page, 'state.admin');
   await expect(page.getByRole('heading', { name: 'Map', level: 1 })).toBeVisible();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await skip.focus();
+  const originalURL = page.url();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main')).toBeFocused();
+  await expect(page).toHaveURL(originalURL);
+  const alerts = page.getByRole('navigation', { name: 'Destinations' }).getByRole('link', { name: 'Alerts', exact: true });
+  await alerts.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeFocused();
+  await expect(page).toHaveTitle('Alerts · Open FIMRA');
+  await expect(page.getByText('Alerts page opened.', { exact: true })).toHaveAttribute('role', 'status');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Map', level: 1 })).toBeFocused();
   for (const [size, viewport] of [['desktop', desktop], ['phone', phone]]) {
     await page.setViewportSize(viewport);
     for (const theme of ['light', 'dark']) {
@@ -104,6 +120,9 @@ try {
       await axe(page, `Shell ${size} ${theme}`, ['.topbar', '.desktop-destinations', '.workspace-controls']);
       await page.screenshot({ path: join(SHOTS, `shell-${size}-${theme}.png`) });
       if (size === 'phone') {
+        const account = page.locator('.account-trigger');
+        await expect(account.locator('.account-initials')).toBeVisible();
+        await expect(account.locator('.user-name')).toBeHidden();
         await openDrawer(page);
         await axe(page, `Drawer ${theme}`, ['.shell-drawer']);
         await page.screenshot({ path: join(SHOTS, `drawer-phone-${theme}.png`) });
@@ -144,7 +163,7 @@ try {
   await page.setViewportSize({ width: 390, height: 300 });
   const drawer = await openDrawer(page);
   await drawer.getByRole('link', { name: 'Alerts', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeFocused();
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
   await page.locator('#hours').evaluate(input => {
     input.value = '144';

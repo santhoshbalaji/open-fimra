@@ -1,4 +1,4 @@
-import { Component, inject, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger } from '@spartan-ng/helm/dropdown-menu';
 import { AuthService } from './auth';
@@ -11,8 +11,9 @@ import { WorkspaceService } from './workspace';
   imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, Icon],
   template: `
     <button hlmBtn variant="ghost" [hlmDropdownMenuTrigger]="account" class="user-trigger account-trigger"
-            [attr.aria-label]="'Account for ' + name()" [title]="name()">
+            [attr.aria-label]="'Account for ' + name() + ', ' + initials()" [title]="name()">
       <span class="user-name">{{ name() }}</span>
+      <span class="account-initials" aria-hidden="true">{{ initials() }}</span>
       <svg fimraIcon="chevron-down" class="chevron" aria-hidden="true"></svg>
     </button>
     <ng-template #account>
@@ -30,6 +31,8 @@ import { WorkspaceService } from './workspace';
 })
 export class ShellAccount {
   readonly name = input.required<string>();
+  protected readonly initials = computed(() =>
+    this.name().trim().split(/\s+/).slice(0, 2).map(part => Array.from(part)[0]).join('').toLocaleUpperCase());
   readonly auth = inject(AuthService);
   readonly workspace = inject(WorkspaceService);
   private readonly navigation = inject(ShellNavigation);

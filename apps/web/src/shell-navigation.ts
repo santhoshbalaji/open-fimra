@@ -22,6 +22,10 @@ export const destinations = [
 export type Destination = typeof destinations[number];
 export type DestinationPath = Destination['path'];
 
+export function destinationAt(path: string): Destination | undefined {
+  return destinations.find(item => item.path === path);
+}
+
 export function allowsDestination(workspace: WorkspaceService, destination: Destination): boolean {
   return !!workspace.current() &&
     (!('grant' in destination) || (destination.grant === 'layers' ? workspace.canManageLayers() : workspace.canDesignForms()));
@@ -119,7 +123,7 @@ export class ShellNavigation {
   private readonly tree = computed(() => this.router.parseUrl(this.url()));
   readonly path = computed(() => this.url().split('?')[0]);
   readonly query = computed(() => this.tree().queryParamMap);
-  readonly destination = computed(() => destinations.find(item => item.path === this.path()));
+  readonly destination = computed(() => destinationAt(this.path()));
   readonly authorized = computed(() => destinations.filter(item => allowsDestination(this.workspace, item)));
 
   href(path: DestinationPath, extra: Params = {}) {

@@ -43,6 +43,7 @@ const palette = theme => [
   ...numbered('chart-series', tokens.chart.series[theme]),
 ];
 const px = value => `${value}px`;
+const rem = value => `${value / tokens.web.remBasePx}rem`;
 const ms = value => `${value}ms`;
 const componentEntries = Object.entries(tokens.components).flatMap(([name, values]) =>
   entries(kebab(name), values, reference));
@@ -64,6 +65,7 @@ function css() {
       ...entries('role-shadow', tokens.semantic.elevation, reference),
       ...entries('target', tokens.density.touchTargetMinPx, px),
       ['type-family', tokens.primitives.font.sans],
+      ['page-max', rem(tokens.web.pageMaxPx)],
       ...entries('focus', tokens.semantic.focusPx, reference),
       ...entries('motion', tokens.semantic.motionMs, reference),
       ...entries('space', Object.fromEntries(tokens.primitives.spacePx.steps.map(step => [step, step])), px),
@@ -91,8 +93,8 @@ function css() {
         const name = `text-${kebab(key)}`;
         const step = resolve(path, 'light');
         return [
-          [name, px(step.sizePx)],
-          [`${name}--line-height`, px(step.lineHeightPx)],
+          [name, rem(step.sizePx)],
+          [`${name}--line-height`, rem(step.lineHeightPx)],
           [`${name}--font-weight`, step.weight],
           [`${name}--letter-spacing`, `${step.trackingEm}em`],
         ];
