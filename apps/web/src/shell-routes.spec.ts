@@ -50,6 +50,7 @@ describe('Shell routes', () => {
     expect(links.includes('Layers')).toBe(layers);
     expect(links.includes('Setup')).toBe(layers);
     expect(links.includes('Duty roster')).toBe(layers);
+    expect(links.includes('Incident response')).toBe(layers);
     expect(links.includes('Form templates')).toBe(forms);
     expect(links.includes('GIS link')).toBe(!!role);
     expect(links.includes('Field phones')).toBe(!!role);
@@ -58,6 +59,8 @@ describe('Shell routes', () => {
     expect(router.url).toBe(layers ? '/settings/layers?workspace=demo' : role ? '/restricted' : '/');
     await harness.navigateByUrl('/settings/duty');
     expect(router.url).toBe(layers ? '/settings/duty?workspace=demo' : role ? '/restricted' : '/');
+    await harness.navigateByUrl('/settings/incident-response');
+    expect(router.url).toBe(layers ? '/settings/incident-response?workspace=demo' : role ? '/restricted' : '/');
     await harness.navigateByUrl('/settings/forms');
     expect(router.url).toBe(forms ? '/settings/forms?workspace=demo' : role ? '/restricted' : '/');
     await harness.navigateByUrl('/reports/field');

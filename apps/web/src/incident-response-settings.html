@@ -1,5 +1,4 @@
 <section class="grid max-w-4xl gap-3 p-4">
-  <h1 class="text-view font-semibold">{{ msg('Incident response') }}</h1>
   <fimra-state-region [state]="state()" (retry)="reload()">
     @if (settings(); as response) {
       <form class="grid gap-4" (submit)="$event.preventDefault(); save()">
