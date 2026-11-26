@@ -5,6 +5,7 @@ import unittest
 from io import BytesIO
 
 from pypdf import PdfReader
+from reportlab.graphics.shapes import Circle, Drawing, Line, Polygon, Rect
 
 import situation_report
 from situation_report import duration, period_text, render
@@ -109,6 +110,53 @@ class SituationReportTest(unittest.TestCase):
             self.assertIn(expected, flat)
         self.assertNotIn(SUBJECT, flat)
 
+    def test_map_draws_the_shared_symbols_and_counts(self):
+        defs = situation_report.SYMBOLS
+        assert_types = {"circle": Circle, "ring": Circle, "square": Rect, "diamond": Polygon}
+        for key, mark in {**defs["forestClasses"], "incident": defs["incident"]}.items():
+            active, closed = Drawing(20, 20), Drawing(20, 20)
+            situation_report.symbol(active, 10, 10, key, True, 0)
+            situation_report.symbol(closed, 10, 10, key, False, 0)
+            self.assertIsInstance(active.contents[0], assert_types[mark["shape"]])
+            self.assertEqual(closed.contents[0].getProperties(), active.contents[0].getProperties())
+            self.assertEqual(len(closed.contents), len(active.contents) + 2)
+            self.assertIsInstance(closed.contents[-1], Line)
+            self.assertLess(closed.contents[-1].x1, closed.contents[-1].x2)
+            self.assertLess(closed.contents[-1].y1, closed.contents[-1].y2)
+            if mark["shape"] == "ring":
+                self.assertIsNone(active.contents[-1].fillColor)
+        report = synthetic_report()
+        end = report["period"]["end"]
+        self.assertEqual([situation_report.report_age(value, end) for value in [
+            "2026-03-15T17:00:00Z", "2026-03-15T07:00:00Z", "2026-03-14T07:00:00Z", "2026-03-12T07:00:00Z",
+        ]], [0, 1, 2, 3])
+        self.assertEqual(situation_report.map_rows(report), [
+            ["Inside forest", 1, 1, 2], ["Near the forest edge", 1, 0, 1],
+            ["Outside forest", 1, 0, 1], ["Suspected fixed heat source", 0, 1, 1],
+            ["Incidents", 1, 0, 1],
+        ])
+
+    def test_unit_names_use_embedded_devanagari_and_bengali_fonts(self):
+        hindi, bengali = "नीरपंख वन", "ধূপপাখা বন"
+        report = synthetic_report()
+        report["scope"] = f"{hindi} (Division)"
+        report["unit"]["name"] = hindi
+        report["map"]["units"][0]["name"] = bengali
+        report["units"][0]["name"] = bengali
+        data, _ = render(report)
+        reader = PdfReader(BytesIO(data))
+        fonts = {str(font.get_object()["/BaseFont"]).split("+")[-1]
+                 for page in reader.pages for font in page["/Resources"]["/Font"].values()}
+        self.assertTrue({"NotoSansDevanagari-Regular", "NotoSansBengali-Regular"} <= fonts)
+        flat = " ".join(" ".join(page.extract_text() for page in reader.pages).split())
+        self.assertIn(hindi, flat)
+        self.assertIn(bengali, flat)
+        # A pre-base vowel must be shaped for printing even though some readers
+        # extract the resulting glyphs in visual order.
+        run, font, _ = next(situation_report.shaped_runs("মেঘপাখা", 9))
+        self.assertEqual(font, "NotoSansBengali")
+        self.assertNotEqual(run, "মেঘপাখা")
+
     def test_document_is_described(self):
         data, _ = render(synthetic_report())
         info = PdfReader(BytesIO(data)).metadata
@@ -152,8 +200,8 @@ class SituationReportTest(unittest.TestCase):
                          "Past 24 hours: 14 Mar 2026, 11:30 to 15 Mar 2026, 11:30, India Standard Time")
 
     def test_durations(self):
-        self.assertEqual([duration(v) for v in (None, 0, 59.4, 60, 3599, 3600, 7500, 172800, 190000)],
-                         ["No data", "0 s", "59 s", "1 min", "1 h", "1 h", "2 h 5 min", "2 days", "2 days 4 h"])
+        self.assertEqual([duration(v) for v in (None, 0, 58.5, 59.4, 60, 150, 3599, 3600, 7500, 172800, 190000)],
+                         ["No data", "0 s", "59 s", "59 s", "1 min", "3 min", "1 h", "1 h", "2 h 5 min", "2 days", "2 days 4 h"])
 
     def test_bad_content_fails_cleanly(self):
         broken = copy.deepcopy(synthetic_report())
@@ -190,8 +238,8 @@ class SituationReportTest(unittest.TestCase):
     def test_colours_follow_the_design_tokens(self):
         with open("/design-tokens.json", encoding="utf-8") as f:
             tokens = json.load(f)
-        paths = {**tokens["semantic"]["color"], **tokens["compatibility"]["color"],
-                 "forest": "map.forest", "active": "map.age.light.0"}
+        self.assertEqual(situation_report.map_tokens, tokens["map"])
+        paths = {**tokens["semantic"]["color"], **tokens["compatibility"]["color"]}
         for name, value in situation_report.TOKENS.items():
             path = paths[name].split(".")
             if path[:2] == ["primitives", "palette"]:

@@ -1,8 +1,7 @@
-<section class="mx-auto grid max-w-[1100px] grid-cols-[minmax(0,1fr)] gap-4 p-4 sm:p-6 lg:p-8" aria-labelledby="report-page-title">
+<section class="mx-auto grid max-w-[1100px] grid-cols-[minmax(0,1fr)] gap-4 p-4 sm:p-6 lg:p-8" aria-labelledby="report-title">
+@if (loading() || !report()) {
 <div class="report-controls grid gap-4 rounded-card border border-border bg-card p-4 shadow-panel">
-  <h2 id="report-page-title" class="text-display">Situation report</h2>
-  <p class="text-muted-foreground">A printable summary of fires, alerts, incidents and field reports for one unit,
-    with the same numbers as the dashboard. It shows only what your role can see.</p>
+  <h1 id="report-title" class="text-display">Situation report</h1>
   <p id="report-scope" class="text-muted-foreground">
     @if (workspaceName(); as name) { {{ name }} · The selected unit sets the report area. }
     Dates and times use India Standard Time.
@@ -11,7 +10,7 @@
     (submit)="$event.preventDefault(); show()">
     <div class="grid gap-4 sm:grid-cols-2">
       <hlm-field><label hlmFieldLabel for="report-unit">Unit</label>
-        <hlm-select [value]="unitKey()" (valueChange)="pickUnit($event)">
+        <hlm-select #unitControl [value]="unitKey()" (valueChange)="pickUnit($event)">
           <hlm-select-trigger buttonId="report-unit" class="w-full"><span class="truncate">{{ unitLabel() }}</span></hlm-select-trigger>
           <hlm-select-content *hlmSelectPortal>
             @for (unit of units(); track key(unit)) {
@@ -44,7 +43,7 @@
         }
       }
     </div>
-    <button hlmBtn type="submit" [disabled]="loading() || !selectedUnit()">Show report</button>
+    <button hlmBtn type="submit" [busy]="loading()" [disabled]="!selectedUnit()">{{ loading() ? 'Making report…' : 'Show report' }}</button>
   </form>
   @if (message()) {
     <p role="alert" class="flex items-start gap-2 rounded-control border border-border border-s-4 border-s-danger bg-card px-4 py-3">
@@ -52,6 +51,7 @@
     </p>
   }
 </div>
+}
 
 @if (loading()) {
   <div role="status" class="grid gap-4"><span class="sr-only">Making the report…</span>
@@ -59,26 +59,31 @@
     <hlm-skeleton class="h-80 w-full" aria-hidden="true" />
   </div>
 } @else if (report(); as data) {
-  <div class="report-actions flex flex-wrap items-center gap-2">
-    <button hlmBtn variant="outline" type="button" (click)="print()">Print</button>
-    <button hlmBtn variant="outline" type="button" [disabled]="pdf()?.status === 'pending'" (click)="preparePdf()">
-      <svg fimraIcon="download" aria-hidden="true"></svg>{{ pdf()?.status === 'ready' ? 'Prepare the PDF again' : 'Prepare PDF' }}</button>
-    @if (pdf(); as file) {
-      @if (file.status === 'pending') { <span role="status" class="text-muted-foreground">Drawing the PDF…</span> }
-      @if (file.status === 'ready' && file.fileName) {
-        <button hlmBtn type="button" [title]="file.fileName" (click)="downloadPdf()">Download the PDF ({{ file.pageCount }} {{ file.pageCount === 1 ? 'page' : 'pages' }})</button>
-      }
-    }
-    @if (pdfMessage()) { <span role="alert" class="text-danger">{{ pdfMessage() }}</span> }
-  </div>
-
   <article class="report grid min-w-0 gap-5 rounded-card border border-border bg-card p-4 sm:p-6" aria-labelledby="report-title">
-    <header class="grid gap-1">
-      <h2 id="report-title" class="text-display">Situation report</h2>
-      <p class="text-subhead">{{ heading() }}</p>
-      <p>{{ periodText() }}</p>
+    <header class="grid gap-3">
+      <h1 id="report-title" #reportTitle tabindex="-1" class="text-display">Situation report</h1>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <dl class="grid min-w-0 gap-x-6 gap-y-2 sm:flex sm:flex-wrap">
+          <div class="min-w-0 wrap-anywhere"><dt class="text-label text-muted-foreground">Unit</dt><dd>{{ heading() }}</dd></div>
+          <div><dt class="text-label text-muted-foreground">Period</dt><dd>{{ periodSummary() }}</dd></div>
+          <div><dt class="text-label text-muted-foreground">Time zone</dt><dd>{{ zoneLabel }}</dd></div>
+        </dl>
+        <button class="report-actions" hlmBtn variant="outline" type="button" (click)="edit()">Edit scope</button>
+      </div>
       <p class="text-label text-muted-foreground">Made {{ formatTime(data.generatedAt) }}.
         @if (preparedFor()) { Shows what is visible to: {{ preparedFor() }}. }</p>
+      <div class="report-actions grid gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <button hlmBtn type="button" [busy]="pdfBusy()" (click)="pdfAction()"
+            [attr.aria-describedby]="pdfMessage() ? 'report-pdf-error' : null">
+            @if (!pdfBusy()) { <svg fimraIcon="download" aria-hidden="true"></svg> }
+            {{ pdfLabel() }}
+          </button>
+          <button hlmBtn variant="outline" type="button" (click)="print()">Print</button>
+        </div>
+        <fimra-live-status class="sr-only" [message]="pdfStatus()" />
+        @if (pdfMessage()) { <p id="report-pdf-error" role="alert" class="text-danger">{{ pdfMessage() }}</p> }
+      </div>
     </header>
 
     <dl class="report-figures grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -98,46 +103,63 @@
           @for (forest of shapes.forest; track $index) { <path class="map-forest" [attr.d]="forest" /> }
           @for (unit of shapes.units; track unit.name) { <path class="map-unit" [attr.d]="unit.path" /> }
           <path class="map-outline" [attr.d]="shapes.outline" />
-          @for (incident of shapes.incidents; track incident.id) {
-            <rect class="map-incident" [attr.x]="incident.x" [attr.y]="incident.y" [attr.width]="incident.width" [attr.height]="incident.height" />
-            @if (incident.labelled) { <text class="map-incident-label" [attr.x]="incident.labelX" [attr.y]="incident.y - 3">Incident {{ incident.id }}</text> }
-          }
           @for (alert of shapes.alerts; track $index) {
-            @switch (alert.forestClass) {
-              @case ('inside') { <circle class="map-alert" [class.closed]="!alert.active" [attr.cx]="alert.x" [attr.cy]="alert.y" r="5" /> }
-              @case ('near_edge') { <circle class="map-alert ring" [class.closed]="!alert.active" [attr.cx]="alert.x" [attr.cy]="alert.y" r="4.5" /> }
-              @case ('fixed_heat_source') { <rect class="map-alert" [class.closed]="!alert.active" [attr.x]="alert.x - 4" [attr.y]="alert.y - 4" width="8" height="8" /> }
-              @default { <circle class="map-alert" [class.closed]="!alert.active" [attr.cx]="alert.x" [attr.cy]="alert.y" r="2.5" /> }
-            }
+            <g class="map-alert" [class.closed]="!alert.active" [attr.transform]="'translate(' + alert.x + ' ' + alert.y + ')'"
+              [fimraReportSymbol]="alert.symbol" [closed]="!alert.active" />
+          }
+          @for (incident of shapes.incidents; track incident.id) {
+            <g class="map-incident" [attr.transform]="'translate(' + incident.x + ' ' + incident.y + ')'"
+              [fimraReportSymbol]="incidentSymbol" [closed]="!incident.active" />
+            @if (incident.labelled) { <text class="map-incident-label" [attr.x]="incident.labelX" [attr.y]="incident.labelY">Incident {{ incident.id }}</text> }
           }
           @for (unit of shapes.units; track unit.name) {
             @if (unit.labelled) { <text class="map-unit-label" [attr.x]="unit.label[0]" [attr.y]="unit.label[1]" text-anchor="middle">{{ unit.name }}</text> }
           }
         </svg>
         <ul class="report-legend flex flex-wrap gap-x-4 gap-y-1 text-label">
-          @for (key of classKeys; track key) { <li><span class="key-symbol" [class]="key" aria-hidden="true"></span>{{ label('forestClasses', key) }}</li> }
-          <li><span class="key-symbol closed" aria-hidden="true"></span>Closed alert</li>
-          <li><span class="key-incident" aria-hidden="true"></span>Incident</li>
-          <li><span class="key-forest" aria-hidden="true"></span>Forest</li>
+          @for (key of classKeys; track key) {
+            <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol(key, 0)" /></svg>{{ label('forestClasses', key) }}</li>
+          }
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', 0)" /></svg>Active alert or incident (no slash)</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', 0)" [closed]="true" /></svg>Closed alert or incident (slash)</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="incidentSymbol" /></svg>Incident</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><rect class="map-forest" x="-7" y="-4" width="14" height="8" /></svg>Forest</li>
         </ul>
+        @if (mapAges().length) {
+          <ul class="report-legend flex flex-wrap gap-x-4 gap-y-1 text-label" aria-label="Observation age at the end of the period">
+            @for (age of mapAges(); track age) {
+              <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', $index)" /></svg>{{ age }}</li>
+            }
+          </ul>
+        }
+        <p id="report-map-note" class="text-label text-muted-foreground">The map shows alerts and incidents in the period, unit boundaries and forest.
+          @if (mapAges().length) { Alert age is measured at the end of the period. }
+          @if (data.map.alertsShown < data.alerts.total) { It shows the latest {{ data.map.alertsShown }} of {{ data.alerts.total }} alerts. }</p>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Markers shown on the map"><table hlmTable>
+          <caption class="caption-top text-start font-medium">Markers shown on the map</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Marker</th><th hlmTh scope="col" class="text-end">Active</th>
+            <th hlmTh scope="col" class="text-end">Closed</th><th hlmTh scope="col" class="text-end">Total</th></tr></thead>
+          <tbody hlmTBody>@for (row of mapCounts(); track row.label) {
+            <tr hlmTr><th hlmTh scope="row" class="whitespace-normal font-normal">{{ row.label }}</th>
+              <td hlmTd class="text-end tabular-nums">{{ row.active }}</td><td hlmTd class="text-end tabular-nums">{{ row.closed }}</td>
+              <td hlmTd class="text-end tabular-nums">{{ row.total }}</td></tr>
+          }</tbody>
+        </table></div>
       } @else {
         <p class="text-muted-foreground">No map shapes for this unit.</p>
       }
-      <p id="report-map-note" class="text-label text-muted-foreground">The map shows the period's alerts, the unit's boundary
-        and the units below it, and forest.
-        @if (data.map.alertsShown < data.alerts.total) { It shows the latest {{ data.map.alertsShown }} of {{ data.alerts.total }} alerts. }</p>
     </section>
 
     <section class="report-section grid gap-3" aria-labelledby="report-alerts-title">
       <h3 id="report-alerts-title" class="report-heading">Detections and alerts</h3>
       <div class="grid gap-4 sm:grid-cols-2">
-        <div hlmTableContainer><table hlmTable><caption class="sr-only">Detections by forest class</caption>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Detections by forest class"><table hlmTable><caption class="sr-only">Detections by forest class</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Forest class</th><th hlmTh scope="col" class="text-end">Detections</th></tr></thead>
           <tbody hlmTBody>@for (key of classKeys; track key) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ label('forestClasses', key) }}</th>
               <td hlmTd class="text-end tabular-nums">{{ data.counts.detections[key] || 0 }}</td></tr>
           }</tbody></table></div>
-        <div hlmTableContainer><table hlmTable><caption class="sr-only">Alerts by queue</caption>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Alerts by queue"><table hlmTable><caption class="sr-only">Alerts by queue</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Queue</th><th hlmTh scope="col" class="text-end">Alerts</th></tr></thead>
           <tbody hlmTBody>@for (key of queueKeys; track key) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ label('queues', key) }}</th>
@@ -159,7 +181,7 @@
 
     <section class="report-section grid gap-2" aria-labelledby="report-times-title">
       <h3 id="report-times-title" class="report-heading">Response times</h3>
-      <div hlmTableContainer><table hlmTable><caption class="sr-only">Median and 90th percentile time to first reach each step</caption>
+      <div hlmTableContainer tabindex="0" role="region" aria-label="Response times"><table hlmTable><caption class="sr-only">Median and 90th percentile time to first reach each step</caption>
         <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Step</th><th hlmTh scope="col" class="text-end">Median</th>
           <th hlmTh scope="col" class="text-end">90th percentile</th><th hlmTh scope="col" class="text-end">Alerts that reached it</th></tr></thead>
         <tbody hlmTBody>@for (time of data.responseTimes; track time.step) {
@@ -175,7 +197,7 @@
         {{ data.incidents.opened }} opened in the period, {{ data.incidents.active }} active, {{ data.incidents.closed }} closed
         and {{ data.incidents.overdue }} overdue.</p>
       @if (data.incidents.items.length) {
-        <div hlmTableContainer><table hlmTable><caption class="sr-only">Incidents with alerts in the period</caption>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Incidents with alerts in the period"><table hlmTable><caption class="sr-only">Incidents with alerts in the period</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Incident</th><th hlmTh scope="col">Place</th><th hlmTh scope="col">Step</th>
             <th hlmTh scope="col">First seen</th><th hlmTh scope="col">Last seen</th><th hlmTh scope="col" class="text-end">Alerts</th></tr></thead>
           <tbody hlmTBody>@for (item of data.incidents.items; track item.id) {
@@ -196,7 +218,7 @@
         Missing: {{ data.fieldReports.missing }}, on {{ data.fieldReports.alertsMissing }}
         {{ data.fieldReports.alertsMissing === 1 ? 'alert' : 'alerts' }}.</p>
       @if (data.fieldReports.forms.length) {
-        <div hlmTableContainer><table hlmTable><caption class="sr-only">Field reports by form</caption>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Field reports by form"><table hlmTable><caption class="sr-only">Field reports by form</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Form</th><th hlmTh scope="col" class="text-end">Submitted</th>
             <th hlmTh scope="col" class="text-end">Approved</th><th hlmTh scope="col" class="text-end">Returned</th>
             <th hlmTh scope="col" class="text-end">Waiting for review</th><th hlmTh scope="col" class="text-end">Missing</th></tr></thead>
@@ -212,7 +234,7 @@
     <section class="report-section grid gap-2" aria-labelledby="report-overdue-title">
       <h3 id="report-overdue-title" class="report-heading">Alerts past their time limit</h3>
       @if (data.overdueAlerts.length) {
-        <div hlmTableContainer><table hlmTable><caption class="sr-only">Alerts past their time limit</caption>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Alerts past their time limit"><table hlmTable><caption class="sr-only">Alerts past their time limit</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Alert</th><th hlmTh scope="col">{{ data.placeLevels.join(' › ') || 'Place' }}</th>
             <th hlmTh scope="col">Step</th><th hlmTh scope="col">Entered step</th><th hlmTh scope="col" class="text-end">Overdue by</th></tr></thead>
           <tbody hlmTBody>@for (alert of data.overdueAlerts; track alert.id) {
@@ -226,7 +248,7 @@
     @if (data.units.length) {
       <section class="report-section grid gap-2" aria-labelledby="report-units-title">
         <h3 id="report-units-title" class="report-heading">By {{ (data.unitLevel || 'unit').toLowerCase() }}</h3>
-        <div hlmTableContainer><table hlmTable><caption class="sr-only">Alerts by {{ (data.unitLevel || 'unit').toLowerCase() }}</caption>
+        <div hlmTableContainer tabindex="0" role="region" aria-label="Alerts by unit"><table hlmTable><caption class="sr-only">Alerts by {{ (data.unitLevel || 'unit').toLowerCase() }}</caption>
           <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ data.unitLevel || 'Unit' }}</th><th hlmTh scope="col" class="text-end">Alerts</th>
             <th hlmTh scope="col" class="text-end">Active</th><th hlmTh scope="col" class="text-end">Overdue</th>
             <th hlmTh scope="col" class="text-end">Waiting for a report</th><th hlmTh scope="col" class="text-end">Forms missing</th></tr></thead>

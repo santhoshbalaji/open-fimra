@@ -18,7 +18,7 @@ import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, alertRowLabel, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
+import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, incidentOffset, mapRequest, placesOf, readDetection, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import type { IncidentFocus, IncidentRow } from './incidents';
 import { AlertReports } from './forms/alert-reports';
@@ -567,7 +567,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
           paint: { 'circle-radius': 12, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': mapColours[theme].selection }
         });
         map.addLayer({ id: 'reported-incidents', type: 'symbol', source: 'reported-incidents',
-          layout: { 'icon-image': this.incidentIcon(map, theme), 'icon-offset': [9, -9], 'icon-overlap': 'always', visibility: 'none' }
+          layout: { 'icon-image': this.incidentIcon(map, theme), 'icon-offset': incidentOffset, 'icon-overlap': 'always', visibility: 'none' }
         });
         map.addLayer({ id: 'incident-members', type: 'circle', source: 'incident-members',
           paint: { 'circle-radius': 19, 'circle-opacity': 0, 'circle-stroke-width': 2, 'circle-stroke-color': mapColours[theme].selection }

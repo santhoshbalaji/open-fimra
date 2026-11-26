@@ -1,4 +1,5 @@
 import type { ExpressionSpecification, MapGeoJSONFeature, RequestParameters, SymbolLayerSpecification } from 'maplibre-gl';
+import symbols from '../../../services/geo-worker/situation-report-symbols.json';
 import { ageColours, mapColours } from './token-values';
 import { isApiRequest } from './config';
 import type { Theme } from './theme';
@@ -103,15 +104,11 @@ export function mapRequest(url: string, base: string, page: string, token: () =>
 }
 
 export function symbolStyle(cls: ForestClass, age: number, theme: Theme) {
-  const palette = mapColours[theme];
-  const color = ageColours[theme][age];
-  switch (cls) {
-    case 'inside': return { shape: 'circle', radius: 6, color };
-    case 'near_edge': return { shape: 'ring', radius: 6, color };
-    case 'outside': return { shape: 'circle', radius: 3, color: palette.neutralMark };
-    case 'fixed_heat_source': return { shape: 'square', radius: 5, color: palette.neutralMark };
-  }
+  const { shape, radius, palette } = symbols.forestClasses[cls];
+  return { shape, radius, color: palette === 'age' ? ageColours[theme][age] : mapColours[theme].neutralMark };
 }
+
+export const incidentOffset = symbols.incident.offset as [number, number];
 
 export function iconName(cls: ForestClass, age: number, theme: Theme): string {
   return ['fire', theme, cls, age].join('-');
@@ -123,7 +120,7 @@ export function symbolImage(cls: ForestClass | 'incident', age: number, theme: T
   const ctx = canvas.getContext('2d')!;
   ctx.scale(2, 2);
   const { shape, radius, color } = cls === 'incident'
-    ? { shape: 'diamond', radius: 6, color: mapColours[theme].selection }
+    ? { ...symbols.incident, color: mapColours[theme].selection }
     : symbolStyle(cls, age, theme);
   const centre = canvas.width / 4;
   ctx.beginPath();

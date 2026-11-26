@@ -6,22 +6,26 @@ saved report: it never reads alerts, detections or grants, so the file cannot
 hold anything the requester may not see. The map is drawn from the unit and
 forest shapes saved in the report, so no outside map service is needed.
 
-ReportLab (BSD licence) writes the PDF. It uses the PDF standard font
-Helvetica, so no font file is bundled.
+ReportLab writes the PDF with embedded Noto fonts for Latin, Devanagari and Bengali.
 """
 
+import json
 import logging
 import math
+import re
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from pathlib import Path as FilePath
 
 import psycopg
-from reportlab.graphics.shapes import Circle, Drawing, Line, Path, Rect, String
+from reportlab.graphics.shapes import Circle, Drawing, Line, Path, Polygon, Rect, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont, shapeStr
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (CondPageBreak, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
@@ -38,32 +42,74 @@ PERSONAL_DATA = "This report contains no names, phone numbers or other personal 
 # checks them against that file.
 TOKENS = {
     "text": "#141816", "textSecondary": "#56615b", "border": "#dde2de", "brand": "#1f5a70",
-    "brandSoft": "#e2ebee", "danger": "#9d2626", "mapBackground": "#e9ece8", "neutralMark": "#7a857f",
-    "card": "#ffffff", "forest": "#1aa373", "active": "#8f1d14",
+    "brandSoft": "#e2ebee", "card": "#ffffff",
 }
 C = {name: colors.HexColor(value) for name, value in TOKENS.items()}
+
+ASSETS = FilePath(__file__).parent
+with (ASSETS / "situation-report-symbols.json").open(encoding="utf-8") as file:
+    SYMBOLS = json.load(file)
+with (ASSETS / "tokens.json").open(encoding="utf-8") as file:
+    map_tokens = json.load(file)["map"]
+MAP_COLOURS = {key: colors.HexColor(value) for key, value in map_tokens["light"].items()}
+AGE_COLOURS = [colors.HexColor(value) for value in map_tokens["age"]["light"]]
+AGE_LABELS = [*map_tokens["age"]["steps"][:-1], "3 days or more"]
+
+FONT = "NotoSans"
+BOLD = "NotoSans-Bold"
+for name, filename in ((FONT, "NotoSans-Regular"), (BOLD, BOLD),
+                       ("NotoSansDevanagari", "NotoSansDevanagari-Regular"),
+                       ("NotoSansBengali", "NotoSansBengali-Regular")):
+    pdfmetrics.registerFont(TTFont(name, str(ASSETS / "fonts" / (filename + ".ttf"))))
+pdfmetrics.registerFontFamily(FONT, normal=FONT, bold=BOLD)
+SCRIPT_RUNS = re.compile(r"([\u0900-\u097f\ua8e0-\ua8ff]+|[\u0980-\u09ff]+)")
 
 PAGE_W, PAGE_H = A4
 MARGIN = 15 * mm
 WIDTH = PAGE_W - 2 * MARGIN
 
-BODY = ParagraphStyle("body", fontName="Helvetica", fontSize=9, leading=12, textColor=C["text"])
+BODY = ParagraphStyle("body", fontName=FONT, fontSize=9, leading=12, textColor=C["text"])
 SMALL = ParagraphStyle("small", parent=BODY, fontSize=8, leading=10.5, textColor=C["textSecondary"])
 NOTE = ParagraphStyle("note", parent=SMALL, spaceAfter=3)
-TITLE = ParagraphStyle("title", parent=BODY, fontName="Helvetica-Bold", fontSize=18, leading=22)
-SUBTITLE = ParagraphStyle("subtitle", parent=BODY, fontName="Helvetica-Bold", fontSize=12, leading=16)
-HEADING = ParagraphStyle("heading", parent=BODY, fontName="Helvetica-Bold", fontSize=11, leading=14,
+TITLE = ParagraphStyle("title", parent=BODY, fontName=BOLD, fontSize=18, leading=22)
+SUBTITLE = ParagraphStyle("subtitle", parent=BODY, fontName=BOLD, fontSize=12, leading=16)
+HEADING = ParagraphStyle("heading", parent=BODY, fontName=BOLD, fontSize=11, leading=14,
                          spaceBefore=8, spaceAfter=4, textColor=C["brand"])
 CELL = ParagraphStyle("cell", parent=BODY, fontSize=8.5, leading=10.5)
 CELL_RIGHT = ParagraphStyle("cellRight", parent=CELL, alignment=TA_RIGHT)
-FIGURE = ParagraphStyle("figure", parent=BODY, fontName="Helvetica-Bold", fontSize=16, leading=19)
+FIGURE = ParagraphStyle("figure", parent=BODY, fontName=BOLD, fontSize=16, leading=19)
 
 MILESTONE_HELP = {"alerted": "satellite observation to alert"}
+SYMBOL_SCALE = 0.65
 
 
-def esc(value):
-    """Text for a ReportLab paragraph, which reads a little XML."""
-    return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+def font_runs(text, base=FONT):
+    """Keep script clusters together and use the matching embedded font."""
+    for index, run in enumerate(SCRIPT_RUNS.split(text)):
+        if run:
+            font = base
+            if index % 2:
+                font = "NotoSansBengali" if "\u0980" <= run[0] <= "\u09ff" else "NotoSansDevanagari"
+            yield run, font
+
+
+def report_paragraph(value, style, bold=False):
+    """Escape ReportLab paragraph text and select the font for each script."""
+    value = str(value)
+    if SCRIPT_RUNS.search(value):
+        style = ParagraphStyle(style.name + "Shaped", parent=style, shaping=True)
+    parts = []
+    for run, font in font_runs(value):
+        text = run.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        parts.append(text if font == FONT else f'<font name="{font}">{text}</font>')
+    text = "".join(parts)
+    return Paragraph(f"<b>{text}</b>" if bold else text, style)
+
+
+def shaped_runs(text, size):
+    for run, font in font_runs(text):
+        shaped = run if font == FONT else shapeStr(run, font, size, force=True)
+        yield shaped, font, pdfmetrics.stringWidth(shaped, font, size)
 
 
 def when(value):
@@ -84,8 +130,8 @@ def duration(seconds):
         return "No data"
     seconds = max(0, float(seconds))
     if seconds < 60:
-        return f"{round(seconds)} s"
-    minutes = round(seconds / 60)
+        return f"{math.floor(seconds + 0.5)} s"
+    minutes = math.floor(seconds / 60 + 0.5)
     if minutes < 60:
         return f"{minutes} min"
     hours, minutes = divmod(minutes, 60)
@@ -127,10 +173,10 @@ def label(report, group, key):
 def table(header, rows, widths, numeric_from=1, empty="None in this period."):
     """A plain table with a heading row. Columns from numeric_from are right-aligned."""
     if not rows:
-        return Paragraph(esc(empty), SMALL)
-    data = [[Paragraph(f"<b>{esc(h)}</b>", CELL_RIGHT if i >= numeric_from else CELL) for i, h in enumerate(header)]]
+        return report_paragraph(empty, SMALL)
+    data = [[report_paragraph(h, CELL_RIGHT if i >= numeric_from else CELL, bold=True) for i, h in enumerate(header)]]
     for row in rows:
-        data.append([Paragraph(esc(v), CELL_RIGHT if i >= numeric_from else CELL) for i, v in enumerate(row)])
+        data.append([report_paragraph(v, CELL_RIGHT if i >= numeric_from else CELL) for i, v in enumerate(row)])
     t = Table(data, colWidths=[w * WIDTH for w in widths], repeatRows=1, hAlign="LEFT")
     t.setStyle(TableStyle([
         ("LINEBELOW", (0, 0), (-1, 0), 0.8, C["text"]),
@@ -158,7 +204,7 @@ def figures(report):
         ("Forms missing", fields.get("missing", 0)),
     ]
     cells = [[Paragraph(f"{value}", FIGURE) for _, value in items],
-             [Paragraph(esc(name), SMALL) for name, _ in items]]
+             [report_paragraph(name, SMALL) for name, _ in items]]
     t = Table(cells, colWidths=[WIDTH / len(items)] * len(items))
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), C["brandSoft"]),
@@ -211,34 +257,98 @@ def shape_path(geometry, project, **style):
     return path
 
 
-def symbol(drawing, x, y, forest_class, active):
-    """Shape shows the forest class and colour shows whether the alert is still active."""
-    color = C["active"] if active else C["neutralMark"]
-    if forest_class == "inside":
-        drawing.add(Circle(x, y, 3.2, fillColor=color, strokeColor=C["card"], strokeWidth=0.6))
-    elif forest_class == "near_edge":
-        drawing.add(Circle(x, y, 3, fillColor=None, strokeColor=color, strokeWidth=1.4))
-    elif forest_class == "fixed_heat_source":
-        drawing.add(Rect(x - 2.6, y - 2.6, 5.2, 5.2, fillColor=color, strokeColor=C["card"], strokeWidth=0.5))
+def report_age(observed, end):
+    if not observed:
+        return None
+    hours = (datetime.fromisoformat(end) - datetime.fromisoformat(observed)).total_seconds() / 3600
+    return next((i for i, limit in enumerate(SYMBOLS["ageHours"]) if hours < limit), len(SYMBOLS["ageHours"]))
+
+
+def forest_key(value):
+    return value if value in SYMBOLS["forestClasses"] else "outside"
+
+
+def symbol(drawing, x, y, forest_class, active, age=None):
+    """Draw the same mark in the map and its key. A slash marks closure."""
+    mark = SYMBOLS["incident"] if forest_class == "incident" else SYMBOLS["forestClasses"][forest_key(forest_class)]
+    radius = mark["radius"] * SYMBOL_SCALE
+    palette = mark["palette"]
+    color = AGE_COLOURS[age] if palette == "age" and age is not None else MAP_COLOURS.get(palette, MAP_COLOURS["neutralMark"])
+    outline = MAP_COLOURS["ageOutline"]
+    style = {"fillColor": color, "strokeColor": outline, "strokeWidth": 0.65}
+    if mark["shape"] == "square":
+        drawing.add(Rect(x - radius, y - radius, radius * 2, radius * 2, **style))
+    elif mark["shape"] == "diamond":
+        drawing.add(Polygon([x, y + radius, x + radius, y, x, y - radius, x - radius, y], **style))
+    elif mark["shape"] == "ring":
+        drawing.add(Circle(x, y, radius, fillColor=None, strokeColor=outline, strokeWidth=2.34))
+        drawing.add(Circle(x, y, radius, fillColor=None, strokeColor=color, strokeWidth=1.3))
     else:
-        drawing.add(Circle(x, y, 1.6, fillColor=color, strokeColor=None))
+        drawing.add(Circle(x, y, radius, **style))
+    if not active:
+        slash = SYMBOLS["closedStroke"]
+        sx, sy = slash["start"]
+        ex, ey = slash["end"]
+        line = (x + sx * radius, y - sy * radius, x + ex * radius, y - ey * radius)
+        drawing.add(Line(*line, strokeColor=MAP_COLOURS["land"], strokeWidth=(slash["width"] + 1.6) * SYMBOL_SCALE))
+        drawing.add(Line(*line, strokeColor=outline, strokeWidth=slash["width"] * SYMBOL_SCALE))
+
+
+def map_legend(report, has_ages):
+    classes = [(key, True, 0, label(report, "forestClasses", key)) for key in SYMBOLS["forestClasses"]]
+    entries = classes + [("inside", True, 0, "Active alert or incident (no slash)"),
+                         ("inside", False, 0, "Closed alert or incident (slash)"),
+                         ("incident", True, None, "Incident"), ("forest", True, None, "Forest")]
+    rows = [entries]
+    if has_ages:
+        rows.append([("inside", True, i, text) for i, text in enumerate(AGE_LABELS)])
+    legend = Drawing(WIDTH, 0)
+    x, y = 0, 0
+    for row in rows:
+        for key, active, age, text in row:
+            space = 22 + pdfmetrics.stringWidth(text, FONT, 7.5)
+            if x + space > WIDTH:
+                x, y = 0, y - 13
+            if key == "forest":
+                legend.add(Rect(x, y - 2.6, 9, 5.2, fillColor=MAP_COLOURS["forest"],
+                                fillOpacity=map_tokens["forestOpacity"], strokeColor=C["textSecondary"], strokeWidth=0.3))
+            else:
+                symbol(legend, x + 5, y, key, active, age)
+            legend.add(String(x + 13, y - 2.5, text, fontName=FONT, fontSize=7.5, fillColor=C["text"]))
+            x += space
+        x, y = 0, y - 13
+    legend.height = -y
+    legend.shift(0, legend.height - 6.5)
+    return legend
+
+
+def map_rows(report):
+    data = report["map"]
+    classes = SYMBOLS["forestClasses"]
+    tally = {key: [0, 0] for key in (*classes, "incident")}
+    for _, _, key, active, *_ in data.get("alerts", []):
+        tally[forest_key(key)][0 if active else 1] += 1
+    for incident in data.get("incidents", []):
+        tally["incident"][0 if incident["active"] else 1] += 1
+    return [[label(report, "forestClasses", key) if key in classes else "Incidents", active, closed, active + closed]
+            for key, (active, closed) in tally.items()]
 
 
 def report_map(report, width=WIDTH, height=105 * mm):
     """The unit, the units below it, forest and the period's alerts and incidents."""
     data = report.get("map") or {}
     drawing = Drawing(width, height)
-    drawing.add(Rect(0, 0, width, height, fillColor=C["mapBackground"], strokeColor=C["border"], strokeWidth=0.5))
+    drawing.add(Rect(0, 0, width, height, fillColor=MAP_COLOURS["canvas"], strokeColor=C["border"], strokeWidth=0.5))
     bounds = data.get("bounds")
     if not bounds:
         drawing.add(String(width / 2, height / 2, "No map shapes for this unit.", textAnchor="middle",
-                           fontName="Helvetica", fontSize=9, fillColor=C["textSecondary"]))
+                           fontName=FONT, fontSize=9, fillColor=C["textSecondary"]))
         return drawing
-    project = Projection(bounds, width, height - 14)
+    project = Projection(bounds, width, height)
     if data.get("outline"):
         drawing.add(shape_path(data["outline"], project, fillColor=C["card"], strokeColor=None))
     for forest in data.get("forest", []):
-        drawing.add(shape_path(forest, project, fillColor=colors.Color(*C["forest"].rgb(), alpha=0.34),
+        drawing.add(shape_path(forest, project, fillColor=MAP_COLOURS["forest"], fillOpacity=map_tokens["forestOpacity"],
                                strokeColor=C["textSecondary"], strokeWidth=0.3))
     for unit in data.get("units", []):
         drawing.add(shape_path(unit["geometry"], project, fillColor=None, strokeColor=C["textSecondary"],
@@ -249,26 +359,34 @@ def report_map(report, width=WIDTH, height=105 * mm):
 
     def place_label(x, y, text, size, color, anchor="start"):
         # A label that would cover another is left out; the tables name everything.
-        width = len(text) * size * 0.5
-        left = x - width / 2 if anchor == "middle" else x
-        box = (left - 1, y - 1, left + width + 1, y + size)
+        runs = list(shaped_runs(text, size))
+        text_width = sum(advance for _, _, advance in runs)
+        left = x - text_width / 2 if anchor == "middle" else x
+        left = min(max(2, left), width - text_width - 2)
+        y = min(max(2, y), height - size - 1)
+        if left < 2:
+            return
+        box = (left - 1, y - 1, left + text_width + 1, y + size)
         if any(box[0] < b[2] and b[0] < box[2] and box[1] < b[3] and b[1] < box[3] for b in labels):
             return
         labels.append(box)
-        drawing.add(String(x, y, text, textAnchor=anchor, fontName="Helvetica", fontSize=size, fillColor=color))
+        for text_run, font, advance in runs:
+            drawing.add(String(left, y, text_run, fontName=font, fontSize=size, fillColor=color))
+            left += advance
 
-    boxes = []
+    for lon, lat, forest_class, active, *observed in data.get("alerts", []):
+        age = report_age(observed[0], report["period"]["end"]) if observed else None
+        symbol(drawing, *project(lon, lat), forest_class, active, age)
+    incident_mark = SYMBOLS["incident"]
+    offset_x, offset_y = incident_mark["offset"]
+    margin = incident_mark["radius"] * SYMBOL_SCALE + 1
     for incident in data.get("incidents", []):
         west, south, east, north = incident["bounds"]
-        x1, y1 = project(west, south)
-        x2, y2 = project(east, north)
-        drawing.add(Rect(x1 - 6, y1 - 6, x2 - x1 + 12, y2 - y1 + 12, fillColor=None, strokeColor=C["brand"],
-                         strokeWidth=0.9, strokeDashArray=[2, 1.5]))
-        boxes.append((x1 - 6, y2 + 8, f"Incident {incident['id']}"))
-    for lon, lat, forest_class, active in data.get("alerts", []):
-        symbol(drawing, *project(lon, lat), forest_class, active)
-    for x, y, text in boxes:
-        place_label(x, y, text, 6.5, C["brand"])
+        x, y = project((west + east) / 2, (south + north) / 2)
+        x = min(max(x + offset_x * SYMBOL_SCALE, margin), width - margin)
+        y = min(max(y - offset_y * SYMBOL_SCALE, margin), height - margin)
+        symbol(drawing, x, y, "incident", incident["active"])
+        place_label(x + 7, y + 4, f"Incident {incident['id']}", 6.5, C["text"])
     for unit in data.get("units", []):
         rings = polygons(unit["geometry"])
         if rings and rings[0]:
@@ -276,17 +394,6 @@ def report_map(report, width=WIDTH, height=105 * mm):
             lon = sum(p[0] for p in ring) / len(ring)
             lat = sum(p[1] for p in ring) / len(ring)
             place_label(*project(lon, lat), unit["name"], 7, C["textSecondary"], "middle")
-    # Legend along the top edge.
-    drawing.add(Rect(0, height - 14, width, 14, fillColor=C["card"], strokeColor=C["border"], strokeWidth=0.5))
-    x = 6
-    entries = [(c, True) for c in ("inside", "near_edge", "fixed_heat_source", "outside")] + [("inside", False)]
-    for forest_class, active in entries:
-        symbol(drawing, x + 3, height - 7, forest_class, active)
-        text = label(report, "forestClasses", forest_class) if active else "Closed alert"
-        drawing.add(String(x + 9, height - 9.5, text, fontName="Helvetica", fontSize=7, fillColor=C["text"]))
-        x += 18 + len(text) * 3.4
-    drawing.add(Line(x, height - 11, x + 10, height - 11, strokeColor=C["brand"], strokeDashArray=[2, 1.5]))
-    drawing.add(String(x + 13, height - 9.5, "Incident", fontName="Helvetica", fontSize=7, fillColor=C["text"]))
     return drawing
 
 
@@ -296,23 +403,33 @@ def story(report):
     heading = report["scope"]
     if not (report.get("unit") or {}).get("name") == report["workspace"]["name"]:
         heading += f" · {report['workspace']['name']}"
-    parts = [Paragraph("Situation report", TITLE), Paragraph(esc(heading), SUBTITLE),
-             Paragraph(esc(period_text(report["period"])), BODY)]
+    parts = [Paragraph("Situation report", TITLE), report_paragraph(heading, SUBTITLE),
+             report_paragraph(period_text(report["period"]), BODY)]
     made = f"Made {when(report['generatedAt'])}."
     grants = [f"{label(report, 'roles', g['role'])}, {g['unitName']} ({g['levelLabel']})"
               for g in report.get("preparedFor", [])]
     if grants:
         made += " Shows what is visible to: " + "; ".join(grants) + "."
-    parts += [Paragraph(esc(made), SMALL), Spacer(1, 4 * mm), figures(report), Spacer(1, 4 * mm)]
+    parts += [report_paragraph(made, SMALL), Spacer(1, 4 * mm), figures(report), Spacer(1, 4 * mm)]
 
-    shown = (report.get("map") or {}).get("alertsShown", 0)
-    map_note = "The map shows the period's alerts, the unit's boundary and the units below it, and forest."
-    if shown < report["alerts"]["total"]:
-        map_note += f" It shows the latest {shown} of {report['alerts']['total']} alerts."
-    parts += [KeepTogether([Paragraph("Map", HEADING), report_map(report), Spacer(1, 1.5 * mm),
-                            Paragraph(esc(map_note), SMALL)])]
+    data = report["map"]
+    if data.get("bounds"):
+        has_ages = any(len(point) > 4 and point[4] for point in data.get("alerts", []))
+        map_note = "The map shows alerts and incidents in the period, unit boundaries and forest."
+        if has_ages:
+            map_note += " Alert age is measured at the end of the period."
+        shown = data.get("alertsShown", 0)
+        total = report["alerts"]["total"]
+        if shown < total:
+            map_note += f" It shows the latest {shown} of {total} alerts."
+        parts += [KeepTogether([Paragraph("Map", HEADING), report_map(report), Spacer(1, 1.5 * mm),
+                                map_legend(report, has_ages), report_paragraph(map_note, SMALL),
+                                Spacer(1, 1.5 * mm), Paragraph("Markers shown on the map", SMALL),
+                                table(["Marker", "Active", "Closed", "Total"], map_rows(report), [0.55, 0.15, 0.15, 0.15])])]
+    else:
+        parts += [Paragraph("Map", HEADING), Paragraph("No map shapes for this unit.", SMALL)]
 
-    classes = ["inside", "near_edge", "outside", "fixed_heat_source"]
+    classes = SYMBOLS["forestClasses"]
     detections = table(["Forest class", "Detections"],
                        [[label(report, "forestClasses", c), counts["detections"].get(c, 0)] for c in classes],
                        [0.3, 0.17])
@@ -322,10 +439,10 @@ def story(report):
     side = Table([[detections, queues]], colWidths=[0.5 * WIDTH, 0.5 * WIDTH])
     side.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
     parts += [Paragraph("Detections and alerts", HEADING), side, Spacer(1, 2 * mm),
-              Paragraph(esc(f"{plural(report['alerts']['total'], 'alert', 'alerts')} in the period: "
+              report_paragraph(f"{plural(report['alerts']['total'], 'alert', 'alerts')} in the period: "
                             f"{report['alerts']['active']} active and {report['alerts']['closed']} closed. "
                             f"Waiting for a report: {counts.get('pendingReports', 0)}. "
-                            f"Past their time limit: {counts.get('overdue', 0)}."), BODY)]
+                            f"Past their time limit: {counts.get('overdue', 0)}.", BODY)]
     parts += [Paragraph("Alerts by current step", HEADING),
               table(["Step", "Alerts"], [[s["label"], s["count"]] for s in report.get("steps", [])], [0.4, 0.15],
                     empty="No alerts in this period.")]
@@ -337,9 +454,9 @@ def story(report):
 
     incidents = report.get("incidents") or {}
     parts += [CondPageBreak(40 * mm), Paragraph("Incidents", HEADING),
-              Paragraph(esc(f"{plural(incidents.get('total', 0), 'incident', 'incidents')} with alerts in the period: "
+              report_paragraph(f"{plural(incidents.get('total', 0), 'incident', 'incidents')} with alerts in the period: "
                             f"{incidents.get('opened', 0)} opened in the period, {incidents.get('active', 0)} active, "
-                            f"{incidents.get('closed', 0)} closed and {incidents.get('overdue', 0)} overdue."), BODY),
+                            f"{incidents.get('closed', 0)} closed and {incidents.get('overdue', 0)} overdue.", BODY),
               Spacer(1, 1.5 * mm),
               table(["Incident", "Place", "Step", "First seen", "Last seen", "Alerts"],
                     [[i["id"], ", ".join(i.get("places") or []) or "No unit",
@@ -349,11 +466,11 @@ def story(report):
 
     fields = report.get("fieldReports") or {}
     parts += [CondPageBreak(40 * mm), Paragraph("Field reports", HEADING),
-              Paragraph(esc(f"Forms submitted for the period's alerts: {fields.get('submitted', 0)}. "
+              report_paragraph(f"Forms submitted for the period's alerts: {fields.get('submitted', 0)}. "
                             f"Approved: {fields.get('approved', 0)}. Returned: {fields.get('returned', 0)}. "
                             f"Waiting for review: {fields.get('awaitingReview', 0)}. "
                             f"Missing: {fields.get('missing', 0)}, on "
-                            f"{plural(fields.get('alertsMissing', 0), 'alert', 'alerts')}."), BODY),
+                            f"{plural(fields.get('alertsMissing', 0), 'alert', 'alerts')}.", BODY),
               Spacer(1, 1.5 * mm),
               table(["Form", "Submitted", "Approved", "Returned", "Waiting for review", "Missing"],
                     [[f["title"], f["submitted"], f["approved"], f["returned"], f["awaitingReview"], f["missing"]]
@@ -369,15 +486,15 @@ def story(report):
 
     units = report.get("units") or []
     if units:
-        parts += [CondPageBreak(40 * mm), Paragraph(esc(f"By {(report.get('unitLevel') or 'unit').lower()}"), HEADING),
+        parts += [CondPageBreak(40 * mm), report_paragraph(f"By {(report.get('unitLevel') or 'unit').lower()}", HEADING),
                   table([report.get("unitLevel") or "Unit", "Alerts", "Active", "Overdue", "Waiting for a report",
                          "Forms missing"],
                         [[u["name"], u["alerts"], u["active"], u["overdue"], u["pendingReports"], u["formsMissing"]]
                          for u in units], [0.3, 0.12, 0.12, 0.12, 0.18, 0.16])]
 
     parts += [CondPageBreak(40 * mm), Paragraph("How the numbers are worked out", HEADING)]
-    parts += [Paragraph(esc(note), NOTE) for note in report.get("notes", [])]
-    parts += [Spacer(1, 3 * mm), Paragraph(esc(PERSONAL_DATA), SMALL), Paragraph(esc(INDEPENDENCE), SMALL)]
+    parts += [report_paragraph(note, NOTE) for note in report.get("notes", [])]
+    parts += [Spacer(1, 3 * mm), report_paragraph(PERSONAL_DATA, SMALL), report_paragraph(INDEPENDENCE, SMALL)]
     return parts
 
 
@@ -397,9 +514,13 @@ def numbered_canvas(footer):
             total = len(self.pages)
             for state in self.pages:
                 self.__dict__.update(state)
-                self.setFont("Helvetica", 7.5)
                 self.setFillColor(C["textSecondary"])
-                self.drawString(MARGIN, 9 * mm, footer)
+                left = MARGIN
+                for run, font, advance in shaped_runs(footer, 7.5):
+                    self.setFont(font, 7.5)
+                    self.drawString(left, 9 * mm, run)
+                    left += advance
+                self.setFont(FONT, 7.5)
                 self.drawRightString(PAGE_W - MARGIN, 9 * mm, f"Page {self._pageNumber} of {total}")
                 super().showPage()
             super().save()

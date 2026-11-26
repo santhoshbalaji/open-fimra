@@ -11,3 +11,4 @@ pypdf==6.21.4
 reportlab==5.1.0
 shapely==2.1.2
 typing-extensions==4.15.0
+uharfbuzz==0.51.5

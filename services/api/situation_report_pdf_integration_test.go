@@ -109,13 +109,28 @@ func TestSituationReportIntegration(t *testing.T) {
 			if code != 200 || json.Unmarshal(data, &dashboard) != nil {
 				t.Fatalf("summary: %d %s", code, data)
 			}
-			code, data, header := call("POST", base+"/situation-reports", user, `{"hours":168}`)
+			code, dataView, _ := call("GET", base+"/situation-report?hours=168&snapshot=1", user, "")
+			var viewed situationReport
+			if code != 200 || json.Unmarshal(dataView, &viewed) != nil || viewed.SnapshotID == "" {
+				t.Fatalf("view: %d %s", code, dataView)
+			}
+			created = append(created, viewed.SnapshotID)
+			body := fmt.Sprintf(`{"snapshotId":%q}`, viewed.SnapshotID)
+			if user == "state.admin" {
+				if code, _, _ := call("POST", base+"/situation-reports", "division.officer", body); code != 404 {
+					t.Fatalf("another user's snapshot: %d", code)
+				}
+			}
+			var draft string
+			if err := pool.QueryRow(ctx, "SELECT status FROM situation_reports WHERE id=$1", viewed.SnapshotID).Scan(&draft); err != nil || draft != "draft" {
+				t.Fatalf("draft: %q, %v", draft, err)
+			}
+			code, data, header := call("POST", base+"/situation-reports", user, body)
 			var status reportStatus
 			if code != http.StatusAccepted || json.Unmarshal(data, &status) != nil {
 				t.Fatalf("create: %d %s", code, data)
 			}
-			created = append(created, status.ID)
-			if header.Get("Location") != base+"/situation-reports/"+status.ID {
+			if status.ID != viewed.SnapshotID || header.Get("Location") != base+"/situation-reports/"+status.ID {
 				t.Fatalf("location %q", header.Get("Location"))
 			}
 			var content []byte
@@ -126,8 +141,18 @@ func TestSituationReportIntegration(t *testing.T) {
 			if err := json.Unmarshal(content, &saved); err != nil {
 				t.Fatal(err)
 			}
-			// New detections between the two requests would change both; the
-			// demo feed is fixed, so the numbers agree exactly.
+			var viewedJSON, savedJSON map[string]any
+			if err := json.Unmarshal(dataView, &viewedJSON); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(content, &savedJSON); err != nil {
+				t.Fatal(err)
+			}
+			delete(viewedJSON, "snapshotId")
+			if !reflect.DeepEqual(savedJSON, viewedJSON) {
+				t.Fatal("the PDF did not use the report shown on screen")
+			}
+			// The demo feed is fixed, so the dashboard counts agree exactly.
 			if !reflect.DeepEqual(saved.Counts.Detections, dashboard.Detections) || saved.Counts.Active != dashboard.Active ||
 				saved.Counts.Overdue != dashboard.Overdue || !reflect.DeepEqual(saved.Counts.Queues, dashboard.Queues) ||
 				!reflect.DeepEqual(saved.Counts.Steps, dashboard.Steps) || saved.Counts.PendingReports != dashboard.PendingReports {

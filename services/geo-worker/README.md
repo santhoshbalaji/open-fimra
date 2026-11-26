@@ -105,7 +105,7 @@ OGR. `make export-test-integration` does this for every format it downloads.
 - [ReportLab](https://www.reportlab.com/opensource/) writes the PDF. It is
   open source under the BSD licence, which can be combined with the AGPL, runs
   inside the worker with no outside service, and is pinned in the lock file
-  with its two dependencies, Pillow and charset-normalizer. It draws tables
+  with its dependencies, including HarfBuzz bindings for text shaping. It draws tables
   that continue across pages and vector shapes, so the map stays sharp when
   printed. A browser-based renderer would need a headless browser in the
   image, and an HTML renderer such as WeasyPrint needs system libraries for
@@ -113,15 +113,14 @@ OGR. `make export-test-integration` does this for every format it downloads.
 - The map is drawn from the shapes saved in the report: the unit's outline,
   the units one level down, published forest and the alerts. It uses a simple
   projection with north up that keeps shapes true near the centre of the
-  unit, so no tile server or outside map service is needed. Shape shows the
-  forest class, as on the web map, and colour shows whether the alert is still
-  active. Labels that would cover each other are left out.
-- Pages are A4 with a footer naming the report and its page number. The text
-  uses Helvetica, a standard PDF font, so no font file is bundled. It covers
-  English text; names in other scripts need an embedded font in a later
-  change. The colours come from the light theme in
-  [tokens.json](../../docs/design-system/tokens.json), and `make geo-test`
-  checks them against that file.
+  unit. The web map and report use the same marker shapes and age colours.
+  A slash marks closed alerts and incidents in both browser print and PDF.
+  Labels that would cover each other are left out.
+- Pages are A4 with a footer naming the report and its page number. The image
+  includes Noto Sans and Noto Sans fonts for Devanagari and Bengali under the
+  SIL Open Font License. The worker embeds the fonts it uses in each PDF and
+  shapes the script text with HarfBuzz. It uses the light colours from
+  [tokens.json](../../docs/design-system/tokens.json).
 - `make geo-test` draws synthetic reports, reads them back with pypdf and
   checks their text and page count. `make situation-report-test-integration`
   makes a report as each demo user through the API, waits for this worker and

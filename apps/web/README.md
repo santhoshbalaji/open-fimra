@@ -48,7 +48,9 @@ Choose **Export** beside the alert queue title to save what you can see as a fil
 
 Choose **Situation report** to make a printable summary of one unit. Choose the unit, which starts at your highest unit, and one day, a range of days or the past hours, then **Show report**. The report has the key numbers, a map of the unit with the period's alerts and incidents, detections and alerts, response times, incidents, field reports, alerts past their time limit and a table for each unit one level down. The numbers are the dashboard's numbers for the same period and unit, and the report shows only what your role can see. Times are in India Standard Time, so a printed report reads the same everywhere.
 
-**Print** prints the report alone, in light colours, without the menus and buttons. **Prepare PDF** asks the server to draw the same report as a PDF, then shows a download button. Only you can download it, until it expires. The map is drawn from the workspace's own boundaries and forest, so it needs no outside map service. The report screen loads only when you open it, so it adds nothing to the first download.
+When the report is ready, the controls fold into its scope. Choose **Edit scope** to change the unit or period. **Prepare PDF** draws the report you are viewing, then changes to **Download PDF**. If preparation fails, use **Retry PDF**. Only you can download the file, until it expires. **Print** prints the report in light colours without the menus and buttons.
+
+The map uses the workspace's own boundaries and forest. A slash marks closed alerts and incidents, and the table below the map lists the number of markers by class and status. The report screen loads only when you open it.
 
 ## Layers
 

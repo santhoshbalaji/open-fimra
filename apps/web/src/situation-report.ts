@@ -7,13 +7,18 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { incidentOffset } from './detections';
 import { ShellNavigation } from './shell-navigation';
 import { WorkspaceService } from './workspace';
 import { StatusBadge } from './ui/status-badge';
+import { LiveStatus } from './ui/live-status';
+import { ageLabels } from './token-values';
+import { reportingTimeZone } from './workspace-format';
+import { alertSymbol, reportAge, reportClass, reportClasses, SituationReportSymbol } from './situation-report-symbol';
 import { Icon } from './ui/icon';
 
 type Geometry = { type: 'Polygon'; coordinates: number[][][] } | { type: 'MultiPolygon'; coordinates: number[][][][] };
@@ -27,6 +32,7 @@ interface IncidentItem {
 interface FormRow { form: string; title: string; submitted: number; approved: number; returned: number; awaitingReview: number; missing: number }
 /** A situation report as the API returns it. The PDF is drawn from the same data. */
 export interface SituationReport {
+  snapshotId: string;
   workspace: { slug: string; name: string };
   unit: { name: string; levelLabel: string; path: string; hierarchy: string } | null;
   scope: string;
@@ -46,7 +52,7 @@ export interface SituationReport {
   units: { code: string; name: string; path: string; alerts: number; active: number; overdue: number;
     pendingReports: number; formsMissing: number }[];
   map: { bounds: Bounds | null; outline: Geometry | null; units: { name: string; geometry: Geometry }[];
-    forest: Geometry[]; alerts: [number, number, string, boolean][]; alertsShown: number;
+    forest: Geometry[]; alerts: [number, number, string, boolean, string?][]; alertsShown: number;
     incidents: { id: string; active: boolean; bounds: Bounds }[] };
   labels: { forestClasses: Record<string, string>; queues: Record<string, string>; roles: Record<string, string> };
   notes: string[];
@@ -54,7 +60,8 @@ export interface SituationReport {
 interface PdfStatus { id: string; status: 'pending' | 'ready' | 'failed' | 'expired'; pageCount: number | null; fileName?: string }
 type PeriodKind = 'day' | 'range' | 'hours';
 
-const india = 'Asia/Kolkata';
+const india = reportingTimeZone;
+const zoneLabel = 'India Standard Time';
 // The same forms as the PDF, such as 16 Mar 2026, 08:45 and Sunday 15 March 2026.
 const timeFormat = new Intl.DateTimeFormat('en-IN', { timeZone: india, day: 'numeric', month: 'short', year: 'numeric',
   hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -84,14 +91,14 @@ export function duration(seconds: number | null): string {
   return left ? `${days} days ${left} h` : `${days} days`;
 }
 
-export function periodText(period: SituationReport['period']): string {
+export function periodText(period: SituationReport['period'], includeZone = true): string {
   let text: string;
   const date = (value: string) => new Date(value + 'T00:00:00Z');
   if (period.hours) text = `Past ${period.hours} hours: ${formatTime(period.start)} to ${formatTime(period.end)}`;
   else if (period.from === period.to) text = `${weekday.format(date(period.from))} ${shortDay.format(date(period.from))}`;
   else text = `${shortDay.format(date(period.from))} to ${shortDay.format(date(period.to))} (${period.days} days)`;
   if (period.partial && !period.hours) text += `, up to ${formatTime(period.end)}`;
-  return text + ', India Standard Time';
+  return includeZone ? text + ', ' + zoneLabel : text;
 }
 
 function rings(geometry: Geometry | null): number[][][] {
@@ -100,7 +107,7 @@ function rings(geometry: Geometry | null): number[][][] {
 }
 
 /** The report map as SVG shapes, projected like the PDF with north up. */
-export function projectMap(map: SituationReport['map'], width = mapSize.width, height = mapSize.height) {
+export function projectMap(map: SituationReport['map'], end = '', width = mapSize.width, height = mapSize.height) {
   const mapWidth = width;
   if (!map.bounds) return null;
   const [west, south, east, north] = map.bounds;
@@ -131,12 +138,18 @@ export function projectMap(map: SituationReport['map'], width = mapSize.width, h
     placed.push(box);
     return true;
   };
+  const incidentRadius = alertSymbol('incident').radius;
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
   const incidents = map.incidents.map(incident => {
     const [x1, y1] = point(incident.bounds[0], incident.bounds[1]);
     const [x2, y2] = point(incident.bounds[2], incident.bounds[3]);
-    const box = { id: incident.id, x: x1 - 7, y: y2 - 7, width: x2 - x1 + 14, height: y1 - y2 + 14 };
+    const x = clamp((x1 + x2) / 2 + incidentOffset[0], incidentRadius + 1, width - incidentRadius - 1);
+    const y = clamp((y1 + y2) / 2 + incidentOffset[1], incidentRadius + 1, height - incidentRadius - 1);
     const text = 'Incident ' + incident.id;
-    return { ...box, labelX: Math.min(Math.max(box.x, 2), width - text.length * 5.5 - 2), labelled: fits(box.x, box.y - 3, text, 10) };
+    const labelX = Math.min(Math.max(x + 8, 2), width - text.length * 5.5 - 2);
+    const labelY = Math.max(y - 7, 12);
+    return { id: incident.id, active: incident.active, x, y, labelX, labelY,
+      labelled: fits(labelX, labelY, text, 10) };
   });
   const units = map.units.map(unit => {
     const label = centre(unit.geometry);
@@ -146,9 +159,11 @@ export function projectMap(map: SituationReport['map'], width = mapSize.width, h
     outline: path(map.outline),
     forest: map.forest.map(path),
     units,
-    alerts: map.alerts.map(([lon, lat, forestClass, active]) => {
+    alerts: map.alerts.map(([lon, lat, rawClass, active, observed]) => {
       const [x, y] = point(lon, lat);
-      return { x, y, forestClass, active };
+      const forestClass = reportClass(rawClass);
+      const age = end ? reportAge(observed, end) : null;
+      return { x, y, forestClass, active, age, symbol: alertSymbol(forestClass, age) };
     }),
     incidents
   };
@@ -161,7 +176,7 @@ export function projectMap(map: SituationReport['map'], width = mapSize.width, h
 @Component({
   selector: 'fimra-situation-report',
   imports: [HlmButtonImports, HlmFieldImports, HlmInput, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports,
-    HlmSkeleton, HlmTableImports, StatusBadge, Icon],
+    HlmSkeleton, HlmTableImports, StatusBadge, Icon, LiveStatus, SituationReportSymbol],
   templateUrl: './situation-report.html',
   styleUrl: './situation-report.css'
 })
@@ -172,6 +187,9 @@ export class SituationReportView {
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly lifetime = inject(DestroyRef);
   private readonly navigation = inject(ShellNavigation, { optional: true });
+  private readonly injector = inject(Injector);
+  private readonly reportTitle = viewChild<ElementRef<HTMLElement>>('reportTitle');
+  private readonly unitControl = viewChild<unknown, ElementRef<HTMLElement>>('unitControl', { read: ElementRef });
   private reportRequest = 0;
   private timer?: ReturnType<typeof setTimeout>;
 
@@ -187,10 +205,43 @@ export class SituationReportView {
   readonly message = signal('');
   readonly pdf = signal<PdfStatus | null>(null);
   readonly pdfMessage = signal('');
+  readonly pdfNeedsReport = signal(false);
+  readonly sendingPdf = signal(false);
+  readonly downloading = signal(false);
+  readonly pdfBusy = computed(() => this.sendingPdf() || this.downloading() || this.pdf()?.status === 'pending');
+  readonly pdfLabel = computed(() => {
+    if (this.downloading()) return 'Downloading PDF…';
+    if (this.pdfBusy()) return 'Preparing PDF…';
+    if (this.pdfNeedsReport()) return 'Refresh report';
+    if (this.pdfMessage()) return 'Retry PDF';
+    const file = this.pdf();
+    if (file?.status !== 'ready') return 'Prepare PDF';
+    return `Download PDF (${file.pageCount} ${file.pageCount === 1 ? 'page' : 'pages'})`;
+  });
+  readonly pdfStatus = computed(() => this.pdfBusy() ? this.pdfLabel() :
+    this.pdf()?.status === 'ready' && !this.pdfMessage() ? 'PDF ready to download.' : '');
   readonly mapSize = mapSize;
   readonly duration = duration;
   readonly formatTime = formatTime;
-  readonly classKeys = ['inside', 'near_edge', 'outside', 'fixed_heat_source'];
+  readonly classKeys = reportClasses;
+  readonly alertSymbol = alertSymbol;
+  readonly incidentSymbol = alertSymbol('incident');
+  readonly zoneLabel = zoneLabel;
+  readonly mapAges = computed(() => this.map()?.alerts.some(alert => alert.age !== null)
+    ? [...ageLabels.slice(0, -1), '3 days or more'] : []);
+  readonly mapCounts = computed(() => {
+    const alerts = this.map()?.alerts ?? [];
+    const incidents = this.map()?.incidents ?? [];
+    const tally = (marks: { active: boolean }[]) => {
+      const active = marks.filter(mark => mark.active).length;
+      return { active, closed: marks.length - active, total: marks.length };
+    };
+    return [
+      ...this.classKeys.map(key => ({ label: this.label('forestClasses', key),
+        ...tally(alerts.filter(alert => alert.forestClass === key)) })),
+      { label: 'Incidents', ...tally(incidents) }
+    ];
+  });
   readonly queueKeys = ['unit', 'edge_review', 'triage'];
 
   readonly endpoint = computed(() => {
@@ -205,7 +256,7 @@ export class SituationReportView {
   });
   readonly map = computed(() => {
     const report = this.report();
-    return report ? projectMap(report.map) : null;
+    return report ? projectMap(report.map, report.period.end) : null;
   });
   readonly heading = computed(() => {
     const report = this.report();
@@ -224,17 +275,17 @@ export class SituationReportView {
       { label: 'Forms missing', value: report.fieldReports.missing }
     ];
   });
-  readonly periodText = computed(() => {
+  readonly periodSummary = computed(() => {
     const report = this.report();
-    return report ? periodText(report.period) : '';
+    return report ? periodText(report.period, false) : '';
   });
 
   constructor() {
-    this.lifetime.onDestroy(() => clearTimeout(this.timer));
+    this.lifetime.onDestroy(() => { this.reportRequest++; clearTimeout(this.timer); });
     effect(onCleanup => {
       const endpoint = this.endpoint();
+      this.clearReport();
       this.units.set([]);
-      this.report.set(null);
       if (!endpoint) return;
       const request = this.http.get<{ units: ReportUnit[] }>(endpoint + '/situation-report/units').subscribe({
         next: ({ units }) => {
@@ -263,13 +314,8 @@ export class SituationReportView {
         if (params.get('show') && (!path || unit)) {
           untracked(() => void this.loadReport());
         } else {
-          this.reportRequest++;
-          this.loading.set(false);
-          this.report.set(null);
+          this.clearReport();
           this.message.set(path && !unit ? 'Choose a unit you can report on.' : '');
-          this.pdf.set(null);
-          this.pdfMessage.set('');
-          clearTimeout(this.timer);
         }
       });
     }
@@ -331,18 +377,43 @@ export class SituationReportView {
     await this.loadReport();
   }
 
+  edit(): void {
+    this.clearReport();
+    this.navigation?.update({ show: null });
+    afterNextRender(() => this.unitControl()?.nativeElement.querySelector('button')?.focus(), { injector: this.injector });
+  }
+
+  private clearReport(): void {
+    this.reportRequest++;
+    this.loading.set(false);
+    this.report.set(null);
+    this.resetPdf();
+  }
+
+  private resetPdf(): void {
+    clearTimeout(this.timer);
+    this.pdf.set(null);
+    this.pdfMessage.set('');
+    this.pdfNeedsReport.set(false);
+    this.sendingPdf.set(false);
+    this.downloading.set(false);
+  }
+
   private async loadReport(): Promise<void> {
     if (!this.endpoint()) return;
     const request = ++this.reportRequest;
-    clearTimeout(this.timer);
+    this.resetPdf();
     this.loading.set(true);
     this.message.set('');
-    this.pdf.set(null);
-    this.pdfMessage.set('');
     try {
-      const params = new HttpParams({ fromObject: this.request() });
+      const params = new HttpParams({ fromObject: { ...this.request(), snapshot: 1 } });
       const report = await firstValueFrom(this.http.get<SituationReport>(this.endpoint() + '/situation-report', { params }));
-      if (request === this.reportRequest) this.report.set(report);
+      if (request === this.reportRequest) {
+        this.report.set(report);
+        afterNextRender(() => {
+          if (request === this.reportRequest) this.reportTitle()?.nativeElement.focus();
+        }, { injector: this.injector });
+      }
     } catch (error) {
       if (request === this.reportRequest) {
         this.report.set(null);
@@ -357,41 +428,56 @@ export class SituationReportView {
     window.print();
   }
 
-  async preparePdf(): Promise<void> {
-    clearTimeout(this.timer);
+  async pdfAction(): Promise<void> {
+    if (this.pdfBusy()) return;
+    if (this.pdfNeedsReport()) {
+      await this.loadReport();
+      return;
+    }
+    const snapshotId = this.report()?.snapshotId;
+    if (!snapshotId) return;
+    const request = this.reportRequest;
+    const endpoint = this.endpoint();
+    const file = this.pdf();
+    const download = file?.status === 'ready' && !this.pdfMessage();
     this.pdfMessage.set('');
     try {
-      this.track(await firstValueFrom(this.http.post<PdfStatus>(this.endpoint() + '/situation-reports', this.request())));
+      if (download && file.fileName) {
+        this.downloading.set(true);
+        const blob = await firstValueFrom(this.http.get(endpoint + '/situation-reports/' + file.id + '/file', { responseType: 'blob' }));
+        if (request !== this.reportRequest) return;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = file.fileName;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+      } else {
+        this.sendingPdf.set(true);
+        const status = await firstValueFrom(this.http.post<PdfStatus>(endpoint + '/situation-reports', { snapshotId }));
+        this.track(status, request, endpoint);
+      }
     } catch (error) {
-      this.pdfFailed(error as HttpErrorResponse);
+      if (request === this.reportRequest) this.pdfFailed(error as HttpErrorResponse);
+    } finally {
+      if (request === this.reportRequest) {
+        this.sendingPdf.set(false);
+        this.downloading.set(false);
+      }
     }
   }
 
-  async downloadPdf(): Promise<void> {
-    const status = this.pdf();
-    if (!status?.fileName) return;
-    try {
-      const file = await firstValueFrom(this.http.get(this.endpoint() + '/situation-reports/' + status.id + '/file', { responseType: 'blob' }));
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(file);
-      link.download = status.fileName;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
-    } catch (error) {
-      this.pdfFailed(error as HttpErrorResponse);
-    }
-  }
-
-  private track(status: PdfStatus): void {
-    if (this.lifetime.destroyed) return;
+  private track(status: PdfStatus, request: number, endpoint: string): void {
+    if (request !== this.reportRequest) return;
     this.pdf.set(status);
     if (status.status === 'failed') this.pdfMessage.set('The PDF could not be drawn. Try again.');
+    if (status.status === 'expired') this.pdfUnavailable();
     if (status.status !== 'pending') return;
     this.timer = setTimeout(async () => {
       try {
-        this.track(await firstValueFrom(this.http.get<PdfStatus>(this.endpoint() + '/situation-reports/' + status.id)));
+        const next = await firstValueFrom(this.http.get<PdfStatus>(endpoint + '/situation-reports/' + status.id));
+        this.track(next, request, endpoint);
       } catch (error) {
-        this.pdfFailed(error as HttpErrorResponse);
+        if (request === this.reportRequest) this.pdfFailed(error as HttpErrorResponse);
       }
     }, 1000);
   }
@@ -399,8 +485,14 @@ export class SituationReportView {
   private pdfFailed(error: HttpErrorResponse): void {
     this.pdf.set(null);
     if (error.status === 401) { this.auth.sessionEnded(); return; }
-    if (error.status === 410) this.pdfMessage.set('This PDF has expired. Prepare it again.');
-    else this.pdfMessage.set(serverMessage(error) || 'The PDF could not be prepared. Try again.');
+    if (error.status === 404 || error.status === 410) {
+      this.pdfUnavailable();
+    } else this.pdfMessage.set(serverMessage(error) || 'The PDF could not be prepared. Try again.');
+  }
+
+  private pdfUnavailable(): void {
+    this.pdfNeedsReport.set(true);
+    this.pdfMessage.set('Refresh the report to prepare its PDF.');
   }
 
   private failed(error: HttpErrorResponse): void {
