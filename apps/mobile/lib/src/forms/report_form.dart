@@ -199,13 +199,18 @@ class _ReportFormState extends State<ReportForm> {
     final pages = objects(layout['pages']);
     final description = _text(widget.definition['description']);
     return Scaffold(
-      appBar: AppBar(title: Text(_text(widget.definition['title']))),
+      appBar: AppBar(title: const Text('Field report')),
       body: SafeArea(
         child: ListView(
           controller: _scroll,
           padding: const EdgeInsets.all(16),
           children: [
+            Semantics(
+              headingLevel: 1,
+              child: Text(_text(widget.definition['title']), style: Theme.of(context).textTheme.titleLarge),
+            ),
             if (description.isNotEmpty) Text(description),
+            const SizedBox(height: 12),
             if (languages.length > 1)
               DropdownButtonFormField<String>(
                 key: ValueKey(_lang),
@@ -414,7 +419,7 @@ class _ReportFormState extends State<ReportForm> {
       key: ValueKey(node.key),
       initialValue: value is num ? _display(node, value, [], showUnit: false) : value?.toString(),
       enabled: !_busy,
-      decoration: InputDecoration(labelText: title, helperText: hint.isEmpty ? null : hint, suffixText: unit),
+      decoration: InputDecoration(suffixText: unit),
       maxLines: control == 'paragraph' ? 3 : 1,
       keyboardType: number ? const TextInputType.numberWithOptions(decimal: true, signed: true) : TextInputType.text,
       onChanged: (text) => set(
@@ -425,7 +430,7 @@ class _ReportFormState extends State<ReportForm> {
             : text,
       ),
     );
-    if (control != 'stepper') return input;
+    if (control != 'stepper') return _FieldLabel(title: title, hint: hint, child: input);
     final places = node.data['decimals'] as int? ?? 0;
     final increment = num.parse('1e-$places');
     final current = value is num ? value : 0;
@@ -461,17 +466,21 @@ class _ReportFormState extends State<ReportForm> {
     final multiple = node.kind == 'multiple-choice';
     final selected = multiple ? (value as List? ?? const []).toSet() : {value};
     if (!multiple && (control == null || control == 'dropdown')) {
-      return DropdownButtonFormField<String>(
-        key: ValueKey((value, choices.map((choice) => choice['key']).join('|'))),
-        initialValue: choices.any((choice) => choice['key'] == value) ? value as String? : null,
-        decoration: InputDecoration(labelText: title, helperText: hint.isEmpty ? null : hint),
-        isExpanded: true,
-        items: [
-          const DropdownMenuItem(value: '', child: Text('No answer')),
-          for (final choice in choices)
-            DropdownMenuItem(value: choice['key'] as String, child: Text(_text(choice['label']))),
-        ],
-        onChanged: _busy || choices.isEmpty ? null : (value) => set(value?.isEmpty == true ? null : value),
+      return _FieldLabel(
+        title: title,
+        hint: hint,
+        child: DropdownButtonFormField<String>(
+          key: ValueKey((value, choices.map((choice) => choice['key']).join('|'))),
+          initialValue: choices.any((choice) => choice['key'] == value) ? value as String? : null,
+          isExpanded: true,
+          itemHeight: null,
+          items: [
+            const DropdownMenuItem(value: '', child: Text('No answer')),
+            for (final choice in choices)
+              DropdownMenuItem(value: choice['key'] as String, child: Text(_text(choice['label']))),
+          ],
+          onChanged: _busy || choices.isEmpty ? null : (value) => set(value?.isEmpty == true ? null : value),
+        ),
       );
     }
     void toggle(String key, bool checked) => set(
@@ -698,6 +707,27 @@ Future<ReportFile?> pickReportFile(String source) async {
   } finally {
     if (source != 'file') await removePickedCopy(file.path);
   }
+}
+
+/// Form authors supply labels and hints, which can need several lines at large text sizes.
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel({required this.title, required this.hint, required this.child});
+  final String title;
+  final String hint;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ExcludeSemantics(child: Text(title)),
+      if (hint.isNotEmpty) Text(hint),
+      const SizedBox(height: 4),
+      MergeSemantics(
+        child: Semantics(label: title, child: child),
+      ),
+    ],
+  );
 }
 
 class _SignatureDialog extends StatefulWidget {

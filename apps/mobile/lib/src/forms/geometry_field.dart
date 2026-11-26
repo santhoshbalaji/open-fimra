@@ -300,80 +300,89 @@ class _GeometryEditorState extends State<_GeometryEditor> {
         : 2;
     final recording = _recording != null;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(title: const Text('Report map')),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: MapLibreMap(
-                initialCameraPosition: CameraPosition(target: centre, zoom: 14),
-                styleString: _style,
-                onMapCreated: (map) => _map = map,
-                onStyleLoadedCallback: () {
-                  _ready = true;
-                  unawaited(_redraw());
-                },
-                onMapClick: (_, point) {
-                  if (!recording && (_point || _polygon)) _add(point);
-                },
-                compassEnabled: false,
-                attributionEnabled: false,
-                rotateGesturesEnabled: false,
-                tiltGesturesEnabled: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            children: [
+              Expanded(
+                child: MapLibreMap(
+                  initialCameraPosition: CameraPosition(target: centre, zoom: 14),
+                  styleString: _style,
+                  onMapCreated: (map) => _map = map,
+                  onStyleLoadedCallback: () {
+                    _ready = true;
+                    unawaited(_redraw());
+                  },
+                  onMapClick: (_, point) {
+                    if (!recording && (_point || _polygon)) _add(point);
+                  },
+                  compassEnabled: false,
+                  attributionEnabled: false,
+                  rotateGesturesEnabled: false,
+                  tiltGesturesEnabled: false,
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  Text(
-                    _point
-                        ? 'Tap the map or use your location.'
-                        : _polygon
-                        ? 'Tap the map to add corners, or use your location at each corner.'
-                        : recording
-                        ? 'Walk the route, then stop recording.'
-                        : 'Record while walking or add points from your location.',
-                  ),
-                  Text('${_points.length} ${_polygon ? 'corners' : 'points'}'),
-                  if (_problem != null) Semantics(liveRegion: true, child: Text(_problem!)),
-                  Wrap(
-                    spacing: 8,
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: constraints.maxHeight * 0.6),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
                     children: [
-                      if (!_point && !_polygon)
-                        OutlinedButton(
-                          onPressed: _locating
-                              ? null
-                              : recording
-                              ? _stop
-                              : () => _gps(record: true),
-                          child: Text(recording ? 'Stop recording' : 'Start recording'),
-                        ),
-                      if (!recording)
-                        OutlinedButton(
-                          onPressed: _locating ? null : () => _gps(record: false),
-                          child: Text(_point ? 'Use GPS' : 'Add GPS point'),
-                        ),
-                      if (_points.isNotEmpty && !recording)
-                        TextButton(
-                          onPressed: () {
-                            setState(_points.removeLast);
-                            unawaited(_redraw());
-                          },
-                          child: const Text('Undo'),
-                        ),
-                      FilledButton(
-                        onPressed: recording || _locating || _points.length < minimum
-                            ? null
-                            : () => Navigator.pop(context, _geometry()),
-                        child: const Text('Use shape'),
+                      Semantics(
+                        headingLevel: 1,
+                        child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+                      ),
+                      Text(
+                        _point
+                            ? 'Tap the map or use your location.'
+                            : _polygon
+                            ? 'Tap the map to add corners, or use your location at each corner.'
+                            : recording
+                            ? 'Walk the route, then stop recording.'
+                            : 'Record while walking or add points from your location.',
+                      ),
+                      Text('${_points.length} ${_polygon ? 'corners' : 'points'}'),
+                      if (_problem != null) Semantics(liveRegion: true, child: Text(_problem!)),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (!_point && !_polygon)
+                            OutlinedButton(
+                              onPressed: _locating
+                                  ? null
+                                  : recording
+                                  ? _stop
+                                  : () => _gps(record: true),
+                              child: Text(recording ? 'Stop recording' : 'Start recording'),
+                            ),
+                          if (!recording)
+                            OutlinedButton(
+                              onPressed: _locating ? null : () => _gps(record: false),
+                              child: Text(_point ? 'Use GPS' : 'Add GPS point'),
+                            ),
+                          if (_points.isNotEmpty && !recording)
+                            TextButton(
+                              onPressed: () {
+                                setState(_points.removeLast);
+                                unawaited(_redraw());
+                              },
+                              child: const Text('Undo'),
+                            ),
+                          FilledButton(
+                            onPressed: recording || _locating || _points.length < minimum
+                                ? null
+                                : () => Navigator.pop(context, _geometry()),
+                            child: const Text('Use shape'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

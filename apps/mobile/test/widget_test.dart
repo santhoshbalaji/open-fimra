@@ -114,7 +114,7 @@ void main() {
     expect(find.text('Hill Division (D1)'), findsOneWidget);
     expect(find.text('Inside forest'), findsOneWidget);
     final acknowledge = find.widgetWithText(FilledButton, 'Acknowledged');
-    await tester.ensureVisible(acknowledge);
+    await tester.scrollUntilVisible(acknowledge, 180);
     await tester.pumpAndSettle();
     await tester.tap(acknowledge);
     await tester.pumpAndSettle();

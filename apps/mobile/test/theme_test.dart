@@ -61,6 +61,18 @@ void main() {
       expect(border.color, palette.controlBoundary);
       expect(focus.color, palette.focus);
       expect(focus.width, 3);
+      for (final style in [theme.textTheme.bodyMedium, theme.textTheme.bodySmall, theme.textTheme.labelMedium]) {
+        expect(style!.fontSize, greaterThanOrEqualTo(16));
+      }
+      final forest = palette.mapForest.withValues(alpha: mapForestOpacity);
+      for (final ground in [
+        palette.mapBackground,
+        palette.mapLand,
+        Color.alphaBlend(forest, palette.mapBackground),
+        Color.alphaBlend(forest, palette.mapLand),
+      ]) {
+        expect(contrast(palette.mapAgeOutline, ground), greaterThanOrEqualTo(3));
+      }
       for (final surface in [input.fillColor!, theme.scaffoldBackgroundColor, theme.dialogTheme.backgroundColor!]) {
         expect(contrast(border.color, surface), greaterThanOrEqualTo(3));
         expect(contrast(focus.color, surface), greaterThanOrEqualTo(3));

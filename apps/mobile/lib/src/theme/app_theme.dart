@@ -59,23 +59,22 @@ ThemeData fimraTheme(Brightness brightness, {FimraDensity density = FimraDensity
     scrim: p.scrim,
     shadow: p.shadow,
   );
+  final body = _style(
+    FimraType.subhead,
+    p.text,
+  ).copyWith(fontWeight: FontWeight.w400, fontVariations: const [FontVariation('wght', 400)]);
+  final label = _style(FimraType.subhead, p.text);
   final text = TextTheme(
     headlineSmall: _style(FimraType.display, p.text),
     titleLarge: _style(FimraType.title, p.text),
-    titleMedium: _style(FimraType.subhead, p.text),
-    titleSmall: _style(FimraType.subhead, p.text).copyWith(fontSize: FimraType.body.size),
-    bodyLarge: _style(
-      FimraType.subhead,
-      p.text,
-    ).copyWith(fontWeight: FontWeight.w400, fontVariations: const [FontVariation('wght', 400)]),
-    bodyMedium: _style(FimraType.body, p.text),
-    bodySmall: _style(
-      FimraType.label,
-      p.textSecondary,
-    ).copyWith(fontWeight: FontWeight.w400, fontVariations: const [FontVariation('wght', 400)]),
-    labelLarge: _style(FimraType.label, p.text).copyWith(fontSize: FimraType.body.size),
-    labelMedium: _style(FimraType.label, p.text),
-    labelSmall: _style(FimraType.label, p.textSecondary),
+    titleMedium: label,
+    titleSmall: label,
+    bodyLarge: body,
+    bodyMedium: body,
+    bodySmall: body,
+    labelLarge: label,
+    labelMedium: label,
+    labelSmall: label,
   );
   const minimum = Size(FimraSize.touchTarget, FimraSize.touchTarget);
   final controlRadius = BorderRadius.circular(FimraSize.radiusControl);
@@ -130,6 +129,8 @@ ThemeData fimraTheme(Brightness brightness, {FimraDensity density = FimraDensity
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: minimum)),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
+      helperMaxLines: 4,
+      errorMaxLines: 4,
       fillColor: p.surface,
       constraints: const BoxConstraints(minHeight: FimraSize.touchTarget),
       border: OutlineInputBorder(borderRadius: controlRadius),
@@ -157,7 +158,7 @@ ThemeData fimraTheme(Brightness brightness, {FimraDensity density = FimraDensity
       indicatorColor: p.selected,
       surfaceTintColor: Colors.transparent,
       labelTextStyle: WidgetStatePropertyAll(text.labelMedium),
-      height: 64,
+      height: 72,
     ),
     listTileTheme: ListTileThemeData(
       minVerticalPadding: 8,
@@ -173,6 +174,7 @@ ThemeData fimraTheme(Brightness brightness, {FimraDensity density = FimraDensity
       backgroundColor: p.surface,
       side: BorderSide(color: p.controlBoundary),
       labelStyle: text.labelMedium,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FimraSize.radiusPill)),
     ),
   );

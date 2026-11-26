@@ -202,7 +202,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             children: [
               const SizedBox(height: 16),
               Text('Reports', style: Theme.of(context).textTheme.titleMedium),
-              if (problem != null) Text(problem),
+              if (problem != null) StatusBadge(icon: Icons.error_outline, label: problem),
               for (final assignment in forms) ...[
                 Builder(
                   builder: (context) {
@@ -215,43 +215,39 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                     }).lastOrNull;
                     final sent = assignment['submitted'] == true || saved?['received_at'] != null;
                     final label = entry?.label ?? move?.label ?? step.replaceAll('_', ' ');
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('${assignment['title']}'),
-                      subtitle: Text(
-                        [
-                          label,
-                          if (sent)
-                            'Sent'
-                          else if (saved?['error'] != null)
-                            'Could not send. Open the outbox for details.'
-                          else if (saved != null)
-                            'Waiting to send',
-                        ].join(' · '),
-                      ),
-                      trailing: sent
-                          ? const Icon(Icons.cloud_done_outlined)
-                          : saved != null
-                          ? IconButton(
-                              tooltip: 'Report outbox',
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${assignment['title']}', style: Theme.of(context).textTheme.titleSmall),
+                          Text(label),
+                          ReportDelivery(item: saved, sent: sent),
+                          if (!sent && saved != null)
+                            OutlinedButton.icon(
+                              label: const Text('Report outbox'),
                               icon: const Icon(Icons.outbox_outlined),
                               onPressed: () => Navigator.of(
                                 context,
                               ).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: repo))),
                             )
-                          : snapshot.hasData && (entry != null || move != null)
-                          ? OutlinedButton(
+                          else if (!sent && snapshot.hasData && (entry != null || move != null))
+                            OutlinedButton(
                               onPressed: () => _fill(assignment, entry != null ? null : move),
                               child: const Text('Fill in'),
-                            )
-                          : null,
+                            ),
+                        ],
+                      ),
                     );
                   },
                 ),
               ],
               for (final report in submissions)
                 if (object(report['approval'])['decision'] case final String decision)
-                  Text('Report version ${report['version']} · ${decision == 'approved' ? 'Approved' : 'Returned'}'),
+                  StatusBadge(
+                    icon: decision == 'approved' ? Icons.check_circle_outline : Icons.assignment_return_outlined,
+                    label: 'Report version ${report['version']} · ${decision == 'approved' ? 'Approved' : 'Returned'}',
+                  ),
             ],
           );
         },
@@ -279,6 +275,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       builder: (_) => StepSheet(view: widget.view, alert: _alert, move: move, locate: widget.locate),
     );
@@ -298,12 +295,14 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
         if (!didPop) Navigator.of(context).pop(_changed);
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(_alert.placeName(widget.view.map))),
+        appBar: AppBar(title: const Text('Alert details')),
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              Semantics(headingLevel: 1, child: Text(_alert.placeName(widget.view.map), style: text.titleLarge)),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
@@ -313,6 +312,8 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+              if (widget.view.services.offline case final repo?)
+                FieldSyncStatus(repo: repo, workspace: _slug, alert: _alert.id),
               _Facts(alert: _alert, map: widget.view.map),
               if (widget.view.services.offline != null) ...[
                 Align(
@@ -376,24 +377,32 @@ class _Facts extends StatelessWidget {
       if (alert.alertQueue != AlertQueue.unit) ('Queue', alert.alertQueue?.label ?? alert.queue),
     ];
     final text = Theme.of(context).textTheme;
-    final p = FimraColours.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final (label, value) in rows)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 110,
-                      child: Text(label, style: text.bodyMedium?.copyWith(color: p.textSecondary)),
-                    ),
-                    Expanded(child: Text(value, style: text.bodyMedium)),
-                  ],
+                child: MergeSemantics(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final heading = Text(label, style: text.titleSmall);
+                      final detail = Text(value, style: text.bodyMedium);
+                      if (constraints.maxWidth < 280 || MediaQuery.textScalerOf(context).scale(16) > 20) {
+                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [heading, detail]);
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(width: 110, child: heading),
+                          Expanded(child: detail),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
           ],
@@ -480,7 +489,7 @@ class _TimelineEntry extends StatelessWidget {
                 Text(details, style: text.bodySmall),
                 if (entry.note.isNotEmpty) Text(entry.note, style: text.bodyMedium),
                 if (entry.reason.isNotEmpty) Text('Location exception: ${entry.reason}', style: text.bodyMedium),
-                if (entry.reportPending) Text('Report pending', style: text.bodySmall),
+                if (entry.reportPending) const StatusBadge(icon: Icons.schedule, label: 'Report pending'),
               ],
             ),
           ),
@@ -563,57 +572,59 @@ class _StepSheetState extends State<StepSheet> {
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(move.label, style: text.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              move.terminal
-                  ? 'This ends the workflow for this alert.'
-                  : move.locationRequired
-                  ? 'Your current location is saved with this step. You need to be near the fire.'
-                  : 'This is saved with your name and the time.',
-              style: text.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _note,
-              maxLines: 3,
-              minLines: 1,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
-            ),
-            if (move.locationRequired && move.canOverride) ...[
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(move.label, style: text.titleLarge),
               const SizedBox(height: 8),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _exception,
-                onChanged: _busy ? null : (value) => setState(() => _exception = value ?? false),
-                title: const Text('Record without my location'),
-                subtitle: const Text('For supervising officers. A reason is required.'),
+              Text(
+                move.terminal
+                    ? 'This ends the workflow for this alert.'
+                    : move.locationRequired
+                    ? 'Your current location is saved with this step. You need to be near the fire.'
+                    : 'This is saved with your name and the time.',
+                style: text.bodyMedium,
               ),
-              if (_exception)
-                TextField(
-                  controller: _reason,
-                  decoration: const InputDecoration(labelText: 'Reason'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _note,
+                maxLines: 3,
+                minLines: 1,
+                decoration: const InputDecoration(labelText: 'Note (optional)'),
+              ),
+              if (move.locationRequired && move.canOverride) ...[
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _exception,
+                  onChanged: _busy ? null : (value) => setState(() => _exception = value ?? false),
+                  title: const Text('Record without my location'),
+                  subtitle: const Text('For supervising officers. A reason is required.'),
                 ),
+                if (_exception)
+                  TextField(
+                    controller: _reason,
+                    decoration: const InputDecoration(labelText: 'Reason'),
+                  ),
+              ],
+              if (_problem != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.error_outline, color: FimraColours.of(context).danger),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_problem!, style: text.bodyMedium)),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 16),
+              FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving' : 'Save')),
+              const SizedBox(height: 8),
+              TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
             ],
-            if (_problem != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.error_outline, color: FimraColours.of(context).danger),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(_problem!, style: text.bodyMedium)),
-                ],
-              ),
-            ],
-            const SizedBox(height: 16),
-            FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving' : 'Save')),
-            const SizedBox(height: 8),
-            TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          ],
+          ),
         ),
       ),
     );

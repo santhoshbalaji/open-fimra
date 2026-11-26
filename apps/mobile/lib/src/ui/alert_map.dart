@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../api/api_client.dart';
@@ -96,7 +97,15 @@ class _AlertMapViewState extends State<AlertMapView> {
   Future<void> _tap(Point<double> point, LatLng _) async {
     final controller = _controller;
     if (controller == null) return;
-    final features = await controller.queryRenderedFeatures(point, detectionLayers, null);
+    var features = await controller.queryRenderedFeatures(point, detectionLayers, null);
+    if (features.isEmpty) {
+      // Keep the symbol small on the map while giving it a finger-sized hit area.
+      features = await controller.queryRenderedFeaturesInRect(
+        Rect.fromCenter(center: Offset(point.x, point.y), width: FimraSize.touchTarget, height: FimraSize.touchTarget),
+        detectionLayers,
+        null,
+      );
+    }
     if (features.isEmpty || !mounted) return;
     // The first feature is the one drawn on top.
     final feature = features.first;
@@ -164,6 +173,8 @@ class _AlertMapViewState extends State<AlertMapView> {
         return Stack(
           children: [
             Semantics(
+              container: true,
+              sortKey: const OrdinalSortKey(1),
               label: 'Map of your area with fire detections',
               child: MapLibreMap(
                 styleString: jsonEncode(style),
@@ -189,17 +200,7 @@ class _AlertMapViewState extends State<AlertMapView> {
                 attributionEnabled: false,
               ),
             ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Column(
-                children: [
-                  _MapButton(icon: Icons.center_focus_strong, tooltip: 'Show my area', onPressed: _fit),
-                  const SizedBox(height: 8),
-                  _MapButton(icon: Icons.info_outline, tooltip: 'Map key', onPressed: () => _showKey(context)),
-                ],
-              ),
-            ),
+            Positioned(right: 12, top: 12, child: AlertMapControls(onFit: _fit)),
             if (_problem != null)
               Positioned(
                 left: 12,
@@ -222,11 +223,33 @@ class _AlertMapViewState extends State<AlertMapView> {
       },
     );
   }
+}
 
-  void _showKey(BuildContext context) => showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (context) => const SafeArea(child: MapKey()),
+class AlertMapControls extends StatelessWidget {
+  const AlertMapControls({super.key, required this.onFit});
+  final VoidCallback onFit;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    explicitChildNodes: true,
+    sortKey: const OrdinalSortKey(0),
+    child: Column(
+      children: [
+        _MapButton(icon: Icons.center_focus_strong, tooltip: 'Show my area', onPressed: onFit),
+        const SizedBox(height: 8),
+        _MapButton(
+          icon: Icons.info_outline,
+          tooltip: 'Map key',
+          onPressed: () => showModalBottomSheet<void>(
+            context: context,
+            useSafeArea: true,
+            scrollControlDisabledMaxHeightRatio: 0.48,
+            builder: (context) => const SafeArea(top: false, child: MapKey()),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -240,8 +263,17 @@ class _MapButton extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     color: FimraColours.of(context).card,
     elevation: 2,
-    shape: const CircleBorder(),
-    child: IconButton(tooltip: tooltip, icon: Icon(icon), onPressed: onPressed),
+    shape: CircleBorder(side: BorderSide(color: FimraColours.of(context).controlBoundary)),
+    child: MergeSemantics(
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: Semantics(
+          label: tooltip,
+          child: IconButton(icon: Icon(icon), onPressed: onPressed),
+        ),
+      ),
+    ),
   );
 }
 
@@ -252,47 +284,102 @@ class MapKey extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final shapes = _KeyGroup(
+      title: 'Shape shows the forest class',
+      entries: [
+        for (final forest in ForestClass.values) (DetectionSymbol(forestClass: forest, size: 20), forest.label),
+      ],
+    );
+    final ages = _KeyGroup(
+      title: 'Colour shows time since detection',
+      entries: [
+        for (var age = 0; age < fireAgeSteps.length; age++)
+          (
+            DetectionSymbol(forestClass: ForestClass.inside, age: age, size: 20),
+            fireAgeSteps[age][0].toUpperCase() + fireAgeSteps[age].substring(1),
+          ),
+      ],
+    );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: Text('Map key', style: text.titleLarge)),
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+              Expanded(
+                child: Semantics(headingLevel: 1, child: Text('Map key', style: text.titleLarge)),
+              ),
+              OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
             ],
           ),
-          const SizedBox(height: 12),
           Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                Text('Shape shows the forest class', style: text.titleSmall),
-                for (final forest in ForestClass.values)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: DetectionSymbol(forestClass: forest, size: 20),
-                    title: Text(forest.label),
-                  ),
-                const SizedBox(height: 8),
-                Text('Colour shows time since detection', style: text.titleSmall),
-                for (var age = 0; age < fireAgeSteps.length; age++)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: DetectionSymbol(forestClass: ForestClass.inside, age: age, size: 20),
-                    title: Text(fireAgeSteps[age][0].toUpperCase() + fireAgeSteps[age].substring(1)),
-                  ),
-                const SizedBox(height: 8),
-                Text('Your own area has a thick outline.', style: text.bodyMedium),
-              ],
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 8, bottom: 8),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final sideBySide = constraints.maxWidth >= 315 * MediaQuery.textScalerOf(context).scale(16) / 16;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (sideBySide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: shapes),
+                            const SizedBox(width: 16),
+                            Expanded(child: ages),
+                          ],
+                        )
+                      else ...[
+                        shapes,
+                        const SizedBox(height: 12),
+                        ages,
+                      ],
+                      const SizedBox(height: 8),
+                      const Text('Your own area has a thick outline.'),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _KeyGroup extends StatelessWidget {
+  const _KeyGroup({required this.title, required this.entries});
+  final String title;
+  final List<(DetectionSymbol, String)> entries;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    explicitChildNodes: true,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(headingLevel: 2, child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
+        const SizedBox(height: 4),
+        for (final (symbol, label) in entries)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                symbol,
+                const SizedBox(width: 8),
+                Expanded(child: Text(label)),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 Future<Uint8List> _squarePng(Color colour, double ratio) async {

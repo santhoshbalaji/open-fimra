@@ -46,9 +46,7 @@ class StatusBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: iconColour ?? p.text),
           const SizedBox(width: 6),
-          Flexible(
-            child: Text(label, style: Theme.of(context).textTheme.labelMedium, overflow: TextOverflow.ellipsis),
-          ),
+          Flexible(child: Text(label, style: Theme.of(context).textTheme.labelMedium)),
         ],
       ),
     );
@@ -67,7 +65,9 @@ class DetectionSymbol extends StatelessWidget {
     final p = FimraColours.of(context);
     return SizedBox.square(
       dimension: size,
-      child: CustomPaint(painter: _SymbolPainter(forestClass, p.fireAge[age.clamp(0, 3)], p.neutralMark, p.card)),
+      child: CustomPaint(
+        painter: _SymbolPainter(forestClass, p.fireAge[age.clamp(0, 3)], p.neutralMark, p.mapAgeOutline),
+      ),
     );
   }
 }
@@ -87,9 +87,17 @@ class _SymbolPainter extends CustomPainter {
       ..strokeWidth = r * 0.36;
     switch (forest) {
       case ForestClass.inside:
-        canvas.drawCircle(centre, r * 0.8, fill..color = colour);
+        canvas.drawCircle(centre, r * 0.86, fill..color = halo);
+        canvas.drawCircle(centre, r * 0.70, fill..color = colour);
       case ForestClass.nearEdge:
-        canvas.drawCircle(centre, r * 0.65, stroke..color = colour);
+        canvas.drawCircle(centre, r * 0.64, stroke..color = halo);
+        canvas.drawCircle(
+          centre,
+          r * 0.64,
+          stroke
+            ..strokeWidth = r * 0.22
+            ..color = colour,
+        );
       case ForestClass.fixedHeatSource:
         canvas.drawRect(Rect.fromCircle(center: centre, radius: r * 0.65), fill..color = neutral);
       case ForestClass.outside || null:
@@ -98,7 +106,8 @@ class _SymbolPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SymbolPainter old) => old.forest != forest || old.colour != colour;
+  bool shouldRepaint(_SymbolPainter old) =>
+      old.forest != forest || old.colour != colour || old.neutral != neutral || old.halo != halo;
 }
 
 /// The project logo in the colours for the current theme.

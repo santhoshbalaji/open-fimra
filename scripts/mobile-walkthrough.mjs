@@ -23,9 +23,27 @@ async function shot(page, name, scale = 'device') {
   await page.screenshot({ path: `${SHOTS}/${name}.png`, scale });
 }
 
+async function themes(page, name) {
+  for (const colorScheme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme });
+    await shot(page, `${name}-${colorScheme}`);
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
+}
+
 // Flutter puts some text in the page and some in accessibility labels.
 function shown(page, text, exact = false) {
   return page.getByText(text, { exact }).or(page.getByLabel(text, { exact })).first();
+}
+
+async function scrollTo(page, target) {
+  const { width, height } = page.viewportSize();
+  await page.mouse.move(width / 2, height / 2);
+  for (let attempt = 0; attempt < 8 && !await target.isVisible(); attempt++) {
+    await page.mouse.wheel(0, 350);
+    await page.waitForTimeout(200);
+  }
+  await target.scrollIntoViewIfNeeded();
 }
 
 async function typeInto(page, label, value) {
@@ -53,18 +71,26 @@ try {
   current = page;
   const signIn = page.getByRole('button', { name: 'Sign in', exact: true });
   await signIn.waitFor({ timeout: 60_000 });
-  await shot(page, '01-sign-in');
+  await themes(page, '01-sign-in');
   step('The sign-in screen shows the logo, Sign in and Server settings.');
 
   await page.getByRole('button', { name: 'Server settings' }).click();
   await typeInto(page, 'Core API address', API);
   await typeInto(page, 'Sign-in address', ISSUER);
-  await shot(page, '02-server-settings');
+  await themes(page, '02-server-settings');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await page.getByRole('textbox', { name: 'Core API address' }).waitFor({ state: 'detached' });
   await shown(page, 'Server: ' + new URL(API).host).waitFor();
   await page.waitForTimeout(500);
   step(`Server settings point the app at ${API} and ${ISSUER}.`);
+
+  const discovery = '**/.well-known/openid-configuration';
+  await page.route(discovery, route => route.abort(), { times: 1 });
+  await signIn.click();
+  await shown(page, 'Cannot reach the server. Check the address or try again.').waitFor();
+  await page.getByRole('button', { name: 'Technical details', exact: true }).waitFor();
+  await themes(page, '03-server-unreachable');
+  step('The sign-in error gives a next action and folds away the server details.');
 
   const popupPromise = context.waitForEvent('page');
   await signIn.click();
@@ -82,7 +108,7 @@ try {
   step('Keycloak opened for the open-fimra-mobile client with an S256 code challenge; the beat guard signed in.');
 
   await shown(page, '2 alerts in the past 7 days · Beat 01').waitFor({ timeout: 30_000 });
-  await shot(page, '04-alerts');
+  await themes(page, '04-alerts');
   // Each alert card is one button whose label starts with its place.
   const cards = page.getByRole('button', { name: /^Beat 01/ });
   const places = await cards.count();
@@ -93,7 +119,7 @@ try {
 
   await page.getByRole('tab', { name: 'Map' }).or(page.getByRole('button', { name: 'Map' })).first().click();
   await page.waitForTimeout(8000);
-  await shot(page, '05-map');
+  await themes(page, '05-map');
   const refused = tileStatuses.filter(status => status >= 400);
   if (tileStatuses.length === 0 || refused.length) {
     throw new Error(`Tile requests: ${tileStatuses.join(', ') || 'none'}`);
@@ -119,19 +145,20 @@ try {
 
   await page.getByRole('tab', { name: 'Alerts' }).or(page.getByRole('button', { name: 'Alerts' })).first().click();
   await cards.first().click();
-  await page.getByRole('button', { name: 'Acknowledged' }).waitFor();
   await shown(page, 'Hill Division (D1)').waitFor();
-  await shot(page, '06-alert');
+  await themes(page, '06-alert');
   step('The alert shows its place, forest class, source and timeline.');
 
-  await page.getByRole('button', { name: 'Acknowledged' }).click();
+  const acknowledge = page.getByRole('button', { name: 'Acknowledged' });
+  await scrollTo(page, acknowledge);
+  await acknowledge.click();
   await typeInto(page, 'Note (optional)', 'On my way.');
-  await shot(page, '07-acknowledge');
+  await themes(page, '07-acknowledge');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await shown(page, 'Acknowledged recorded.').waitFor();
-  await shown(page, 'On my way.').waitFor();
+  await scrollTo(page, shown(page, 'On my way.'));
   await shown(page, 'Demo Beat Guard', false).waitFor();
-  await shot(page, '08-acknowledged');
+  await themes(page, '08-acknowledged');
   step('Acknowledged was recorded; the timeline shows it with the beat guard\'s name and note.');
 
   const state = await context.storageState();

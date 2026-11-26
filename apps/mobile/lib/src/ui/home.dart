@@ -227,6 +227,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Account',
+            padding: const EdgeInsets.all(12),
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (value) {
               if (value == 'workspace') _chooseWorkspace();
