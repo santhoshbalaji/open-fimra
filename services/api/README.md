@@ -703,7 +703,7 @@ Incidents will be one more collection when they are built.
 ### Personal access keys
 
 Desktop GIS cannot easily use the browser sign-in, so each person can make
-personal access keys in the web app (**GIS link keys** in the account menu),
+personal access keys in the web app (**Settings → GIS link**),
 or with these endpoints and a signed-in bearer token:
 
 - `GET /api/v1/access-keys` lists the caller's unrevoked keys with `id`,

@@ -5,9 +5,9 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import tokens from '../../../docs/design-system/tokens.json';
-import { AfterViewInit, Component, ViewEncapsulation, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { AfterViewInit, Component, ViewEncapsulation, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, EMPTY, exhaustMap, timer } from 'rxjs';
+import { catchError, EMPTY, exhaustMap, forkJoin, timer } from 'rxjs';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
 import { GeoJSONSource, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
@@ -18,10 +18,10 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
-import { Incidents, type IncidentFocus } from './incidents';
+import type { IncidentFocus, IncidentRow } from './incidents';
 import { AlertReports } from './forms/alert-reports';
-import { Submissions, type ReportFilters } from './forms/submissions';
-import type { NotificationLink } from './notifications';
+import { ShellNavigation, recordId } from './shell-navigation';
+import { ShellListScroll } from './shell-list-scroll';
 import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
 import { unavailable, WorkspaceService } from './workspace';
@@ -32,13 +32,16 @@ import { Icon } from './ui/icon';
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, Incidents, AlertReports, Submissions, Icon],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
 export class DemoMap implements AfterViewInit, OnDestroy {
-  readonly linkedAlert = input<NotificationLink | null>(null);
+  private readonly navigation = inject(ShellNavigation);
   readonly linkedMessage = signal('');
+  private readonly alertId = computed(() => recordId(this.navigation.query().get('alert')));
+  private readonly detectionId = computed(() => recordId(this.navigation.query().get('detection')));
+  private readonly incidentId = computed(() => this.navigation.path() === '/monitor/map' ? recordId(this.navigation.query().get('incident')) : '');
   private readonly geography = signal<{ endpoint: string; info: WorkspaceMap } | null>(null);
   readonly boundaries = computed(() => boundaryKey(this.geography()?.info.levels ?? [], this.appearance.theme())
     .filter(row => !this.filters.lowBandwidth() || row.depth === 0));
@@ -65,13 +68,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
   readonly hours = this.queue.hours;
-  readonly mobileQueue = signal(false);
-  /** The panel beside the map lists alerts one by one, or grouped into incidents. */
-  readonly queueView = signal<'alerts' | 'incidents' | 'reports'>('alerts');
-  /** The reports list's form and decision, which its export uses. */
-  readonly reportFilters = signal<ReportFilters>({ form: '', decision: 'pending', formLabel: '' });
+  readonly mobileQueue = computed(() => this.navigation.path() === '/monitor/alerts');
   private readonly incidentFocus = signal<IncidentFocus | null>(null);
-  private fromQueue = false;
   readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
   readonly selected = this.queue.selected;
@@ -84,6 +82,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private resize?: ResizeObserver;
   private selectedId = '';
   private previousView?: { center: [number, number]; zoom: number };
+  private restoredDetection = '';
   private movedInDetails = false;
   private readonly detailTitle = viewChild<ElementRef<HTMLHeadingElement>>('detailTitle');
   private readonly http = inject(HttpClient);
@@ -132,11 +131,16 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     });
     effect(() => {
       const geography = this.geography();
+      const detection = this.detectionId();
       if (!geography) this.fittedWorkspace = undefined;
-      if (this.ready() && geography?.info.boundary && this.fittedWorkspace !== geography.endpoint) {
-        untracked(() => this.fitBoundary());
-        this.fittedWorkspace = geography.endpoint;
-      }
+      if (!this.ready() || !geography?.info.boundary) return;
+      const mapView = history.state?.mapView as { detection: string; workspace: string; center: [number, number]; zoom: number } | undefined;
+      const restore = detection !== this.restoredDetection && detection && mapView?.detection === detection &&
+        mapView.workspace === this.workspace.current()?.slug;
+      if (restore) this.map?.jumpTo({ center: mapView.center, zoom: mapView.zoom });
+      else if (this.fittedWorkspace !== geography.endpoint) untracked(() => this.fitBoundary());
+      this.restoredDetection = detection;
+      this.fittedWorkspace = geography.endpoint;
     });
     effect(() => {
       const geography = this.geography();
@@ -188,20 +192,17 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     });
     effect(() => this.detailTitle()?.nativeElement.focus({ preventScroll: true }));
     effect(onCleanup => {
-      const link = this.linkedAlert();
+      const id = this.alertId();
       const endpoint = this.queue.endpoint();
       this.linkedMessage.set('');
-      if (!link?.alert || !endpoint || this.workspace.current()?.slug !== link.workspace) {
+      if (!id || !endpoint) {
         if (untracked(this.queue.linked)) this.queue.select(null);
         return;
       }
-      const request = this.http.get<AlertRow>(endpoint + '/' + link.alert).subscribe({
-        next: row => {
-          this.fromQueue = false;
-          this.selectionTrigger = this.map?.getCanvas();
-          this.mobileQueue.set(false);
-          this.queue.selectLinked(row);
-        },
+      if (untracked(this.queue.linked)?.id !== id) this.queue.select(null);
+      this.queue.now();
+      const request = this.http.get<AlertRow>(endpoint + '/' + id).subscribe({
+        next: row => this.queue.selectLinked(row),
         error: err => {
           if (err.status === 401) this.auth.sessionEnded();
           this.linkedMessage.set('This alert could not be opened.');
@@ -210,8 +211,42 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       onCleanup(() => request.unsubscribe());
     });
     effect(() => {
+      const detection = this.detectionId();
+      if (!detection) {
+        if (!this.alertId() && untracked(this.selected)) this.queue.select(null);
+        return;
+      }
+      const point = this.visible().find(item => String(item.id) === detection);
+      const previous = untracked(this.selected);
+      if (String(previous?.id ?? '') !== detection) this.queue.select(point ?? null);
+    });
+    effect(onCleanup => {
+      const id = this.incidentId();
+      const endpoint = this.exportEndpoint();
+      this.incidentFocus.set(null);
+      if (!id || !endpoint) return;
+      const request = forkJoin({
+        incident: this.http.get<IncidentRow>(endpoint + '/incidents/' + id),
+        alerts: this.http.get<{ items: AlertRow[] }>(endpoint + '/alerts', { params: { incident: id, limit: 200 } })
+      }).subscribe({
+        next: ({ incident, alerts }) => this.incidentFocus.set({
+          id, bounds: incident.bounds, points: alerts.items.map(alert => [alert.longitude, alert.latitude])
+        }),
+        error: err => {
+          if (err.status === 401) this.auth.sessionEnded();
+          this.linkedMessage.set('This incident could not be shown on the map.');
+        }
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+    effect(() => {
       const focus = this.incidentFocus();
       if (!this.ready() || !this.map) return;
+      if (focus?.points.length) {
+        const [west, south, east, north] = focus.bounds;
+        const padding = Math.min(80, this.container().nativeElement.clientWidth * 0.1);
+        this.map.fitBounds([[west, south], [east, north]], { padding, maxZoom: 13, duration: 0 });
+      }
       this.map.getSource<GeoJSONSource>('incident-members')?.setData({
         type: 'FeatureCollection',
         features: (focus?.points ?? []).map(coordinates => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates } }))
@@ -320,9 +355,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         if (!map.getLayer('detections')) return;
         const [feature] = map.queryRenderedFeatures(event.point, { layers: ['detections'] });
         if (feature) {
-          this.fromQueue = false;
           this.selectionTrigger = map.getCanvas();
-          this.queue.select(readDetection(feature));
+          this.openDetection(String(readDetection(feature).id));
         }
       });
       map.on('idle', () => {
@@ -368,49 +402,28 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
 
   choose(id: string): void {
-    this.fromQueue = false;
     this.selectionTrigger = document.getElementById('detection-picker') ?? undefined;
-    this.queue.select(this.visible().find(point => String(point.id) === id) ?? null);
+    this.openDetection(id);
+  }
+
+  private openDetection(id: string): void {
+    const map = this.map;
+    // Keep the viewport with the history entry so the same tiles can load again.
+    const mapView = map && id ? {
+      detection: id, workspace: this.workspace.current()?.slug, center: map.getCenter().toArray(), zoom: map.getZoom()
+    } : undefined;
+    this.navigation.update({ alert: null, detection: id || null }, mapView && { state: { mapView } });
   }
 
   openRow(row: AlertRow, button: HTMLButtonElement): void {
-    this.fromQueue = true;
     this.selectionTrigger = button;
-    this.mobileQueue.set(false);
-    this.queue.selectRow(row);
-
-    this.detailTitle()?.nativeElement.focus();
-  }
-
-  showView(view: 'alerts' | 'incidents' | 'reports'): void {
-    if (view === this.queueView()) return;
-    this.queueView.set(view);
-    if (view === 'alerts') this.incidentFocus.set(null);
-  }
-
-  /** Draws an incident's visible member alerts and fits the map to them. */
-  showIncident(focus: IncidentFocus | null): void {
-    const previous = this.incidentFocus();
-    this.incidentFocus.set(focus);
-    if (!focus || previous?.id === focus.id) return;
-    const [west, south, east, north] = focus.bounds;
-    const padding = Math.min(80, this.container().nativeElement.clientWidth * 0.1);
-    this.map?.fitBounds([[west, south], [east, north]], { padding, maxZoom: 13, duration: 0 });
-  }
-
-  openMember(row: AlertRow): void {
-    this.fromQueue = true;
-    this.selectionTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-    this.mobileQueue.set(false);
-    this.queue.selectLinked(row);
+    this.navigation.update({ alert: row.id, detection: null });
   }
 
   closeDetails(): void {
-    this.queue.select(null);
-    const trigger = this.selectionTrigger;
-    if (this.fromQueue && trigger?.isConnected) this.mobileQueue.set(true);
+    this.navigation.update({ alert: null, detection: null });
     requestAnimationFrame(() => {
-      const target = trigger?.isConnected ? trigger : this.map?.getCanvas();
+      const target = this.selectionTrigger?.isConnected ? this.selectionTrigger : this.map?.getCanvas();
       target?.focus();
     });
   }

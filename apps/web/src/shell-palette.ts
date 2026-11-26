@@ -1,0 +1,84 @@
+import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmInput } from '@spartan-ng/helm/input';
+import { ShellNavigation, type DestinationPath } from './shell-navigation';
+import { ThemeService } from './theme';
+
+@Component({
+  selector: 'fimra-shell-palette',
+  imports: [HlmButton, HlmDialogImports, HlmInput],
+  template: `
+    <hlm-dialog [state]="open() ? 'open' : 'closed'" (closed)="dismiss()" aria-modal="true">
+      <hlm-dialog-content *hlmDialogPortal class="shell-palette">
+        <h2 hlmDialogTitle>Search destinations</h2>
+        <p hlmDialogDescription>Use the arrow keys to move, Enter to open and Escape to close.</p>
+        <input hlmInput cdkFocusInitial aria-label="Search destinations" placeholder="Search"
+               [value]="search()" (input)="search.set($any($event.target).value); index.set(0)"
+               (keydown)="key($event)">
+        <div class="palette-results">
+          @for (result of results(); track result.name; let i = $index) {
+            <button hlmBtn variant="ghost" [class.palette-active]="i === active()" type="button"
+                    (click)="choose(i)" (focus)="index.set(i)" (keydown)="key($event)">
+              {{ result.name }} <span>{{ result.group }}</span>
+            </button>
+          } @empty { <p role="status">No matching commands.</p> }
+        </div>
+      </hlm-dialog-content>
+    </hlm-dialog>
+  `
+})
+export class ShellPalette {
+  readonly open = input.required<boolean>();
+  readonly closed = output<void>();
+  readonly search = signal('');
+  readonly index = signal(0);
+  private readonly navigation = inject(ShellNavigation);
+  private readonly appearance = inject(ThemeService);
+  private readonly actions = [
+    { name: 'Toggle theme', group: 'Action', run: () => this.appearance.toggle() },
+    { name: 'Reset filters', group: 'Action', run: () => this.navigation.update({
+      hours: null, class: null, unitPath: null, cursor: null, alert: null, detection: null, incident: null, report: null, decision: null, form: null,
+      period: null, from: null, to: null, hierarchy: null, reportHours: null, show: null
+    }) }
+  ];
+  readonly results = computed(() => {
+    const destinations = this.navigation.authorized().map(item => ({ name: item.name, group: item.group, run: () => this.go(item.path) }));
+    const search = this.search().trim().toLowerCase();
+    return [...destinations, ...this.actions].filter(item => (item.name + ' ' + item.group).toLowerCase().includes(search));
+  });
+  readonly active = computed(() => Math.min(this.index(), this.results().length - 1));
+
+  private go(path: DestinationPath): void {
+    this.navigation.go(path);
+  }
+
+  choose(index: number): void {
+    const command = this.results()[index];
+    if (command) {
+      this.dismiss();
+      command.run();
+    }
+  }
+
+  key(event: KeyboardEvent): void {
+    const count = this.results().length;
+    if (!count) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const index = (this.active() + (event.key === 'ArrowDown' ? 1 : count - 1)) % count;
+      this.index.set(index);
+      const item = document.querySelectorAll<HTMLButtonElement>('.palette-results button')[index];
+      item?.focus();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      this.choose(this.active());
+    }
+  }
+
+  dismiss(): void {
+    this.search.set('');
+    this.index.set(0);
+    this.closed.emit();
+  }
+}

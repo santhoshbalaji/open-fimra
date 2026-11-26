@@ -5,6 +5,7 @@ import { WEB_CONFIG } from './config';
 import { Detection } from './detections';
 import { WorkspaceService } from './workspace';
 
+import { ShellNavigation } from './shell-navigation';
 import { DashboardFilters } from './dashboard-filters';
 
 export const queueLabels = { unit: 'Unit', edge_review: 'Edge review', triage: 'Triage' };
@@ -29,6 +30,7 @@ export class AlertQueue {
   private readonly workspace = inject(WorkspaceService);
   private readonly auth = inject(AuthService);
   private readonly filters = inject(DashboardFilters);
+  private readonly navigation = inject(ShellNavigation, { optional: true });
   readonly hours = this.filters.hours;
   readonly now = signal(Date.now());
   readonly selected = signal<Detection | null>(null);
@@ -59,10 +61,26 @@ export class AlertQueue {
       this.filters.params();
       this.message.set('');
       this.page.set(null);
-      this.cursor.set('');
-      this.selected.set(null);
-      this.linked.set(null);
-      this.pinned.set(null);
+      if (!this.navigation) {
+        this.cursor.set('');
+        this.selected.set(null);
+        this.linked.set(null);
+        this.pinned.set(null);
+      }
+    });
+    if (this.navigation) {
+      const query = this.navigation.query;
+      effect(() => {
+        const params = query();
+        this.cursor.set(params.get('cursor') || '');
+        const queue = params.get('queue');
+        this.active.set(queue === 'unit' || queue === 'edge_review' || queue === 'triage' ? queue : this.linked()?.queue ?? 'unit');
+      });
+    }
+    effect(() => {
+      this.active();
+      this.cursor();
+      this.page.set(null);
     });
     effect(onCleanup => {
       const url = this.endpoint();
@@ -75,7 +93,10 @@ export class AlertQueue {
         next: page => {
           this.page.set(page);
           this.message.set('');
-          if (!page.canReview && this.active() !== 'unit') this.switchTo('unit');
+          if (!page.canReview && this.active() !== 'unit') {
+            if (this.navigation) this.navigation.update({ queue: 'unit', cursor: null }, { replaceUrl: true });
+            else this.switchTo('unit');
+          }
         },
         error: (error: HttpErrorResponse) => this.failed(error)
       });
@@ -96,8 +117,11 @@ export class AlertQueue {
           this.pinned.set(row ?? null);
           if (row && row.queue !== this.active()) {
             this.page.set(null);
-            this.cursor.set('');
-            this.active.set(row.queue);
+            if (this.navigation) this.navigation.update({ queue: row.queue, cursor: null });
+            else {
+              this.cursor.set('');
+              this.active.set(row.queue);
+            }
           }
         },
         error: (error: HttpErrorResponse) => { this.pinned.set(null); this.failed(error); }
@@ -121,8 +145,10 @@ export class AlertQueue {
   }
 
   selectLinked(row: AlertRow): void {
-    this.changePage('');
-    this.active.set(row.queue);
+    if (!this.navigation) {
+      this.changePage('');
+      this.active.set(row.queue);
+    }
     this.linked.set(row);
     this.pinned.set(row);
     this.selected.set({ ...row, id: row.detection_id });
@@ -130,12 +156,20 @@ export class AlertQueue {
 
   switchTo(queue: Queue): void {
     if (this.active() === queue) return;
+    if (this.navigation) {
+      this.navigation.update({ queue, cursor: null, alert: null, detection: null });
+      return;
+    }
     this.select(null);
     this.active.set(queue);
     this.changePage('');
   }
 
   changePage(cursor: string): void {
+    if (this.navigation) {
+      this.navigation.update({ cursor: cursor || null, alert: null, detection: null });
+      return;
+    }
     this.page.update(page => page && { ...page, items: [], nextCursor: undefined });
     this.cursor.set(cursor);
   }

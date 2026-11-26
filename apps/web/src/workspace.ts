@@ -4,7 +4,7 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 
 interface Workspace { slug: string; name: string }
-interface Assignment { workspace: Workspace; role: string; hierarchy?: string; unit: { path: string } }
+interface Assignment { workspace: Workspace; role: string; hierarchy?: string; unit: { path: string; name?: string } }
 /** A role the user holds in the current workspace. */
 export interface Role { role: string; hierarchy: string; path: string }
 interface SetupInfo { bootstrapAvailable: boolean; unfinished: string[] }
@@ -21,6 +21,8 @@ export class WorkspaceService {
   readonly current = signal<Workspace | null>(null);
   readonly loaded = signal(false);
   readonly message = signal('');
+  readonly failed = signal(false);
+  readonly profileReady = computed(() => this.loaded() || this.failed());
   private readonly grants = signal<Assignment[]>([]);
   /** True on a fresh install that has not been claimed yet. */
   readonly bootstrapAvailable = signal(false);
@@ -37,6 +39,16 @@ export class WorkspaceService {
   readonly roles = computed<Role[]>(() => this.grants()
     .filter(grant => grant.workspace.slug === this.current()?.slug)
     .map(grant => ({ role: grant.role, hierarchy: grant.hierarchy ?? '', path: grant.unit?.path ?? '' })));
+
+  readonly workspaces = computed(() => [...new Map(this.grants().map(grant => [grant.workspace.slug, grant.workspace])).values()]);
+  readonly jurisdictions = computed(() => [...new Map(this.grants()
+    .filter(grant => grant.workspace.slug === this.current()?.slug && grant.unit?.path)
+    .map(grant => [grant.unit.path, grant.unit.name || grant.unit.path])).entries()]);
+
+  allowsScope(path: string): boolean {
+    return /^[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*$/.test(path) &&
+      this.jurisdictions().some(([grant]) => path === grant || path.startsWith(grant + '.'));
+  }
 
   /** Root administrators design forms; supervising officers design forms for their division. */
   readonly canDesignForms = computed(() => this.canManageLayers() ||
@@ -55,10 +67,14 @@ export class WorkspaceService {
       this.loaded.set(false);
       this.grants.set([]);
       this.message.set('');
+      this.failed.set(false);
+      this.bootstrapAvailable.set(false);
+      this.unfinishedSetup.set([]);
       if (!subject) return;
       let retry: ReturnType<typeof setTimeout>;
       const load = () => this.http.get<Profile>(this.base + '/api/v1/me').subscribe({
         next: profile => {
+          this.failed.set(false);
           this.grants.set(profile.roleAssignments);
           this.bootstrapAvailable.set(profile.setup?.bootstrapAvailable ?? false);
           this.unfinishedSetup.set(profile.setup?.unfinished ?? []);
@@ -72,6 +88,7 @@ export class WorkspaceService {
           if (error.status === 401) this.auth.sessionEnded();
           else if (error.status === 403) this.deny();
           else {
+            this.failed.set(true);
             this.message.set(unavailable);
             retry = setTimeout(() => { request = load(); }, 60_000);
           }
@@ -97,6 +114,7 @@ export class WorkspaceService {
 
   deny(): void {
     this.current.set(null);
+    this.loaded.set(true);
     this.message.set(noAccess);
   }
 }

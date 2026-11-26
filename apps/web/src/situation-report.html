@@ -6,7 +6,7 @@
   <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end" (submit)="$event.preventDefault(); show()">
     <div class="grid gap-4 sm:grid-cols-2">
       <hlm-field><label hlmFieldLabel for="report-unit">Unit</label>
-        <hlm-select [value]="unitKey()" (valueChange)="$event && unitKey.set($event)">
+        <hlm-select [value]="unitKey()" (valueChange)="pickUnit($event)">
           <hlm-select-trigger buttonId="report-unit" class="w-full"><span class="truncate">{{ unitLabel() }}</span></hlm-select-trigger>
           <hlm-select-content *hlmSelectPortal>
             @for (unit of units(); track key(unit)) {
@@ -26,20 +26,20 @@
       @if (kind() === 'hours') {
         <hlm-field><label hlmFieldLabel for="report-hours">Hours before now</label>
           <input hlmInput id="report-hours" #hoursInput type="number" min="1" max="720" required [value]="hours()"
-            (change)="hoursInput.reportValidity() && hours.set(+hoursInput.value)">
+            (change)="hoursInput.reportValidity() && setPeriodValue('reportHours', hoursInput.value)">
         </hlm-field>
       } @else {
         <hlm-field><label hlmFieldLabel for="report-from">{{ kind() === 'day' ? 'Day' : 'From' }}</label>
-          <input hlmInput id="report-from" #fromInput type="date" required [max]="today" [value]="from()" (change)="from.set(fromInput.value)">
+          <input hlmInput id="report-from" #fromInput type="date" required [max]="today" [value]="from()" (change)="setPeriodValue('from', fromInput.value)">
         </hlm-field>
         @if (kind() === 'range') {
           <hlm-field><label hlmFieldLabel for="report-to">To</label>
-            <input hlmInput id="report-to" #toInput type="date" required [min]="from()" [max]="today" [value]="to()" (change)="to.set(toInput.value)">
+            <input hlmInput id="report-to" #toInput type="date" required [min]="from()" [max]="today" [value]="to()" (change)="setPeriodValue('to', toInput.value)">
           </hlm-field>
         }
       }
     </div>
-    <button hlmBtn type="submit" [disabled]="loading() || !units().length">Show report</button>
+    <button hlmBtn type="submit" [disabled]="loading() || !selectedUnit()">Show report</button>
   </form>
   @if (message()) {
     <p role="alert" class="flex items-start gap-2 rounded-control border border-border border-s-4 border-s-danger bg-card px-4 py-3">

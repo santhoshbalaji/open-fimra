@@ -2,7 +2,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import type { AlertRow } from './alert-queue';
 import { AuthService } from './auth';
 import { DashboardFilters } from './dashboard-filters';
@@ -10,6 +10,7 @@ import { classes, relativeAge } from './detections';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
 import { Workflow } from './workflow';
+import { ShellNavigation } from './shell-navigation';
 import { WorkspaceService } from './workspace';
 
 export interface IncidentRow {
@@ -60,16 +61,23 @@ export class Incidents {
   private readonly workspace = inject(WorkspaceService);
   private readonly filters = inject(DashboardFilters);
   readonly incidentsUrl = computed(() => this.endpoint() + '/incidents');
-  private readonly selectedId = computed(() => this.selected()?.id);
+  private readonly navigation = inject(ShellNavigation, { optional: true });
+  readonly selectedId = computed(() => this.navigation ? this.navigation.query().get('incident') : this.selected()?.id);
 
   constructor() {
     effect(() => {
       this.endpoint();
       this.filters.params();
-      this.cursor.set('');
       this.page.set(null);
-      this.selected.set(null);
+      if (!this.navigation) {
+        this.cursor.set('');
+        this.selected.set(null);
+      }
     });
+    if (this.navigation) {
+      const query = this.navigation.query;
+      effect(() => this.cursor.set(query().get('cursor') ?? ''));
+    }
     effect(onCleanup => {
       const params: Record<string, string | number> = { ...this.filters.params() };
       const cursor = this.cursor();
@@ -87,13 +95,18 @@ export class Incidents {
       const id = this.selectedId();
       this.now();
       this.reload();
-      if (!id) { this.members.set(null); return; }
+      if (!id || untracked(this.selected)?.id !== id) {
+        this.selected.set(null);
+        this.members.set(null);
+      }
+      if (!id) return;
+      this.detailMessage.set('');
       const detail = this.http.get<IncidentRow>(this.incidentsUrl() + '/' + id).subscribe({
-        next: row => this.selected.set(row.id === this.selected()?.id ? row : this.selected()),
+        next: row => this.selected.set(row),
         error: (error: HttpErrorResponse) => { this.failed(error); this.detailMessage.set('This incident could not load.'); }
       });
       const members = this.http.get<{ items: AlertRow[] }>(this.endpoint() + '/alerts', { params: { incident: id, limit: 200 } }).subscribe({
-        next: page => { this.members.set(page.items); this.detailMessage.set(''); },
+        next: page => this.members.set(page.items),
         error: (error: HttpErrorResponse) => { this.failed(error); this.detailMessage.set('Member alerts could not load.'); }
       });
       onCleanup(() => { detail.unsubscribe(); members.unsubscribe(); });
@@ -107,6 +120,10 @@ export class Incidents {
   }
 
   open(row: IncidentRow): void {
+    if (this.navigation) {
+      this.navigation.update({ incident: row.id });
+      return;
+    }
     this.detailMessage.set('');
     if (row.id !== this.selected()?.id) this.members.set(null);
     this.selected.set(row);
@@ -117,7 +134,8 @@ export class Incidents {
   }
 
   close(): void {
-    this.selected.set(null);
+    if (this.navigation) this.navigation.update({ incident: null });
+    else this.selected.set(null);
   }
 
   changed(): void {
@@ -125,6 +143,10 @@ export class Incidents {
   }
 
   changePage(cursor: string): void {
+    if (this.navigation) {
+      this.navigation.update({ cursor: cursor || null });
+      return;
+    }
     this.page.update(page => page && { ...page, items: [], nextCursor: undefined });
     this.cursor.set(cursor);
   }

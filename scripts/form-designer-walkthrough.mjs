@@ -43,10 +43,11 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 900 
 const page = await context.newPage();
 try {
   await page.goto(WEB);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.locator('#username').fill('state.admin');
   await page.locator('#password').fill('demo');
   await page.locator('#kc-login').click();
-  await page.getByRole('button', { name: 'Forms', exact: true }).click();
+  await page.getByRole('link', { name: 'Form templates', exact: true }).click();
   await page.getByRole('heading', { name: 'National templates' }).waitFor();
   const nationalCard = page.getByRole('article', { name: 'National report' });
   await nationalCard.getByText('1 report', { exact: true }).waitFor();

@@ -7,6 +7,7 @@ import { WEB_CONFIG } from './config';
 import { classes, ForestClass, sourceLabel } from './detections';
 import { WorkspaceService } from './workspace';
 import { ClassChart } from './class-chart';
+import { ShellNavigation } from './shell-navigation';
 import { DashboardFilters } from './dashboard-filters';
 import { queueLabels } from './alert-queue';
 import { HlmCardImports } from '@spartan-ng/helm/card';
@@ -39,6 +40,7 @@ interface Summary {
 })
 export class Dashboard {
   readonly focusFeedHealth = input(false);
+  private readonly navigation = inject(ShellNavigation, { optional: true });
   private readonly feedHeading = viewChild<ElementRef<HTMLElement>>('feedHeading');
   readonly filters = inject(DashboardFilters);
   readonly summary = signal<Summary | null>(null);
@@ -61,7 +63,7 @@ export class Dashboard {
 
   constructor() {
     effect(() => {
-      if (this.focusFeedHealth()) this.feedHeading()?.nativeElement.focus();
+      if (this.focusFeedHealth() || this.navigation?.query().get('view') === 'feed-health') this.feedHeading()?.nativeElement.focus();
     });
     effect(onCleanup => {
       const workspace = this.workspace.current();

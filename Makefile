@@ -432,3 +432,9 @@ mobile-test-integration: mobile-deps ## Test the field app's API client as each 
 
 mobile-walkthrough: mobile-web ## Sign in to the browser build as the beat guard in headless Chromium, acknowledge an alert and save screenshots outside the repository
 	MODE=walkthrough $(MOBILE_SCRIPT_ENV) scripts/mobile-integration.sh
+
+SHELL_SHOTS ?= $(HOME)/open-fimra-screenshots/u4
+.PHONY: shell-walkthrough
+shell-walkthrough: web-build ## Check routes, history and shell accessibility against the seeded development stack
+	SHOTS="$(SHELL_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh

@@ -1,155 +1,116 @@
-import { HlmToaster } from '@spartan-ng/helm/sonner';
-import { HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger } from '@spartan-ng/helm/dropdown-menu';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { AuthService } from './auth';
-import { ThemeService } from './theme';
-import { WorkspaceService } from './workspace';
-import { DemoMap } from './demo-map';
-import { Layers } from './layers';
-import { NotificationLink, Notifications, notificationURL } from './notifications';
-import { Dashboard } from './dashboard';
 import { Bootstrap } from './bootstrap';
-import { SetupWizard } from './setup-wizard';
-import { WEB_CONFIG } from './config';
-import { Icon } from './ui/icon';
+import { DashboardFilters } from './dashboard-filters';
 import { FilterFields } from './filter-fields';
-import { AccessKeys } from './access-keys';
-import { FormsScreen } from './forms/forms-screen';
-import { SituationReportView } from './situation-report';
-import { Devices } from './devices';
+import { Notifications, type NotificationLink } from './notifications';
+import { ShellNavigation, homePath } from './shell-navigation';
+import { ShellAccount } from './shell-account';
+import { ShellDrawer } from './shell-drawer';
+import { ShellPalette } from './shell-palette';
+import { ThemeService } from './theme';
+import { LiveStatus } from './ui/live-status';
+import { Icon } from './ui/icon';
+import { WorkspaceService } from './workspace';
+import { classes, type ForestClass } from './detections';
 
 @Component({
   selector: 'fimra-root',
-  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, HlmToaster, FilterFields, DemoMap, Layers, Dashboard, Notifications, Bootstrap, SetupWizard, AccessKeys, FormsScreen, SituationReportView, Devices, Icon],
+  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmButton, HlmToaster, Bootstrap, FilterFields, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus],
+  providers: [ShellNavigation],
   templateUrl: './app.html',
-  host: { '(window:popstate)': 'loadLink()' }
+  host: { '(window:keydown)': 'shortcut($event)' }
 })
 export class App implements OnInit {
   readonly workspace = inject(WorkspaceService);
   readonly auth = inject(AuthService);
   readonly appearance = inject(ThemeService);
-  readonly showLayers = signal(false);
-  readonly showKeys = signal(false);
-  readonly showForms = signal(false);
-  readonly showPhones = signal(false);
-  private readonly http = inject(HttpClient);
-  private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
-  /** null follows the setup state: the wizard opens until it is finished. */
-  private readonly setupChoice = signal<boolean | null>(null);
-  readonly showSetup = computed(() => this.workspace.canManageLayers() &&
-    (this.setupChoice() ?? this.workspace.setupPending()));
-  readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
-
+  readonly navigation = inject(ShellNavigation);
+  private readonly router = inject(Router);
+  private readonly filters = inject(DashboardFilters);
+  private readonly authOpened = signal(false);
+  private routed = false;
   readonly filtersOpen = signal(false);
-  readonly dashboard = signal(false);
-  /** The printable situation report, loaded only when it is opened. */
-  readonly report = signal(false);
-  readonly linkedAlert = signal<NotificationLink | null>(null);
-  readonly linkMessage = signal('');
-  readonly focusFeedHealth = signal(false);
-  private readonly target = signal<NotificationLink | null>(null);
+  readonly drawerRequest = signal<{ trigger: HTMLElement } | null>(null);
+  readonly paletteOpen = signal(false);
+  readonly groups = ['Monitor', 'Reports', 'Dashboard', 'Settings'] as const;
+  readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
+  readonly showFilters = computed(() => {
+    const view = this.navigation.destination();
+    return view && 'filters' in view;
+  });
+  readonly scope = computed(() => {
+    const unit = this.navigation.query().get('unitPath');
+    const jurisdictions = this.workspace.jurisdictions();
+    if (unit) return jurisdictions.find(([path]) => path === unit)?.[1] || unit;
+    const [first] = jurisdictions;
+    if (jurisdictions.length === 1 && first && !first[0].includes('.') && first[1] === this.workspace.current()?.name) {
+      return 'All units';
+    }
+    return jurisdictions.map(([, label]) => label).join(', ');
+  });
 
   constructor() {
     effect(() => {
-      const target = this.target();
-      if (!this.workspace.loaded()) return;
-      this.linkedAlert.set(null);
-      this.linkMessage.set('');
-      this.focusFeedHealth.set(false);
-      if (!target) return;
-      if (!this.workspace.select(target.workspace)) {
-        this.linkMessage.set('You cannot open this workspace.');
-        return;
+      if (!this.authOpened() || !this.auth.user() || !this.workspace.loaded()) return;
+      if (!this.routed) {
+        this.routed = true;
+        this.router.initialNavigation();
       }
-      this.showLayers.set(false);
-      this.showKeys.set(false);
-      this.showForms.set(false);
-      this.showPhones.set(false);
-      this.setupChoice.set(false);
-      this.dashboard.set(target.alert === null);
-      this.report.set(false);
-      if (target.alert) this.linkedAlert.set(target);
-      else this.focusFeedHealth.set(true);
+    });
+    effect(() => {
+      if (this.navigation.path() === '/' && this.router.lastSuccessfulNavigation() &&
+          this.workspace.current() && this.workspace.loaded()) {
+        untracked(() => this.navigation.go(homePath(this.workspace), {}, true));
+      }
+    });
+    effect(() => {
+      const query = this.navigation.query();
+      this.filters.hours.set(Number(query.get('hours') ?? 168));
+      const forest = query.get('class');
+      this.filters.forestClass.set(forest && Object.hasOwn(classes, forest) ? forest as ForestClass : '');
+      this.filters.unitPath.set(query.get('unitPath') ?? '');
+    });
+    effect(() => {
+      this.navigation.path();
+      this.filtersOpen.set(false);
     });
   }
 
   ngOnInit(): void {
-    void this.auth.open().then(() => this.loadLink());
+    void this.auth.open().finally(() => this.authOpened.set(true));
   }
 
-  loadLink(): void {
-    const params = new URLSearchParams(location.search);
-    const workspace = params.get('workspace');
-    const alert = params.get('alert');
-    const feedHealth = params.get('view') === 'feed-health';
-    this.target.set(workspace && (alert ? /^[1-9][0-9]*$/.test(alert) : feedHealth) ? { workspace, alert } : null);
+  shortcut(event: KeyboardEvent): void {
+    if (event.defaultPrevented || event.repeat || event.altKey || !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== 'k' || !this.workspace.current()) return;
+    event.preventDefault();
+    this.paletteOpen.set(true);
   }
 
-  toggleLayers(): void {
-    this.setupChoice.set(false);
-    this.showKeys.set(false);
-    this.showForms.set(false);
-    this.showPhones.set(false);
-    this.showLayers.set(!this.showLayers());
-  }
-
-  toggleForms(): void {
-    this.setupChoice.set(false);
-    this.showKeys.set(false);
-    this.showLayers.set(false);
-    this.showPhones.set(false);
-    this.showForms.set(!this.showForms());
-  }
-
-  openKeys(): void {
-    this.setupChoice.set(false);
-    this.showLayers.set(false);
-    this.showForms.set(false);
-    this.showPhones.set(false);
-    this.showKeys.set(true);
-  }
-
-  openPhones(): void {
-    this.setupChoice.set(false);
-    this.showLayers.set(false);
-    this.showKeys.set(false);
-    this.showForms.set(false);
-    this.showPhones.set(true);
-  }
-
-  openSetup(): void {
-    const workspace = this.workspace.current();
-    if (!workspace) return;
-    this.showLayers.set(false);
-    this.showKeys.set(false);
-    this.showForms.set(false);
-    this.showPhones.set(false);
-    if (this.workspace.setupPending()) {
-      this.setupChoice.set(true);
-      return;
-    }
-    // Reopening records the choice and shows the wizard until it is finished again.
-    this.http.post(this.api + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug) + '/setup/reopen', {})
-      .subscribe({ next: () => { this.setupChoice.set(true); this.workspace.reload(); } });
-  }
-
-  leaveSetup(layers: boolean): void {
-    this.setupChoice.set(false);
-    this.showLayers.set(layers);
-  }
-
-  setupFinished(): void {
-    this.setupChoice.set(null);
-    this.showLayers.set(false);
-    this.dashboard.set(false);
-    this.report.set(false);
-    this.workspace.reload();
+  reload(): void {
+    location.reload();
   }
 
   openNotice(link: NotificationLink): void {
-    history.pushState(null, '', notificationURL(link));
-    this.target.set(link);
+    this.navigation.go(link.alert ? '/monitor/alerts' : '/dashboard', {
+      workspace: link.workspace,
+      unitPath: null,
+      cursor: null,
+      queue: null,
+      detection: null,
+      alert: link.alert,
+      view: link.alert ? null : 'feed-health'
+    });
+  }
+
+  screenOpened(screen: unknown): void {
+    if (screen && typeof screen === 'object' && 'closed' in screen) {
+      (screen.closed as { subscribe: (callback: () => void) => void }).subscribe(() => this.navigation.monitor());
+    }
   }
 }

@@ -1,88 +1,125 @@
 @if (auth.user(); as user) {
-  @let name = user.profile.name || user.profile.preferred_username || 'User';
-  <header class="topbar flex items-center gap-4 bg-card">
-    <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
-    <h1 class="workspace font-semibold">{{ workspace.current()?.name || 'Control room' }}</h1>
-    <div class="ml-auto flex items-center gap-2">
-      @if (workspace.setupPending() && !showSetup()) {
-        <button hlmBtn variant="ghost" class="user-trigger" (click)="openSetup()">Finish setup</button>
+  @let name = user.profile.name || user.profile.preferred_username || user.profile.email || 'User';
+  @if (workspace.current(); as current) {
+    <header class="topbar bg-card">
+      <button hlmBtn variant="outline" class="destination-drawer" aria-haspopup="dialog" #menu (click)="drawerRequest.set({ trigger: menu })">Menu</button>
+      @if (drawerRequest(); as request) {
+        @defer (on immediate) {
+          <fimra-shell-drawer [request]="request" [scope]="current.name + ' · ' + scope()" [links]="links" />
+        }
       }
-      @if (workspace.canDesignForms()) {
-        <button hlmBtn variant="ghost" class="user-trigger" (click)="toggleForms()" [attr.aria-pressed]="showForms()">Forms</button>
-      }
-      @if (workspace.canManageLayers()) {
-        <button hlmBtn variant="ghost" class="user-trigger" (click)="toggleLayers()">
-          {{ showLayers() || showSetup() ? 'Control room' : 'Layers' }}
+      <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+      <div class="workspace">
+        <p class="workspace-name" [title]="current.name">{{ current.name }}</p>
+        <p class="workspace-scope" [title]="scope()">{{ scope() || 'Assigned units' }}</p>
+      </div>
+      <div class="header-actions">
+        <button hlmBtn variant="ghost" class="search-trigger" (click)="paletteOpen.set(true)"
+                title="Search destinations" aria-keyshortcuts="Control+K Meta+K">
+          <span>Search</span><kbd>⌘/Ctrl K</kbd>
         </button>
-      }
-      <button hlmBtn variant="ghost" class="icon-button" (click)="appearance.toggle()"
-              aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'" title="Toggle dark theme">
-        @if (appearance.theme() === 'dark') { <svg fimraIcon="sun"></svg> } @else { <svg fimraIcon="moon"></svg> }
-      </button>
-      <fimra-notifications (openNotice)="openNotice($event)" />
-      <button hlmBtn variant="ghost" [hlmDropdownMenuTrigger]="account" class="user-trigger account-trigger flex items-center gap-2"
-              [attr.aria-label]="'Account for ' + name">
-        <span class="avatar" aria-hidden="true">{{ name.charAt(0).toUpperCase() }}</span>
-        <span class="user-name">{{ name }}</span>
-        <svg fimraIcon="chevron-down" class="chevron"></svg>
-      </button>
-      <ng-template #account>
-        <hlm-dropdown-menu>
-          @if (workspace.canManageLayers()) {
-            <button hlmDropdownMenuItem (triggered)="openSetup()"><svg fimraIcon="settings"></svg> First-run setup</button>
+        <button hlmBtn variant="ghost" class="theme-trigger" (click)="appearance.toggle()"
+                aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'">
+          @defer (on immediate) {
+            @if (appearance.theme() === 'dark') { <svg fimraIcon="sun" aria-hidden="true"></svg> }
+            @else { <svg fimraIcon="moon" aria-hidden="true"></svg> }
           }
-          <button hlmDropdownMenuItem (triggered)="openKeys()"><svg fimraIcon="key-round"></svg> GIS link keys</button>
-          <button hlmDropdownMenuItem (triggered)="openPhones()"><svg fimraIcon="bell"></svg> Field phones</button>
-          <button hlmDropdownMenuItem (triggered)="auth.signOut()"><svg fimraIcon="log-out"></svg> Sign out</button>
-        </hlm-dropdown-menu>
-      </ng-template>
-    </div>
-  </header>
-  @if (workspace.current() && !showSetup() && !showKeys() && !showForms() && !showPhones() && !(showLayers() && workspace.canManageLayers())) {
-    <div class="workspace-controls" [class.filters-open]="filtersOpen()">
-      <nav aria-label="Control room views">
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="!dashboard() && !report()" (click)="dashboard.set(false); report.set(false); focusFeedHealth.set(false)">Map and queue</button>
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="dashboard()" (click)="dashboard.set(true); report.set(false)">Dashboard</button>
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="report()" (click)="report.set(true); dashboard.set(false)">Situation report</button>
-      </nav>
-      @if (!report()) {
-        <button hlmBtn variant="outline" size="sm" class="filter-toggle" [attr.aria-expanded]="filtersOpen()" aria-controls="map-filters" (click)="filtersOpen.set(!filtersOpen())">Filters</button>
-        @defer (on immediate) { <fimra-filter-fields /> } @placeholder { <div class="filter-fields" id="map-filters"></div> }
+        </button>
+        @defer (on immediate) { <fimra-notifications (openNotice)="openNotice($event)" /> }
+        @defer (on immediate) { <fimra-shell-account [name]="name" /> }
+        @placeholder { <span class="user-trigger user-name">{{ name }}</span> }
+      </div>
+    </header>
+    <nav aria-label="Destinations" class="desktop-destinations">
+      <ng-container *ngTemplateOutlet="links; context: { close: null }" />
+    </nav>
+    <ng-template #links let-close="close">
+      @for (group of groups; track group) {
+        @if (group === 'Dashboard') {
+          <a hlmBtn variant="ghost" [routerLink]="navigation.href('/dashboard')" (click)="close?.()"
+             [attr.aria-current]="navigation.path() === '/dashboard' ? 'page' : null">Dashboard</a>
+        } @else {
+          <div class="destination-group" role="group" [attr.aria-label]="group">
+            <span class="destination-label" aria-hidden="true">{{ group }}</span>
+            @for (item of navigation.authorized(); track item.path) {
+              @if (item.group === group) {
+                <a hlmBtn variant="ghost" [routerLink]="navigation.href(item.path)" (click)="close?.()"
+                   [attr.aria-current]="navigation.path() === item.path ? 'page' : null">{{ item.name }}</a>
+              }
+            }
+          </div>
+        }
       }
-    </div>
+    </ng-template>
+    @if (navigation.destination(); as destination) {
+      <div class="workspace-controls" [class.filters-open]="filtersOpen()">
+        <h1>{{ destination.name }}</h1>
+        @if (showFilters()) {
+          <button hlmBtn variant="outline" size="sm" class="filter-toggle" [attr.aria-expanded]="filtersOpen()"
+                  aria-controls="map-filters" (click)="filtersOpen.set(!filtersOpen())">Filters</button>
+          @defer (on immediate) { <fimra-filter-fields /> }
+          @placeholder { <div id="map-filters"></div> }
+        }
+      </div>
+    }
+    @if (auth.error()) { <p role="alert" class="shell-message">{{ auth.error() }}</p> }
   }
-  <main>
-    @if (linkMessage()) { <p role="status">{{ linkMessage() }}</p> }
-    @if (showBootstrap()) {
+  <main id="task" [class.welcome]="(!workspace.current() || !navigation.destination()) && !showBootstrap()">
+    @if (workspace.failed()) {
+      <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+      <h1>Workspace unavailable</h1>
+      <p>Open FIMRA could not load your workspace.</p>
+      <button hlmBtn (click)="workspace.reload()">Retry</button>
+    } @else if (!workspace.loaded()) {
+      <h1>Loading your workspace</h1>
+      <fimra-live-status class="sr-only" message="Loading your workspace" />
+      <button hlmBtn variant="outline" (click)="reload()">Reload</button>
+    } @else if (showBootstrap()) {
       @defer (on immediate) { <fimra-bootstrap /> }
-    } @else if (showKeys()) {
-      @defer (on immediate) { <fimra-access-keys (closed)="showKeys.set(false)" /> }
-    } @else if (showForms() && workspace.canDesignForms()) {
-      @defer (on immediate) { <fimra-forms-screen (closed)="showForms.set(false)" /> }
-    } @else if (showPhones()) {
-      @defer (on immediate) { <fimra-devices (closed)="showPhones.set(false)" /> }
-    } @else if (showSetup()) {
-      @defer (on immediate) { <fimra-setup-wizard (finished)="setupFinished()" (leave)="leaveSetup(false)" (openLayers)="leaveSetup(true)" /> }
-    } @else if (showLayers() && workspace.canManageLayers()) {
-      @defer (on immediate) { <fimra-layers /> }
-    } @else if (report() && workspace.current()) {
-      @defer (on immediate) { <fimra-situation-report /> }
-    } @else if (dashboard() && workspace.current()) {
-      @defer (on immediate) { <fimra-dashboard [focusFeedHealth]="focusFeedHealth()" /> }
-    } @else {
-      @defer (on immediate) { <fimra-demo-map [linkedAlert]="linkedAlert()" /> }
+    } @else if (!workspace.current() || navigation.path() === '/restricted') {
+      @if (!workspace.current()) {
+        <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+      }
+      <h1>Restricted access</h1>
+      <p>Signed in as <strong>{{ name }}</strong>@if (user.profile.email && user.profile.email !== name) { ({{ user.profile.email }}) }.</p>
+      <p>Ask your workspace administrator to assign a role for the area you work in.</p>
+      <div class="welcome-actions">
+        <button hlmBtn (click)="auth.signOut(true)">Switch account</button>
+        <button hlmBtn variant="outline" (click)="auth.signOut()">Sign out</button>
+      </div>
+      @if (auth.error() && !workspace.current()) { <p role="alert">{{ auth.error() }}</p> }
+    } @else if (!navigation.destination()) {
+      <h1>Opening your workspace</h1>
+      <fimra-live-status class="sr-only" message="Opening your workspace" />
+      <button hlmBtn variant="outline" (click)="reload()">Reload</button>
+    }
+    @if (workspace.current()) {
+      <router-outlet (activate)="screenOpened($event)" />
     }
   </main>
+  @defer (when paletteOpen()) {
+    <fimra-shell-palette [open]="paletteOpen()" (closed)="paletteOpen.set(false)" />
+  }
 } @else {
   <main class="welcome">
     <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
-    @if (auth.error() || auth.signedOut()) {
-      <p role="status">{{ auth.error() || 'You have signed out.' }}</p>
+    @if (auth.error()) {
+      <h1>Sign-in unavailable</h1>
+      <p>{{ auth.error() }}</p>
+      <button hlmBtn (click)="auth.signIn()">Retry sign-in</button>
+    } @else if (auth.opening()) {
+      <h1>Opening sign-in</h1>
+      <fimra-live-status class="sr-only" message="Opening sign-in" />
+      <button hlmBtn variant="outline" (click)="reload()">Reload</button>
+    } @else if (auth.signedOut()) {
+      <h1>You signed out</h1>
       <button hlmBtn (click)="auth.signIn()">Sign in</button>
     } @else {
-      <p role="status">Opening sign-in…</p>
+      <h1>Sign in to Open FIMRA</h1>
+      <p>Use your department account to open your workspace.</p>
+      <button hlmBtn (click)="auth.signIn()">Sign in</button>
     }
   </main>
 }
 
-@defer (on immediate) { <hlm-toaster [theme]="appearance.theme()" /> }
+@defer (on idle) { <hlm-toaster [theme]="appearance.theme()" /> }

@@ -45,6 +45,9 @@
       <div role="status" aria-label="Loading member alerts" class="grid gap-2"><hlm-skeleton class="h-12" /></div>
     }
   </section>
+} @else if (selectedId()) {
+  <button hlmBtn variant="ghost" (click)="close()">All incidents</button>
+  <p role="status">{{ detailMessage() || 'Loading incident…' }}</p>
 } @else {
   @if (message()) { <p role="status">{{ message() }}</p> }
   @if (page(); as data) {
