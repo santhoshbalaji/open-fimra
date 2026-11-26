@@ -128,12 +128,18 @@ The wizard then opens for root administrators until it is finished. Its steps ar
 
 ## Notifications
 
-The bell in the top bar shows the unread count. Open it to see unread
-notifications first. Choose an alert to mark the notification as read and
-select the alert on the map and in its queue. Alert links also work after
-sign-in and can open older alerts. Feed notices open the feed health section
-of the dashboard. Press Escape to close the list and return
+The bell in the top bar shows the unread count. Open it to see the newest
+notifications first and use **All** or **Unread** to filter the list. Use
+**Mark as read** on one notice or **Mark all as read** for the whole inbox.
+Opening an alert or feed notice also marks it as read and takes you to the
+alert or the dashboard's **Feed health** section. Alert links also work after
+sign-in and can open older alerts. Press Escape or choose **Close** to return
 focus to the bell.
+
+Run `make dev db-migrate seed-test demo-detections notifications-walkthrough`
+on a disposable development stack to check the inbox with a keyboard and axe
+in both themes at desktop and phone widths. It adds synthetic notices to the
+demo inbox and saves screenshots to `~/open-fimra-screenshots/u9`.
 
 ## How to use the design system
 

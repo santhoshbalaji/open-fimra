@@ -39,10 +39,25 @@ WHERE n.id=$2 AND n.recipient_id=u.id AND u.oidc_subject=$1 AND n.channel='in_ap
 		return
 	}
 
+	query := r.URL.Query()
+	view := query.Get("view")
+	if view != "" && view != "all" && view != "unread" {
+		writeError(w, 400, "Invalid notification view.")
+		return
+	}
+	var before int64
+	if raw := query.Get("before"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 1 || view == "" {
+			writeError(w, 400, "Invalid notification cursor.")
+			return
+		}
+		before = value
+	}
 	offset := 0
-	if raw := r.URL.Query().Get("offset"); raw != "" {
+	if raw := query.Get("offset"); raw != "" {
 		value, err := strconv.Atoi(raw)
-		if err != nil || value < 0 {
+		if err != nil || value < 0 || view != "" {
 			writeError(w, 400, "Invalid notification offset.")
 			return
 		}
@@ -54,26 +69,46 @@ WITH inbox AS MATERIALIZED (
     SELECT n.id,n.event,n.created_at,n.read_at,w.slug AS workspace,n.alert_id
     FROM users u JOIN notifications n ON n.recipient_id=u.id JOIN workspaces w ON w.id=n.workspace_id
     WHERE u.oidc_subject=$1 AND n.channel='in_app' AND notification_visible(n)
+), filtered AS (
+    SELECT * FROM inbox
+    WHERE ($3 <> 'unread' OR read_at IS NULL) AND ($4::bigint = 0 OR id < $4)
 ), page AS (
-    SELECT * FROM inbox ORDER BY read_at IS NOT NULL,id DESC LIMIT 50 OFFSET $2
+    SELECT * FROM filtered ORDER BY ($3 = '' AND read_at IS NOT NULL),id DESC LIMIT 50 OFFSET $2
 )
 SELECT jsonb_build_object('unreadCount',(SELECT count(*) FROM inbox WHERE read_at IS NULL),
-    'hasMore', (SELECT count(*) FROM inbox) > $2::bigint+50,
+    'hasMore', (SELECT count(*) FROM filtered) - 50 > $2::bigint,
     'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',page.id::text,'event',event,
         'createdAt',page.created_at,'readAt',read_at,'workspace',workspace,'alertId',page.alert_id::text,
         'forestClass',a.forest_class,'beatName',line.levels #>> '{beat,name}',
         'divisionName',line.levels #>> '{division,name}','incidentId',im.incident_id::text)
-        ORDER BY read_at IS NOT NULL,page.id DESC) FROM page
+        ORDER BY ($3 = '' AND read_at IS NOT NULL),page.id DESC) FROM page
         LEFT JOIN alerts a ON a.id=page.alert_id
         LEFT JOIN incident_members im ON im.alert_id=page.alert_id
         LEFT JOIN hierarchies h ON h.id=a.hierarchy_id
         LEFT JOIN LATERAL (SELECT value AS levels FROM jsonb_each(a.hierarchy)
-            ORDER BY (key=h.slug) DESC,key LIMIT 1) line ON true),'[]'))`, subject, offset).Scan(&result)
+            ORDER BY (key=h.slug) DESC,key LIMIT 1) line ON true),'[]'))`, subject, offset, view, before).Scan(&result)
 	if err != nil {
 		a.notificationError(w, err)
 		return
 	}
 	writeJSON(w, 200, result)
+}
+
+func (a api) readAllNotifications(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	subject := r.Context().Value(identityKey{}).(identity).Subject
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	_, err := a.reader.Exec(ctx, `
+UPDATE notifications n SET read_at=now() FROM users u
+WHERE n.recipient_id=u.id AND u.oidc_subject=$1 AND n.channel='in_app'
+  AND n.read_at IS NULL AND notification_visible(n)`, subject)
+	if err != nil {
+		a.notificationError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a api) notificationPreferences(w http.ResponseWriter, r *http.Request) {

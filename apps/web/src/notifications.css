@@ -11,51 +11,95 @@
   border-radius: 1rem;
   background: var(--color-brand);
   color: var(--color-brand-foreground);
-  font-size: 0.7rem;
+  font-size: var(--text-label);
   font-weight: 700;
   line-height: 1.2rem;
 }
 
 .inbox {
   position: absolute;
-  z-index: 20;
+  z-index: 30;
   top: calc(100% + 0.65rem);
   right: 0;
-  width: min(22rem, calc(100vw - 9rem));
-  max-height: min(28rem, 72vh);
-  overflow: auto;
-  padding: 1rem;
-  border: 1px solid var(--color-border);
+  width: min(28rem, calc(100vw - 9rem));
   border-radius: var(--radius-card);
-  background: var(--color-card);
-  color: var(--color-text);
+}
+
+.inbox:has(.notification-body) {
   box-shadow: var(--shadow-menu);
 }
 
-.inbox h2 {
-  margin-bottom: 0.5rem;
-  font-weight: 700;
+.notification-body {
+  display: grid;
+  gap: 0.75rem;
 }
 
-.inbox li {
-  border-top: 1px solid var(--color-border);
-  padding: 0.65rem 0;
-}
-
-.inbox small {
+.inbox-actions, .inbox-filters, .notice-title, .notice-meta, .notice-meta small {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.inbox-actions, .notice-meta {
+  justify-content: space-between;
+}
+
+.inbox-filters [aria-pressed=true] {
+  color: var(--color-brand);
+}
+
+.notification-body button[aria-disabled=true] {
+  cursor: default;
   color: var(--color-text-secondary);
 }
 
-.inbox a {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+.notification-list {
+  max-block-size: min(25rem, 48dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding: 0.5rem;
+  padding-inline: 0.25rem;
 }
 
-@media (max-width: 840px) {
-  .notification-bell { position: static; }
-  .notification-bell > button { position: relative; }
-  .inbox { top: 100%; right: 8px; width: min(360px, calc(100vw - 16px)); }
+.notification-list:empty {
+  display: none;
+}
+
+.notification-list li {
+  border-top: 1px solid var(--color-border);
+  padding: 0.5rem 0;
+}
+
+.notice-title a {
+  min-block-size: var(--target-web);
+  display: inline-flex;
+  align-items: center;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+}
+
+.notice-title a:focus-visible {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+.notice-meta {
+  min-block-size: var(--target-web);
+}
+
+.notice-meta small {
+  color: var(--color-text-secondary);
+}
+
+@media (width < 48rem) {
+  .inbox {
+    position: static;
+    width: auto;
+  }
+
+  .notification-list {
+    max-block-size: 60dvh;
+  }
 }

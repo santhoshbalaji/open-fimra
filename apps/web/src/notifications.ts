@@ -1,13 +1,17 @@
-import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, inject, output, signal, viewChild, ElementRef } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { classes, ForestClass, relativeAge } from './detections';
-import { EmptyState } from './ui/empty-state';
+import { Observable } from 'rxjs';
+import { classes, ForestClass } from './detections';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
+import { defaultWorkspaceFormat } from './workspace-format';
 import { Icon } from './ui/icon';
+import { LiveStatus } from './ui/live-status';
+import { SidePanel } from './ui/side-panel';
+import { DataState, StateRegion } from './ui/state-region';
+import { StatusBadge } from './ui/status-badge';
 
 export interface NotificationLink { workspace: string; alert: string | null }
 
@@ -19,6 +23,7 @@ export function notificationURL(link: NotificationLink): URL {
   url.search = params.toString();
   return url;
 }
+
 interface Notice {
   id: string;
   event: 'alert_new' | 'alert_overdue' | 'feed_open';
@@ -31,10 +36,11 @@ interface Notice {
   divisionName: string | null;
 }
 interface Inbox { unreadCount: number; items: Notice[]; hasMore: boolean }
+type InboxFilter = 'all' | 'unread';
 
 @Component({
   selector: 'fimra-notifications',
-  imports: [HlmButtonImports, HlmSkeletonImports, EmptyState, Icon],
+  imports: [HlmButtonImports, Icon, LiveStatus, SidePanel, StateRegion, StatusBadge],
   templateUrl: './notifications.html',
   styleUrl: './notifications.css'
 })
@@ -42,21 +48,59 @@ export class Notifications {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly destroy = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly endpoint = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '') + '/api/v1/notifications';
-  private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('bell');
-  private readonly pending = new Set<string>();
-  private refreshAfterLoad = false;
-  private offset = 0;
+  private readonly panel = viewChild.required(SidePanel);
+  private readonly list = viewChild<ElementRef<HTMLElement>>('list');
+  private readonly unreadFilter = viewChild<ElementRef<HTMLButtonElement>>('unreadFilter');
+  private readonly showMore = viewChild<ElementRef<HTMLButtonElement>>('showMore');
+  private readonly failure = signal<{ message: string; retry: () => void } | null>(null);
+  private readonly loadedAt = signal<Date | null>(null);
+  private before: string | undefined;
   readonly openNotice = output<NotificationLink>();
-  readonly open = signal(false);
   readonly inbox = signal<Inbox | null>(null);
-  readonly error = signal('');
-  readonly loading = signal(false);
+  readonly filter = signal<InboxFilter>('all');
+  readonly busy = signal(false);
   readonly labels = { alert_new: 'New fire alert', alert_overdue: 'Fire alert overdue', feed_open: 'Feed needs attention' };
-  readonly date = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  readonly now = signal(Date.now());
-  readonly relativeAge = relativeAge;
-  readonly timestamp = Date.parse;
+  readonly now = signal(new Date());
+  readonly count = computed(() => this.inbox()?.unreadCount ?? 0);
+  readonly unreadMessage = computed(() => this.inbox() ? this.format.number(this.count()) + ' unread' : '');
+  readonly bellLabel = computed(() => ['Notifications', this.unreadMessage()].filter(Boolean).join(', '));
+  readonly state = computed<DataState>(() => {
+    const failure = this.failure();
+    if (failure) return { kind: 'error', heading: failure.message };
+    if (this.busy()) {
+      const at = this.loadedAt();
+      return at
+        ? { kind: 'stale', heading: 'Updating notifications', observedAt: { dateTime: at.toISOString(), label: this.format.dateTime(at) } }
+        : { kind: 'loading', heading: 'Loading notifications' };
+    }
+    const inbox = this.inbox();
+    if (inbox && !inbox.items.length && !inbox.hasMore) {
+      return { kind: 'empty', heading: this.filter() === 'unread' ? 'You have no unread notifications.' : 'You have no notifications.' };
+    }
+    return { kind: 'ready' };
+  });
+  private readonly format = defaultWorkspaceFormat;
+
+  constructor() {
+    this.load('all');
+    const timer = setInterval(() => {
+      this.now.set(new Date());
+      if (!this.panel().open() && !this.failure()) this.load(this.filter());
+    }, 60_000);
+    this.destroy.onDestroy(() => clearInterval(timer));
+  }
+
+  toggle(bell: HTMLButtonElement): void {
+    const panel = this.panel();
+    if (panel.open()) {
+      panel.close();
+      return;
+    }
+    panel.show(bell);
+    if (!this.failure()) this.load(this.filter());
+  }
 
   title(item: Notice): string {
     if (!item.alertId) return this.labels[item.event];
@@ -65,25 +109,12 @@ export class Notifications {
     return title + ' · ' + (place || 'Unknown unit');
   }
 
-  constructor() {
-    this.load();
-    const timer = setInterval(() => {
-      this.now.set(Date.now());
-      if (!this.open()) this.load();
-    }, 60_000);
-    this.destroy.onDestroy(() => clearInterval(timer));
+  dateTime(value: string): string {
+    return this.format.dateTime(new Date(value));
   }
 
-  toggle(): void {
-    this.open.update(open => !open);
-    if (this.open()) this.load();
-  }
-
-  close(event: Event): void {
-    if (!this.open()) return;
-    event.stopPropagation();
-    this.open.set(false);
-    this.trigger().nativeElement.focus();
+  age(value: string): string {
+    return this.format.age(new Date(value), this.now());
   }
 
   link(item: Notice): string {
@@ -91,54 +122,108 @@ export class Notifications {
   }
 
   follow(event: MouseEvent, item: Notice): void {
-    this.read(item);
-    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    this.markRead(item);
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    this.close(event);
+    this.panel().close();
     this.openNotice.emit({ workspace: item.workspace, alert: item.alertId });
   }
 
-  read(item: Notice): void {
-    if (item.readAt || this.pending.has(item.id)) return;
-    this.pending.add(item.id);
-    this.http.post(this.endpoint + '/' + item.id + '/read', null).pipe(takeUntilDestroyed(this.destroy)).subscribe({
-      next: () => {
-        this.pending.delete(item.id);
-        this.load();
-      },
-      error: (err: HttpErrorResponse) => {
-        this.pending.delete(item.id);
-        if (err.status === 401) this.auth.sessionEnded();
-        this.error.set('Could not mark the notification as read.');
-      }
+  selectFilter(filter: InboxFilter): void {
+    if (filter !== this.filter()) this.load(filter);
+  }
+
+  loadMore(): void {
+    if (this.before && this.inbox()?.hasMore) this.load(this.filter(), this.before);
+  }
+
+  private load(filter: InboxFilter, before?: string): void {
+    const params: Record<string, string> = { view: filter };
+    if (before) params['before'] = before;
+    this.request(this.http.get<Inbox>(this.endpoint, { params }), 'Could not load notifications.',
+      () => this.load(filter, before), page => {
+        const list = this.list()?.nativeElement;
+        const switching = filter !== this.filter();
+        const previous = before ? this.inbox()?.items ?? [] : [];
+        const items = [...previous, ...page.items];
+        if (!switching) this.keepListFocus(items, before ? page.items[0]?.id : undefined);
+        this.before = page.items.at(-1)?.id;
+        this.filter.set(filter);
+        this.inbox.set({ ...page, items });
+        if (switching && list) list.scrollTop = 0;
+      });
+  }
+
+  markRead(item: Notice): void {
+    if (item.readAt) return;
+    this.request(this.http.post(this.endpoint + '/' + item.id + '/read', null), 'Could not mark the notification as read.',
+      () => this.markRead(item), () => this.updateRead(item.id));
+  }
+
+  markAllRead(): void {
+    if (!this.count()) return;
+    this.request(this.http.post(this.endpoint + '/read-all', null), 'Could not mark all notifications as read.',
+      () => this.markAllRead(), () => this.updateRead());
+  }
+
+  retry(): void {
+    this.failure()?.retry();
+  }
+
+  private updateRead(id?: string): void {
+    const inbox = this.inbox();
+    if (!inbox) return;
+    const readAt = new Date().toISOString();
+    const unreadOnly = this.filter() === 'unread';
+    const items = inbox.items
+      .map(item => !item.readAt && (!id || item.id === id) ? { ...item, readAt } : item)
+      .filter(item => !unreadOnly || !item.readAt);
+    this.keepListFocus(items);
+    this.inbox.set({
+      items,
+      unreadCount: id ? Math.max(0, inbox.unreadCount - 1) : 0,
+      hasMore: (id || !unreadOnly) ? inbox.hasMore : false
     });
   }
 
-  load(more = false): void {
-    if (this.loading()) {
-      if (!more) this.refreshAfterLoad = true;
+  private keepListFocus(items: Notice[], firstAddedId?: string): void {
+    const list = this.list()?.nativeElement;
+    if (!list) return;
+    const focused = list.ownerDocument.activeElement;
+    const row = focused?.closest<HTMLElement>('[data-notice-id]');
+    const id = row?.dataset['noticeId'];
+    let targetId = firstAddedId;
+    if (row && id && list.contains(row)) {
+      const remaining = items.find(item => item.id === id);
+      if (remaining && !(remaining.readAt && focused?.matches('[data-mark-read]'))) return;
+      const index = (this.inbox()?.items ?? []).findIndex(item => item.id === id);
+      targetId = remaining?.id ?? items[Math.min(index, items.length - 1)]?.id;
+    } else if (!focused || focused !== this.showMore()?.nativeElement) {
       return;
     }
-    this.loading.set(true);
-    const offset = more ? this.offset : 0;
-    this.http.get<Inbox>(this.endpoint, { params: { offset } }).pipe(takeUntilDestroyed(this.destroy)).subscribe({
-      next: page => {
-        const previous = more ? this.inbox()?.items ?? [] : [];
-        const items = new Map([...previous, ...page.items].map(item => [item.id, item]));
-        this.inbox.set({ ...page, items: [...items.values()] });
-        this.error.set('');
-        this.offset = offset + page.items.length;
-        this.loading.set(false);
-        if (this.refreshAfterLoad) {
-          this.refreshAfterLoad = false;
-          this.load();
-        }
+    afterNextRender(() => {
+      // Leave focus alone if the reader has already moved it elsewhere.
+      const active = list.ownerDocument.activeElement;
+      if (active !== focused && active !== list.ownerDocument.body) return;
+      const link = targetId ? list.querySelector<HTMLAnchorElement>(`[data-notice-id="${targetId}"] a`) : null;
+      (link ?? this.showMore()?.nativeElement ?? this.unreadFilter()?.nativeElement)?.focus({ preventScroll: true });
+    }, { injector: this.injector });
+  }
+
+  private request<T>(request: Observable<T>, message: string, retry: () => void, apply: (result: T) => void): void {
+    if (this.busy()) return;
+    this.failure.set(null);
+    this.busy.set(true);
+    request.pipe(takeUntilDestroyed(this.destroy)).subscribe({
+      next: result => {
+        apply(result);
+        this.loadedAt.set(new Date());
+        this.busy.set(false);
       },
       error: (err: HttpErrorResponse) => {
         if (err.status === 401) this.auth.sessionEnded();
-        this.error.set('Could not load notifications.');
-        this.refreshAfterLoad = false;
-        this.loading.set(false);
+        this.failure.set({ message, retry });
+        this.busy.set(false);
       }
     });
   }
