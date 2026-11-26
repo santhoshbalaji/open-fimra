@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { DOCUMENT, DatePipe, NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
@@ -21,6 +21,7 @@ import { DataState, StateRegion } from './ui/state-region';
 import { LayerChecks, LayerProblem, LayerStatus, LayerStatusBadge } from './layer-status';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
+import { defaultWorkspaceFormat } from './workspace-format';
 import { Icon } from './ui/icon';
 
 export type StepKey = 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
@@ -71,7 +72,7 @@ export const roleLabels: Record<string, string> = {
 /** The guided first-run wizard (PLAN.md section 7) for a root administrator. */
 @Component({
   selector: 'fimra-setup-wizard',
-  imports: [DatePipe, NgTemplateOutlet, EmptyState, FieldErrorSummary, LiveStatus, StateRegion, StatusBadge, LayerChecks, LayerStatusBadge, HlmAlertImports, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmTableImports, Icon],
+  imports: [NgTemplateOutlet, EmptyState, FieldErrorSummary, LiveStatus, StateRegion, StatusBadge, LayerChecks, LayerStatusBadge, HlmAlertImports, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmTableImports, Icon],
   templateUrl: './setup-wizard.html',
   styleUrl: './setup-wizard.css',
   host: { class: 'block h-full overflow-auto max-md:scroll-pt-16 max-md:scroll-pb-16' }
@@ -91,8 +92,7 @@ export class SetupWizard implements OnInit {
   private readonly watches = new Map<string, Subscription>();
   readonly finished = output<void>();
   readonly openLayers = output<void>();
-  readonly leave = output<void>();
-
+  readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
   readonly steps = steps;
   readonly roleLabels = roleLabels;
   readonly roles = Object.keys(roleLabels);

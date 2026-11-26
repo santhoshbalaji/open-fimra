@@ -96,19 +96,14 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 
 /* Keep existing screen actions and metadata until the screens use the shell header. */
 @media screen {
-  .page-content > :is(fimra-dashboard, fimra-situation-report, fimra-layers, fimra-devices, fimra-access-keys, fimra-forms-screen) > :first-child,
-  .page-content > fimra-shell-setup > fimra-setup-wizard > :first-child {
+  .page-content > :is(fimra-dashboard, fimra-situation-report) > :first-child {
     max-width: none;
     padding-inline: var(--page-gutter);
     padding-top: 0;
   }
-  .page-content > :is(fimra-dashboard, fimra-layers) fimra-page-header > header [role=heading],
+  .page-content > fimra-dashboard fimra-page-header > header [role=heading],
   .page-content > fimra-dashboard fimra-page-header h1,
-  .page-content > fimra-situation-report #report-title,
-  .page-content > :is(fimra-devices, fimra-forms-screen) > div > div:first-child > h2,
-  .page-content > fimra-shell-setup fimra-setup-wizard > div > div:first-child > h2 { display: none; }
-  .page-content > fimra-layers fimra-page-header > header > div:first-child { display: none; }
-  .page-content > fimra-layers fimra-page-header > header { justify-content: flex-end; }
+  .page-content > fimra-situation-report #report-title { display: none; }
 }
 .view-switch { gap: 4px; padding: 4px; border-radius: var(--radius-card); background: var(--color-background); }
 .view-switch [aria-pressed=true] { color: var(--color-brand); background: var(--color-card); box-shadow: var(--shadow-panel); }

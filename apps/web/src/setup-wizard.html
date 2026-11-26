@@ -1,9 +1,4 @@
-<div class="mx-auto grid max-w-[1080px] gap-4 px-4 pt-6 pb-12 sm:px-8">
-  <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-    <h2 class="text-display">First-run setup</h2>
-    @if (state(); as state) { <p class="text-muted-foreground">{{ state.workspace.name }}</p> }
-    <button hlmBtn variant="ghost" size="sm" type="button" class="ms-auto" (click)="leave.emit()">Leave setup for now</button>
-  </div>
+<div class="grid gap-4 px-(--page-gutter) pb-12">
   @if (state(); as state) {
     <div class="grid grid-cols-[minmax(0,1fr)] items-start gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
       <ng-template #stepList>
@@ -44,7 +39,7 @@
       <section hlmCard class="setup-step gap-5 overflow-visible! px-5 sm:px-6" aria-labelledby="step-heading">
         <div class="grid gap-1">
           <p class="hidden text-xs text-muted-foreground md:block">Step {{ stepIndex() + 1 }} of {{ steps.length }}</p>
-          <h3 id="step-heading" #stepHeading tabindex="-1" class="text-title focus-visible:outline-3 focus-visible:outline-ring">{{ steps[stepIndex()].label }}</h3>
+          <h2 id="step-heading" #stepHeading tabindex="-1" class="text-title focus-visible:outline-3 focus-visible:outline-ring">{{ steps[stepIndex()].label }}</h2>
         </div>
         @if (error()) {
           <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5"><svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
@@ -126,9 +121,9 @@
                   [attr.data-published]="layer.published || null">
                   <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                     <div class="grid gap-1">
-                      <h4 [id]="'review-' + layer.key" tabindex="-1" class="rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+                      <h3 [id]="'review-' + layer.key" tabindex="-1" class="rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring">
                         {{ layer.name }}@if (!layer.required) { <small class="font-normal text-muted-foreground"> (optional)</small> }
-                      </h4>
+                      </h3>
                       <fimra-layer-status class="layer-state justify-self-start" [status]="drafts()[layer.key]?.status ?? layer.latest?.status"
                         [alreadyPublished]="layer.published" [blocked]="!!blocking(layer).length" readyLabel="Ready to publish"
                         [readFailed]="!!(checkErrors()[layer.key] || layerMessages()[layer.key])" />
@@ -191,7 +186,7 @@
             <p role="status" class="flex items-start gap-2 rounded-control bg-background px-3 py-2">
               @switch (state.firms.source) {
                 @case ('settings') { <svg fimraIcon="key-round" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
-                  <span>A key is saved, set on {{ state.firms.setAt | date:'medium' }}@if (state.firms.hint) {, ending in {{ state.firms.hint }}}. It is stored encrypted and is never shown again.</span> }
+                  <span>A key is saved@if (state.firms.setAt; as setAt) {, set on <time [attr.datetime]="setAt">{{ dateTime(setAt) }}</time>}@if (state.firms.hint) {, ending in {{ state.firms.hint }}}. It is stored encrypted and is never shown again.</span> }
                 @case ('environment') { <svg fimraIcon="key-round" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
                   <span>This server uses the key in its FIMRA_FIRMS_MAP_KEY setting. A key saved here takes its place.</span> }
                 @default { <svg fimraIcon="info" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg><span>No key is saved yet.</span> }
@@ -327,11 +322,11 @@
                             @if (item.emailStatus === 'sent') { <span hlmBadge variant="outline" class="ms-2"><svg fimraIcon="mail-check" aria-hidden="true" class="size-3"></svg>Email sent</span> }
                             @if (item.emailStatus === 'failed') { <span hlmBadge variant="destructive" class="ms-2"><svg fimraIcon="mail-x" aria-hidden="true" class="size-3"></svg>Email failed</span> }
                             <span class="mt-1 block text-muted-foreground sm:hidden">{{ roleLabels[item.role] }} · {{ item.unitName || item.unitPath }} ·
-                              Expires {{ item.expiresAt | date:'mediumDate' }}</span>
+                              Expires <time [attr.datetime]="item.expiresAt">{{ dateTime(item.expiresAt) }}</time></span>
                           </td>
                           <td hlmTd class="max-sm:hidden">{{ roleLabels[item.role] }}</td>
                           <td hlmTd class="max-sm:hidden">{{ item.unitName || item.unitPath }}</td>
-                          <td hlmTd class="max-sm:hidden"><time>{{ item.expiresAt | date:'mediumDate' }}</time></td>
+                          <td hlmTd class="max-sm:hidden"><time [attr.datetime]="item.expiresAt">{{ dateTime(item.expiresAt) }}</time></td>
                           <td hlmTd class="text-end"><button hlmBtn variant="ghost" size="sm" type="button" class="text-destructive" [disabled]="busy()"
                             [attr.aria-label]="'Revoke invitation for ' + item.email" (click)="revoke(item)">Revoke</button></td>
                         </tr>

@@ -87,7 +87,10 @@ export const shellRoutes: Routes = [
   destinationRoute('/reports/situation', () => import('./situation-report').then(module => module.SituationReportView)),
   destinationRoute('/dashboard', () => import('./dashboard').then(module => module.Dashboard)),
   destinationRoute('/settings/layers', () => import('./layers').then(module => module.Layers)),
-  destinationRoute('/settings/forms', () => import('./forms/forms-screen').then(module => module.FormsScreen)),
+  {
+    ...destinationRoute('/settings/forms', () => import('./forms/forms-screen').then(module => module.FormsScreen)),
+    canDeactivate: [(screen: { confirmLeaving(): boolean | Promise<boolean> }) => screen.confirmLeaving()]
+  },
   destinationRoute('/settings/setup', () => import('./shell-setup').then(module => module.SetupScreen)),
   destinationRoute('/settings/gis', () => import('./access-keys').then(module => module.AccessKeys)),
   destinationRoute('/settings/devices', () => import('./devices').then(module => module.Devices)),

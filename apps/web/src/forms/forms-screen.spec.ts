@@ -1,7 +1,8 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
+import { NgTemplateOutlet } from '@angular/common';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { Component, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,8 +23,22 @@ const nationalVersion: VersionSummary = {
 };
 const nationalForm: FormSummary = { form: 'first-report', level: 'national', unit: null, canManage: true, versions: [nationalVersion], assignments: [] };
 
+@Component({
+  imports: [FormsScreen, NgTemplateOutlet],
+  template: `
+    <header>
+      <ng-container [ngTemplateOutlet]="screen()?.pageSecondary() ?? null" />
+      <ng-container [ngTemplateOutlet]="screen()?.pagePrimary() ?? null" />
+    </header>
+    <fimra-forms-screen />
+  `
+})
+class FormsHost {
+  readonly screen = viewChild(FormsScreen);
+}
+
 describe('FormsScreen', () => {
-  let fixture: ComponentFixture<FormsScreen>;
+  let fixture: ComponentFixture<FormsHost>;
   let http: HttpTestingController;
   const roles = signal<Role[]>([{ role: 'state_admin', hierarchy: 'territorial', path: 'ds' }]);
   const admin = signal(true);
@@ -36,7 +51,7 @@ describe('FormsScreen', () => {
     stubLayoutApis();
     admin.set(true);
     roles.set([{ role: 'state_admin', hierarchy: 'territorial', path: 'ds' }]);
-    TestBed.configureTestingModule({ imports: [FormsScreen], providers: [
+    TestBed.configureTestingModule({ imports: [FormsHost], providers: [
       provideHttpClient(), provideHttpClientTesting(),
       provideSpartanHlm(),
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } },
@@ -44,7 +59,7 @@ describe('FormsScreen', () => {
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test/' } }
     ] });
     vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
-    fixture = TestBed.createComponent(FormsScreen);
+    fixture = TestBed.createComponent(FormsHost);
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
   });
@@ -58,9 +73,10 @@ describe('FormsScreen', () => {
   it('lists forms by level with how many reports each version has', () => {
     http.expectOne(base).flush([nationalForm]);
     fixture.detectChanges();
-    const headings = [...root().querySelectorAll('h3')].map(h => h.textContent?.trim());
+    const headings = [...root().querySelectorAll('h2')].map(h => h.textContent?.trim());
     expect(headings).toEqual(['National templates', 'State forms', 'Division forms']);
     expect(root().querySelector('.version-row')!.textContent).toContain('1 report');
+    expect(root().querySelector('.version-row time')!.textContent).toContain('3:30 pm IST');
     expect(root().querySelector('.version-row fimra-status-badge svg[data-icon=circle-check]')).toBeTruthy();
     expect(button('Extend version 1 of First report')).toBeTruthy();
     expect(root().textContent).toContain('No state forms yet.');
@@ -95,7 +111,7 @@ describe('FormsScreen', () => {
     http.expectOne(base).flush([nationalForm]);
     fixture.detectChanges();
     const publish = button('Publish…')!;
-    const confirmPublish = vi.spyOn(fixture.componentInstance, 'confirmPublish');
+    const confirmPublish = vi.spyOn(fixture.componentInstance.screen()!, 'confirmPublish');
     publish.focus();
     click('Publish…');
     TestBed.tick();
@@ -149,7 +165,43 @@ describe('FormsScreen', () => {
     expect(root().textContent).toContain('1 report filled in on this version');
     expect(button('Save draft')).toBeUndefined();
     click('Back to forms');
-    expect(root().querySelector('h2')!.textContent).toContain('Forms');
+    expect(root().querySelector('h2')!.textContent).toContain('National templates');
+  });
+
+  it('keeps unsaved changes on cancel and returns to the list on discard', async () => {
+    http.expectOne(base).flush([]);
+    fixture.detectChanges();
+    click('New state form');
+    type('#start-id', 'demo-patrol');
+    type('#start-title', 'Demo patrol');
+    click('Open in the designer');
+    const screen = fixture.componentInstance.screen()!;
+    const close = vi.spyOn(screen, 'closeDesigner');
+    const back = button('Back to forms')!;
+    back.focus();
+    click('Back to forms');
+    TestBed.tick();
+    const dialog = () => document.querySelector('[role=alertdialog]')!;
+    expect(dialog().textContent).toContain('Leave without saving?');
+    const keep = dialog().querySelector('button')!;
+    expect(keep.textContent).toContain('Keep editing');
+    expect(document.activeElement).toBe(keep);
+    keep.click();
+    TestBed.tick();
+    await close.mock.results[0].value;
+    expect(screen.dirty()).toBe(true);
+    expect(document.activeElement).toBe(back);
+
+    click('Back to forms');
+    TestBed.tick();
+    const discard = dialog().querySelectorAll('button')[1];
+    expect(discard.textContent).toContain('Discard changes');
+    discard.click();
+    TestBed.tick();
+    await close.mock.results[1].value;
+    fixture.detectChanges();
+    expect(screen.editing()).toBeNull();
+    expect(root().textContent).toContain('National templates');
   });
 
   it('adds a national template from a file', () => {
