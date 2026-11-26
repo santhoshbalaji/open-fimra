@@ -22,8 +22,9 @@
       </hlm-select>
     </hlm-field>
   }
-  @if (workspace.message() || linkedMessage() || tileError() || geographyError() || error()) {
-    <p class="map-message" role="status">{{ workspace.message() || linkedMessage() || tileError() || geographyError() || error() }}</p>
+  <fimra-state-region [state]="mapDataState()" (retry)="retryMapData()" />
+  @if (workspace.message() || linkedMessage() || error()) {
+    <p class="map-message" role="status">{{ workspace.message() }} {{ linkedMessage() }} {{ error() }}</p>
   }
 </div>
 <section class="map-key" aria-label="Map key">
@@ -114,16 +115,15 @@
     @if (queue.rows().length) {
       <table hlmTable class="alert-table">
         <caption class="sr-only">{{ queueLabels[queue.active()] }} alerts</caption>
-        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Detection and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
+        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Alert and place</th><th hlmTh scope="col">Workflow</th></tr></thead>
         <tbody hlmTBody>
           @for (row of queue.rows(); track row.id) {
             @let active = row.detection_id === selected()?.id?.toString();
             @let place = places(row);
             <tr hlmTr [attr.data-state]="active ? 'selected' : null">
               <td hlmTd><button #rowButton class="row-open" (click)="openRow(row, rowButton)"
-                    [attr.aria-label]="classes[row.forest_class] + ', ' + place.firstName + ', ' + localTime.format(row.observed_at * 1000)"
-                    [attr.aria-current]="active ? 'true' : null">{{ classes[row.forest_class] }}</button>
-                <p>{{ place.firstName }}</p>
+                    [attr.aria-current]="active ? 'true' : null">{{ alertRowLabel(row, place.firstName) }}</button>
+                <small>{{ classes[row.forest_class] }}</small>
                 @if (place.rest) { <small>{{ place.rest }}</small> }
                 <small><time [title]="localTime.format(row.observed_at * 1000)">{{ relativeAge(row.observed_at, now()) }}</time></small>
                 @if (row.triage) { <small>{{ reasons[row.triage] }}</small> }

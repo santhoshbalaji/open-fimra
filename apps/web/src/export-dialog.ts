@@ -21,6 +21,7 @@ export const exportFormats = {
 };
 export type ExportFormat = keyof typeof exportFormats;
 type Kind = 'alerts' | 'detections' | 'submissions';
+const datasets: Record<Kind, string> = { alerts: 'Alerts', detections: 'Detections on the map', submissions: 'Field reports' };
 export interface ExportStatus {
   id: string;
   status: 'pending' | 'ready' | 'failed' | 'expired';
@@ -58,6 +59,7 @@ export class ExportDialog {
   readonly closed = output<void>();
 
   readonly formatLabels = exportFormats;
+  readonly datasets = datasets;
   readonly formats = Object.entries(exportFormats) as [ExportFormat, string][];
   readonly kind = signal<Kind>('alerts');
   readonly decisionWords: Record<string, string> = { pending: 'waiting for a decision', approved: 'approved', returned: 'returned' };
@@ -76,11 +78,11 @@ export class ExportDialog {
     const reports = this.kind() === 'submissions';
     const parts = [(reports ? 'received' : 'observed') + ' in the past ' + (hours % 24 === 0 && hours > 24 ? `${hours / 24} days` : `${hours} hours`)];
     parts.push(this.forestClass() ? classes[this.forestClass() as ForestClass] : 'all forest classes');
-    if (this.unitPath()) parts.push('units under ' + this.unitPath());
+    parts.push(this.unitPath() ? 'units under ' + this.unitPath() : 'all units you can see');
     if (this.kind() === 'alerts') parts.push(this.onlyQueue() ? this.queueLabel() + ' queue' : 'all queues you can see');
     if (reports) {
       parts.push(this.form() ? (this.formLabel() || this.form()) + ' reports, with a column for each answer' : 'reports on every form');
-      if (this.decision()) parts.push(this.decisionWords[this.decision()] ?? this.decision());
+      parts.push(this.decision() ? this.decisionWords[this.decision()] ?? this.decision() : 'all decisions');
     }
     return parts.join(' · ');
   });
@@ -120,6 +122,7 @@ export class ExportDialog {
   }
 
   async prepare(): Promise<void> {
+    if (this.busy()) return;
     this.reset();
     this.busy.set(true);
     const body: Record<string, unknown> = { kind: this.kind(), format: this.format(), hours: this.hours() };

@@ -3,10 +3,11 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, effect, inject, input, output, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { StatusBadge } from '../ui/status-badge';
 import { decisionLabels, serverProblems, type Submission } from './form-api';
 import { FormFill } from './form-fill';
@@ -30,7 +31,7 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
       <section class="approval" aria-labelledby="approval-title">
         <h4 id="approval-title">Decision</h4>
         @if (s.approval; as a) {
-          <p><fimra-status-badge [icon]="a.decision === 'approved' ? 'complete' : 'overdue'" [label]="labels[a.decision]" />
+          <p #decisionResult tabindex="-1"><fimra-status-badge [icon]="a.decision === 'approved' ? 'complete' : 'overdue'" [label]="labels[a.decision]" />
             by {{ a.by }}, {{ time(a.at) }}</p>
           @if (a.note) { <p class="approval-note">{{ a.note }}</p> }
         } @else if (s.canApprove) {
@@ -48,7 +49,7 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
           } @else {
             <p>{{ labels.pending }}. A decision cannot be changed later.</p>
             <div class="form-actions">
-              <button hlmBtn type="button" [disabled]="busy()" (click)="decide('approved', '')">Approve</button>
+              <button #approve hlmBtn type="button" [busy]="busy()" (click)="approveReport(approve)">Approve</button>
               <button hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="returning.set(true)">Return with a note</button>
             </div>
           }
@@ -77,6 +78,11 @@ export class SubmissionView {
   readonly labels = decisionLabels;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
+  private readonly confirmation = inject(ConfirmDialog);
+  private readonly lifetime = inject(DestroyRef);
+  private confirming = false;
+  private readonly injector = inject(Injector);
+  private readonly decisionResult = viewChild<ElementRef<HTMLElement>>('decisionResult');
 
   constructor() {
     effect(onCleanup => {
@@ -99,6 +105,23 @@ export class SubmissionView {
     return when.format(new Date(value));
   }
 
+  async approveReport(trigger: HTMLButtonElement): Promise<void> {
+    const report = this.submission();
+    if (!report?.canApprove || report.approval || this.confirming || this.busy()) return;
+    this.confirming = true;
+    try {
+      const confirmed = await this.confirmation.open({
+        heading: 'Approve this report?',
+        detail: 'This decision cannot be changed later.',
+        confirmLabel: 'Approve report',
+        trigger
+      });
+      if (confirmed && !this.lifetime.destroyed && this.submission() === report) await this.decide('approved', '');
+    } finally {
+      this.confirming = false;
+    }
+  }
+
   async decide(decision: 'approved' | 'returned', note: string): Promise<void> {
     const current = this.submission();
     if (!current || this.busy()) return;
@@ -115,16 +138,24 @@ export class SubmissionView {
       this.returning.set(false);
       toast.success(decision === 'approved' ? 'Report approved.' : 'Report returned.');
       this.decided.emit(saved);
+      if (decision === 'approved') this.focusDecision();
     } catch (error) {
       const failed = error as HttpErrorResponse;
       if (failed.status === 401) { this.auth.sessionEnded(); return; }
       this.message.set(failed.status === 403 ? 'Only a supervising officer on this alert can decide.' : serverProblems(failed).message);
       if (failed.status === 409) {
         // Someone else decided first. Show their decision.
-        this.http.get<Submission>(this.workspaceUrl() + '/submissions/' + current.id).subscribe({ next: s => this.submission.set(s) });
+        this.http.get<Submission>(this.workspaceUrl() + '/submissions/' + current.id).subscribe({ next: s => {
+          this.submission.set(s);
+          if (decision === 'approved') this.focusDecision();
+        } });
       }
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private focusDecision(): void {
+    afterNextRender(() => this.decisionResult()?.nativeElement.focus(), { injector: this.injector });
   }
 }

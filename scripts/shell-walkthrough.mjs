@@ -158,12 +158,13 @@ try {
   const list = page.locator('.alert-panel');
   const row = list.locator('.row-open').last();
   await expect(row).toBeVisible();
-  const offset = await list.evaluate(element => {
-    element.scrollTop = 36;
-    return element.scrollTop;
-  });
+  await list.evaluate(element => { element.scrollTop = 36; });
+  // Use the position at selection, after the row has been brought into view.
+  await row.scrollIntoViewIfNeeded();
+  const offset = await list.evaluate(element => element.scrollTop);
   assert.ok(offset > 0, 'The list must scroll to exercise position restoration.');
-  const selection = await row.getAttribute('aria-label');
+  const selection = (await row.innerText()).trim();
+  assert.match(selection, /^.+ · Alert #\d+$/);
   await row.click();
   await expect(page).toHaveURL(/alert=/);
   await expect(page.locator('.detail-card')).toBeVisible();

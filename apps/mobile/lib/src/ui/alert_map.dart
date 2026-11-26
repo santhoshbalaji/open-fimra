@@ -252,30 +252,45 @@ class MapKey extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return ListView(
-      shrinkWrap: true,
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      children: [
-        Text('Map key', style: text.titleLarge),
-        const SizedBox(height: 12),
-        Text('Shape shows the forest class', style: text.titleSmall),
-        for (final forest in ForestClass.values)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: DetectionSymbol(forestClass: forest, size: 20),
-            title: Text(forest.label),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Map key', style: text.titleLarge)),
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+            ],
           ),
-        const SizedBox(height: 8),
-        Text('Colour shows time since detection', style: text.titleSmall),
-        for (var age = 0; age < fireAgeSteps.length; age++)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: DetectionSymbol(forestClass: ForestClass.inside, age: age, size: 20),
-            title: Text(fireAgeSteps[age][0].toUpperCase() + fireAgeSteps[age].substring(1)),
+          const SizedBox(height: 12),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Text('Shape shows the forest class', style: text.titleSmall),
+                for (final forest in ForestClass.values)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: DetectionSymbol(forestClass: forest, size: 20),
+                    title: Text(forest.label),
+                  ),
+                const SizedBox(height: 8),
+                Text('Colour shows time since detection', style: text.titleSmall),
+                for (var age = 0; age < fireAgeSteps.length; age++)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: DetectionSymbol(forestClass: ForestClass.inside, age: age, size: 20),
+                    title: Text(fireAgeSteps[age][0].toUpperCase() + fireAgeSteps[age].substring(1)),
+                  ),
+                const SizedBox(height: 8),
+                Text('Your own area has a thick outline.', style: text.bodyMedium),
+              ],
+            ),
           ),
-        const SizedBox(height: 8),
-        Text('Your own area has a thick outline.', style: text.bodyMedium),
-      ],
+        ],
+      ),
     );
   }
 }

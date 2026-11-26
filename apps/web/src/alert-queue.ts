@@ -23,6 +23,11 @@ export interface AlertRow extends Detection {
 }
 interface Page { items: AlertRow[]; counts: Partial<Record<Queue, number>>; canReview: boolean; nextCursor?: string }
 
+/** Name the place first and distinguish alerts from different observations there. */
+export function alertRowLabel(row: AlertRow, place: string): string {
+  return `${place} · Alert #${row.id}`;
+}
+
 @Injectable()
 export class AlertQueue {
   private readonly http = inject(HttpClient);

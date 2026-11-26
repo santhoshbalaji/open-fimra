@@ -6,17 +6,23 @@
   </p>
 }
 @if (summary(); as data) {
-  <div class="stat-grid grid grid-cols-3 gap-3 sm:gap-4 lg:grid-cols-4">
+  <p id="dashboard-scope" class="text-muted-foreground">
+    Jurisdiction: {{ jurisdiction() }}
+    @if (filters.unitPath()) { · Units under {{ filters.unitPath() }} }
+    @if (filters.forestClass(); as forestClass) { · {{ classes[forestClass] }} }
+  </p>
+  <div class="stat-grid grid grid-cols-3 gap-3 sm:gap-4 lg:grid-cols-4" role="group" aria-describedby="dashboard-scope">
     <section hlmCard size="sm" class="col-span-3 lg:col-span-1" aria-labelledby="today-title">
       <hlm-card-header><h3 hlmCardTitle id="today-title">Detections today</h3>
-        <p hlmCardDescription>Since midnight in India</p></hlm-card-header>
+        <p hlmCardDescription>Since midnight, India Standard Time</p></hlm-card-header>
       <div hlmCardContent><dl class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">@for (key of classKeys; track key) {
         <dt class="text-muted-foreground">{{ classes[key] }}</dt><dd class="text-end font-semibold tabular-nums">{{ data.today[key] || 0 }}</dd>
       }</dl></div>
     </section>
     @for (tile of tiles; track tile.key) {
       <section hlmCard size="sm" [attr.aria-labelledby]="'tile-' + tile.key">
-        <hlm-card-header><h3 hlmCardTitle [id]="'tile-' + tile.key">{{ tile.label }}</h3></hlm-card-header>
+        <hlm-card-header><h3 hlmCardTitle [id]="'tile-' + tile.key">{{ tile.label }}</h3>
+          <p hlmCardDescription>Past {{ filters.hours() }} hours</p></hlm-card-header>
         <div hlmCardContent class="flex flex-wrap items-end justify-between gap-2">
           <strong class="stat-value text-figure font-semibold tabular-nums">{{ data[tile.key] }}</strong>
           @if (tile.key === 'overdue' && data.overdue) { <fimra-status-badge icon="overdue" label="Needs action" /> }
