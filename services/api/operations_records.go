@@ -360,7 +360,7 @@ func (a api) operationsSubmission(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	var in operationsSubmissionRequest
 	if !decodeOperations(w, r, &in, maxSubmissionBytes) || !uuidPattern.MatchString(in.ID) ||
-		!formKeyPattern.MatchString(in.Form) || in.Version < 1 || len(in.Values) == 0 || in.Step != "" || in.Location != nil {
+		!formKeyPattern.MatchString(in.Form) || in.Version < 1 || len(in.Values) == 0 || in.Step != "" || in.Location != nil || in.ProvisionalSubmissionID != nil {
 		writeError(w, http.StatusBadRequest, "Provide a submission ID, a form, its version and the values.")
 		return
 	}

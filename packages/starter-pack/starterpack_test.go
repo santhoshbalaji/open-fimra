@@ -17,7 +17,8 @@ func TestFormsAreValid(t *testing.T) {
 	list := Forms()
 	want := []string{"control-room-dispatch", "first-report", "final-report", ManualFireReport, "patrol-log",
 		"offence-referral", "relief-referral", "preparedness-work", "fire-training", "readiness-check",
-		"prescribed-burn-authorisation", "prescribed-burn-completion", "after-action-finding"}
+		"prescribed-burn-authorisation", "prescribed-burn-completion", "after-action-finding",
+		"response-intake", ResponseFlash, ResponseUpdate, "response-action", DamageAssessment}
 	var keys []string
 	for _, f := range list {
 		keys = append(keys, f.Key)
@@ -35,6 +36,7 @@ func TestFormsAreValid(t *testing.T) {
 
 func TestStepsFitTheDefaultWorkflow(t *testing.T) {
 	used := map[string]string{}
+	extendedSteps := append(slices.Clone(defaultSteps), "assigned", "flash_update", "response_update")
 	for _, f := range Forms() {
 		var form struct {
 			Stages []struct {
@@ -55,8 +57,15 @@ func TestStepsFitTheDefaultWorkflow(t *testing.T) {
 			t.Errorf("%s has no stages, so it can be filled in at one step only", f.Key)
 		}
 		for _, step := range f.Steps {
-			if !slices.Contains(defaultSteps, step) || step == "new" {
+			steps := defaultSteps
+			if f.Extended {
+				steps = extendedSteps
+			}
+			if !slices.Contains(steps, step) || step == "new" {
 				t.Errorf("%s is assigned to %s, which is not a step after New in the default workflow", f.Key, step)
+			}
+			if f.Extended {
+				continue
 			}
 			if other, taken := used[step]; taken {
 				t.Errorf("%s and %s are both assigned to %s", f.Key, other, step)

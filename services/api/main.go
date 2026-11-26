@@ -110,6 +110,10 @@ func main() {
 }
 
 func run(ctx context.Context, cfg config, logger *slog.Logger) error {
+	choices, err := loadFeedbackChoices(os.Getenv("FIMRA_SOURCE_FEEDBACK_CHOICES"))
+	if err != nil {
+		return err
+	}
 	startup, cancelStartup := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelStartup()
 
@@ -190,7 +194,8 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 
 	server := &http.Server{
 		Handler: newHandler(pool, auth, logger, cfg.corsOrigins, cfg.uploadDir, jobs,
-			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys), withAttachments(attachments, maxAttachment), withPush(push)),
+			withExports(cfg.exportDir, cfg.exportTTL), withSetup(setup, secrets, keys), withAttachments(attachments, maxAttachment), withPush(push),
+			func(a *api) { a.feedbackChoices = choices }),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       time.Minute,

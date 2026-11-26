@@ -8,6 +8,7 @@ import 'package:fimra_field/src/api/models.dart';
 import 'package:fimra_field/src/data/field_store.dart';
 import 'package:fimra_field/src/data/offline_repository.dart';
 import 'package:fimra_field/src/data/outbox.dart';
+import 'package:fimra_field/src/forms/answers.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -54,6 +55,72 @@ void main() {
     expect(await store.read('guard', 'demo', 'reference'), isNull);
     expect(await store.reports('guard'), isEmpty);
     expect(await store.file('report', 'photo'), isNull);
+  });
+
+  test('a revised assessment keeps its provisional link and both large photos through offline sync', () async {
+    final source = File('../../packages/starter-pack/forms/damage-assessment.json');
+    final definition = jsonDecode(await source.readAsString()) as Json;
+    final tree = FormTree(definition);
+    final photos = [
+      ReportFile('00000000-0000-4000-8000-000000000011', 'area.jpg', 'image/jpeg', Uint8List(3 << 20)..[0] = 11),
+      ReportFile('00000000-0000-4000-8000-000000000012', 'damage.jpg', 'image/jpeg', Uint8List(4 << 20)..[0] = 12),
+    ];
+    final checked = AnswerSession(
+      tree,
+      {
+        'assessed_at': '2025-01-01T10:00:00Z',
+        'measurement': 'surveyed',
+        'area_ha': 7.25,
+        'method': 'Walked the perimeter',
+        'uncertainty': 'Far edge checked by the second team',
+        'alert_area_ha': 2.5,
+        'area_basis': 'Burnt strip nearest this alert',
+        'vegetation': 'Grass and dry leaves burnt',
+        'property': 'The access gate was damaged',
+        'area_photo': [photos[0].id],
+        'impact_photo': [photos[1].id],
+      },
+      step: 'final_report',
+      attachments: {for (final photo in photos) photo.id: photo.metadata},
+    );
+    expect(checked.answers, isNotNull, reason: checked.problems.toString());
+    expect(checked.attachmentIds, photos.map((photo) => photo.id).toSet());
+
+    var connected = false;
+    final uploads = <int>[];
+    Json? posted;
+    final api = FimraApi(
+      baseUrl: 'http://example.invalid',
+      token: ({forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        if (!connected) throw http.ClientException('Signal lost');
+        if (request.method == 'GET') return http.Response('{}', 404);
+        if (request.method == 'PUT') {
+          uploads.add(request.bodyBytes.length);
+          return http.Response('{}', 201);
+        }
+        posted = jsonDecode(request.body) as Json;
+        return http.Response('{}', 201);
+      }),
+    );
+    const parent = '00000000-0000-4000-8000-000000000021';
+    final body = {
+      'id': '00000000-0000-4000-8000-000000000022',
+      'form': 'damage-assessment',
+      'version': 1,
+      'step': 'final_report',
+      'provisionalSubmissionId': parent,
+      'values': checked.answers,
+    };
+    await store.enqueue('guard', 'demo', '42', 'Revised damage assessment', body, photos, generation: store.generation);
+    final outbox = ReportOutbox(api, store);
+    expect(await outbox.send('guard'), isEmpty);
+    expect((await store.reports('guard', pendingOnly: true)).single['received_at'], isNull);
+    connected = true;
+    expect(await outbox.send('guard', retry: true), {'demo'});
+    expect(uploads, unorderedEquals([3 << 20, 4 << 20]));
+    expect(posted, body);
+    expect(await store.reports('guard', pendingOnly: true), isEmpty);
   });
 
   test('a saved alert, timeline, form and map open without a signal', () async {

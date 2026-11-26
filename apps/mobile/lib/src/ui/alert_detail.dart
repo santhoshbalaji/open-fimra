@@ -128,12 +128,21 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     required String fromStep,
     WorkflowMove? move,
     Json? draft,
+    String? provisionalId,
     DateTime? reachedAt,
   }) async {
     if (_formOpen) return;
     _formOpen = true;
     try {
-      await _openForm(assignment, canSend: canSend, fromStep: fromStep, move: move, draft: draft, reachedAt: reachedAt);
+      await _openForm(
+        assignment,
+        canSend: canSend,
+        fromStep: fromStep,
+        move: move,
+        draft: draft,
+        provisionalId: provisionalId,
+        reachedAt: reachedAt,
+      );
     } on Exception {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fieldText(context).couldNotOpenTheReport)));
@@ -149,12 +158,14 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     required String fromStep,
     WorkflowMove? move,
     Json? draft,
+    String? provisionalId,
     DateTime? reachedAt,
   }) async {
     final repo = widget.view.services.offline!;
     final generation = repo.store.generation;
     final draftBody = _body(draft);
     if (draft != null) assignment = object(draftBody['assignment']);
+    final parent = provisionalId ?? draftBody['provisionalSubmissionId'] as String?;
     final definition = object(assignment['definition']);
     final id = draft?['id'] as String? ?? newDeviceId();
     final step = assignment['step'] as String;
@@ -192,7 +203,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     ).wait;
     if (!mounted || repo.store.generation != generation) return;
     final raised = _alert.raisedAt;
-    final title = assignment['title'] as String;
+    final title = parent == null ? assignment['title'] as String : fieldText(context).revisedDamageAssessment;
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => ReportForm(
@@ -200,6 +211,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
           step: step,
           initial: initial,
           reachedAt: reachedAt,
+          titleOverride: parent == null ? null : title,
           canSend: canSend,
           draftValues: object(draftBody['values']),
           draftFiles: files,
@@ -208,7 +220,15 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             _slug,
             _alert.id,
             title,
-            {'id': id, 'form': form, 'step': step, 'assignment': assignment, 'values': values, 'language': language},
+            {
+              'id': id,
+              'form': form,
+              'step': step,
+              'assignment': assignment,
+              'values': values,
+              'language': language,
+              'provisionalSubmissionId': ?parent,
+            },
             files,
             generation,
           ),
@@ -238,6 +258,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
               'id': id,
               'form': form,
               'version': assignment['version'],
+              'provisionalSubmissionId': ?parent,
               'step': step,
               'deviceTime': DateTime.now().toUtc().toIso8601String(),
               'location': ?queuedStep?.toJson()['location'],
@@ -285,10 +306,20 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
       if (at != null) reached[step] = DateTime.parse(at);
     }
     final moves = (current == _alert.status ? history?.moves : history?.offlineMoves[current]) ?? const [];
-    Json? savedFor(Json assignment, {required bool draft}) => queue.where((row) {
+    final submissions = objects(_reportData?['submissions']);
+    Json? savedFor(Json assignment, {required bool draft, String? provisionalId}) => queue.where((row) {
       if ((row['kind'] == 'draft') != draft || row['kind'] == 'step') return false;
+      if (row['received_at'] != null &&
+          (assignment['form'] == 'response-update' ||
+              submissions.any(
+                (report) => report['id'] == row['id'] && object(report['approval'])['decision'] == 'returned',
+              ))) {
+        return false;
+      }
       final body = _body(row);
-      return body['form'] == assignment['form'] && body['step'] == assignment['step'];
+      return body['form'] == assignment['form'] &&
+          body['step'] == assignment['step'] &&
+          body['provisionalSubmissionId'] == provisionalId;
     }).lastOrNull;
 
     final reportActions = <Widget>[];
@@ -296,7 +327,13 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     final assignedSteps = forms.map((form) => form['step']).toSet();
     final needsCurrentReport = forms.any((form) {
       if (form['step'] != current || form['submitted'] == true) return false;
-      final saved = savedFor(form, draft: false);
+      final saved =
+          savedFor(form, draft: false) ??
+          submissions
+              .where((report) => report['form'] == form['form'])
+              .map((report) => savedFor(form, draft: false, provisionalId: report['id'] as String))
+              .nonNulls
+              .firstOrNull;
       return saved == null || (saved['error'] != null && saved['retry_at'] == null);
     });
     for (final assignment in forms) {
@@ -305,11 +342,41 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
       final saved = savedFor(assignment, draft: false);
       final draft = savedFor(assignment, draft: true);
       final sent = assignment['submitted'] == true || saved?['received_at'] != null;
+      final repeatable = assignment['form'] == 'response-update';
       final atStep = reached.containsKey(step) || step == current;
       final move = moves.where((move) => move.step == step).firstOrNull;
       final canSend = atStep || (move != null && !needsCurrentReport);
       final canDraft = canSend || step == 'first_report' || draft != null;
-      if (sent || saved != null) {
+      final provisional = submissions.where(
+        (report) => report['form'] == 'damage-assessment' && report['provisionalAssessment'] == null,
+      );
+      if (assignment['form'] == 'damage-assessment' && atStep && _problem == null) {
+        for (final report in provisional) {
+          final parent = report['id'] as String;
+          final revisionDraft = savedFor(assignment, draft: true, provisionalId: parent);
+          final pendingRevision = savedFor(assignment, draft: false, provisionalId: parent);
+          final name = fieldText(context).revisedDamageAssessment;
+          final area = object(report['values'])['area_ha'];
+          if (pendingRevision != null) {
+            otherReports.add(ReportDelivery(item: pendingRevision));
+            continue;
+          }
+          reportActions.add(
+            OutlinedButton(
+              onPressed: () =>
+                  _fill(assignment, canSend: true, fromStep: current, draft: revisionDraft, provisionalId: parent),
+              child: Text(
+                revisionDraft != null
+                    ? fieldText(context).resumeDraft(name)
+                    : area is num
+                    ? fieldText(context).reviseAssessmentArea(formatNumber(context, area))
+                    : name,
+              ),
+            ),
+          );
+        }
+      }
+      if ((sent && !repeatable) || saved != null) {
         otherReports.add(
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -322,7 +389,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             ),
           ),
         );
-      } else if (canDraft && _problem == null) {
+      } else if (canDraft && _problem == null && (assignment['form'] != 'damage-assessment' || provisional.isEmpty)) {
         final name = title == 'First report' ? fieldText(context).firstReportActionName : workflowName(context, title);
         final buttonLabel = draft != null
             ? fieldText(context).resumeDraft(name)

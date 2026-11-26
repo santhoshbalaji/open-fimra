@@ -34,6 +34,7 @@ class ReportForm extends StatefulWidget {
     this.draftValues = const {},
     this.draftFiles = const [],
     this.draftLanguage,
+    this.titleOverride,
     this.saveDraft,
     this.canSend = true,
     this.reachedAt,
@@ -51,6 +52,7 @@ class ReportForm extends StatefulWidget {
   final Json draftValues;
   final List<ReportFile> draftFiles;
   final String? draftLanguage;
+  final String? titleOverride;
   final SaveDraft? saveDraft;
   final bool canSend;
   final DateTime? reachedAt;
@@ -241,10 +243,23 @@ class _ReportFormState extends State<ReportForm> {
         final reportedTime = switch (move.step) {
           'team_sent' => answers['dispatched_at'],
           'reached_site' => answers['reached_at'],
+          'flash_update' || 'response_update' => answers['checked_at'],
+          'extinguished' => answers['extinguished_at'],
           _ => null,
         };
+        final response = move.step == 'flash_update' || move.step == 'response_update'
+            ? <String, dynamic>{
+                'status': answers['fire_status'],
+                'estimatedExtent': ?answers['estimated_extent'],
+                'threats': ?answers['threats'],
+                'helpNeeded': ?answers['help_needed'],
+                'nextContact': ?answers['next_contact'],
+              }
+            : null;
         step = StepRequest(
           step: move.step,
+          note: move.step == 'assigned' ? answers['assigned_team'] as String? ?? '' : '',
+          response: response,
           clientId: newDeviceId(),
           clientTime: DateTime.now(),
           actualAt: move.extended && reportedTime is String ? DateTime.tryParse(reportedTime) : null,
@@ -297,7 +312,10 @@ class _ReportFormState extends State<ReportForm> {
             children: [
               Semantics(
                 headingLevel: 1,
-                child: Text(_text(widget.definition['title']), style: Theme.of(context).textTheme.titleLarge),
+                child: Text(
+                  widget.titleOverride ?? _text(widget.definition['title']),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
               if (description.isNotEmpty) Text(description),
               const SizedBox(height: 12),

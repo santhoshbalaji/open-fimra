@@ -1,0 +1,26 @@
+{
+  "fireSeen": { "yes": "Yes", "no": "No" },
+  "landClass": {
+    "forest": "Forest Land",
+    "agriculture": "Agriculture Land",
+    "revenue": "Revenue",
+    "industry": "Industry",
+    "other": "Others"
+  },
+  "fireType": {
+    "ground": "Ground Fire",
+    "surface": "Surface Fire",
+    "crown": "Crown Fire",
+    "other": "Please Specify"
+  },
+  "cause": {
+    "agriculture": "Agriculture",
+    "jhum": "Jhum cultivation",
+    "lightning": "Lightning",
+    "ntfp": "NTFP collection",
+    "control_burn": "Control burning",
+    "transmission": "Transmission line",
+    "unknown": "Unknown",
+    "other": "Others"
+  }
+}

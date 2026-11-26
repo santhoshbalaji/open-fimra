@@ -1,0 +1,33 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "response-intake",
+  "version": 1,
+  "title": {"en": "Fire intake report", "hi": "आग की सूचना का विवरण"},
+  "languages": ["en", "hi"],
+  "sections": [
+    { "key": "report", "title": {"en": "Report received", "hi": "प्राप्त सूचना"}, "items": [
+        {
+          "key": "report_source",
+          "type": "single-choice",
+          "label": {"en": "Who reported the fire?", "hi": "आग की सूचना किसने दी?"},
+          "required": true,
+          "choices": [
+            {"key": "phone", "label": {"en": "Phone caller", "hi": "फ़ोन करने वाला व्यक्ति"}},
+            {"key": "radio", "label": {"en": "Radio caller", "hi": "रेडियो पर सूचना देने वाला व्यक्ति"}},
+            {"key": "staff", "label": {"en": "Forest staff", "hi": "वन कर्मचारी"}},
+            {"key": "public", "label": {"en": "Member of the public", "hi": "आम नागरिक"}},
+            {"key": "satellite", "label": {"en": "Satellite alert", "hi": "उपग्रह अलर्ट"}},
+            {"key": "other", "label": {"en": "Other source", "hi": "अन्य स्रोत"}}
+          ]
+        },
+        {"key": "assigned_team", "type": "text", "label": {"en": "Team or officer assigned", "hi": "नियुक्त दल या अधिकारी"}, "required": true, "maxLength": 200},
+        {"key": "received_at", "type": "date-time", "label": {"en": "When was the report received?", "hi": "सूचना कब मिली?"}, "required": true, "notInFuture": true},
+        {"key": "alert_location", "type": "alert-value", "label": {"en": "Alert location", "hi": "अलर्ट का स्थान"}, "source": "location"},
+        {"key": "reported_location", "type": "point", "label": {"en": "Reported fire location", "hi": "बताया गया आग का स्थान"}},
+        {"key": "landmark", "type": "text", "label": {"en": "Nearest landmark or access route", "hi": "पास की पहचान वाली जगह या पहुँच का रास्ता"}, "maxLength": 1000},
+        {"key": "threats", "type": "text", "label": {"en": "What is at risk?", "hi": "किसे खतरा है?"}, "maxLength": 1000},
+        {"key": "help_needed", "type": "text", "label": {"en": "What help is needed?", "hi": "किस मदद की ज़रूरत है?"}, "maxLength": 1000}
+    ] }
+  ]
+}

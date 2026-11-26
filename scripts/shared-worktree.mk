@@ -60,7 +60,7 @@ worktree-db-owned:
 
 # Guard the worktree's main database before any recipe uses it. The disposable
 # tests claim/check their own namespace through recreate-db.
-db-shell db-migrate db-rollback db-status db-test seed-test api-run api-test-integration ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records \
+db-shell db-migrate db-rollback db-status db-test seed-test api-run api-test-integration ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records demo-response-forms \
 	backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key geo-worker-up geo-test-integration \
 	export-test-integration situation-report-test-integration xlsform-test-integration shell-walkthrough \
 	incident-walkthrough layers-walkthrough notifications-walkthrough: | worktree-db-owned

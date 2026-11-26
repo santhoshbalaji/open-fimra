@@ -605,6 +605,52 @@ an offence referral on a closed case, an authorised burn linked to an
 alert with the Controlled burn outcome, and an after-action finding with an
 owner. The demo division officer has the offence grant.
 
+### Damage assessment revisions
+
+Save the first damage assessment at Final report. To revise it, submit a new
+`damage-assessment` with its own ID and `provisionalSubmissionId` set to the
+first assessment's ID. Both reports must be for the same alert. The original
+has its own approval or return note and keeps its attachments. Multiple
+revisions can link to the same original. The revision response includes
+`provisionalAssessment` with the original ID, area, measurement method,
+uncertainty and review decision. The alert's grants govern access to both
+reports and their evidence.
+
+### Source feedback
+
+An alert can have feedback if its detection is from `fsi` and carries an
+`externalAlertRef` in its source data. For the fictional demo, the source is
+`demo_fsi`. Several alerts in one case can have different reference numbers
+and findings. Each feedback record uses the approved flash update from that
+alert. To include an area, use an approved damage assessment on the same
+alert with an explicit attributable area and a reason. Feedback includes
+only the area attributed to that alert. Staff can keep an unverified report
+and prepare feedback once they know whether there was a fire.
+
+`GET /api/v1/workspaces/{slug}/alerts/{id}/source-feedback` shows the external
+reference and feedback records to staff who can see the alert. A supervising
+officer can post `{"verificationId": "...", "assessmentId": "..."}` to the
+same address. Omit `assessmentId` to send no area. The same pair of reports
+finds the same feedback record and can be retried. The record keeps its
+mapped choices, area, remarks, submission time and any decision and receipt
+from the provider. Reports with different findings can produce a new
+feedback record.
+
+The [FSI FAST 3.0 feedback guide](https://fsi.nic.in/uploads/documents/technical_information_series_vol1_no2.pdf)
+shows the public choice labels. The API maps form keys to those labels with
+`source_feedback_choices.json`. Set `FIMRA_SOURCE_FEEDBACK_CHOICES` to an
+absolute path to a JSON file with the same keys to supply provider codes.
+**To confirm with FSI**
+
+Confirm the current codes, required choices, alert reference and accepted
+submission and receipt formats. Live FSI records stay
+prepared until a sender is connected through the agreed exchange. The demo
+sender creates a fictional acceptance without a network connection.
+
+Run `make demo-response-forms` to load a fictional case with two source
+alerts, distinct acceptance receipts and a returned provisional assessment
+linked to an approved revision.
+
 ### Attachments
 
 Upload each photo, signature or file before the submission, with an ID the phone makes:

@@ -1,0 +1,19 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "response-update",
+  "version": 1,
+  "title": {"en": "Response update", "hi": "कार्रवाई की नई जानकारी"},
+  "languages": ["en", "hi"],
+  "sections": [
+    { "key": "progress", "title": {"en": "Progress on site", "hi": "मौके की स्थिति"}, "items": [
+        {"key": "checked_at", "type": "date-time", "label": {"en": "Time of this update", "hi": "इस जानकारी का समय"}, "required": true, "notInFuture": true},
+        {"key": "fire_status", "type": "text", "label": {"en": "What is happening now?", "hi": "अभी क्या हो रहा है?"}, "maxLength": 300, "required": true},
+        {"key": "threats", "type": "text", "label": {"en": "What is at risk now?", "hi": "अब किसे खतरा है?"}, "maxLength": 300},
+        {"key": "resources", "type": "text", "label": {"en": "People and equipment on site", "hi": "मौके पर लोग और उपकरण"}, "maxLength": 1000},
+        {"key": "help_needed", "type": "text", "label": {"en": "What help is needed?", "hi": "किस मदद की ज़रूरत है?"}, "maxLength": 300},
+        {"key": "next_contact", "type": "date-time", "label": {"en": "Next contact time", "hi": "अगले संपर्क का समय"}},
+        {"key": "progress_photo", "type": "photo", "label": {"en": "Progress photo", "hi": "मौजूदा स्थिति की तस्वीर"}}
+    ] }
+  ]
+}

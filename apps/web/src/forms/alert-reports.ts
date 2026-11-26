@@ -13,9 +13,10 @@ import { workspaceFormat } from '../workspace-format';
 import { decisionLabels, type AssignedForm, type Submission } from './form-api';
 import { FormFill } from './form-fill';
 import { SubmissionView } from './submission-view';
+import { SourceFeedback } from './source-feedback';
 
 interface History { entries: { step: string; label: string }[]; moves: { step: string; label: string }[] }
-interface Draft { form: AssignedForm; initial: Record<string, unknown> }
+interface Draft { form: AssignedForm; initial: Record<string, unknown>; provisionalSubmissionId?: string }
 
 /**
  * The report forms on an alert's workflow, and the reports already sent.
@@ -24,7 +25,7 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
  */
 @Component({
   selector: 'fimra-alert-reports',
-  imports: [HlmButtonImports, HlmDialogImports, HlmSkeletonImports, SidePanel, StatusBadge, FormFill, SubmissionView],
+  imports: [HlmButtonImports, HlmDialogImports, HlmSkeletonImports, SidePanel, StatusBadge, FormFill, SubmissionView, SourceFeedback],
   host: { class: 'alert-reports' },
   styleUrl: './forms.css',
   encapsulation: ViewEncapsulation.None,
@@ -36,11 +37,11 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
           <ul class="report-forms">
             @for (f of list; track f.form + f.step) {
               <li>
-                <span><strong>{{ f.title }}</strong> <small>{{ msg('at {0}', [stepLabel(f.step)]) }}</small></span>
+                <span><strong>{{ msg(f.title) }}</strong> <small>{{ msg('at {0}', [stepLabel(f.step)]) }}</small></span>
                 @if (f.requiredNow) { <fimra-status-badge icon="overdue" [label]=" msg('Needed before the next step') " /> }
                 @else if (f.submitted) { <fimra-status-badge icon="complete" [label]=" msg('Sent') " /> }
                 @if (canFill(f)) {
-                  <button hlmBtn size="sm" [variant]="f.requiredNow ? 'primary' : 'outline'" (click)="fill(f)">{{ msg('Start {0}', [f.title]) }}</button>
+                  <button hlmBtn size="sm" [variant]="f.requiredNow ? 'primary' : 'outline'" (click)="fill(f)">{{ msg('Start {0}', [msg(f.title)]) }}</button>
                 }
               </li>
             }
@@ -50,7 +51,12 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
           <ul class="report-list" [attr.aria-label]=" msg('Reports sent for this alert') ">
             @for (s of submissions(); track s.id) {
               <li>
-                <button #report hlmBtn variant="link" size="sm" (click)="selected.set(s.id); review.show(report)">{{ msg('{0}, version {1}', [titleOf(s.form), s.version]) }}</button>
+                <button #report hlmBtn variant="link" size="sm" (click)="selected.set(s.id); review.show(report)">{{ msg('{0}, version {1}', [titleOf(s), s.version]) }}</button>
+                @if (assessmentForm(); as assessment) {
+                  @if (s.form === assessment.form && !s.provisionalAssessment) {
+                    <button hlmBtn size="sm" variant="outline" (click)="revise(assessment, s)">{{ msg('Revise this assessment') }}</button>
+                  }
+                }
                 <small>{{ s.submittedBy }} · {{ time(s.receivedAt) }}</small>
                 <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
                   [label]="labels[s.approval?.decision ?? 'pending']" />
@@ -61,6 +67,11 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
       }
     } @else if (message()) {
       <p role="status">{{ message() }}</p>
+    }
+    @if (alert().source === 'fsi' || alert().source === 'demo_fsi') {
+      @defer (on immediate) {
+        <fimra-source-feedback [url]="alertUrl() + '/source-feedback'" [submissions]="submissions()" />
+      }
     }
     <fimra-side-panel #review="fimraSidePanel" [heading]=" msg('Review field report') " [fullHeight]="true" (closed)="selected.set(null)">
       @if (selected(); as id) {
@@ -73,13 +84,13 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
       <hlm-dialog-content *hlmDialogPortal class="report-dialog" [showCloseButton]="false">
         @if (open(); as o) {
           <div class="report-dialog-heading">
-            <h2 hlmDialogTitle>{{ msg('Start {0}', [o.form.title]) }}</h2>
+            <h2 hlmDialogTitle>{{ o.provisionalSubmissionId ? msg('Revised damage assessment') : msg('Start {0}', [msg(o.form.title)]) }}</h2>
             <button hlmBtn variant="ghost" size="sm" (click)="open.set(null)">{{ msg('Close') }}</button>
           </div>
           @defer (on immediate) {
             <fimra-form-fill [workspaceUrl]="workspaceUrl()" [form]="o.form.form" [version]="o.form.version" [step]="o.form.step"
               [stepLabel]="stepLabel(o.form.step)" [currentStepLabel]="stepLabel(currentStep())"
-              [alert]="alert()" [initial]="o.initial" (submitted)="reload()" (cancelled)="open.set(null)" />
+              [alert]="alert()" [initial]="o.initial" [provisionalSubmissionId]="o.provisionalSubmissionId" (submitted)="reload()" (cancelled)="open.set(null)" />
           } @placeholder {
             <hlm-skeleton class="h-24" role="status" [attr.aria-label]=" msg('Loading') " />
           }
@@ -109,13 +120,23 @@ export class AlertReports {
   private readonly version = signal(0);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly alertUrl = computed(() => this.workspaceUrl() + '/alerts/' + this.alert().id);
+  protected readonly assessmentForm = computed(() => this.forms()?.find(f => f.form === 'damage-assessment'));
+  protected readonly alertUrl = computed(() => this.workspaceUrl() + '/alerts/' + this.alert().id);
 
   constructor() {
+    let previousUrl = '';
     effect(onCleanup => {
       const url = this.alertUrl();
       this.stepTime();
       this.version();
+      if (previousUrl !== url) {
+        previousUrl = url;
+        this.forms.set(null);
+        this.submissions.set([]);
+        this.reached.set([]);
+        this.open.set(null);
+        this.selected.set(null);
+      }
       const request = forkJoin({
         forms: this.http.get<{ step: string; forms: AssignedForm[] }>(url + '/forms'),
         submissions: this.http.get<Submission[]>(url + '/submissions'),
@@ -140,15 +161,19 @@ export class AlertReports {
 
   /** A form can be filled in once the alert has reached its step, until a report counts. */
   canFill(form: AssignedForm): boolean {
-    return !form.submitted && this.reached().includes(form.step);
+    return this.reached().includes(form.step) && (form.form === 'response-update' || (!form.submitted &&
+      (form.form !== 'damage-assessment' || !this.submissions().some(s => s.form === form.form))));
   }
 
   stepLabel(step: string): string {
     return this.stepLabels()[step] ?? step.replace(/_/g, ' ');
   }
 
-  titleOf(form: string): string {
-    return this.forms()?.find(f => f.form === form)?.title ?? form;
+  titleOf(report: Submission): string {
+    if (report.form === 'damage-assessment') {
+      return translate(report.provisionalAssessment ? 'Revised damage assessment' : 'Provisional damage assessment');
+    }
+    return translate(this.forms()?.find(f => f.form === report.form)?.title ?? report.form);
   }
 
   time(value: string): string {
@@ -159,6 +184,10 @@ export class AlertReports {
     // Later stages keep the answers of earlier ones, from the newest report that counts.
     const earlier = this.submissions().find(s => s.form === form.form && s.step !== form.step && s.approval?.decision !== 'returned');
     this.open.set({ form, initial: earlier?.values ?? {} });
+  }
+
+  protected revise(form: AssignedForm, assessment: Submission): void {
+    this.open.set({ form, provisionalSubmissionId: assessment.id, initial: {} });
   }
 
   reload(): void {

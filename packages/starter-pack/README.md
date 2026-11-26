@@ -31,7 +31,7 @@ The patrol log is optional. A patrol that finds a fire can open a case with the 
 
 ## Switching it on
 
-The wizard's starter forms step, or the request `POST /api/v1/workspaces/{slug}/starter-pack`, adds each starter form that the workspace does not have yet, publishes it and assigns it to its steps. A form the workspace already has with the same key is left as it is, and so is a step that already has another form. Turning it on again is safe. See the [starter pack endpoints](../../services/api/README.md#starter-pack).
+The wizard's starter forms step, or the request `POST /api/v1/workspaces/{slug}/starter-pack`, adds each starter form that the workspace does not have yet, publishes it and assigns it to its steps. A form the workspace already has with the same key is left as it is,. The pack leaves occupied steps alone. The extended damage assessment can share Final report with the completion form. Turning it on again is safe. See the [starter pack endpoints](../../services/api/README.md#starter-pack).
 
 ## Go package
 
@@ -42,3 +42,25 @@ make starter-pack-test   # every form passes the Go validator and fits the defau
 ```
 
 The drafts in [packages/form-schema/examples](../form-schema/examples) are format examples for the validators and the XLSForm converter. Change the forms here.
+
+## Extended response workflow
+
+The extended workflow adds these reports to the starter pack.
+
+| Report | Step | What it records |
+| --- | --- | --- |
+| Fire intake report | Assigned | Source, reported location, team, threats and help needed |
+| Control-room dispatch | Team sent, Reached site | Crew, instructions, dispatch time and arrival |
+| Flash update | Flash update | What the team saw at this alert, threats, resources and help needed |
+| Response update | Response update | Changes on site, work underway and next contact. File a new report at each check-in. |
+| Action taken | Extinguished | What the team did, resources used and the watch plan |
+| Damage assessment | Final report | Surveyed or estimated area, method, uncertainty, effects and photos |
+
+Use **Revise this assessment** on the original damage assessment to start a
+revision. Each report has its own evidence and review decision. The original
+and its figures remain in the alert's reports.
+
+Turn on the pack again to add missing forms to an extended workspace. When a
+workspace with the original starter pack switches on the extended workflow,
+the extra reports are added for new cases. This keeps existing form versions
+and assignments available.

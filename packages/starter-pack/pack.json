@@ -12,6 +12,11 @@
     { "form": "readiness-check", "steps": [] },
     { "form": "prescribed-burn-authorisation", "steps": [] },
     { "form": "prescribed-burn-completion", "steps": [] },
-    { "form": "after-action-finding", "steps": [] }
+    { "form": "after-action-finding", "steps": [] },
+    { "form": "response-intake", "steps": ["assigned"], "extended": true },
+    { "form": "response-flash", "steps": ["flash_update"], "extended": true },
+    { "form": "response-update", "steps": ["response_update"], "extended": true },
+    { "form": "response-action", "steps": ["extinguished"], "extended": true },
+    { "form": "damage-assessment", "steps": ["final_report"], "extended": true }
   ]
 }

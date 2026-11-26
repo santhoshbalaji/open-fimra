@@ -26,6 +26,14 @@ export interface Submission {
   location: { longitude: number; latitude: number } | null;
   values: Record<string, unknown>;
   approval: Approval | null;
+  provisionalAssessment?: {
+    id: string;
+    areaHa: number | null;
+    measurement: 'surveyed' | 'estimated' | null;
+    method: string | null;
+    uncertainty: string | null;
+    decision: 'pending' | Approval['decision'];
+  } | null;
   /** Whether the caller is a supervising officer on the alert. */
   canApprove?: boolean;
 }

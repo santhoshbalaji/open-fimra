@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:fimra_field/src/api/models.dart';
 import 'package:fimra_field/src/data/field_store.dart';
 import 'package:fimra_field/src/forms/report_form.dart';
 import 'package:fimra_field/src/l10n/app_localizations.dart';
@@ -8,6 +11,75 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('the starter flash report queues the workflow note and its photo while offline', (tester) async {
+    final definition =
+        jsonDecode(File('../../packages/starter-pack/forms/response-flash.json').readAsStringSync()) as Json;
+    final photo = ReportFile('00000000-0000-4000-8000-000000000001', 'site.jpg', 'image/jpeg', Uint8List(3 << 20));
+    StepRequest? queuedStep;
+    List<ReportFile>? queuedFiles;
+    tester.view.physicalSize = const Size(900, 2100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<bool>(
+                  builder: (_) => ReportForm(
+                    definition: definition,
+                    step: 'flash_update',
+                    alert: const {},
+                    move: const WorkflowMove(
+                      step: 'flash_update',
+                      label: 'Flash update',
+                      locationRequired: false,
+                      canOverride: false,
+                      terminal: false,
+                      extended: true,
+                    ),
+                    draftValues: {
+                      'checked_at': '2025-01-01T10:00:00Z',
+                      'fire_status': 'No fire seen',
+                      'site_location': {
+                        'type': 'Point',
+                        'coordinates': [86.29, 16.41],
+                      },
+                      'fire_seen': 'no',
+                      'help_needed': 'Another crew to check the ridge',
+                      'site_photo': [photo.id],
+                    },
+                    draftFiles: [photo],
+                    save: (answers, files, step) async {
+                      queuedStep = step;
+                      queuedFiles = files;
+                    },
+                  ),
+                ),
+              ),
+              child: const Text('Open flash report'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open flash report'));
+    await tester.pumpAndSettle();
+    expect(find.text('Flash update'), findsOneWidget);
+    expect(find.text('site.jpg'), findsOneWidget);
+    await tester.tap(find.text('Save to send later'));
+    await tester.pumpAndSettle();
+    expect(queuedStep?.step, 'flash_update');
+    expect(queuedStep?.actualAt, DateTime.utc(2025, 1, 1, 10));
+    expect(queuedStep?.response, {'status': 'No fire seen', 'helpNeeded': 'Another crew to check the ridge'});
+    expect(queuedFiles?.single.bytes.length, 3 << 20);
+  });
+
   testWidgets('a translated repeat and a conditional photo are checked and saved', (tester) async {
     const definition = {
       'title': {'en': 'First report', 'hi': 'पहली रिपोर्ट'},

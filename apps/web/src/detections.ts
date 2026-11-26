@@ -65,7 +65,9 @@ export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'
   return rows.map(({ slug, label }) => ({ label, name: places[slug]?.name ?? '', code: places[slug]?.code ?? '' }));
 }
 
-const sourceNames: Record<string, string> = { firms: 'NASA FIRMS', manual: 'Manual fire report' };
+const sourceNames: Record<string, string> = {
+  firms: 'NASA FIRMS', manual: 'Manual fire report', fsi: 'Forest Survey of India', demo_fsi: 'Demo data'
+};
 
 /** A readable name for a detection source code. */
 export function sourceLabel(value: string | null | undefined): string {

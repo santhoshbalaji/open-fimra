@@ -174,7 +174,8 @@ String confidenceLabel(String value, [BuildContext? context]) {
 String sourceLabel(BuildContext context, String source) => switch (source) {
   'firms' => 'NASA FIRMS',
   'manual' => fieldText(context).manualFireReport,
-  'demo' => fieldText(context).demoData,
+  'demo' || 'demo_fsi' => fieldText(context).demoData,
+  'fsi' => fieldText(context).forestSurveyOfIndia,
   _ => source,
 };
 
