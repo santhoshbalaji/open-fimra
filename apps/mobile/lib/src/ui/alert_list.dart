@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import 'home.dart';
+import 'outbox_screen.dart';
 import 'widgets.dart';
 
 /// The alerts the user may see, newest first.
@@ -32,11 +35,12 @@ class AlertListViewState extends State<AlertListView> {
   @override
   void initState() {
     super.initState();
-    reload();
+    reload(refresh: false);
   }
 
   /// Reads the first page again, for example after a step was recorded.
-  Future<void> reload() async {
+  Future<void> reload({bool refresh = true}) async {
+    if (refresh) unawaited(widget.view.services.offline?.sync(refresh: true));
     setState(() {
       _loading = _items.isEmpty;
       _problem = null;
@@ -104,6 +108,7 @@ class AlertListViewState extends State<AlertListView> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(child: _header(context, total)),
+          if (widget.view.services.offline case final repo?) SliverToBoxAdapter(child: FieldSyncStatus(repo: repo)),
           if (problem != null)
             SliverFillRemaining(
               hasScrollBody: false,

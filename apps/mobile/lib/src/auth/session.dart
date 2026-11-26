@@ -34,6 +34,12 @@ class Session extends ChangeNotifier {
   /// The latest sign-in problem, for the sign-in screen.
   String? get message => _message;
 
+  /// The account ID in the token kept by this session.
+  String? get subject {
+    final token = _tokens?.idToken ?? _tokens?.accessToken;
+    return token == null ? null : TokenSet.unverifiedClaims(token)['sub'] as String?;
+  }
+
   /// The username from the latest token, for display only.
   String? get username {
     final token = _tokens?.idToken ?? _tokens?.accessToken;
@@ -87,6 +93,7 @@ class Session extends ChangeNotifier {
 
   Future<TokenSet?> _refresh(TokenSet current) async {
     final next = await _client.refresh(current);
+    if (!identical(_tokens, current)) return null;
     if (next == null) {
       _tokens = null;
       await _tokenStore.clear();

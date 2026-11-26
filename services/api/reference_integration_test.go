@@ -78,7 +78,35 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		}
 		request(tc.path, headers.Get("ETag"), 304)
 	}
+	offline, headers := request("/offline-reference", "", 200)
+	var reference struct {
+		Type     string
+		Features []struct {
+			Geometry   json.RawMessage
+			Properties struct{ Kind, Code string }
+		}
+	}
+	if err := json.Unmarshal(offline, &reference); err != nil || reference.Type != "FeatureCollection" ||
+		headers.Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("offline map: %s (%v)", offline, err)
+	}
+	units := 0
+	for _, feature := range reference.Features {
+		if len(feature.Geometry) == 0 {
+			t.Fatalf("offline feature has no geometry: %+v", feature)
+		}
+		if feature.Properties.Kind == "units" {
+			units++
+			if feature.Properties.Code != "B01" {
+				t.Fatalf("offline map contains a unit outside the beat grant: %+v", feature.Properties)
+			}
+		}
+	}
+	if units != 1 {
+		t.Fatalf("offline map should include the assigned beat: %s", offline)
+	}
 	token = demoToken(t, client, tokenURL, "no.role")
 	request(fullState, tag, 403)
 	request("", "", 403)
+	request("/offline-reference", "", 403)
 }

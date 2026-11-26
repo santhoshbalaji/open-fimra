@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -253,6 +254,17 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 	if retry := upload(photoID, "beat.guard", "site.jpg", "image/jpeg", photo, 200); !bytes.Equal(first.body, retry.body) {
 		t.Fatal("a retried upload changed its receipt")
 	}
+	// The phone lost its connection after the first photo was stored. It
+	// checks its receipt first and sends only the remaining photos.
+	if got := call("GET", path+photoID, "beat.guard", nil, 200); !bytes.Equal(first.body, got.body) {
+		t.Fatalf("receipt does not match the saved photo: %s", got.body)
+	}
+	call("GET", path+photoID, "no.role", nil, 404)
+	call("GET", path+photoID, "division.officer", nil, 404)
+	remaining := []string{"5ca1ab1e-0000-4000-8000-000000000007", "5ca1ab1e-0000-4000-8000-000000000008"}
+	for _, id := range remaining {
+		call("GET", path+id, "beat.guard", nil, 404)
+	}
 	upload(photoID, "beat.guard", "site.jpg", "image/jpeg", append(photo, 'x'), 409)
 	upload(signatureID, "beat.guard", "sign.png", "image/png", signature, 201)
 	upload("5ca1ab1e-0000-4000-8000-000000000003", "beat.guard", "fake.jpg", "image/jpeg", []byte("plain text, not a photo"), 415)
@@ -279,7 +291,7 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 	values := map[string]any{
 		"reached_at": time.Now().Add(-time.Hour).Format(time.RFC3339), "fire_status": "controlled",
 		"cause_group": "natural", "cause": "lightning", "estimated_area": 1.25, "vegetation": []string{"grass"},
-		"site_photos": []string{photoID}, "reporter_signature": signatureID,
+		"site_photos": append([]string{photoID}, remaining...), "reporter_signature": signatureID,
 		"teams": []map[string]any{{"team_name": "Demo Team A", "members": 6}, {"team_name": "Demo Team B", "members": 4}},
 	}
 	submission := map[string]any{"id": "5ca1ab1e-0000-4000-8000-0000000000a1", "form": "first-report", "version": 1,
@@ -293,6 +305,11 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 		t.Fatalf("required form not listed: %s", got.body)
 	}
 	call("POST", submissions, "no.role", submission, 404)
+	// A report referring to photos still in the outbox is never stored in part.
+	call("POST", submissions, "beat.guard", submission, 422)
+	for i, id := range remaining {
+		upload(id, "beat.guard", fmt.Sprintf("site-%d.jpg", i+2), "image/jpeg", append(bytes.Clone(photo), byte(i)), 201)
+	}
 	wrong := map[string]any{}
 	for k, v := range submission {
 		wrong[k] = v
@@ -321,6 +338,22 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND role_slug = 'fie
 	if json.Unmarshal(receipt.body, &stored) != nil || stored.Step != "first_report" || stored.Values["total_staff"] != 10.0 ||
 		stored.Values["alert_location"] == nil {
 		t.Fatalf("submission receipt: %s", receipt.body)
+	}
+	resumed := call("GET", submissions, "beat.guard", nil, 200)
+	var reports []struct {
+		ID     string
+		Values struct {
+			SitePhotos []string `json:"site_photos"`
+		}
+	}
+	if err := json.Unmarshal(resumed.body, &reports); err != nil || len(reports) != 1 ||
+		reports[0].ID != stored.ID || !slices.Equal(reports[0].Values.SitePhotos, append([]string{photoID}, remaining...)) {
+		t.Fatalf("expected one resumed report with three photos: %s", resumed.body)
+	}
+	var linked int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM submission_attachments
+WHERE submission_id = $1 AND field = 'site_photos'`, stored.ID).Scan(&linked); err != nil || linked != 3 {
+		t.Fatalf("expected three linked photos: %d, %v", linked, err)
 	}
 	for user, status := range map[string]int{"state.admin": 200, "division.officer": 200, "beat.guard": 200, "no.role": 404} {
 		call("GET", "/submissions/"+stored.ID, user, nil, status)
@@ -474,7 +507,7 @@ WHERE workspace_id = 'd0000000-0000-4000-8000-000000000001' AND action IN ('form
 		t.Fatal(err)
 	}
 	want := map[string]int{"form.publish": 3, "form.assign": 1, "submission.create": 3, "submission.approve": 1,
-		"submission.return": 1, "attachment.upload": 4, "attachment.download": 3}
+		"submission.return": 1, "attachment.upload": 6, "attachment.download": 3}
 	for action, n := range want {
 		if audit[action] != n {
 			t.Errorf("audit %s: %d rows, want %d (all: %v)", action, audit[action], n, audit)

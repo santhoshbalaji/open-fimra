@@ -10,6 +10,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../auth/oidc.dart';
+import '../data/field_store.dart';
 import '../map/map_auth.dart';
 import '../map/map_style.dart';
 import '../theme/app_theme.dart';
@@ -19,9 +20,10 @@ import 'widgets.dart';
 /// The user's area on a map, with detections from the permission-filtered
 /// tiles. Tap a point to open its alert.
 class AlertMapView extends StatefulWidget {
-  const AlertMapView({super.key, required this.view, required this.onOpen});
+  const AlertMapView({super.key, required this.view, required this.onOpen, this.focus});
   final WorkspaceView view;
   final void Function(Alert alert) onOpen;
+  final Alert? focus;
 
   @override
   State<AlertMapView> createState() => _AlertMapViewState();
@@ -74,7 +76,7 @@ class _AlertMapViewState extends State<AlertMapView> {
     } on Exception {
       // The squares are missing, but circles still show.
     }
-    await _fit();
+    if (widget.focus == null) await _fit();
   }
 
   Future<void> _fit() async {
@@ -118,6 +120,24 @@ class _AlertMapViewState extends State<AlertMapView> {
 
   @override
   Widget build(BuildContext context) {
+    final repo = widget.view.services.offline;
+    if (repo == null) return _buildMap(context);
+    return ValueListenableBuilder(
+      valueListenable: repo.changes,
+      builder: (context, _, _) => FutureBuilder(
+        future: repo.offline || widget.focus != null
+            ? (repo.savedReference(_slug), repo.savedAlerts(_slug)).wait
+            : null,
+        builder: (context, snap) => _buildMap(
+          context,
+          reference: snap.data?.$1 ?? (repo.offline || widget.focus != null ? const {} : null),
+          alerts: widget.focus == null ? snap.data?.$2 ?? [] : [widget.focus!],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMap(BuildContext context, {Json? reference, List<Alert> alerts = const []}) {
     final p = FimraColours.of(context);
     final style = mapStyle(
       referenceTiles: mapTileUrl(widget.view.services.repository.referenceTiles(_slug)),
@@ -125,25 +145,42 @@ class _AlertMapViewState extends State<AlertMapView> {
       info: widget.view.map,
       palette: p,
       jurisdiction: widget.view.grants,
+      offlineReference: reference,
+      offlineAlerts: alerts,
     );
     final bounds = _bounds;
-    final centre = bounds == null
+    final focus = widget.focus;
+    final centre = focus != null
+        ? LatLng(focus.latitude, focus.longitude)
+        : bounds == null
         ? const LatLng(22, 79)
         : LatLng((bounds.south + bounds.north) / 2, (bounds.west + bounds.east) / 2);
     return FutureBuilder<void>(
-      future: _ready,
+      future: reference == null ? _ready : null,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+        if (reference == null && snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
         return Stack(
           children: [
             Semantics(
               label: 'Map of your area with fire detections',
               child: MapLibreMap(
                 styleString: jsonEncode(style),
-                initialCameraPosition: CameraPosition(target: centre, zoom: bounds == null ? 4 : 10),
+                initialCameraPosition: CameraPosition(
+                  target: centre,
+                  zoom: focus != null
+                      ? 13
+                      : bounds == null
+                      ? 4
+                      : 10,
+                ),
                 onMapCreated: (controller) => _controller = controller,
-                onStyleLoadedCallback: _styleLoaded,
-                onMapClick: _tap,
+                onStyleLoadedCallback: () {
+                  _imageBrightness = null;
+                  unawaited(_styleLoaded());
+                },
+                onMapClick: focus == null ? _tap : null,
                 // Rotation is off, so the map needs no compass.
                 compassEnabled: false,
                 rotateGesturesEnabled: false,

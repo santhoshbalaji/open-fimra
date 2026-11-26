@@ -93,8 +93,11 @@ func (a api) alertForms(w http.ResponseWriter, r *http.Request) {
 SELECT jsonb_build_object('step', i.current_step, 'forms', COALESCE((
     SELECT jsonb_agg(jsonb_build_object('form', f.form_key, 'version', f.version, 'title', f.title, 'step', f.step,
         'submitted', f.submitted, 'requiredNow', f.step = i.current_step AND NOT f.submitted) ORDER BY f.step, f.form_key)
-    FROM alert_forms($1) f), '[]'))
-FROM workflow_instances i WHERE i.alert_id = $1`, id).Scan(&result)
+    FROM alert_forms($1) f), '[]'), 'attachments', CASE WHEN $2 THEN COALESCE((
+    SELECT jsonb_object_agg(a.id, jsonb_build_object('contentType', a.content_type, 'fileName', a.file_name, 'sizeBytes', a.size_bytes))
+    FROM attachments a WHERE a.alert_id = $1 AND EXISTS (SELECT FROM submission_attachments sa WHERE sa.attachment_id = a.id)
+), '{}') ELSE '{}'::jsonb END)
+FROM workflow_instances i WHERE i.alert_id = $1`, id, r.URL.Query().Get("attachmentMetadata") == "1").Scan(&result)
 	})
 	if err != nil {
 		a.writeProblem(w, err, "Alert not found.", "Could not load the alert's forms")

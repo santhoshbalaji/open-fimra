@@ -78,6 +78,7 @@ class DeviceManager extends ChangeNotifier {
   /// The ID sent with every API call, or null before registration.
   String? get deviceId => _id;
   Device? get device => _device;
+  bool get endingSession => _ending != null;
   PushStatus get pushStatus => _status;
 
   /// The server's or the push app's problem in plain English, if any.

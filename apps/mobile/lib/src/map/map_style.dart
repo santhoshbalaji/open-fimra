@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import '../api/models.dart';
+import '../data/field_store.dart';
 import '../theme/tokens.g.dart';
 
 /// Layer IDs that show detections, for finding the point under a tap.
@@ -20,12 +21,19 @@ Map<String, Object?> mapStyle({
   required WorkspaceMap info,
   required FimraPalette palette,
   List<RoleAssignment> jurisdiction = const [],
+  Json? offlineReference,
+  List<Alert> offlineAlerts = const [],
 }) {
   final p = palette;
-  const units = {'source': 'reference', 'source-layer': 'units'};
-  const forest = {'source': 'reference', 'source-layer': 'forest'};
-  const exclusions = {'source': 'reference', 'source-layer': 'exclusions'};
-  const detections = {'source': 'detections', 'source-layer': 'detections'};
+  final saved = offlineReference != null;
+  Map<String, Object> source(String kind) => saved ? {'source': kind} : {'source': 'reference', 'source-layer': kind};
+  final units = source('units');
+  final forest = source('forest');
+  final exclusions = source('exclusions');
+  final detections = {'source': 'detections', if (!saved) 'source-layer': 'detections'};
+  final features = objects(offlineReference?['features']);
+  Json collection(List<Json> rows) => {'type': 'FeatureCollection', 'features': rows};
+  final now = DateTime.now();
   final ageColour = [
     'match',
     ['get', 'age'],
@@ -42,17 +50,48 @@ Map<String, Object?> mapStyle({
     'version': 8,
     'name': 'Open FIMRA field map',
     'sources': {
-      'reference': {
-        'type': 'vector',
-        'tiles': [referenceTiles],
-        'minzoom': 0,
-        'maxzoom': 14,
-      },
-      'detections': {
-        'type': 'vector',
-        'tiles': [detectionTiles],
-        'minzoom': 0,
-        'maxzoom': 14,
+      if (saved) ...{
+        for (final kind in ['units', 'forest', 'exclusions'])
+          kind: {
+            'type': 'geojson',
+            'data': collection(features.where((row) => object(row['properties'])['kind'] == kind).toList()),
+          },
+        'detections': {
+          'type': 'geojson',
+          'data': collection([
+            for (final alert in offlineAlerts)
+              {
+                'type': 'Feature',
+                'geometry': {
+                  'type': 'Point',
+                  'coordinates': [alert.longitude, alert.latitude],
+                },
+                'properties': {
+                  'id': alert.detectionId,
+                  'forest_class': alert.forestClass,
+                  'age': switch (now.difference(alert.observedAt).inHours) {
+                    < 6 => 0,
+                    < 24 => 1,
+                    < 72 => 2,
+                    _ => 3,
+                  },
+                },
+              },
+          ]),
+        },
+      } else ...{
+        'reference': {
+          'type': 'vector',
+          'tiles': [referenceTiles],
+          'minzoom': 0,
+          'maxzoom': 14,
+        },
+        'detections': {
+          'type': 'vector',
+          'tiles': [detectionTiles],
+          'minzoom': 0,
+          'maxzoom': 14,
+        },
       },
     },
     'layers': [

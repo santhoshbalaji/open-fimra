@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -8,11 +9,13 @@ import 'models.dart';
 
 /// A failed API call with the server's plain-English message.
 class ApiException implements Exception {
-  const ApiException(this.status, this.message);
+  const ApiException(this.status, this.message, {this.problems = const []});
 
   /// The HTTP status, or 0 when the server could not be reached.
   final int status;
   final String message;
+
+  final List<String> problems;
 
   bool get offline => status == 0;
 
@@ -82,9 +85,28 @@ class FimraApi implements DeviceApi {
       '$_base${workspacePath(slug)}/tiles/detections/{z}/{x}/{y}.mvt?hours=$hours'
       '&classes=inside,near_edge,outside,fixed_heat_source';
 
-  Future<Profile> me() async => Profile.fromJson(await _get('/api/v1/me'));
+  Future<Map<String, dynamic>> profileData() => _get('/api/v1/me');
+  Future<Profile> me() async => Profile.fromJson(await profileData());
 
-  Future<WorkspaceMap> workspace(String slug) async => WorkspaceMap.fromJson(await _get(workspacePath(slug)));
+  Future<Map<String, dynamic>> workspaceData(String slug) => _get(workspacePath(slug));
+  Future<WorkspaceMap> workspace(String slug) async => WorkspaceMap.fromJson(await workspaceData(slug));
+
+  Future<Map<String, dynamic>> alertsData(
+    String slug, {
+    String? queue,
+    String? status,
+    int? hours,
+    String? detection,
+    String? cursor,
+    int? limit,
+  }) => _get('${workspacePath(slug)}/alerts', {
+    'queue': ?queue,
+    'status': ?status,
+    if (hours != null) 'hours': '$hours',
+    'detection': ?detection,
+    'cursor': ?cursor,
+    if (limit != null) 'limit': '$limit',
+  });
 
   Future<AlertPage> alerts(
     String slug, {
@@ -94,23 +116,66 @@ class FimraApi implements DeviceApi {
     String? detection,
     String? cursor,
     int? limit,
-  }) async {
-    final query = {
-      'queue': ?queue,
-      'status': ?status,
-      if (hours != null) 'hours': '$hours',
-      'detection': ?detection,
-      'cursor': ?cursor,
-      if (limit != null) 'limit': '$limit',
-    };
-    return AlertPage.fromJson(await _get('${workspacePath(slug)}/alerts', query));
+  }) async => AlertPage.fromJson(
+    await alertsData(
+      slug,
+      queue: queue,
+      status: status,
+      hours: hours,
+      detection: detection,
+      cursor: cursor,
+      limit: limit,
+    ),
+  );
+
+  String _alertPath(String slug, String id) => '${workspacePath(slug)}/alerts/${Uri.encodeComponent(id)}';
+
+  Future<Map<String, dynamic>> alertData(String slug, String id) => _get(_alertPath(slug, id));
+  Future<Alert> alert(String slug, String id) async => Alert.fromJson(await alertData(slug, id));
+
+  Future<Map<String, dynamic>> historyData(String slug, String id) => _get('${_alertPath(slug, id)}/history');
+  Future<AlertHistory> history(String slug, String id) async => AlertHistory.fromJson(await historyData(slug, id));
+
+  Future<Map<String, dynamic>> offlineReference(String slug) => _get('${workspacePath(slug)}/offline-reference');
+
+  Future<Map<String, dynamic>> assignedForms(String slug, String id) =>
+      _get('${_alertPath(slug, id)}/forms', const {'attachmentMetadata': '1'});
+
+  Future<Map<String, dynamic>> formVersion(String slug, String form, int version) =>
+      _get('${workspacePath(slug)}/forms/${Uri.encodeComponent(form)}/versions/$version');
+
+  Future<List<Map<String, dynamic>>> submissions(String slug, String id) async {
+    final result = await _send('GET', '${_alertPath(slug, id)}/submissions', null, list: true);
+    return (result['items'] as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Alert> alert(String slug, String id) async =>
-      Alert.fromJson(await _get('${workspacePath(slug)}/alerts/${Uri.encodeComponent(id)}'));
+  Future<Map<String, dynamic>> submitReport(String slug, String id, Map<String, dynamic> report) =>
+      _send('POST', '${_alertPath(slug, id)}/submissions', report);
 
-  Future<AlertHistory> history(String slug, String id) async =>
-      AlertHistory.fromJson(await _get('${workspacePath(slug)}/alerts/${Uri.encodeComponent(id)}/history'));
+  Future<Map<String, dynamic>?> attachmentReceipt(String slug, String id, String attachment) async {
+    try {
+      return await _get('${_alertPath(slug, id)}/attachments/${Uri.encodeComponent(attachment)}');
+    } on ApiException catch (error) {
+      if (error.status == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadAttachment(
+    String slug,
+    String id,
+    String attachment,
+    String name,
+    String type,
+    Uint8List bytes,
+  ) => _send(
+    'PUT',
+    '${_alertPath(slug, id)}/attachments/${Uri.encodeComponent(attachment)}',
+    bytes,
+    query: {'name': name},
+    contentType: type,
+    timeout: const Duration(minutes: 4),
+  );
 
   Future<StepReceipt> recordStep(String slug, String id, StepRequest request) async => StepReceipt.fromJson(
     await _send('POST', '${workspacePath(slug)}/alerts/${Uri.encodeComponent(id)}/steps', request.toJson()),
@@ -155,6 +220,9 @@ class FimraApi implements DeviceApi {
     Object? body, {
     Map<String, String>? query,
     bool allowEmpty = false,
+    bool list = false,
+    String contentType = 'application/json',
+    Duration timeout = _timeout,
   }) async {
     final url = Uri.parse('$_base$path').replace(queryParameters: query == null || query.isEmpty ? null : query);
     Future<http.Response> attempt(bool refresh) async {
@@ -172,11 +240,15 @@ class FimraApi implements DeviceApi {
       final device = deviceId?.call();
       if (device != null) request.headers['Fimra-Device'] = device;
       if (body != null) {
-        request.headers['Content-Type'] = 'application/json';
-        request.body = jsonEncode(body);
+        request.headers['Content-Type'] = contentType;
+        if (body is Uint8List) {
+          request.bodyBytes = body;
+        } else {
+          request.body = jsonEncode(body);
+        }
       }
       try {
-        return await http.Response.fromStream(await _http.send(request).timeout(_timeout));
+        return await _http.send(request).then(http.Response.fromStream).timeout(timeout);
       } on TimeoutException {
         throw const ApiException(0, 'The server took too long to answer. Try again.');
       } on Exception {
@@ -187,6 +259,7 @@ class FimraApi implements DeviceApi {
     Map<String, dynamic>? decode(http.Response response) {
       try {
         final decoded = response.body.isEmpty ? null : jsonDecode(response.body);
+        if (list && decoded is List) return {'items': decoded};
         return decoded is Map<String, dynamic> ? decoded : null;
       } on FormatException {
         return null;
@@ -216,6 +289,7 @@ class FimraApi implements DeviceApi {
     throw ApiException(
       response.statusCode,
       message is String && message.isNotEmpty ? message : _fallback(response.statusCode),
+      problems: (json?['problems'] as List? ?? const []).whereType<String>().toList(),
     );
   }
 
