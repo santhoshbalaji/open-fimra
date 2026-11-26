@@ -3,12 +3,14 @@
 @if (auth.user(); as user) {
   @let name = user.profile.name || user.profile.preferred_username || user.profile.email || msg('User');
   @if (workspace.current(); as current) {
-    <header class="topbar bg-card">
-      <button data-variant="outline" class="shell-button destination-drawer" aria-haspopup="dialog" #menu (click)="drawerRequest.set({ trigger: menu })">{{ msg('Menu') }}</button>
-      @if (drawerRequest(); as request) {
-        @defer (on immediate) {
-          <fimra-shell-drawer [request]="request" [scope]="current.name + ' · ' + scope()" [links]="links"
-                              (destinationClosed)="focusPage()" />
+    <header class="topbar bg-card" [class.drawer-layout]="sidebar.drawer()">
+      @if (sidebar.drawer()) {
+        <button data-variant="outline" class="shell-button destination-drawer" aria-haspopup="dialog" #menu (click)="drawerRequest.set({ trigger: menu })">{{ msg('Menu') }}</button>
+        @if (drawerRequest(); as request) {
+          @defer (on immediate) {
+            <fimra-shell-drawer [request]="request" [scope]="current.name + ' · ' + scope()" [links]="links"
+                                (destinationClosed)="focusPage()" />
+          }
         }
       }
       <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
@@ -34,87 +36,101 @@
         @placeholder { <span class="user-trigger user-name">{{ name }}</span> }
       </div>
     </header>
-    <nav [attr.aria-label]=" msg('Destinations') " class="desktop-destinations">
-      <ng-container *ngTemplateOutlet="links; context: { close: null }" />
-    </nav>
-    <ng-template #links let-close="close">
-      @for (group of groups; track group) {
-        @if (group === 'Dashboard') {
-          <a class="shell-button" data-variant="ghost" [routerLink]="navigation.href('/dashboard')" (click)="close?.('/dashboard', $event)"
-             [attr.aria-current]="navigation.path() === '/dashboard' ? 'page' : null">{{ msg('Dashboard') }}</a>
-        } @else {
-          <div class="destination-group" role="group" [attr.aria-label]="msg(group)">
-            <span class="destination-label" aria-hidden="true">{{ msg(group) }}</span>
-            @for (item of navigation.authorized(); track item.path) {
-              @if (item.group === group) {
-                <a class="shell-button" data-variant="ghost" [routerLink]="navigation.href(item.path)" (click)="close?.(item.path, $event)"
-                   [attr.aria-current]="navigation.path() === item.path ? 'page' : null">{{ msg(item.name) }}</a>
-              }
-            }
-          </div>
-        }
-      }
-    </ng-template>
     @if (auth.error()) { <p role="alert" class="shell-message">{{ msg(auth.error() || '') }}</p> }
   }
+  <ng-template #links let-close="close" let-rail="rail">
+    @for (group of navigation.grouped(); track group.name) {
+      <div class="destination-group" role="group" [attr.aria-label]="msg(group.name)">
+        @if (group.name !== 'Dashboard' || !close) {
+          <span class="destination-label" aria-hidden="true">{{ msg(group.name) }}</span>
+        }
+        @for (item of group.items; track item.path) {
+          <a class="shell-button destination-link" data-variant="ghost" [routerLink]="navigation.href(item.path)"
+             (click)="close?.(item.path, $event)" [attr.aria-current]="navigation.path() === item.path ? 'page' : null"
+             [attr.aria-label]="rail ? msg(item.name) : null"
+             fimraSidebarTooltip>
+            <svg [fimraIcon]="item.icon" aria-hidden="true"></svg>
+            <span class="destination-name" [attr.role]="rail ? 'tooltip' : null">{{ msg(item.name) }}</span>
+          </a>
+        }
+      </div>
+    }
+  </ng-template>
   @let destination = navigation.destination();
-  <main id="task" tabindex="-1" [class.welcome]="(!workspace.current() || !destination) && !showBootstrap()"
-        [class.page-frame]="!!workspace.current() && !!destination" [class.page-full]="destination?.group === 'Monitor'">
-    @if (workspace.failed()) {
-      <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
-      <h1>{{ msg('Workspace unavailable') }}</h1>
-      <p>{{ msg('Open FIMRA could not load your workspace.') }}</p>
-      <button class="shell-button" (click)="workspace.reload()">{{ msg('Retry') }}</button>
-    } @else if (!workspace.loaded()) {
-      <h1>{{ msg('Loading your workspace') }}</h1>
-      <fimra-live-status class="sr-only" [message]=" msg('Loading your workspace') " />
-      <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
-    } @else if (showBootstrap()) {
-      @defer (on immediate) { <fimra-bootstrap /> }
-    } @else if (!workspace.current() || navigation.path() === '/restricted') {
-      @if (!workspace.current()) {
+  <div class="shell-layout">
+    @if (workspace.current() && !sidebar.drawer()) {
+      @let collapsed = sidebar.collapsed();
+      @let toggleLabel = collapsed ? msg('Expand sidebar') : msg('Collapse sidebar');
+      <nav class="shell-sidebar" [class.sidebar-collapsed]="collapsed" [attr.aria-label]="msg('Destinations')">
+        <button type="button" class="shell-button sidebar-toggle" data-variant="ghost" (click)="sidebar.toggle()"
+                [attr.aria-label]="toggleLabel" [attr.aria-expanded]="!collapsed" aria-controls="sidebar-destinations"
+                aria-keyshortcuts="Alt+Shift+S" fimraSidebarTooltip>
+          <svg [fimraIcon]="collapsed ? 'panel-left-open' : 'panel-left-close'" aria-hidden="true"></svg>
+          <span class="destination-name" [attr.role]="collapsed ? 'tooltip' : null">{{ toggleLabel }}</span>
+        </button>
+        <div id="sidebar-destinations">
+          <ng-container *ngTemplateOutlet="links; context: { close: null, rail: collapsed }" />
+        </div>
+      </nav>
+    }
+    <main id="task" tabindex="-1" [class.welcome]="(!workspace.current() || !destination) && !showBootstrap()"
+          [class.page-frame]="!!workspace.current() && !!destination" [class.page-full]="destination?.group === 'Monitor'">
+      @if (workspace.failed()) {
         <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+        <h1>{{ msg('Workspace unavailable') }}</h1>
+        <p>{{ msg('Open FIMRA could not load your workspace.') }}</p>
+        <button class="shell-button" (click)="workspace.reload()">{{ msg('Retry') }}</button>
+      } @else if (!workspace.loaded()) {
+        <h1>{{ msg('Loading your workspace') }}</h1>
+        <fimra-live-status class="sr-only" [message]=" msg('Loading your workspace') " />
+        <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
+      } @else if (showBootstrap()) {
+        @defer (on immediate) { <fimra-bootstrap /> }
+      } @else if (!workspace.current() || navigation.path() === '/restricted') {
+        @if (!workspace.current()) {
+          <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
+        }
+        <fimra-page-header [title]=" msg('Restricted access') " />
+        <p>{{ msg('Signed in as') }} <strong>{{ name }}</strong>@if (user.profile.email && user.profile.email !== name) { ({{ user.profile.email }})}.</p>
+        <p>{{ msg('Ask your workspace administrator to assign a role for the area you work in.') }}</p>
+        <div class="welcome-actions">
+          <button class="shell-button" (click)="auth.signOut(true)">{{ msg('Switch account') }}</button>
+          <button class="shell-button" data-variant="outline" (click)="auth.signOut()">{{ msg('Sign out') }}</button>
+        </div>
+        @if (auth.error() && !workspace.current()) { <p role="alert">{{ msg(auth.error() || '') }}</p> }
+      } @else if (!navigation.destination()) {
+        <h1>{{ msg('Opening your workspace') }}</h1>
+        <fimra-live-status class="sr-only" [message]=" msg('Opening your workspace') " />
+        <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
       }
-      <fimra-page-header [title]=" msg('Restricted access') " />
-      <p>{{ msg('Signed in as') }} <strong>{{ name }}</strong>@if (user.profile.email && user.profile.email !== name) { ({{ user.profile.email }})}.</p>
-      <p>{{ msg('Ask your workspace administrator to assign a role for the area you work in.') }}</p>
-      <div class="welcome-actions">
-        <button class="shell-button" (click)="auth.signOut(true)">{{ msg('Switch account') }}</button>
-        <button class="shell-button" data-variant="outline" (click)="auth.signOut()">{{ msg('Sign out') }}</button>
-      </div>
-      @if (auth.error() && !workspace.current()) { <p role="alert">{{ msg(auth.error() || '') }}</p> }
-    } @else if (!navigation.destination()) {
-      <h1>{{ msg('Opening your workspace') }}</h1>
-      <fimra-live-status class="sr-only" [message]=" msg('Opening your workspace') " />
-      <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
-    }
-    @if (workspace.current()) {
-      @if (destination) {
-        <fimra-page-header class="shell-page-header" [class.monitor-header]="showFilters()"
-                           [title]="msg(destination.name)" [scope]="showFilters() ? '' : scope() || 'Assigned units'">
-          @if (headerSlots()?.pageFreshness?.(); as freshness) {
-            <ng-container pageFreshness [ngTemplateOutlet]="freshness" />
-          }
-          @if (showFilters()) {
-            <div pageSecondary class="monitor-filters min-w-0">
-              @defer (on immediate) { <fimra-monitor-filters /> }
-            </div>
-          }
-          @if (headerSlots()?.pageSecondary?.(); as secondary) {
-            <ng-container pageSecondary [ngTemplateOutlet]="secondary" />
-          }
-          @if (headerSlots()?.pagePrimary?.(); as primary) {
-            <ng-container pagePrimary [ngTemplateOutlet]="primary" />
-          }
-        </fimra-page-header>
+      @if (workspace.current()) {
+        @if (destination) {
+          <fimra-page-header class="shell-page-header" [class.monitor-header]="showFilters()"
+                             [title]="msg(destination.name)" [scope]="showFilters() ? '' : scope() || 'Assigned units'">
+            @if (headerSlots()?.pageFreshness?.(); as freshness) {
+              <ng-container pageFreshness [ngTemplateOutlet]="freshness" />
+            }
+            @if (showFilters()) {
+              <div pageSecondary class="monitor-filters min-w-0">
+                @defer (on immediate) { <fimra-monitor-filters /> }
+              </div>
+            }
+            @if (headerSlots()?.pageSecondary?.(); as secondary) {
+              <ng-container pageSecondary [ngTemplateOutlet]="secondary" />
+            }
+            @if (headerSlots()?.pagePrimary?.(); as primary) {
+              <ng-container pagePrimary [ngTemplateOutlet]="primary" />
+            }
+          </fimra-page-header>
+        }
+        @let phoneLists = destination?.path === '/settings/devices';
+        <div class="page-content" [attr.tabindex]="phoneLists ? 0 : null"
+             [attr.role]="phoneLists ? 'region' : null" [attr.aria-label]="phoneLists ? msg('Phone lists') : null">
+          <router-outlet (activate)="screenOpened($event)" (deactivate)="headerSlots.set(null)" />
+        </div>
       }
-      @let phoneLists = destination?.path === '/settings/devices';
-      <div class="page-content" [attr.tabindex]="phoneLists ? 0 : null"
-           [attr.role]="phoneLists ? 'region' : null" [attr.aria-label]="phoneLists ? msg('Phone lists') : null">
-        <router-outlet (activate)="screenOpened($event)" (deactivate)="headerSlots.set(null)" />
-      </div>
-    }
-  </main>
+    </main>
+  </div>
   @defer (when paletteOpen()) {
     <fimra-shell-palette [open]="paletteOpen()" (closed)="closePalette()" (reselected)="focusPage()" />
   }

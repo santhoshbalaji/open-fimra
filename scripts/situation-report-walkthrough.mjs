@@ -97,7 +97,7 @@ try {
       await expect(edit).toBeHidden();
       await expect(pdf).toBeHidden();
       await expect(print).toBeHidden();
-      await expect(page.locator('.topbar, .desktop-destinations').filter({ visible: true })).toHaveCount(0);
+      await expect(page.locator('.topbar, .shell-sidebar').filter({ visible: true })).toHaveCount(0);
       await expect(page.getByText('Closed alert or incident (slash)', { exact: true })).toBeVisible();
       await expect(table).toBeVisible();
       await capture(page, `${size}-${theme}-print`);

@@ -6,19 +6,21 @@ import { classes } from './detections';
 import { WorkspaceService } from './workspace';
 
 export const destinations = [
-  { path: '/monitor/map', name: 'Map', group: 'Monitor', filters: true },
-  { path: '/monitor/alerts', name: 'Alerts', group: 'Monitor', filters: true },
-  { path: '/monitor/incidents', name: 'Incidents', group: 'Monitor', filters: true },
-  { path: '/reports/field', name: 'Field reports', group: 'Reports', filters: true },
-  { path: '/reports/situation', name: 'Situation report', group: 'Reports' },
-  { path: '/dashboard', name: 'Dashboard', group: 'Dashboard', filters: true },
-  { path: '/settings/layers', name: 'Layers', group: 'Settings', grant: 'layers' },
-  { path: '/settings/forms', name: 'Form templates', group: 'Settings', grant: 'forms' },
-  { path: '/settings/setup', name: 'Setup', group: 'Settings', grant: 'layers' },
-  { path: '/settings/duty', name: 'Duty roster', group: 'Settings', grant: 'layers' },
-  { path: '/settings/gis', name: 'GIS link', group: 'Settings' },
-  { path: '/settings/devices', name: 'Field phones', group: 'Settings' }
+  { path: '/monitor/map', name: 'Map', icon: 'map', group: 'Monitor', filters: true },
+  { path: '/monitor/alerts', name: 'Alerts', icon: 'triangle-alert', group: 'Monitor', filters: true },
+  { path: '/monitor/incidents', name: 'Incidents', icon: 'flame', group: 'Monitor', filters: true },
+  { path: '/reports/field', name: 'Field reports', icon: 'file-pen-line', group: 'Reports', filters: true },
+  { path: '/reports/situation', name: 'Situation report', icon: 'file-chart-column', group: 'Reports' },
+  { path: '/dashboard', name: 'Dashboard', icon: 'layout-dashboard', group: 'Dashboard', filters: true },
+  { path: '/settings/layers', name: 'Layers', icon: 'layers', group: 'Settings', grant: 'layers' },
+  { path: '/settings/forms', name: 'Form templates', icon: 'list-ordered', group: 'Settings', grant: 'forms' },
+  { path: '/settings/setup', name: 'Setup', icon: 'settings', group: 'Settings', grant: 'layers' },
+  { path: '/settings/duty', name: 'Duty roster', icon: 'clock', group: 'Settings', grant: 'layers' },
+  { path: '/settings/gis', name: 'GIS link', icon: 'key-round', group: 'Settings' },
+  { path: '/settings/devices', name: 'Field phones', icon: 'smartphone', group: 'Settings' }
 ] as const;
+
+const groups = ['Monitor', 'Reports', 'Dashboard', 'Settings'] as const;
 
 export type Destination = typeof destinations[number];
 export type DestinationPath = Destination['path'];
@@ -124,6 +126,12 @@ export class ShellNavigation {
   readonly query = computed(() => this.tree().queryParamMap);
   readonly destination = computed(() => destinationAt(this.path()));
   readonly authorized = computed(() => destinations.filter(item => allowsDestination(this.workspace, item)));
+
+  readonly grouped = computed(() => {
+    const authorized = this.authorized();
+    return groups.map(name => ({ name, items: authorized.filter(item => item.group === name) }))
+      .filter(group => group.items.length > 0);
+  });
 
   href(path: DestinationPath, extra: Params = {}) {
     const query = this.tree().queryParams;

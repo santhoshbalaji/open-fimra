@@ -2,7 +2,7 @@
 
 Sign in with your department account to open your first assigned workspace. The header shows your workspace and assigned area. If the account has no workspace role, ask your workspace administrator to assign one, or use **Switch account** to sign in with another account.
 
-**Monitor** contains **Map**, **Alerts** and **Incidents**. **Reports** contains **Field reports** and **Situation report**. The shell also links to **Dashboard** and the **Settings** screens your role can use. On a phone, open **Menu** to switch destinations. Use **Search** or Ctrl+K (Command+K on a Mac) to find a destination by name. Links keep the selected workspace and filters. Refresh keeps the current view, and Back restores the previous view and its list position.
+**Monitor** contains **Map**, **Alerts** and **Incidents**. **Reports** contains **Field reports** and **Situation report**. The shell also links to **Dashboard** and the **Settings** screens your role can use. Use the sidebar to switch destinations. On smaller landscape screens it starts with icons only. Choose **Expand sidebar** or **Collapse sidebar**, or press Alt+Shift+S. Your browser remembers the choice. On a phone or portrait tablet, open **Menu**. Use **Search** or Ctrl+K (Command+K on a Mac) to find a destination by name. Links keep the selected workspace and filters. Refresh keeps the current view, and Back restores the previous view and its list position.
 
 The map starts with the past seven days and refreshes every minute. Choose a period such as the last three days, or set a custom window from one to 720 hours. Narrow the view by forest class or search for a unit by name or level. On a phone, open **Filters** first. All classes are selected at first. **Layers and legend** lets you show and hide map layers. The small key stays on the map and the full legend follows the layers and zoom.
 
@@ -96,7 +96,7 @@ make web-test
 make web-build
 ```
 
-Run `make dev db-migrate seed-test demo-detections shell-walkthrough` for a headless Chromium check of the four demo profiles, keyboard search, refresh and Back. It checks both themes at desktop and phone widths with axe and saves screenshots to `~/open-fimra-screenshots/u4`. Use `WEB_PORT` for a different loopback port allowed by your sign-in realm.
+Run `make dev db-migrate seed-test demo-detections shell-walkthrough` for a headless Chromium check of the four demo profiles, keyboard search, refresh and Back. It checks the sidebar and drawer with axe in both themes and languages at desktop, tablet and phone sizes and saves screenshots to `~/open-fimra-screenshots/u4`. Use `WEB_PORT` for a different loopback port allowed by your sign-in realm.
 
 The build writes the static app to `apps/web/dist/web/browser/`. Press Ctrl+C to stop the dev server.
 

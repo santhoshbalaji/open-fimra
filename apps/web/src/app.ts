@@ -15,9 +15,11 @@ import { ShellNavigation, homePath } from './shell-navigation';
 import { ShellAccount } from './shell-account';
 import { ShellDrawer } from './shell-drawer';
 import { ShellPalette } from './shell-palette';
+import { ShellSidebar } from './shell-sidebar';
 import { ThemeService } from './theme';
 import { LiveStatus } from './ui/live-status';
 import { Icon } from './ui/icon';
+import { SidebarTooltip } from './ui/sidebar-tooltip';
 import { restoreOverlayFocus } from './ui/overlay-focus';
 import { PageHeader, type PageHeaderSlots } from './ui/page-header';
 import { WorkspaceService } from './workspace';
@@ -25,8 +27,8 @@ import { classes, type ForestClass } from './detections';
 
 @Component({
   selector: 'fimra-root',
-  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray],
-  providers: [ShellNavigation],
+  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray, SidebarTooltip],
+  providers: [ShellNavigation, ShellSidebar],
   templateUrl: './app.html',
   host: { '(window:keydown)': 'shortcut($event)', '(window:pointerdown)': 'pointerInput()' }
 })
@@ -48,7 +50,7 @@ export class App implements OnInit {
   private paletteOrigin: HTMLElement | null = null;
   readonly routeAnnouncement = signal('');
   readonly headerSlots = signal<PageHeaderSlots | null>(null);
-  readonly groups = ['Monitor', 'Reports', 'Dashboard', 'Settings'] as const;
+  readonly sidebar = inject(ShellSidebar);
   readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
   readonly showFilters = computed(() => {
     const view = this.navigation.destination();
@@ -68,6 +70,9 @@ export class App implements OnInit {
 
   constructor() {
     inject(LanguagePreference);
+    effect(() => {
+      if (!this.sidebar.drawer()) this.drawerRequest.set(null);
+    });
     this.router.events.pipe(takeUntilDestroyed()).subscribe(event => {
       if (!(event instanceof NavigationEnd)) return;
       const previous = this.router.lastSuccessfulNavigation()?.previousNavigation?.finalUrl;
@@ -132,10 +137,14 @@ export class App implements OnInit {
 
   shortcut(event: KeyboardEvent): void {
     if (!['Alt', 'Control', 'Meta', 'Shift'].includes(event.key)) this.keyboardInput = true;
-    if (event.defaultPrevented || event.repeat || event.altKey || !(event.ctrlKey || event.metaKey) ||
-        event.key.toLowerCase() !== 'k' || !this.workspace.current()) return;
-    event.preventDefault();
-    this.openPalette();
+    if (event.defaultPrevented || event.repeat || !this.workspace.current()) return;
+    if (event.code === 'KeyS' && event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && !this.sidebar.drawer()) {
+      event.preventDefault();
+      this.sidebar.toggle();
+    } else if (event.key.toLowerCase() === 'k' && !event.altKey && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      this.openPalette();
+    }
   }
 
   protected openPalette(trigger?: HTMLElement): void {
