@@ -26,7 +26,18 @@
   .has-detail .incident-panel {
     display: block;
     padding: 1rem 1rem 1rem 0;
+    overflow: hidden;
   }
+
+  /* Let the table use the space between the list summary and the pager. */
+  :host ::ng-deep .incident-list :is(fimra-data-table, fimra-data-table > fimra-state-region, fimra-data-table > fimra-state-region > div,
+    fimra-data-table > fimra-state-region > div > div:not([hidden]), fimra-data-table > fimra-state-region > div > div > .grid) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+  :host ::ng-deep .incident-list .table-scroll { flex: 1; max-block-size: none; }
 }
 
 @media (48rem <= width < 64rem) {

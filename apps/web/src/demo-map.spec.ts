@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { convertToParamMap, provideRouter } from '@angular/router';
+import { convertToParamMap, provideRouter, Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth';
@@ -78,7 +78,11 @@ describe('Detection map', () => {
       { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }), message: signal(''), deny: vi.fn() } },
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } },
       { provide: ThemeService, useValue: { theme: signal('light') } },
-      { provide: ShellNavigation, useValue: { url: signal('/monitor/map'), path: signal('/monitor/map'), query, update } }
+      { provide: ShellNavigation, useFactory: () => {
+        const router = TestBed.inject(Router);
+        return { url: signal('/monitor/map'), path: signal('/monitor/map'), query, update,
+          href: (path: string, queryParams: object) => router.createUrlTree([path], { queryParams }) };
+      } }
     ] });
     http = TestBed.inject(HttpTestingController);
     query.set(convertToParamMap({}));
@@ -168,7 +172,7 @@ describe('Detection map', () => {
     fixture.componentInstance.choose('42');
     fixture.detectChanges();
     expect(update).toHaveBeenLastCalledWith({ alert: null, detection: '42' }, expect.anything());
-    expect(html.querySelector('#detail-title')?.textContent).toBe('Detection #42');
+    expect(html.querySelector('.record-detail h2')?.textContent).toBe('Detection #42');
     expect(html.querySelector('#detection-picker')?.textContent).toContain('Detection #42');
     expect(mocks.sources.get('selection')?.setData).toHaveBeenLastCalledWith({
       type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [81, 20] } }]

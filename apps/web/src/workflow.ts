@@ -3,7 +3,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
-import { StatusBadge } from './ui/status-badge';
+import { Timeline, type TimelineEvent } from './ui/timeline';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, inject, Injector, input, output, signal, viewChild } from '@angular/core';
 import { ConfirmDialog } from './ui/confirm-dialog';
@@ -12,6 +12,8 @@ import { LiveStatus } from './ui/live-status';
 import { restoreOverlayFocus } from './ui/overlay-focus';
 import { defaultWorkspaceFormat } from './workspace-format';
 import { firstValueFrom } from 'rxjs';
+
+const milestones = new Set(['acknowledged', 'reached_site', 'controlled', 'extinguished', 'closed']);
 
 interface Move { step: string; label: string; location_required: boolean; can_override: boolean; terminal: boolean; missingReports?: string[] }
 export interface WorkflowEntry {
@@ -26,12 +28,13 @@ interface History { entries: WorkflowEntry[] | null; moves: Move[]; mergedInto?:
 
 @Component({
   selector: 'fimra-workflow',
-  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, StateRegion, StatusBadge, LiveStatus],
+  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, StateRegion, Timeline, LiveStatus],
   templateUrl: './workflow.html'
 })
 export class Workflow {
   readonly url = input.required<string>();
   readonly stepTime = input.required<string>();
+  readonly now = input<number>();
   /** What the workflow belongs to, for its wording. */
   readonly subject = input<'alert' | 'incident'>('alert');
   readonly changed = output<void>();
@@ -63,7 +66,25 @@ export class Workflow {
   private readonly injector = inject(Injector);
   private readonly confirm = inject(ConfirmDialog);
   private trigger?: HTMLElement;
-  protected readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
+  protected readonly nowDate = computed(() => new Date(this.now() ?? Date.now()));
+  readonly timeline = computed<TimelineEvent[]>(() => {
+    const incident = this.subject() === 'incident';
+    return (this.history()?.entries ?? []).map((entry, index, all) => ({
+      id: `${entry.at}/${index}`,
+      title: entry.label,
+      at: new Date(entry.at),
+      milestone: !incident || index === 0 || index === all.length - 1 || milestones.has(entry.step),
+      detail: [
+        entry.actor || 'Recorded automatically',
+        incident && entry.latitude != null && `${entry.latitude}, ${entry.longitude}`,
+        entry.note,
+        entry.reason && `Location exception: ${entry.reason}`,
+        entry.reportPending && 'Report pending',
+        entry.alertsMoved ? `Moved ${defaultWorkspaceFormat.number(entry.alertsMoved)} ${entry.alertsMoved === 1 ? 'alert' : 'alerts'}` : '',
+        entry.incidentId && `Recorded on incident #${entry.incidentId}`
+      ].filter(Boolean).join('\n')
+    }));
+  });
 
   constructor() {
     let previousUrl = '';

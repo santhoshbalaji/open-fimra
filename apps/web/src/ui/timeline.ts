@@ -38,7 +38,7 @@ let timelineId = 0;
               <time [attr.datetime]="event.at.toISOString()">{{ format().dateTime(event.at) }}</time>
               <span aria-hidden="true"> · </span>{{ format().age(event.at, now()) }}
             </p>
-            @if (event.detail) { <p class="text-body">{{ event.detail }}</p> }
+            @if (event.detail) { <p class="text-body whitespace-pre-line">{{ event.detail }}</p> }
           </li>
         }
       </ol>

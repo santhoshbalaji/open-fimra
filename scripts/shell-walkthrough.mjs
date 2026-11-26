@@ -141,16 +141,17 @@ try {
   }
 
   console.log('Checking map detection history');
+  const detailHeading = page.getByRole('heading', { level: 2, name: /^(Alert|Detection) #\d+$/ });
   await page.setViewportSize(desktop);
   await expect(page.locator('#detection-picker')).toBeEnabled();
   await page.locator('#detection-picker').press('Space');
   await page.getByRole('option').first().click();
   await expect(page).toHaveURL(/detection=/);
-  await expect(page.locator('.detail-card')).toBeVisible();
+  await expect(detailHeading).toBeFocused();
   await page.reload();
-  await expect(page.locator('.detail-card')).toBeVisible();
+  await expect(detailHeading).toBeFocused();
   await page.goBack();
-  await expect(page.locator('.detail-card')).toBeHidden();
+  await expect(detailHeading).toBeHidden();
 
   // Force small API pages so the real cursor and detail endpoints can be tested
   // with the small synthetic dataset used by the development stack.
@@ -187,9 +188,9 @@ try {
   assert.match(selection, /^.+ · Alert #\d+$/);
   await row.click();
   await expect(page).toHaveURL(/alert=/);
-  await expect(page.locator('.detail-card')).toBeVisible();
+  await expect(detailHeading).toBeFocused();
   await page.reload();
-  await expect(page.locator('.detail-card')).toBeVisible();
+  await expect(detailHeading).toBeFocused();
   assert.match(page.url(), /hours=144/);
   assert.match(page.url(), /cursor=/);
   await page.goBack();

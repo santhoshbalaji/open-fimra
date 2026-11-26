@@ -27,7 +27,8 @@ let nextPanel = 0;
       @if (phone()) {
         <hlm-sheet #sheet side="bottom" state="open" autoFocus="first-heading" [restoreFocus]="false"
           (closed)="finishClose()">
-          <hlm-sheet-content *hlmSheetPortal [style.height]="fullHeight() ? '100dvh' : null" class="rounded-t-card border-border">
+          <hlm-sheet-content *hlmSheetPortal [style.height]="fullHeight() ? '100dvh' : null"
+            [closeLabel]="closeLabel()" class="rounded-t-card border-border">
             <hlm-sheet-header>
               <h2 #sheetHeading hlmSheetTitle tabindex="-1" class="text-base">{{ heading() }}</h2>
             </hlm-sheet-header>
@@ -36,10 +37,11 @@ let nextPanel = 0;
         </hlm-sheet>
       } @else {
         <section tabindex="-1" [attr.aria-labelledby]="headingId" (keydown.escape)="dismissDock($event)"
-          class="grid min-w-0 gap-3 rounded-card border border-border bg-card p-4">
+          class="grid min-w-0 content-start gap-3 rounded-card border border-border bg-card p-4"
+          [class.max-h-full]="scrollDock()" [class.overflow-auto]="scrollDock()" [class.overscroll-contain]="scrollDock()">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 #dockHeading [id]="headingId" tabindex="-1" class="rounded-sm text-base font-semibold focus-visible:outline-2 focus-visible:outline-ring">{{ heading() }}</h2>
-            <button type="button" hlmBtn variant="ghost" (click)="close()">Close</button>
+            <h2 #dockHeading [id]="headingId" tabindex="-1" class="rounded-sm text-base font-semibold wrap-anywhere focus-visible:outline-2 focus-visible:outline-ring">{{ heading() }}</h2>
+            <button type="button" hlmBtn variant="ghost" [attr.aria-label]="closeLabel()" (click)="close()">Close</button>
           </div>
           <ng-container [ngTemplateOutlet]="body" />
         </section>
@@ -49,7 +51,9 @@ let nextPanel = 0;
 })
 export class SidePanel {
   readonly heading = input.required<string>();
+  readonly closeLabel = input('Close');
   readonly fullHeight = input(false);
+  readonly scrollDock = input(false);
   readonly closed = output<void>();
 
   private readonly injector = inject(Injector);
@@ -83,6 +87,7 @@ export class SidePanel {
   }
 
   close() {
+    if (!this.open()) return;
     const sheet = this.sheet();
     if (sheet) sheet.close();
     else this.finishClose();

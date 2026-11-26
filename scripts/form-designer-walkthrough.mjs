@@ -133,9 +133,8 @@ async function extendAndPublish(page, viewport, theme) {
     await checkView(page, 'properties-sheet-' + label);
   }
   const question = page.locator('#prop-text-en');
-  await question.press('Control+a');
-  await question.press('Backspace');
-  await question.press('Tab');
+  await question.fill('');
+  await question.blur();
   if (phone) {
     await page.keyboard.press('Escape');
     await sheet.waitFor({ state: 'hidden' });
@@ -257,12 +256,41 @@ try {
   const originalAnswer = presentation.getByText('4 people', { exact: true });
   check(await presentation.getByText('Updated national report').count() === 0, 'the earlier report shows the newer form title');
   await originalAnswer.waitFor();
+  const reportHeading = page.getByRole('heading', { level: 2, name: 'National report', exact: true });
+  const reportRow = page.locator(`[data-report-id="${submission}"]`).first();
+  const review = page.getByRole('region', { name: 'Review actions' });
+  const timeline = page.locator('fimra-submission-view fimra-timeline');
+  const reportUrl = page.url();
+  await page.locator('fimra-submission-view .report-alert-link').click();
+  await page.getByRole('heading', { level: 2, name: /^Alert #/ }).waitFor();
+  await page.goBack();
+  check(page.url() === reportUrl, 'Back must restore the selected report');
+  await checkFocus(reportHeading, 'Back must focus the report heading');
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     for (const theme of themes) {
       await setTheme(page, theme);
+      await page.reload();
+      await reportHeading.waitFor();
+      await checkFocus(reportHeading, 'focus must move to the report heading');
+      await page.locator('.submission-header').getByText(/Beat 05/).waitFor();
+      await timeline.getByText(/Submitted by/).waitFor();
+      if (viewport.width >= 768) {
+        const [list, detail] = await Promise.all([
+          page.getByRole('region', { name: 'Field report queue' }).boundingBox(),
+          page.locator('.report-panel').boundingBox()
+        ]);
+        check(list.x + list.width <= detail.x, 'the report panel must dock beside the list');
+      }
+      await review.waitFor();
+      const actions = await review.boundingBox();
+      check(actions.y + actions.height <= viewport.height, 'review actions must be reachable without scrolling');
       await originalAnswer.scrollIntoViewIfNeeded();
-      await checkView(page, `historical-report-${viewport.width}-${theme}`, 'fimra-submission-view');
+      await checkView(page, `historical-report-${viewport.width}-${theme}`);
+      await page.keyboard.press('Escape');
+      await reportRow.waitFor();
+      await checkFocus(reportRow, 'closing a report must return focus to its row');
+      await reportRow.press('Enter');
     }
   }
   console.log('The earlier report shows the crew size using version 1 after version 2 changed its visibility rule.');

@@ -83,7 +83,7 @@ try {
     const layersButton = page.getByRole('button', { name: 'Layers and legend', exact: true });
     const canvas = page.locator('.maplibregl-canvas');
     const alertRows = page.locator('.alert-panel .row-open');
-    const detail = page.locator('.detail-card');
+    const detail = page.locator('fimra-side-panel.record-detail > section, hlm-sheet-content:has(#observation-heading)');
     const key = page.getByRole('region', { name: 'Map legend', exact: true });
     for (const theme of ['light', 'dark']) {
       tiles = 'live';
@@ -120,11 +120,19 @@ try {
       assert.match(detection, /^\d+$/);
       await expect(picker).toContainText('Detection #' + detection);
 
-      // Zoom about the selection before closing so the map stays centred there.
+      // On a phone the modal sheet gives way to the selected map point.
+      if (size === 'phone') {
+        await detail.getByRole('link', { name: 'Show on map', exact: true }).click();
+        await expect(detail).toBeHidden();
+        await expect(canvas).toBeFocused();
+      }
+      // Zoom about the selection so the map stays centred there.
       await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-      await detail.getByRole('button', { name: 'Close map details' }).press('Escape');
-      await expect(detail).toBeHidden();
-      await expect(picker).toBeFocused();
+      if (size === 'desktop') {
+        await detail.getByRole('button', { name: 'Close map details' }).press('Escape');
+        await expect(detail).toBeHidden();
+        await expect(picker).toBeFocused();
+      }
       const box = await canvas.boundingBox();
       assert.ok(box);
       await expect(async () => {
@@ -137,6 +145,34 @@ try {
       await expect(detail.getByRole('link', { name: /^Open incident #/ })).toBeVisible();
       if (size === 'desktop') await expect(alertRows.and(page.locator('[aria-current=true]'))).toBeVisible();
       await check(page, `selected-${size}-${theme}`);
+
+      await page.goto(WEB + '/monitor/alerts');
+      const row = alertRows.first();
+      await expect(row).toBeVisible();
+      const alert = await row.getAttribute('data-alert-id');
+      const place = (await row.textContent()).split(' · Alert #')[0].trim();
+      const heading = detail.getByRole('heading', { name: 'Alert #' + alert, exact: true });
+      await row.press('Enter');
+      await expect(heading).toBeFocused();
+      await expect(detail.getByText(place, { exact: false }).first()).toBeVisible();
+      await expect(detail.locator('fimra-timeline li').first()).toBeVisible();
+      const location = await detail.getByText('Location', { exact: true }).locator('xpath=following-sibling::dd[1]').textContent();
+      await expect(detail.locator('fimra-timeline')).not.toContainText(location);
+      if (size === 'desktop') {
+        assert.ok((await detail.boundingBox()).x > (await row.boundingBox()).x, 'Alert detail docks beside the list');
+      }
+      await check(page, `alert-detail-${size}-${theme}`);
+      await page.reload();
+      await expect(heading).toBeFocused();
+      await detail.getByRole('link', { name: 'Show on map', exact: true }).click();
+      await expect(page).toHaveURL(/\/monitor\/map\?.*#map$/);
+      await expect(detail).toBeHidden();
+      await expect(canvas).toBeFocused();
+      assert.equal(new URL(page.url()).searchParams.get('alert'), alert);
+      await page.goBack();
+      await expect(heading).toBeFocused();
+      await detail.getByRole('button', { name: 'Close alert details' }).press('Escape');
+      await expect(row).toBeFocused();
 
       tiles = 'empty';
       await page.goto(WEB + '/monitor/map');

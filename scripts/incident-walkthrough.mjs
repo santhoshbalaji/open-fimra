@@ -50,6 +50,14 @@ try {
         await page.emulateMedia({ colorScheme: theme });
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         const row = incidentLink(page).first();
+        if (size === 'desktop') {
+          const pager = page.getByRole('group', { name: 'Incidents pages' });
+          const list = page.getByRole('region', { name: 'Incident list' });
+          await expect(pager).toBeVisible();
+          const [pagerBox, listBox] = await Promise.all([pager.boundingBox(), list.boundingBox()]);
+          assert.ok(listBox.y + listBox.height - pagerBox.y - pagerBox.height <= 20,
+            'The pager stays at the bottom of the list');
+        }
         await capture(page, prefix + '-loaded');
         await open(page, row);
         await expect(page.getByRole('heading', { name: 'Timeline', exact: true })).toBeVisible();

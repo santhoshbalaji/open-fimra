@@ -4,7 +4,7 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { mapColours } from './token-values';
-import { RouterLink } from '@angular/router';
+import { RouterLink, UrlTree } from '@angular/router';
 import { afterNextRender, AfterViewInit, Component, ViewEncapsulation, ElementRef, Injector, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, EMPTY, exhaustMap, expand, forkJoin, reduce, timer } from 'rxjs';
@@ -30,7 +30,6 @@ import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
 import { DataTable, type TableColumn } from './ui/data-table';
 import { defaultWorkspaceFormat } from './workspace-format';
-import { restoreOverlayFocus } from './ui/overlay-focus';
 
 const detectionGroup: MapLayerGroup = { id: 'detections', label: 'Fire detections', minZoom: 0 };
 const incidentGroup: MapLayerGroup = {
@@ -142,6 +141,14 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     return point && !rows.some(row => String(row.id) === String(point.id)) ? [point, ...rows] : rows;
   });
   readonly selected = this.queue.selected;
+  protected readonly mapOnly = computed(() => !this.alertsView() && this.navigation.url().endsWith('#map'));
+  protected readonly detailHeading = computed(() => {
+    const alert = this.queue.pinned();
+    const id = alert?.id || this.alertId();
+    return id ? 'Alert #' + id : 'Detection #' + (this.selected()?.id ?? this.detectionId());
+  });
+  private readonly detailRequested = computed(() => !this.mapOnly() && !!(this.alertId() || this.detectionId()));
+  private readonly detailReady = computed(() => !!this.selected());
   private readonly selectionCoordinates = computed(() => {
     const selected = this.selected();
     if (!selected) return null;
@@ -180,7 +187,6 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly queueTitle = viewChild<ElementRef<HTMLElement>>('queueTitle');
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
   private selectionTrigger?: HTMLElement;
-  private readonly focusAfterClose = signal<{ alert: string } | null>(null);
   private readonly injector = inject(Injector);
   private readonly queuePanel = viewChild<ElementRef<HTMLElement>>('queuePanel');
   private resize?: ResizeObserver;
@@ -188,7 +194,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private previousView?: { center: [number, number]; zoom: number };
   private restoredDetection = '';
   private movedInDetails = false;
-  private readonly detailTitle = viewChild<ElementRef<HTMLHeadingElement>>('detailTitle');
+  private readonly detailPanel = viewChild<SidePanel>('detailPanel');
   private readonly http = inject(HttpClient);
   private readonly appearance = inject(ThemeService);
   private readonly auth = inject(AuthService);
@@ -304,20 +310,25 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         this.centerSelection();
       }
     });
-    effect(() => this.detailTitle()?.nativeElement.focus({ preventScroll: true }));
     effect(() => {
-      const closed = this.focusAfterClose();
-      if (!closed || this.alertId() || this.detectionId() || this.selected()) return;
-      this.focusAfterClose.set(null);
-      afterNextRender(() => {
-        const row = closed.alert ? this.queuePanel()?.nativeElement.querySelector<HTMLElement>(
-          `[data-alert-id="${closed.alert}"]`
-        ) : null;
-        const fallback = this.alertsView() ? this.queueTitle()?.nativeElement : this.map?.getCanvas();
-        const trigger = this.selectionTrigger ?? (this.alertsView() ? null : document.getElementById('detection-picker'));
-        restoreOverlayFocus(row ?? trigger, fallback);
-        this.selectionTrigger = undefined;
-      }, { injector: this.injector });
+      const panel = this.detailPanel();
+      const requested = this.detailRequested();
+      const alert = this.alertId();
+      this.detectionId();
+      const ready = this.detailReady();
+      if (!panel) return;
+      untracked(() => {
+        if (!requested) panel.close();
+        else if (ready) this.showDetails(panel, alert);
+      });
+    });
+    effect(() => {
+      if (this.mapOnly() && this.ready() && !this.detailPanel()?.open()) {
+        afterNextRender({ read: () => {
+          // Let the shell set route focus and the sheet release its focus trap first.
+          if (this.mapOnly()) this.map?.getCanvas().focus({ preventScroll: true });
+        } }, { injector: this.injector });
+      }
     });
     effect(onCleanup => {
       const id = this.alertId();
@@ -648,8 +659,26 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }
 
   closeDetails(): void {
-    this.focusAfterClose.set({ alert: this.alertId() });
-    this.navigation.update({ alert: null, detection: null });
+    if (this.detailRequested()) this.navigation.update({ alert: null, detection: null });
+  }
+
+  protected mapLink(mapOnly = true): UrlTree {
+    const alert = this.queue.pinned();
+    const tree = this.navigation.href('/monitor/map', {
+      alert: alert?.id ?? null, detection: alert ? null : this.selected()?.id
+    });
+    return new UrlTree(tree.root, tree.queryParams, mapOnly ? 'map' : null);
+  }
+
+  private showDetails(panel: SidePanel, alert: string): void {
+    const trigger = this.selectionTrigger;
+    this.selectionTrigger = undefined;
+    panel.show(() => {
+      if (this.mapOnly()) return this.map?.getCanvas() ?? null;
+      if (trigger?.isConnected) return trigger;
+      const row = alert ? this.queuePanel()?.nativeElement.querySelector<HTMLElement>(`[data-alert-id="${alert}"]`) : null;
+      return (this.alertsView() ? row : row ?? document.getElementById('detection-picker')) ?? null;
+    }, this.alertsView() ? this.queueTitle()?.nativeElement : this.map?.getCanvas());
   }
 
   fit(): void {

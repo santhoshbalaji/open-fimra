@@ -13,8 +13,8 @@ import { DataTable, type TableColumn, type TablePage, type TablePosition } from 
 import { SidePanel } from './ui/side-panel';
 import { StateRegion, type DataState } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
-import { Timeline, type TimelineEvent } from './ui/timeline';
-import { Workflow, type WorkflowEntry } from './workflow';
+import { Timeline } from './ui/timeline';
+import { Workflow } from './workflow';
 import { defaultWorkspaceFormat } from './workspace-format';
 
 export interface IncidentRow {
@@ -36,8 +36,6 @@ export interface IncidentRow {
 }
 interface Page<Row> { items: Row[]; total: number; nextCursor?: string }
 export interface IncidentFocus { id: string; points: [number, number][]; bounds: [number, number, number, number] }
-
-const milestones = new Set(['acknowledged', 'reached_site', 'controlled', 'extinguished', 'closed']);
 
 @Component({
   selector: 'fimra-incidents',
@@ -249,23 +247,6 @@ export class Incidents {
   protected changed(): void {
     this.listRetry.update(n => n + 1);
     this.detailRetry.update(n => n + 1);
-  }
-
-  protected timeline(entries: WorkflowEntry[] | null): TimelineEvent[] {
-    return (entries ?? []).map((entry, index, all) => ({
-      id: `${entry.at}/${index}`,
-      title: entry.label,
-      at: new Date(entry.at),
-      milestone: index === 0 || index === all.length - 1 || milestones.has(entry.step),
-      detail: [
-        entry.actor || 'Recorded automatically',
-        entry.latitude != null && `${entry.latitude}, ${entry.longitude}`,
-        entry.note,
-        entry.reason && `Location exception: ${entry.reason}`,
-        entry.reportPending && 'Report pending',
-        entry.alertsMoved ? `Moved ${this.format.number(entry.alertsMoved)} ${entry.alertsMoved === 1 ? 'alert' : 'alerts'}` : ''
-      ].filter(Boolean).join(' · ')
-    }));
   }
 
   private routeState() {
