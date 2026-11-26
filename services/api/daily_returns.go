@@ -23,6 +23,11 @@ var dailyReturnFactsSQL string
 //go:embed daily_return_coverage.sql
 var dailyReturnCoverageSQL string
 
+//go:embed state_extract_facts.sql
+var stateExtractFactsSQL string
+
+var dailyAndStateFactsSQL = "SELECT (" + dailyReturnFactsSQL + "), (" + stateExtractFactsSQL + ")"
+
 type dailyPolicy struct {
 	Hierarchy string `json:"hierarchy"`
 	Level     string `json:"level"`
@@ -79,6 +84,7 @@ type dailyFigures struct {
 	Remarks      string             `json:"remarks"`
 	Author       string             `json:"author"`
 	Facts        []dailyFact        `json:"facts,omitempty"`
+	StateFacts   *[]dailyFact       `json:"stateFacts,omitempty"`
 	Totals       map[string]float64 `json:"totals"`
 }
 
@@ -382,7 +388,7 @@ WHERE r.daily_policy_id=$1 AND r.unit_path=$2::ltree AND r.period_from=$3::date 
 
 func readDailySnapshot(ctx context.Context, tx pgx.Tx, revision dailyRevision) (*dailySnapshot, error) {
 	var snapshot dailySnapshot
-	err := tx.QueryRow(ctx, `SELECT content #- '{dailyReturn,facts}' FROM situation_reports WHERE id=$1::uuid`,
+	err := tx.QueryRow(ctx, `SELECT content #- '{dailyReturn,facts}' #- '{dailyReturn,stateFacts}' FROM situation_reports WHERE id=$1::uuid`,
 		revision.ID).Scan(&snapshot)
 	snapshot.Review = &revision
 	return &snapshot, err
@@ -455,10 +461,10 @@ VALUES($1::uuid,$2,$3,$4,$5)`, latest.ID, in.Action, subject, author, strings.Tr
 func submitDailyReturn(ctx context.Context, tx pgx.Tx, window dailyWindow, subject, author string, unit dailyExpectedUnit,
 	in dailyRequest, latest dailyRevision) (string, error) {
 	facts := []dailyFact{}
+	stateFacts := []dailyFact{}
 	if !in.Nil {
-		err := tx.QueryRow(ctx, dailyReturnFactsSQL, window.WorkspaceID, window.HierarchyID, unit.Path,
-			window.Start, window.End, window.TimeZone).Scan(&facts)
-		if err != nil {
+		if err := tx.QueryRow(ctx, dailyAndStateFactsSQL, window.WorkspaceID, window.HierarchyID, unit.Path,
+			window.Start, window.End, window.TimeZone).Scan(&facts, &stateFacts); err != nil {
 			return "", err
 		}
 		if in.Received > 0 {
@@ -473,7 +479,7 @@ func submitDailyReturn(ctx context.Context, tx pgx.Tx, window dailyWindow, subje
 		Period: reportPeriod{From: window.Day, To: window.Day, Days: 1, Start: window.Start, End: window.End,
 			TimeZone: window.TimeZone, Partial: window.End.Before(window.Due)},
 		DailyReturn: dailyFigures{ExpectedUnit: &unit, Policy: window.dailyPolicy, Cutoff: window.Due, Nil: in.Nil,
-			Remarks: strings.TrimSpace(in.Remarks), Author: author, Facts: facts, Totals: totals}}
+			Remarks: strings.TrimSpace(in.Remarks), Author: author, Facts: facts, StateFacts: &stateFacts, Totals: totals}}
 	raw, err := json.Marshal(snapshot)
 	if err != nil {
 		return "", err

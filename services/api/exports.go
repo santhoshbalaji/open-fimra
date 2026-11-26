@@ -246,7 +246,7 @@ const exportStatusFields = `
 // readExport returns the caller's own export. Other users' exports are not found.
 func (a api) readExport(ctx context.Context, slug string, id pgtype.UUID, subject string) (exportStatus, error) {
 	return scanExport(a.pool.QueryRow(ctx, exportStatusFields+`
-		WHERE e.id = $1 AND w.slug = $2 AND e.requested_by = $3
+		WHERE e.kind <> 'state_extract' AND e.id = $1 AND w.slug = $2 AND e.requested_by = $3
 		  AND (cardinality(e.duty_grants) = 0 OR e.duty_grants <@ dispatch_grant_keys(e.workspace_id, $3, false))
 	`, id, slug, subject))
 }
@@ -330,7 +330,7 @@ func (a api) listExports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := a.pool.Query(ctx, exportStatusFields+`
-		WHERE w.slug = $1 AND e.requested_by = $2
+		WHERE e.kind <> 'state_extract' AND w.slug = $1 AND e.requested_by = $2
 		  AND (cardinality(e.duty_grants) = 0 OR e.duty_grants <@ dispatch_grant_keys(e.workspace_id, $2, false))
 		ORDER BY e.created_at DESC, e.id DESC LIMIT 20
 	`, slug, caller.Subject)

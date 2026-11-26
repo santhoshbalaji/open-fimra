@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,18 @@ func TestDailyReturnIntegration(t *testing.T) {
 	if os.Getenv("FIMRA_REPORT_INTEGRATION") != "1" {
 		t.Skip("Run make situation-report-test-integration.")
 	}
+	testDailyReturnIntegration(t, true)
+}
+
+func TestStateExtractIntegration(t *testing.T) {
+	if os.Getenv("FIMRA_STATE_EXTRACT_INTEGRATION") != "1" {
+		t.Skip("Run make state-extract-test-integration.")
+	}
+	testDailyReturnIntegration(t, false)
+}
+
+func testDailyReturnIntegration(t *testing.T, checkPDF bool) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, loadConfig().databaseURL)
@@ -95,11 +108,18 @@ SELECT $3,detection_id,observed_at,'unit',$4,'dailyroot.c1.d1','{}',
 FROM units u WHERE alerts.id=$1 AND u.hierarchy_id=$2 AND u.current_path='dailyroot.c1.d2'`, alert, hierarchy); err != nil {
 		t.Fatal(err)
 	}
+	if !checkPDF {
+		seedStateExtractInputs(t, ctx, tx, workspace, hierarchy, prefix, alert, observed)
+	}
 	if err = tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	request := notificationRequests(t, api{pool: pool, reader: pool, logger: slog.Default()}.handler, prefix, "")
+	secrets, err := newSettingsCipher(base64.StdEncoding.EncodeToString(make([]byte, 32)), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := notificationRequests(t, api{pool: pool, reader: pool, logger: slog.Default(), secrets: secrets}.handler, prefix, "")
 	base := "/api/v1/workspaces/" + slug
 	call := func(actor, method, path string, input any, want int, out any) []byte {
 		t.Helper()
@@ -168,15 +188,19 @@ FROM units u WHERE alerts.id=$1 AND u.hierarchy_id=$2 AND u.current_path='dailyr
 	}
 	call("a1", "GET", path, nil, 200, &coverage)
 	c := coverage.Coverage
+	sourceTotal := float64(1)
+	if !checkPDF {
+		sourceTotal++
+	}
 	if c.Expected != 4 || c.Reported != 2 || c.Missing != 2 || len(c.Units) != 4 ||
-		!c.Units[1].Nil || c.Units[2].Status != "missing" || c.Daily["source.satellite"] != 1 ||
-		c.Daily["assistance.received"] != 1 || c.Season["source.satellite"] != 1 {
+		!c.Units[1].Nil || c.Units[2].Status != "missing" || c.Daily["source.satellite"] != sourceTotal ||
+		c.Daily["assistance.received"] != 1 || c.Season["source.satellite"] != sourceTotal {
 		t.Fatalf("coverage: %+v", c)
 	}
 	coverage.Coverage.Daily = nil
 	call("a1", "GET", "/daily-returns?day=2026-03-09&scope=dailyroot.c1", nil, 200, &coverage)
 	if c := coverage.Coverage; c.Expected != 2 || c.Missing != 2 || c.Daily["source.satellite"] != 0 ||
-		c.Season["source.satellite"] != 1 {
+		c.Season["source.satellite"] != sourceTotal {
 		t.Fatalf("season figures leaked into the following day: %+v", c)
 	}
 	// Independently evaluate the supporting unit's automatic totals. The nil
@@ -198,6 +222,11 @@ FROM units u WHERE alerts.id=$1 AND u.hierarchy_id=$2 AND u.current_path='dailyr
 JOIN daily_return_notices d ON d.id=notifications.daily_notice_id
 WHERE workspace_id=$1 AND notifications.event='daily_return_missing' AND d.day='2026-03-08'`, workspace).Scan(&misses); err != nil || misses != 2 {
 		t.Fatalf("missed cutoff notices: got %d, want 2: %v", misses, err)
+	}
+
+	if !checkPDF {
+		testStateExtractRequests(t, call, prefix, second, nilReturn.ID)
+		return
 	}
 
 	// A transfer between filings can put the same source record in two saved

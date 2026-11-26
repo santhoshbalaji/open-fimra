@@ -1,0 +1,60 @@
+{
+  "keyId": "bdd9deac505d2185102befaac25aa10b",
+  "signature": "QDOZAFml9SNC1JAgsCQn/2c8y9LLWxAP1nD+MM3nc7QRltH4TVvE2rVB6DqMUWWu8iNdB6ETWx36NzYLvRddDg==",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "preparedness",
+    "source": "approved_preparedness_records",
+    "id": "9bed94e2-b93b-4fb7-a192-179084fdd046",
+    "revision": 2,
+    "supersedes": "9bed94e2-b93b-4fb7-a192-179084fdd045",
+    "authority": {
+      "stateCode": "XS-DEMO",
+      "unitCodeSystem": "demo-forest-units",
+      "approverRole": "state_admin"
+    },
+    "window": {
+      "from": "2026-03-08",
+      "to": "2026-03-08",
+      "seasonFrom": "2026-03-01",
+      "seasonTo": "2026-05-31",
+      "timeZone": "Asia/Kolkata",
+      "cutoff": "18:00",
+      "startsAt": "2026-03-07T12:30:00Z",
+      "endsAt": "2026-03-08T12:30:00Z"
+    },
+    "generatedAt": "2026-03-10T00:00:00Z",
+    "preparedness": {
+      "status": "reported",
+      "approvedRecords": 1,
+      "workRecords": 1,
+      "completedWork": 1,
+      "trainingRecords": 0,
+      "readinessChecks": 0,
+      "trained": {
+        "status": "not_reported",
+        "expected": 0,
+        "reported": 0,
+        "value": null
+      },
+      "target": {
+        "status": "reported",
+        "expected": 1,
+        "reported": 1,
+        "value": 5
+      },
+      "workDone": {
+        "status": "reported",
+        "expected": 1,
+        "reported": 1,
+        "value": 3
+      },
+      "expenditureINR": {
+        "status": "zero",
+        "expected": 1,
+        "reported": 1,
+        "value": 0
+      }
+    }
+  }
+}

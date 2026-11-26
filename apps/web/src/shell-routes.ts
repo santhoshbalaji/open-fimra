@@ -103,6 +103,7 @@ export const shellRoutes: Routes = [
   destinationRoute('/reports/field', () => import('./shell-field-reports').then(module => module.FieldReportScreen)),
   destinationRoute('/reports/operations', () => import('./operations-records').then(module => module.OperationsRecords)),
   destinationRoute('/reports/daily', () => import('./daily-return').then(module => module.DailyReturnView)),
+  destinationRoute('/reports/state', () => import('./state-return').then(module => module.StateReturnView)),
   destinationRoute('/reports/situation', () => import('./situation-report').then(module => module.SituationReportView)),
   destinationRoute('/dashboard', () => import('./dashboard').then(module => module.Dashboard)),
   destinationRoute('/settings/layers', () => import('./layers').then(module => module.Layers)),

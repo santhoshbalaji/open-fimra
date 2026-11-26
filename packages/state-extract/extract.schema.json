@@ -1,0 +1,704 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open FIMRA signed state extract, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "keyId",
+    "signature",
+    "payload"
+  ],
+  "properties": {
+    "keyId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{86}==$"
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/incidentDocument"
+        },
+        {
+          "$ref": "#/$defs/preparednessDocument"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stateCode",
+        "unitCodeSystem",
+        "approverRole"
+      ],
+      "properties": {
+        "stateCode": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9-]{1,31}$"
+        },
+        "unitCodeSystem": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$"
+        },
+        "approverRole": { "const": "state_admin" }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "seasonFrom",
+        "seasonTo",
+        "timeZone",
+        "cutoff",
+        "startsAt",
+        "endsAt"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date"
+        },
+        "to": {
+          "type": "string",
+          "format": "date"
+        },
+        "seasonFrom": {
+          "type": "string",
+          "format": "date"
+        },
+        "seasonTo": {
+          "type": "string",
+          "format": "date"
+        },
+        "timeZone": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_+/-]{1,100}$"
+        },
+        "cutoff": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "startsAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endsAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "reported",
+        "status",
+        "units"
+      ],
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reported": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "enum": [
+            "zero",
+            "reported",
+            "incomplete",
+            "not_reported"
+          ]
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/unitDay"
+          },
+          "maxItems": 25000
+        }
+      }
+    },
+    "unitDay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "day",
+        "boundaryVersion",
+        "status",
+        "overlappingDetectionRecords"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$"
+        },
+        "day": {
+          "type": "string",
+          "format": "date"
+        },
+        "boundaryVersion": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            { "type": "null" }
+          ]
+        },
+        "status": {
+          "enum": [
+            "zero",
+            "reported",
+            "incomplete",
+            "not_reported"
+          ]
+        },
+        "overlappingDetectionRecords": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "denominator",
+        "measured",
+        "unknown",
+        "totalSeconds"
+      ],
+      "properties": {
+        "denominator": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "measured": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "area": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "expected",
+        "reported",
+        "hectares",
+        "breakdowns",
+        "impacts"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "zero",
+            "reported",
+            "incomplete",
+            "not_reported"
+          ]
+        },
+        "expected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reported": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "hectares": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            { "type": "null" }
+          ]
+        },
+        "breakdowns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {},
+          "patternProperties": {
+            "^(forest|non_forest|mixed|unknown)\\.(field|satellite|mixed)\\.(provisional|final)$": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "impacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {},
+          "patternProperties": {
+            "^(vegetation|wildlife|property)$": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        }
+      }
+    },
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "expected",
+        "reported",
+        "value"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "zero",
+            "reported",
+            "incomplete",
+            "not_reported"
+          ]
+        },
+        "expected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reported": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "preparedness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "approvedRecords",
+        "workRecords",
+        "completedWork",
+        "trainingRecords",
+        "readinessChecks",
+        "trained",
+        "target",
+        "workDone",
+        "expenditureINR"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "reported",
+            "incomplete",
+            "not_reported"
+          ]
+        },
+        "approvedRecords": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workRecords": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "completedWork": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "trainingRecords": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "readinessChecks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "trained": {
+          "$ref": "#/$defs/quantity"
+        },
+        "target": {
+          "$ref": "#/$defs/quantity"
+        },
+        "workDone": {
+          "$ref": "#/$defs/quantity"
+        },
+        "expenditureINR": {
+          "$ref": "#/$defs/quantity"
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "detections",
+        "alerts",
+        "incidents",
+        "operations",
+        "response",
+        "area"
+      ],
+      "properties": {
+        "detections": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "records",
+            "deduplicated"
+          ],
+          "properties": {
+            "records": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "deduplicated": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "patternProperties": {
+            "^[a-z][a-z0-9_]{0,63}\\.(inside|near_edge|outside|fixed_heat_source)$": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "alerts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "routed",
+            "fire_seen",
+            "no_fire_found",
+            "awaiting_verification",
+            "awaiting_at_cutoff",
+            "false_alarm",
+            "duplicate",
+            "non_forest",
+            "controlled_burn",
+            "not_reachable",
+            "unsafe",
+            "outside_jurisdiction"
+          ],
+          "properties": {
+            "routed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "fire_seen": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "no_fire_found": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "awaiting_verification": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "awaiting_at_cutoff": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "false_alarm": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "duplicate": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "non_forest": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "controlled_burn": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "not_reachable": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "unsafe": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "outside_jurisdiction": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "incidents": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "new",
+            "active",
+            "controlled",
+            "extinguished",
+            "closed",
+            "closure_backlog"
+          ],
+          "properties": {
+            "new": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "active": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "controlled": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "extinguished": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "closed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "closure_backlog": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "operations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "assistance_requested",
+            "assistance_received",
+            "overdue_cases",
+            "overdue_alerts"
+          ],
+          "properties": {
+            "assistance_requested": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "assistance_received": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "overdue_cases": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "overdue_alerts": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "response": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {},
+          "patternProperties": {
+            "^(new|reopened|acknowledged|assigned|team_sent)$": {
+              "$ref": "#/$defs/response"
+            }
+          }
+        },
+        "area": {
+          "$ref": "#/$defs/area"
+        }
+      }
+    },
+    "incidentDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source",
+        "schemaVersion",
+        "id",
+        "revision",
+        "supersedes",
+        "authority",
+        "window",
+        "generatedAt",
+        "coverage"
+      ],
+      "properties": {
+        "kind": { "const": "incident" },
+        "source": { "const": "approved_daily_returns_and_assessments" },
+        "schemaVersion": { "const": 1 },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            { "type": "null" }
+          ]
+        },
+        "authority": {
+          "$ref": "#/$defs/authority"
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "totals": {
+          "$ref": "#/$defs/totals"
+        }
+      }
+    },
+    "preparednessDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source",
+        "schemaVersion",
+        "id",
+        "revision",
+        "supersedes",
+        "authority",
+        "window",
+        "generatedAt",
+        "preparedness"
+      ],
+      "properties": {
+        "kind": { "const": "preparedness" },
+        "source": { "const": "approved_preparedness_records" },
+        "schemaVersion": { "const": 1 },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            { "type": "null" }
+          ]
+        },
+        "authority": {
+          "$ref": "#/$defs/authority"
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "preparedness": {
+          "$ref": "#/$defs/preparedness"
+        }
+      }
+    }
+  }
+}

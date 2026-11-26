@@ -12,6 +12,7 @@ export const destinations = [
   { path: '/reports/field', name: 'Field reports', icon: 'file-pen-line', group: 'Reports', filters: true },
   { path: '/reports/operations', name: 'Referrals and preparedness', icon: 'file-pen-line', group: 'Reports' },
   { path: '/reports/daily', name: 'Daily situation return', icon: 'file-chart-column', group: 'Reports' },
+  { path: '/reports/state', name: 'State return', icon: 'file-chart-column', group: 'Reports', grant: 'layers' },
   { path: '/reports/situation', name: 'Situation report', icon: 'file-chart-column', group: 'Reports' },
   { path: '/dashboard', name: 'Dashboard', icon: 'layout-dashboard', group: 'Dashboard', filters: true },
   { path: '/settings/layers', name: 'Layers', icon: 'layers', group: 'Settings', grant: 'layers' },

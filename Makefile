@@ -559,3 +559,17 @@ SITUATION_REPORT_SHOTS ?= $(HOME)/open-fimra-screenshots/situation-report
 situation-report-walkthrough: web-build demo-daily-returns ## Check printable reports and daily returns in Chromium
 	WEB_PORT=$(WEB_PORT) SHOTS="$(SITUATION_REPORT_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh situation-report-walkthrough.mjs
+
+.PHONY: state-extract-test state-extract-test-integration demo-state-extracts
+state-extract-test: ## Validate the published state extract schema and examples
+	cd packages/state-extract && go vet ./... && go test ./...
+
+state-extract-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+state-extract-test-integration: ## Check signed extracts and corrections in the API
+	cd services/api && FIMRA_STATE_EXTRACT_INTEGRATION=1 go test -run '^TestStateExtractIntegration$$' -count=1 -v .
+
+demo-state-extracts: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+demo-state-extracts: export FIMRA_SETTINGS_KEY := $(FIMRA_SETTINGS_KEY)
+demo-state-extracts: export FIMRA_SETTINGS_OLD_KEYS := $(FIMRA_SETTINGS_OLD_KEYS)
+demo-state-extracts: demo-daily-returns ## Sign a fictional state return and its correction
+	cd services/api && go run . demo-state-extracts

@@ -96,7 +96,7 @@ jobs:
         with:
           go-version: '1.26.6'
           cache-dependency-path: services/api/go.sum
-      - run: make api-lint api-test
+      - run: make api-lint api-test state-extract-test
 
   api-integration:
     name: Core API integration tests
@@ -117,6 +117,8 @@ jobs:
           echo '### Dashboard timings on the demo data' >> "$GITHUB_STEP_SUMMARY"
           awk '/^=== RUN .*dashboard_SQL_parity\// {n=split($NF, parts, "/"); user=parts[n]}
                /summary, 20 signed requests/ {sub(/^.*summary, /, ""); print "- " user ": " $0}' api-integration.log >> "$GITHUB_STEP_SUMMARY"
+      - name: Validate state extracts and correction receipts
+        run: make state-extract-test-integration
       - name: Backfill the demo fixtures twice; the second run must fetch nothing
         run: |
           make backfill-demo

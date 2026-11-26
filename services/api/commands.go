@@ -28,6 +28,8 @@ func runCommand(ctx context.Context, cfg config, args []string) error {
 		return ingestCommand(ctx, cfg, args)
 	case "backfill-firms":
 		return backfillCommand(ctx, cfg, args)
+	case "demo-state-extracts":
+		return stateExtractDemo(ctx, cfg)
 	case "demo-response-forms":
 		return responseFormsDemo(ctx, cfg)
 	case "demo-incident-response":

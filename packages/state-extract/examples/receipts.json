@@ -1,0 +1,32 @@
+[
+  {
+    "schemaVersion": 1,
+    "extractId": "9bed94e2-b93b-4fb7-a192-179084fdd045",
+    "revision": 1,
+    "kind": "incident",
+    "status": "incomplete",
+    "keyId": "bdd9deac505d2185102befaac25aa10b",
+    "sha256": "4275e5449a9afd02457d2238ebbef27c37814ce81486a6e6b2c289004b2a9b91",
+    "validatedAt": "2026-03-09T00:00:00Z"
+  },
+  {
+    "schemaVersion": 1,
+    "extractId": "9bed94e2-b93b-4fb7-a192-179084fdd046",
+    "revision": 2,
+    "kind": "incident",
+    "status": "reported",
+    "keyId": "bdd9deac505d2185102befaac25aa10b",
+    "sha256": "96bcfd6586a14b2c27c77e8b85c5d87dc34b6215ab8ae57374d97cd0937b42e2",
+    "validatedAt": "2026-03-10T00:00:00Z"
+  },
+  {
+    "schemaVersion": 1,
+    "extractId": "9bed94e2-b93b-4fb7-a192-179084fdd046",
+    "revision": 2,
+    "kind": "preparedness",
+    "status": "reported",
+    "keyId": "bdd9deac505d2185102befaac25aa10b",
+    "sha256": "561b2454175711085d7fc45f0ec27c55ddee10a68f6e9204c47808d3ce23e160",
+    "validatedAt": "2026-03-10T00:00:00Z"
+  }
+]
