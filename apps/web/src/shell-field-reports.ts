@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ViewEncapsulation, inject, signal } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { DashboardFilters } from './dashboard-filters';
@@ -12,7 +12,7 @@ import { Icon } from './ui/icon';
   selector: 'fimra-field-report-screen',
   imports: [ExportDialog, HlmButton, HlmDialogImports, Icon, ShellListScroll, Submissions],
   template: `
-    <div class="shell-list" fimraListScroll>
+    <div class="shell-list field-report-list" fimraListScroll>
       <section class="shell-list-body field-report-screen" aria-label="Field reports">
         <div class="queue-heading">
           <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
@@ -30,6 +30,28 @@ import { Icon } from './ui/icon';
         <fimra-submissions [endpoint]="endpoint()" [now]="now()" (filtersChanged)="reportFilters.set($event)" />
       </section>
     </div>
+  `,
+  encapsulation: ViewEncapsulation.None,
+  styles: `
+    .field-report-list .field-report-screen { display: grid; gap: 1rem; max-width: none; }
+    .field-report-list .report-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+    .field-report-list .report-panel { display: none; min-width: 0; min-height: 0; }
+
+    @media (width >= 48rem) {
+      .field-report-list .field-report-screen {
+        height: 100%;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .field-report-list .report-workspace { grid-template-rows: minmax(0, 1fr); }
+      .field-report-list .report-workspace.has-report {
+        grid-template-columns: minmax(0, 1fr) minmax(20rem, 42%);
+      }
+      .field-report-list .has-report .report-panel { display: block; }
+      .field-report-list .report-queue { align-content: start; overflow: auto; }
+    }
+    @media (width >= 64rem) {
+      .field-report-list .report-workspace.has-report { grid-template-columns: minmax(0, 1fr) minmax(20rem, 30rem); }
+    }
   `,
   host: { class: 'block h-full' }
 })

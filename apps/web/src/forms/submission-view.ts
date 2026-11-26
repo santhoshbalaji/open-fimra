@@ -7,10 +7,13 @@ import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed,
 
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth';
+import type { AlertRow } from '../alert-queue';
+import { placesOf } from '../detections';
 import { ShellNavigation } from '../shell-navigation';
 import { LiveStatus } from '../ui/live-status';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { StateRegion, type DataState } from '../ui/state-region';
+import { Timeline, type TimelineEvent } from '../ui/timeline';
 import { StatusBadge } from '../ui/status-badge';
 import { defaultWorkspaceFormat } from '../workspace-format';
 import { decisionLabels, serverProblems, type FormVersion, type Submission } from './form-api';
@@ -24,14 +27,20 @@ import { FormPresentation } from './form-presentation';
  */
 @Component({
   selector: 'fimra-submission-view',
-  imports: [HlmButtonImports, HlmFieldImports, HlmTextareaImports, LiveStatus, RouterLink, StatusBadge, StateRegion, FormPresentation],
+  imports: [HlmButtonImports, HlmFieldImports, HlmTextareaImports, LiveStatus, RouterLink, StatusBadge, StateRegion, FormPresentation, Timeline],
   host: { class: 'submission-view' },
   template: `
     <fimra-live-status class="sr-only" [message]="announcement()" />
     <fimra-state-region [state]="reportState()" (retry)="reloadReport()">
       @if (submission(); as s) {
         <header class="submission-header">
-          <h3>{{ title() }}</h3>
+          @if (showTitle()) { <h3>{{ title() }}</h3> }
+          <p class="text-base font-medium wrap-anywhere">{{ place() }}</p>
+          <div #decisionResult tabindex="-1" class="flex flex-wrap items-center gap-2">
+            <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
+              [label]="s.approval ? labels[s.approval.decision] : 'Submitted'" />
+            @if (!s.approval) { <span class="submission-meta">{{ labels.pending }}</span> }
+          </div>
           <p class="submission-meta">Version {{ s.version }}</p>
           <dl class="submission-facts">
             <div><dt>Sender</dt><dd>{{ s.submittedBy }}</dd></div>
@@ -39,11 +48,6 @@ import { FormPresentation } from './form-presentation';
               @if (navigation) {
                 <a class="report-alert-link" [routerLink]="navigation.href('/monitor/alerts', { alert: s.alertId })">Alert #{{ s.alertId }}</a>
               } @else { Alert #{{ s.alertId }} }
-            </dd></div>
-            <div><dt>Decision</dt><dd #decisionResult tabindex="-1">
-              <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
-                [label]="s.approval ? labels[s.approval.decision] : 'Submitted'" />
-              @if (!s.approval) { <span class="submission-meta">{{ labels.pending }}</span> }
             </dd></div>
             <div><dt>Received</dt><dd><time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time></dd></div>
           </dl>
@@ -56,9 +60,15 @@ import { FormPresentation } from './form-presentation';
           }
         </fimra-state-region>
 
+        <section aria-label="Report timeline" class="grid gap-2 border-t border-divider pt-3">
+          <h3 class="font-semibold">Timeline</h3>
+          <fimra-timeline [events]="timeline()" [now]="nowDate()" />
+        </section>
+
         @if (!s.approval && s.canApprove && definition()) {
-          <section class="approval" aria-label="Review actions">
-            <h4>Review actions</h4>
+          <section class="approval sticky bottom-0 z-1 bg-card" aria-label="Review actions">
+            <h3 class="font-semibold">Review actions</h3>
+            @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
             @if (returning()) {
               <form novalidate (submit)="$event.preventDefault(); decide('returned', note.value)">
                 <hlm-field>
@@ -80,22 +90,9 @@ import { FormPresentation } from './form-presentation';
               </div>
             }
           </section>
+        } @else if (message()) {
+          <p role="alert" class="report-refused">{{ message() }}</p>
         }
-        @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
-
-        <section class="approval" aria-label="Report history">
-          <h4>Report history</h4>
-          <ol class="report-history" role="list">
-            <li>Submitted by {{ s.submittedBy }} · <time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time>
-              @if (s.deviceTime) { <p class="submission-meta">Saved on the device {{ time(s.deviceTime) }}</p> }
-            </li>
-            @if (s.approval; as a) {
-              <li>{{ labels[a.decision] }} by {{ a.by }} · <time [attr.datetime]="a.at">{{ time(a.at) }}</time>
-                @if (a.note) { <p class="approval-note">{{ a.note }}</p> }
-              </li>
-            }
-          </ol>
-        </section>
       }
     </fimra-state-region>
   `
@@ -103,6 +100,8 @@ import { FormPresentation } from './form-presentation';
 export class SubmissionView {
   readonly workspaceUrl = input.required<string>();
   readonly submissionId = input.required<string>();
+  readonly showTitle = input(true);
+  readonly now = input<number>();
   readonly decided = output<Submission>();
   readonly submission = signal<Submission | null>(null);
   readonly message = signal('');
@@ -125,7 +124,24 @@ export class SubmissionView {
   private readonly decisionResult = viewChild<ElementRef<HTMLElement>>('decisionResult');
   protected readonly definition = signal<FormVersion['definition'] | null>(null);
   protected readonly formState = signal<DataState>({ kind: 'loading', heading: 'Loading the form version' });
-  protected readonly title = computed(() => textIn(this.definition()?.['title'], 'en') || this.submission()?.form);
+  readonly title = computed(() => textIn(this.definition()?.['title'], 'en') || this.submission()?.form);
+  protected readonly place = signal('Unknown place');
+  protected readonly nowDate = computed(() => new Date(this.now() ?? Date.now()));
+  protected readonly timeline = computed<TimelineEvent[]>(() => {
+    const report = this.submission();
+    if (!report) return [];
+    const events: TimelineEvent[] = [{
+      id: 'submitted', title: 'Submitted by ' + report.submittedBy, at: new Date(report.receivedAt), milestone: true,
+      detail: report.deviceTime ? 'Saved on the device ' + this.time(report.deviceTime) : undefined
+    }];
+    const approval = report.approval;
+    if (approval) events.push({
+      id: 'decision', title: this.labels[approval.decision] + ' by ' + approval.by,
+      at: new Date(approval.at), milestone: true, detail: approval.note
+    });
+    return events;
+  });
+  private readonly alertId = computed(() => this.submission()?.alertId);
   private readonly formAttempt = signal(0);
   private readonly formUrl = computed(() => {
     const report = this.submission();
@@ -152,6 +168,20 @@ export class SubmissionView {
           this.reportState.set(error.status === 403 || error.status === 404 ?
             { kind: 'forbidden', heading: 'This report is unavailable' } : { kind: 'error', heading: 'The report could not load' });
         }
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+    effect(onCleanup => {
+      const id = this.alertId();
+      this.place.set('Unknown place');
+      if (!id) return;
+      const request = this.http.get<AlertRow>(this.workspaceUrl() + '/alerts/' + id).subscribe({
+        next: alert => {
+          const names = placesOf(alert, []).map(place => place.name || place.code).filter(Boolean);
+          this.place.set(names.join(' · ') ||
+            [alert.beat_name, alert.range_name, alert.division_name].filter(Boolean).join(' · ') || 'Unknown place');
+        },
+        error: (error: HttpErrorResponse) => { if (error.status === 401) this.auth.sessionEnded(); }
       });
       onCleanup(() => request.unsubscribe());
     });

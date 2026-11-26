@@ -10,7 +10,7 @@ import { AuthService } from '../auth';
 import { DashboardFilters, defaultDashboardHours } from '../dashboard-filters';
 import { classes } from '../detections';
 import { FilterFields } from '../filter-fields';
-import { ShellNavigation } from '../shell-navigation';
+import { ShellNavigation, submissionId } from '../shell-navigation';
 import { DataTable, type TableColumn, type TablePage, type TablePosition } from '../ui/data-table';
 import { FilterBar, FilterControls } from '../ui/filter-bar';
 import { SidePanel } from '../ui/side-panel';
@@ -35,14 +35,10 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
   selector: 'fimra-submissions',
   imports: [DataTable, FilterBar, FilterControls, FilterFields, HlmButton, HlmFieldImports, HlmSelectImports, SidePanel, StatusBadge, SubmissionView],
   styleUrl: './forms.css',
+  host: { class: 'report-workspace', '[class.has-report]': 'panel()?.open()' },
   encapsulation: ViewEncapsulation.None,
   template: `
     <div #queue tabindex="-1" class="report-queue" role="region" aria-label="Field report queue">
-      <fimra-side-panel heading="Review field report" [fullHeight]="true" (closed)="closeReview()">
-        @if (panel()?.open() && selectedId(); as id) {
-          <fimra-submission-view [workspaceUrl]="endpoint()" [submissionId]="id" (decided)="reload()" />
-        }
-      </fimra-side-panel>
       <fimra-filter-bar [filters]="activeFilters()" (remove)="removeFilter($event)" (clearAll)="clearFilters()">
         <ng-template fimraFilterControls>
           <fimra-filter-fields [forReports]="true" />
@@ -69,7 +65,8 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
         </ng-template>
       </fimra-filter-bar>
       <ng-template #reportCell let-row>
-        <button #report hlmBtn variant="link" class="report-open" type="button" (click)="open(row, report)">
+        <button #report hlmBtn variant="link" class="report-open" type="button"
+          [attr.data-report-id]="row.id" [attr.aria-expanded]="selectedId() === row.id" (click)="open(row, report)">
           {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}, received {{ received(row) }}</span>
         </button>
         <p>{{ place(row) }}</p>
@@ -79,7 +76,8 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
           [label]="status(row)" />
       </ng-template>
       <ng-template #phoneActions let-row>
-        <button #report hlmBtn variant="outline" type="button" (click)="open(row, report)">Open {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}</span></button>
+        <button #report hlmBtn variant="outline" type="button"
+          [attr.data-report-id]="row.id" [attr.aria-expanded]="selectedId() === row.id" (click)="open(row, report)">Open {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}</span></button>
       </ng-template>
       <fimra-data-table caption="Field reports" [columns]="columns()" [rowKey]="rowKey" [rowLabel]="rowLabel"
         [page]="page()" [state]="state()" [phoneCards]="true" [rowActions]="phoneCards() ? phoneActions : undefined"
@@ -87,6 +85,13 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
         (pageRequest)="setPosition($event)" (retry)="reload()" />
       @if (state().kind === 'ready' && !page().rows.length) { <p>No reports on this page.</p> }
     </div>
+    <fimra-side-panel class="report-panel" [heading]="view()?.title() || 'Field report'"
+      [scrollDock]="true" [fullHeight]="true" (closed)="closeReview()">
+      @if (panel()?.open() && selectedId(); as id) {
+        <fimra-submission-view [workspaceUrl]="endpoint()" [submissionId]="id" [showTitle]="false"
+          [now]="now()" (decided)="reload()" />
+      }
+    </fimra-side-panel>
   `
 })
 export class Submissions {
@@ -100,7 +105,8 @@ export class Submissions {
   protected readonly panel = viewChild(SidePanel);
   private readonly queue = viewChild<ElementRef<HTMLElement>>('queue');
   private readonly navigation = inject(ShellNavigation);
-  protected readonly selectedId = computed(() => this.navigation.query().get('report'));
+  protected readonly selectedId = computed(() => submissionId(this.navigation.query().get('report')));
+  protected readonly view = viewChild(SubmissionView);
   private readonly attempt = signal(0);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
@@ -164,8 +170,13 @@ export class Submissions {
       const id = this.selectedId();
       if (!panel || !fallback) return;
       untracked(() => {
-        if (id && !panel.open()) panel.show(this.trigger ?? fallback, fallback);
-        else if (!id && panel.open()) panel.close();
+        if (!id) {
+          panel.close();
+          return;
+        }
+        const trigger = this.trigger;
+        panel.show(() => trigger?.isConnected ? trigger :
+          fallback.querySelector<HTMLElement>(`[data-report-id="${id}"]`), fallback);
       });
     });
 

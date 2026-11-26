@@ -173,6 +173,7 @@ try {
   await expect(page.getByRole('heading', { name: 'Alert #' + nextAlert, exact: true })).toBeVisible();
   await expect(inbox).toBeHidden();
 
+  await page.getByRole('button', { name: 'Close alert details', exact: true }).click();
   await openInbox();
   const feedLink = inbox.getByRole('link', { name: 'Feed needs attention', exact: true });
   await tabTo(feedLink);

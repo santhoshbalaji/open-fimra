@@ -40,6 +40,7 @@ describe('Report and approval', () => {
     fixture.detectChanges();
     http.expectOne(workspace + '/submissions/' + submission.id).flush(submission);
     fixture.detectChanges();
+    http.expectOne(workspace + '/alerts/' + submission.alertId).flush({ beat_name: 'Beat 01', range_name: 'Demo Range' });
     // The report shows with the version it was filled in on.
     http.expectOne(workspace + '/forms/first-report/versions/' + submission.version).flush({ form: 'first-report', version: 1,
       status: 'published', definition: firstReport });
@@ -58,8 +59,9 @@ describe('Report and approval', () => {
     const { el, fixture, button } = render(report);
     const header = el.querySelector('.submission-header')!;
     expect(header.querySelector('h3')!.textContent).toBe('First report');
-    expect(header.querySelector('p')!.textContent).toBe('Version 1');
-    expect(Array.from(header.querySelectorAll('dt'), term => term.textContent)).toEqual(['Sender', 'Related alert', 'Decision', 'Received']);
+    expect(header.querySelector('p')!.textContent).toBe('Beat 01 · Demo Range');
+    expect(header.querySelector('p.submission-meta')!.textContent).toBe('Version 1');
+    expect(Array.from(header.querySelectorAll('dt'), term => term.textContent)).toEqual(['Sender', 'Related alert', 'Received']);
     expect(header.querySelector('dd')!.textContent).toBe('Demo Beat Guard');
     expect(header.querySelector('a')!.getAttribute('href')).toBe('/monitor/alerts?alert=7');
     expect(header.textContent).toContain('Submitted');
@@ -91,8 +93,8 @@ describe('Report and approval', () => {
     post.flush({ ...report, approval: { decision: 'approved', note: '', by: 'Demo Division Officer', at: '2026-03-15T10:00:00Z' } });
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(el.querySelector('.approval')!.textContent).toContain('Approved');
-    expect(el.querySelector('.approval')!.textContent).toContain('Demo Division Officer');
+    expect(el.querySelector('fimra-timeline')!.textContent).toContain('Approved');
+    expect(el.querySelector('fimra-timeline')!.textContent).toContain('Demo Division Officer');
     expect(el.querySelector('fimra-live-status')!.textContent).toBe('Report approved.');
     expect(button('Approve')).toBeUndefined();
     expect(document.activeElement).toBe(el.querySelector('.submission-header [tabindex="-1"]'));
@@ -119,6 +121,7 @@ describe('Report and approval', () => {
       ...report, id: 'demo-newer-report', version: 2, values: { cause: 'lightning' }
     });
     fixture.detectChanges();
+    http.expectOne(workspace + '/alerts/' + report.alertId).flush({ beat_name: 'Beat 01' });
     http.expectOne(workspace + '/forms/first-report/versions/2').flush({ definition: latest });
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -129,6 +132,7 @@ describe('Report and approval', () => {
     fixture.detectChanges();
     http.expectOne(workspace + '/submissions/' + report.id).flush({ ...report, values: { cause: 'lightning', crew: 4 } });
     fixture.detectChanges();
+    http.expectOne(workspace + '/alerts/' + report.alertId).flush({ beat_name: 'Beat 01' });
     http.expectOne(workspace + '/forms/first-report/versions/1').flush({ definition: original });
     fixture.detectChanges();
     expect(el.textContent).toContain('Original report');
@@ -156,7 +160,7 @@ describe('Report and approval', () => {
     post.flush({ ...report, approval: { decision: 'returned', note: 'Recount the teams.', by: 'Demo Division Officer', at: '2026-03-15T10:00:00Z' } });
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(el.querySelector('.approval-note')!.textContent?.trim()).toBe('Recount the teams.');
+    expect(el.querySelector('fimra-timeline li:last-child p:last-child')!.textContent?.trim()).toBe('Recount the teams.');
     expect(el.querySelector('fimra-live-status')!.textContent).toBe('Report returned.');
     expect(document.activeElement).toBe(el.querySelector('.submission-header [tabindex="-1"]'));
   });

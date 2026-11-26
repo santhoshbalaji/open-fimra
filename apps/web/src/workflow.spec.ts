@@ -29,14 +29,14 @@ describe('Workflow panel', () => {
     fixture.detectChanges();
     return { fixture, el: fixture.nativeElement as HTMLElement, http };
   }
-  it('shows the ordered timeline with the actor, time, location and pending reports', () => {
+  it('shows the ordered timeline with the actor, time and pending reports without repeating coordinates', () => {
     const {el} = render([]);
-    const entries = Array.from(el.querySelectorAll('li'));
+    const entries = Array.from(el.querySelectorAll('fimra-timeline li'));
     expect(entries[0].textContent).toContain('New');
-    expect(entries[0].textContent).toContain('16, 86');
+    expect(entries[0].textContent).not.toContain('16, 86');
     expect(entries[1].textContent).toContain('Demo Guard');
     expect(entries[1].textContent).toContain('Report pending');
-    expect(entries[1].querySelector('time')?.dateTime).toBe('2026-01-01T12:00:00Z');
+    expect(entries[1].querySelector('time')?.dateTime).toBe('2026-01-01T12:00:00.000Z');
     expect(el.querySelector('button')).toBeNull();
   });
   it('only offers the returned moves and hides the field location exception', () => {

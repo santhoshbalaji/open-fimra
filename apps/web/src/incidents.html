@@ -31,7 +31,7 @@
     }
   </section>
 
-  <fimra-side-panel class="incident-panel" [heading]="'Incident #' + selectedId()" [fullHeight]="true" (closed)="closed()">
+  <fimra-side-panel class="incident-panel" [heading]="'Incident #' + selectedId()" [fullHeight]="true" [scrollDock]="true" (closed)="closed()">
     @if (selectedId()) {
       <fimra-state-region [state]="detailState()" (retry)="retryDetail()">
         @if (incident(); as row) {
@@ -84,10 +84,10 @@
               </fimra-state-region>
             </section>
 
-            @if (workflow.history(); as history) {
+            @if (workflow.history()) {
               <section aria-labelledby="incident-timeline" class="grid min-w-0 gap-2 border-t border-divider pt-4">
                 <h3 id="incident-timeline" class="text-base font-semibold">Timeline</h3>
-                <fimra-timeline [events]="timeline(history.entries)" [now]="nowDate()" allActivityLabel="Show full history" />
+                <fimra-timeline [events]="workflow.timeline()" [now]="nowDate()" allActivityLabel="Show full history" />
               </section>
             }
           </div>

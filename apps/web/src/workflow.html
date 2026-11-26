@@ -18,7 +18,7 @@
           </hlm-dropdown-menu></ng-template>
         }
       </div>
-    } @else if (subject() === 'incident' && !data.mergedInto) {
+    } @else if (!data.mergedInto) {
       <p class="text-text-secondary">No next step available.</p>
     }
     @if (move(); as action) {
@@ -56,21 +56,9 @@
     <fimra-live-status [message]="result()" />
   </div>
 </fimra-state-region>
-@if (subject() === 'alert') {
-  @if (history(); as data) {
-    <h3>Timeline</h3>
-    <ol class="step-timeline" role="list">
-      @for (entry of data.entries ?? []; track $index) {
-        <li><fimra-status-badge icon="step" [label]="entry.label" /><time [attr.datetime]="entry.at">{{ dateTime(entry.at) }}</time>
-          <small>{{ entry.actor || 'Opened automatically' }}</small>
-          @if (entry.latitude !== null) { <small>{{ entry.latitude }}, {{ entry.longitude }}</small> }
-          @if (entry.note) { <small>{{ entry.note }}</small> }
-          @if (entry.reason) { <small>Location exception · {{ entry.reason }}</small> }
-          @if (entry.reportPending) { <small>Report pending</small> }
-          @if (entry.alertsMoved) { <small>Moved {{ entry.alertsMoved }} {{ entry.alertsMoved === 1 ? 'alert' : 'alerts' }}</small> }
-          @if (entry.incidentId) { <small>Recorded on incident #{{ entry.incidentId }}</small> }
-        </li>
-      }
-    </ol>
-  }
+@if (subject() === 'alert' && history()) {
+  <section aria-labelledby="alert-timeline" class="mt-3 grid gap-2 border-t border-divider pt-3">
+    <h3 id="alert-timeline">Timeline</h3>
+    <fimra-timeline [events]="timeline()" [now]="nowDate()" emptyLabel="No activity yet." />
+  </section>
 }

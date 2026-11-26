@@ -1,4 +1,4 @@
-<div class="workspace-panes" [class.show-queue]="alertsView()" [class.show-details]="!!selected()">
+<div class="workspace-panes" [class.show-queue]="alertsView()">
 <section class="map-pane" aria-label="Detection map">
 <div #canvas class="map-canvas"></div>
 <div class="map-actions" role="group" aria-label="Map controls">
@@ -7,6 +7,9 @@
   <button hlmBtn variant="ghost" [disabled]="!ready() || !boundary()" (click)="fit()" title="Fit workspace to map" aria-label="Fit workspace to map"><svg fimraIcon="maximize"></svg></button>
 </div>
 <div class="fire-controls">
+  @if (mapOnly() && selected()) {
+    <a hlmBtn variant="outline" class="bg-popover" [routerLink]="mapLink(false)">{{ detailHeading() }} details</a>
+  }
   @if (workspace.current()) {
     <hlm-field class="filter-card">
       <label hlmFieldLabel for="detection-picker">Detections in view</label>
@@ -127,61 +130,6 @@
   </fimra-side-panel>
 }
 </section>
-@if (selected(); as point) {
-  @let alert = queue.pinned();
-  <section tabindex="-1" class="detail-card" aria-labelledby="detail-title"
-    (keydown.escape)="$event.stopPropagation(); closeDetails()">
-    <div class="detail-heading">
-      <div>
-        <p>{{ workspace.current()?.name }}</p>
-        <h2 id="detail-title" #detailTitle tabindex="-1">{{ alert ? 'Alert #' + alert.id : 'Detection #' + point.id }}</h2>
-      </div>
-      <button type="button" hlmBtn variant="ghost" (click)="closeDetails()" [attr.aria-label]="alertsView() ? 'Close alert details' : 'Close map details'">Close</button>
-    </div>
-    <section class="map-detail-block" aria-labelledby="alert-detail-heading">
-      <h3 id="alert-detail-heading">Routed alert</h3>
-      @if (alert) {
-        <div class="step-meta" aria-label="Current step">
-          <fimra-status-badge icon="step" [label]="alert.step_label" />
-          <time [attr.datetime]="alert.step_time">{{ dateTime(alert.step_time) }}</time>
-          @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-        </div>
-        @defer (on immediate) {
-          <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
-            (changed)="queue.refresh()" (reportNeeded)="openReport($event)" />
-        }
-      } @else { <p>No alert available for this detection.</p> }
-    </section>
-    @if (alert) {
-      <section class="map-detail-block" #reportsHeading tabindex="-1" aria-label="Field reports">
-        @defer (on immediate) {
-          <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="reportChanged()" />
-        }
-      </section>
-    }
-    <section class="map-detail-block" aria-labelledby="observation-heading">
-      <h3 id="observation-heading">{{ point.source === 'manual' ? 'Reported observation' : 'Detected observation' }}</h3>
-      <p>Detection #{{ point.id }} · {{ dateTime(point.observed_at * 1000) }} · {{ detectionAge(point.observed_at, now()) }}</p>
-      <dl>
-        <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
-        @for (place of places(point).all; track place.label; let first = $first) {
-          <dt>{{ place.label }}</dt><dd>{{ place.name || place.code || 'Unknown' }} @if (first && place.name && place.code) { ({{ place.code }}) }</dd>
-        }
-        <dt>Source</dt><dd>{{ sourceLabel(point.source) }}</dd>
-        <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
-        <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
-        <dt>Confidence</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>
-      </dl>
-      @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
-    </section>
-    <section class="map-detail-block" aria-labelledby="incident-detail-heading">
-      <h3 id="incident-detail-heading">Linked incident</h3>
-      @if (alert?.incident_id; as incident) {
-        <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/incidents', { incident })">Open incident #{{ incident }}</a>
-      } @else { <p>No incident available for this detection.</p> }
-    </section>
-  </section>
-}
 @if (workspace.current()) {
   <aside #queuePanel class="alert-panel" aria-labelledby="queue-title" fimraListScroll>
     <div class="queue-heading">
@@ -244,6 +192,62 @@
     }
   </aside>
 }
+<fimra-side-panel #detailPanel class="record-detail" [class.detail-open]="detailPanel.open()"
+  [heading]="detailHeading()" [closeLabel]="alertsView() ? 'Close alert details' : 'Close map details'"
+  [fullHeight]="true" [scrollDock]="true" (closed)="closeDetails()">
+  @if (detailPanel.open() && selected(); as point) {
+    @let alert = queue.pinned();
+    @let place = places(point);
+    <div class="grid gap-2">
+      <p class="text-base font-medium wrap-anywhere">{{ place.firstName }}@if (place.rest) { · {{ place.rest }} }</p>
+      @if (alert) {
+        <div class="step-meta" aria-label="Current step">
+          <fimra-status-badge icon="step" [label]="alert.step_label" />
+          @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+          <time [attr.datetime]="alert.step_time">Updated {{ dateTime(alert.step_time) }}</time>
+        </div>
+      } @else { <p>No alert available for this detection.</p> }
+      <a hlmBtn variant="outline" class="justify-self-start" [routerLink]="mapLink()">Show on map</a>
+      @if (alert) {
+        @defer (on immediate) {
+          <fimra-workflow class="m-0!" [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
+            [now]="now()" (changed)="queue.refresh()" (reportNeeded)="openReport($event)" />
+        }
+      }
+    </div>
+    @if (alert) {
+      <section class="map-detail-block" #reportsHeading tabindex="-1" aria-label="Field reports">
+        @defer (on immediate) {
+          <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="reportChanged()" />
+        }
+      </section>
+    }
+    <section class="map-detail-block" aria-labelledby="observation-heading">
+      <h3 id="observation-heading">{{ point.source === 'manual' ? 'Reported observation' : 'Detected observation' }}</h3>
+      <p>Detection #{{ point.id }} · {{ dateTime(point.observed_at * 1000) }} · {{ detectionAge(point.observed_at, now()) }}</p>
+      <dl>
+        @if (point.latitude !== null && point.latitude !== undefined && point.longitude !== null && point.longitude !== undefined) {
+          <dt>Location</dt><dd>{{ point.latitude }}, {{ point.longitude }}</dd>
+        }
+        <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
+        @for (place of places(point).all; track place.label; let first = $first) {
+          <dt>{{ place.label }}</dt><dd>{{ place.name || place.code || 'Unknown' }} @if (first && place.name && place.code) { ({{ place.code }}) }</dd>
+        }
+        <dt>Source</dt><dd>{{ sourceLabel(point.source) }}</dd>
+        <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
+        <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
+        <dt>Confidence</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>
+      </dl>
+      @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
+    </section>
+    <section class="map-detail-block" aria-labelledby="incident-detail-heading">
+      <h3 id="incident-detail-heading">Linked incident</h3>
+      @if (alert?.incident_id; as incident) {
+        <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/incidents', { incident })">Open incident #{{ incident }}</a>
+      } @else { <p>No incident available for this detection.</p> }
+    </section>
+  }
+</fimra-side-panel>
 </div>
 
 <ng-template #rowHeading let-row>
