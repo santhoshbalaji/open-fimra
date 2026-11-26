@@ -36,7 +36,9 @@ describe('Control-room dashboard', () => {
   });
 
   afterEach(() => {
-    TestBed.inject(HttpTestingController).verify();
+    const http = TestBed.inject(HttpTestingController);
+    http.match(r => r.url.endsWith('/situation-report/units')).forEach(request => request.flush({ units: [] }));
+    http.verify();
     localStorage.clear();
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -105,7 +107,7 @@ describe('Control-room dashboard', () => {
       });
     }
     expect(page.querySelector('#count-pending_reports')?.textContent).toBe('1');
-    expect(page.querySelector('#count-pending_reports + dd')?.textContent).toBe('Alerts observed · Past 72 hours');
+    expect(page.querySelector('#count-pending_reports + dd')?.textContent).toBe('Alerts observed · Last 3 days');
     const link = [...page.querySelectorAll('a')].find(a => a.textContent?.trim() === 'Awaiting review')!;
     const url = new URL(link.href);
     expect(url.pathname).toBe('/reports/field');
@@ -113,7 +115,7 @@ describe('Control-room dashboard', () => {
       workspace: 'demo', hours: '72', class: 'inside', unitPath: 'ds.c1', decision: 'pending'
     });
     expect(page.querySelector('#count-awaiting-review')?.textContent).toBe('37');
-    expect(page.querySelector('#count-awaiting-review + dd')?.textContent).toBe('Field reports received · Past 72 hours');
+    expect(page.querySelector('#count-awaiting-review + dd')?.textContent).toBe('Field reports received · Last 3 days');
   });
 
   it('requests the field reports total for the same filters and distinguishes failure from zero', () => {
