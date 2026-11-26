@@ -27,7 +27,8 @@ type stepRequest struct {
 }
 
 const historySQL = `
-SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY terminal,label)
+SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) || jsonb_build_object(
+ 'missingReports', ARRAY(SELECT f.form_key FROM alert_missing_forms($3,m.step) f)) ORDER BY terminal,label,step)
  FROM alert_moves($1,$2,$3) m),'[]'),'entries',(
  SELECT jsonb_agg(jsonb_build_object('from',l.from_step,'step',l.to_step,'label',s.label,
   'at',l.occurred_at,'actor',u.display_name,'note',l.note,'reason',l.override_reason,

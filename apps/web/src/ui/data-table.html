@@ -67,7 +67,13 @@
           <li class="result-card" [class.selected]="isSelected(row)">
             <div class="flex items-center gap-2">
               @if (selected()) { <ng-container [ngTemplateOutlet]="pickRow" [ngTemplateOutletContext]="{ $implicit: row }" /> }
-              <p class="min-w-0 font-semibold" [attr.lang]="rowLanguage()?.(row) ?? null">{{ rowLabel()(row) }}</p>
+              @if (rowHeadingCell(); as cell) {
+                <div class="min-w-0" [attr.lang]="rowLanguage()?.(row) ?? null">
+                  <ng-container [ngTemplateOutlet]="cell" [ngTemplateOutletContext]="{ $implicit: row }" />
+                </div>
+              } @else {
+                <p class="min-w-0 font-semibold" [attr.lang]="rowLanguage()?.(row) ?? null">{{ rowLabel()(row) }}</p>
+              }
             </div>
             <dl>
               @for (column of visibleColumns(); track column.id) {

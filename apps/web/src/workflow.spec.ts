@@ -1,15 +1,22 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { InteractivityChecker } from '@angular/cdk/a11y';
+import { stubLayoutApis } from './overlay-testing';
 import { Workflow } from './workflow';
 
 describe('Workflow panel', () => {
   const url = '/api/v1/workspaces/demo/alerts/1';
   const fieldMove = { step: 'reached_site', label: 'Reached site', location_required: true, terminal: false, can_override: false };
   const close = { step: 'closed', label: 'Closed', location_required: false, terminal: true, can_override: true };
-  beforeEach(() => { TestBed.configureTestingModule({providers: [provideHttpClient(), provideHttpClientTesting()]}); });
-  function render(moves: typeof fieldMove[]) {
+  beforeEach(() => {
+    stubLayoutApis();
+    TestBed.configureTestingModule({providers: [provideHttpClient(), provideHttpClientTesting()]});
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
+  });
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  function render(moves: (typeof fieldMove & { missingReports?: string[] })[]) {
     const fixture = TestBed.createComponent(Workflow);
     fixture.componentRef.setInput('url', url);
     fixture.componentRef.setInput('stepTime', '2026-01-01T12:00:00Z');
@@ -39,20 +46,84 @@ describe('Workflow panel', () => {
     fixture.detectChanges();
     expect(el.querySelector('[role=checkbox]')).toBeNull();
     expect(el.textContent).toContain('share your location');
+    expect(el.textContent).toContain('Location required');
+    expect(document.activeElement).toBe(el.querySelector('form h3'));
   });
-  it('lets an officer give a reason and requires confirmation to close', () => {
+  it('returns focus to the close action and can dismiss a terminal confirmation without saving', async () => {
     const {el, fixture, http} = render([{...fieldMove, can_override:true}, close]);
-    el.querySelector('button')!.click();
+    const field = el.querySelector('button')!;
+    field.click();
     fixture.detectChanges();
     expect(el.querySelector('[role=checkbox]')).toBeTruthy();
-    Array.from(el.querySelectorAll('button')).find(b => b.textContent.trim() === 'Cancel')!.click();
+    el.querySelector('form h3')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
-    expect(el.textContent).not.toContain('Confirm Closed');
-    Array.from(el.querySelectorAll('button')).find(b => b.textContent.includes('Close alert'))!.click();
+    expect(document.activeElement).toBe(field);
+    const closeButton = Array.from(el.querySelectorAll('button')).find(b => b.textContent.includes('Close alert'))!;
+    closeButton.click();
     fixture.detectChanges();
     document.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
     fixture.detectChanges();
-    expect(el.querySelector('button[type=submit]')?.textContent).toContain('Confirm Closed');
-    http.expectNone(url+'/steps');
+    const review = el.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    review.focus();
+    review.click();
+    TestBed.tick();
+    const modal = document.querySelector('[role=alertdialog]')!;
+    expect(modal.textContent).toContain('Confirm Closed');
+    modal.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(review);
+    expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    http.expectNone(url + '/steps');
+    el.querySelector('form h3')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(closeButton);
+  });
+  it('announces saving and success and focuses the saved result across a history reload', async () => {
+    const {el, fixture, http} = render([{...fieldMove, location_required:false}]);
+    el.querySelector('button')!.click();
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Saving Reached site');
+    http.expectOne(url + '/steps').flush({});
+    await fixture.whenStable();
+    fixture.detectChanges();
+    http.expectOne(url + '/history').flush({ moves: [], entries: [] });
+    fixture.detectChanges();
+    expect(document.activeElement?.textContent).toContain('Saved: Reached site.');
+    expect(el.querySelector('form')).toBeNull();
+  });
+  it('announces a browser location refusal and the server’s reason for a refused step', async () => {
+    const mockNavigator = Object.create(navigator);
+    Object.defineProperty(mockNavigator, 'geolocation', { value: {
+      getCurrentPosition: (_success: PositionCallback, failure: PositionErrorCallback) => failure({ code: 1 } as GeolocationPositionError)
+    } });
+    vi.stubGlobal('navigator', mockNavigator);
+    const {el, fixture, http} = render([{...fieldMove, can_override: true}]);
+    el.querySelector('button')!.click();
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+    await fixture.whenStable();
+    expect(el.textContent).toContain('Location permission denied');
+    http.expectNone(url + '/steps');
+
+    el.querySelector<HTMLButtonElement>('[role=checkbox]')!.click();
+    fixture.detectChanges();
+    el.querySelector<HTMLTextAreaElement>('#location-reason')!.value = 'Confirmed by radio';
+    el.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+    http.expectOne(url + '/steps').flush({ error: 'Your role cannot record this step.' }, { status: 403, statusText: 'Forbidden' });
+    await fixture.whenStable();
+    expect(el.textContent).toContain('Permission denied. Your role cannot record this step.');
+    expect(el.querySelector('form')).not.toBeNull();
+  });
+  it('hands a report gate to the field report form without posting a step', () => {
+    const {el, fixture, http} = render([{...fieldMove, missingReports: ['first-report']}]);
+    const open = vi.fn();
+    fixture.componentInstance.reportNeeded.subscribe(open);
+    el.querySelector('button')!.click();
+    fixture.detectChanges();
+    Array.from(el.querySelectorAll('button')).find(button => button.textContent.trim() === 'Open required report')!.click();
+    expect(open).toHaveBeenCalledWith('first-report');
+    http.expectNone(url + '/steps');
   });
 });

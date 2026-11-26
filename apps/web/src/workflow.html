@@ -1,68 +1,76 @@
-<ng-template #actions let-data>
-
-  @if (chosen(); as move) {
-    <form (submit)="$event.preventDefault(); save(note.value, reason.value)">
-      <h3 #formTitle [attr.tabindex]="subject() === 'incident' ? -1 : null">{{ move.terminal ? 'Confirm outcome' : 'Record step' }} · {{ move.label }}</h3>
-      @if (move.terminal) { <p>This ends the workflow for this {{ subject() }}.</p> }
-      @if (subject() === 'incident') { <p>This can also move member alerts that allow the same step.</p> }
-      <hlm-field><label hlmFieldLabel for="step-note">Note (optional)</label>
-        <textarea hlmTextarea id="step-note" #note maxlength="2000"></textarea>
-      </hlm-field>
-      @if (move.location_required) {
-        <p>Your browser will ask to share your location.</p>
-        @if (move.can_override) {
-          <label hlmFieldLabel><hlm-checkbox aria-label="Enter a reason instead" [checked]="exception()" (checkedChange)="exception.set($event)" /> Enter a reason instead</label>
+<fimra-state-region [state]="historyState()" (retry)="reload()">
+  @if (history(); as data) {
+    @if (data.moves.length) {
+      <h3>Next step</h3>
+      <div class="workflow-moves">
+        @for (action of steps(); track action.step; let first = $first) {
+          <button #stepButton hlmBtn type="button" [variant]="first ? 'primary' : 'outline'"
+            [attr.aria-expanded]="move()?.step === action.step" [disabled]="busy() || loading() || loadError()"
+            (click)="choose(action, stepButton)">{{ action.label }}</button>
         }
-      }
-      <div [hidden]="!exception()"><hlm-field><label hlmFieldLabel for="location-reason">Reason for the location exception</label>
-        <textarea hlmTextarea id="location-reason" #reason [required]="exception()" maxlength="2000"></textarea>
-      </hlm-field></div>
-      <button hlmBtn type="submit" [disabled]="busy()">{{ move.terminal ? 'Confirm' : 'Save' }} {{ move.label }}</button>
-      <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="choose(null)">Cancel</button>
-    </form>
-  } @else if (data.moves.length) {
-    <h3 #nextStep [attr.tabindex]="subject() === 'incident' ? -1 : null">Next step</h3>
-    <div class="workflow-moves">
-      @for (move of steps(); track move.step; let first = $first) {
-        <button hlmBtn [variant]="first ? 'primary' : 'outline'" (click)="choose(move)">{{ move.label }}</button>
-      }
-      @if (outcomes().length) {
-        <button hlmBtn variant="outline" [hlmDropdownMenuTrigger]="menu">Close {{ subject() }}…</button>
-        <ng-template #menu><hlm-dropdown-menu>
-          @for (move of outcomes(); track move.step) {
-            <button hlmDropdownMenuItem (triggered)="choose(move)">{{ move.label }}</button>
+        @if (outcomes().length) {
+          <button #closeButton hlmBtn type="button" variant="outline" [hlmDropdownMenuTrigger]="menu"
+            [disabled]="busy() || loading() || loadError()">Close {{ subject() }}…</button>
+          <ng-template #menu><hlm-dropdown-menu>
+            @for (action of outcomes(); track action.step) {
+              <button hlmDropdownMenuItem (triggered)="choose(action, closeButton)">{{ action.label }}</button>
+            }
+          </hlm-dropdown-menu></ng-template>
+        }
+      </div>
+    } @else if (subject() === 'incident' && !data.mergedInto) {
+      <p class="text-text-secondary">No next step available.</p>
+    }
+    @if (move(); as action) {
+      <form class="workflow-step grid gap-2 rounded-control border border-border p-3 my-3"
+        (keydown.escape)="cancel($event)" (submit)="$event.preventDefault(); save(note.value, reason.value, submit)">
+        <h3 #formTitle tabindex="-1">{{ action.terminal ? 'Close ' + subject() : 'Record step' }} · {{ action.label }}</h3>
+        @if (pendingReport(); as report) {
+          <p>Submit the required report before recording this step.</p>
+          <button type="button" hlmBtn class="justify-self-start" (click)="reportNeeded.emit(report)">Open required report</button>
+        }
+        <div [hidden]="!!pendingReport()">
+          @if (subject() === 'incident') { <p>This can also move member alerts that allow the same step.</p> }
+          <hlm-field><label hlmFieldLabel for="step-note">Note (optional)</label>
+            <textarea hlmTextarea id="step-note" #note rows="2" maxlength="2000"></textarea>
+          </hlm-field>
+          @if (action.location_required) {
+            <p>Your browser will ask you to share your location.</p>
+            @if (action.can_override) {
+              <label hlmFieldLabel><hlm-checkbox aria-label="Enter a reason instead" [checked]="exception()"
+                (checkedChange)="exception.set($event)" /> Enter a reason instead</label>
+            }
           }
-        </hlm-dropdown-menu></ng-template>
-      }
-    </div>
-  } @else if (subject() === 'incident' && !data.mergedInto) {
-    <p #nextStep tabindex="-1" class="text-text-secondary">No next step available.</p>
+          <div [hidden]="!exception()"><hlm-field><label hlmFieldLabel for="location-reason">Reason for the location exception</label>
+            <textarea hlmTextarea id="location-reason" #reason rows="2" [required]="exception()" maxlength="2000"></textarea>
+          </hlm-field></div>
+          <button #submit hlmBtn type="submit" [busy]="busy()" [disabled]="loading() || loadError()">
+            {{ action.terminal ? 'Review' : 'Save' }} {{ action.label }}
+          </button>
+        </div>
+        <button hlmBtn variant="ghost" class="justify-self-start" type="button" [disabled]="busy()" (click)="cancel()">Cancel</button>
+      </form>
+    }
   }
-</ng-template>
-
-@if (subject() === 'incident') {
-  <fimra-state-region [state]="historyState()" (retry)="retryHistory()">
-    @if (history(); as data) {
-      <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: data }" />
-    }
-  </fimra-state-region>
-} @else if (history(); as data) {
-  <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: data }" />
-  <h3>Timeline</h3>
-  <ol class="step-timeline">
-    @for (entry of data.entries; track $index) {
-      <li><fimra-status-badge icon="step" [label]="entry.label" /><time [attr.datetime]="entry.at">{{ entry.at | date:'medium' }}</time>
-        <small>{{ entry.actor || 'Opened automatically' }}</small>
-        @if (entry.latitude !== null) { <small>{{ entry.latitude }}, {{ entry.longitude }}</small> }
-        @if (entry.note) { <small>{{ entry.note }}</small> }
-        @if (entry.reason) { <small>Location exception · {{ entry.reason }}</small> }
-        @if (entry.reportPending) { <small>Report pending</small> }
-        @if (entry.alertsMoved) { <small>Moved {{ entry.alertsMoved }} {{ entry.alertsMoved === 1 ? 'alert' : 'alerts' }}</small> }
-        @if (entry.incidentId) { <small>Recorded on incident #{{ entry.incidentId }}</small> }
-      </li>
-    }
-  </ol>
-} @else if (!message()) {
-  <hlm-skeleton class="h-12" role="status" aria-label="Loading timeline" />
+  <div #resultTarget tabindex="-1" class="rounded-control focus-visible:outline-2 focus-visible:outline-ring">
+    <fimra-live-status [message]="result()" />
+  </div>
+</fimra-state-region>
+@if (subject() === 'alert') {
+  @if (history(); as data) {
+    <h3>Timeline</h3>
+    <ol class="step-timeline" role="list">
+      @for (entry of data.entries ?? []; track $index) {
+        <li><fimra-status-badge icon="step" [label]="entry.label" /><time [attr.datetime]="entry.at">{{ dateTime(entry.at) }}</time>
+          <small>{{ entry.actor || 'Opened automatically' }}</small>
+          @if (entry.latitude !== null) { <small>{{ entry.latitude }}, {{ entry.longitude }}</small> }
+          @if (entry.note) { <small>{{ entry.note }}</small> }
+          @if (entry.reason) { <small>Location exception · {{ entry.reason }}</small> }
+          @if (entry.reportPending) { <small>Report pending</small> }
+          @if (entry.alertsMoved) { <small>Moved {{ entry.alertsMoved }} {{ entry.alertsMoved === 1 ? 'alert' : 'alerts' }}</small> }
+          @if (entry.incidentId) { <small>Recorded on incident #{{ entry.incidentId }}</small> }
+        </li>
+      }
+    </ol>
+  }
 }
-@if (message()) { <p role="status">{{ message() }}</p> }

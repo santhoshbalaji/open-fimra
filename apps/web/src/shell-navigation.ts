@@ -42,6 +42,7 @@ export function submissionId(value: string | null): string {
 
 export function allowedParams(path: string, input: Params, workspace: WorkspaceService): Params {
   const params: Params = {};
+  const validCursor = /^[0-9T:.Z+\-,a-f]{1,128}$/;
   const current = workspace.current();
   if (current) params['workspace'] = current.slug;
   const { unitPath, hours, alert, detection, incident, report, class: forest, queue, cursor, decision, form, view } = input;
@@ -49,9 +50,15 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
   if (typeof hours === 'string' && /^\d{1,3}$/.test(hours) && +hours >= 1 && +hours <= 720) params['hours'] = String(+hours);
   if (typeof forest === 'string' && Object.hasOwn(classes, forest)) params['class'] = forest;
   if (path.startsWith('/monitor/') || path === '/reports/field') {
-    if (typeof cursor === 'string' && /^[0-9T:.Z+\-,a-f]{1,128}$/.test(cursor)) params['cursor'] = cursor;
+    if (typeof cursor === 'string' && validCursor.test(cursor)) params['cursor'] = cursor;
   }
   if (path === '/monitor/map' || path === '/monitor/alerts') {
+    if (input['alertSort'] === 'oldest') params['alertSort'] = 'oldest';
+    const trail = input['alertTrail'];
+    if (params['cursor'] && typeof trail === 'string') {
+      const [first, ...earlier] = trail.split('|');
+      if (first === '-' && earlier.every(value => validCursor.test(value) && value !== '-')) params['alertTrail'] = trail;
+    }
     if (typeof alert === 'string' && recordId(alert)) params['alert'] = alert;
     if (!params['alert'] && typeof detection === 'string' && recordId(detection)) params['detection'] = detection;
     if (queue === 'unit' || queue === 'triage' || queue === 'edge_review') {

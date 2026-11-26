@@ -87,6 +87,11 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err.Error())
 		return
 	}
+	sort := r.URL.Query().Get("sort")
+	if sort != "" && sort != "newest" && sort != "oldest" {
+		writeError(w, 400, "Unknown alert sort order.")
+		return
+	}
 	var id *int64
 	if raw := chi.URLParam(r, "id"); raw != "" {
 		n, err := strconv.ParseInt(raw, 10, 64)
@@ -119,7 +124,7 @@ func (a api) alerts(w http.ResponseWriter, r *http.Request) {
 	var allowed, knownStatus bool
 	var page alertPage
 	err = a.reader.QueryRow(ctx, alertsSQL, caller.Subject, chi.URLParam(r, "slug"), id, f.hours,
-		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID, f.group).Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
+		f.queue, f.status, f.class, f.path, f.before, f.beforeID, f.limit+1, detectionID, incidentID, f.group, sort == "oldest").Scan(&allowed, &page.CanReview, &knownStatus, &page.Counts, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read alerts", "error", err)
 		writeError(w, 500, "Could not load alerts.")
