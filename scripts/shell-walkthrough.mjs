@@ -29,6 +29,49 @@ async function axe(page, label, selectors) {
   console.log(label + ' — zero serious or critical axe violations');
 }
 
+async function checkMonitorType(page, wall) {
+  const selectors = ['.map-key', '.alert-scan .row-open', '.scan-line', '.next-action', '.queue-freshness'];
+  for (const selector of selectors) {
+    const label = page.locator(selector + ':visible').first();
+    await expect(label).toBeVisible();
+    const expectedSize = wall ? '24px' : selector.endsWith('.row-open') ? '14px' : '12px';
+    await expect(label).toHaveCSS('font-size', expectedSize);
+  }
+  const overflowing = await page.locator(
+    '.map-pane, .map-key, .alert-panel, .queue-heading, .alert-scan, .scan-line'
+  ).evaluateAll(elements => elements.filter(element => element.scrollWidth > element.clientWidth + 1)
+    .map(element => element.className));
+  assert.deepEqual(overflowing, [], 'Monitor labels fit their containers');
+}
+
+async function toggleWallDisplay(page, checked) {
+  const account = page.locator('.account-trigger');
+  await account.press('Enter');
+  const toggle = page.getByRole('menuitemcheckbox', { name: 'Wall display', exact: true });
+  await expect(toggle).toHaveAttribute('aria-checked', String(checked));
+  await toggle.press('Enter');
+  await expect(toggle).toBeHidden();
+  await expect(account).toBeFocused();
+}
+
+async function checkWallDisplay(page) {
+  await toggleWallDisplay(page, false);
+  await expect(page.locator('fimra-root')).toHaveAttribute('data-wall-display', '');
+  await page.reload();
+  await expect(page.locator('fimra-root')).toHaveAttribute('data-wall-display', '');
+  await expect(page.locator('#detection-picker')).toBeEnabled();
+  for (const theme of ['light', 'dark']) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await checkMonitorType(page, true);
+    await axe(page, 'Wall display 1920x1080 ' + theme, []);
+    await page.screenshot({ path: join(SHOTS, 'wall-on-1920x1080-' + theme + '.png') });
+  }
+  await toggleWallDisplay(page, true);
+  await expect(page.locator('fimra-root')).not.toHaveAttribute('data-wall-display');
+  await checkMonitorType(page, false);
+}
+
 async function openDrawer(page, menu = 'Menu', destinations = 'Destinations') {
   await page.getByRole('button', { name: menu, exact: true }).click();
   const drawer = page.getByRole('dialog', { name: destinations });
@@ -119,6 +162,7 @@ async function checkSidebarMatrix() {
       await expect(page.locator('#detection-picker')).toBeEnabled();
       for (const [width, height, scale, layout] of sizes.filter(size => size[2] === deviceScaleFactor)) {
         await page.setViewportSize({ width, height });
+        await expect(page.locator('fimra-root')).not.toHaveAttribute('data-wall-display');
         const sidebar = page.locator('.shell-sidebar');
         const menuButton = page.getByRole('button', { name: menu, exact: true });
         if (layout === 'drawer') {
@@ -144,6 +188,7 @@ async function checkSidebarMatrix() {
           assert.deepEqual(await page.evaluate(() => [
             document.documentElement, ...document.querySelectorAll('.topbar, .shell-layout, .shell-sidebar, main, .page-content')
           ].filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.className)), [], label);
+          if (lang === 'en' && [1536, 1920].includes(width)) await checkMonitorType(page, false);
           await axe(page, 'Shell ' + label, []);
           await page.screenshot({ path: join(SHOTS, 'shell-' + label + '.png') });
           if (layout === 'drawer') {
@@ -156,6 +201,7 @@ async function checkSidebarMatrix() {
             await expect(menuButton).toBeFocused();
           }
         }
+        if (lang === 'en' && width === 1920) await checkWallDisplay(page);
       }
       await context.close();
     }

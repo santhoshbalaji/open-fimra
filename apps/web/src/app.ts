@@ -7,7 +7,7 @@ import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { LanguagePreference } from './language-preference';
 import { AuthService } from './auth';
 import { Bootstrap } from './bootstrap';
-import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
+import { DashboardFilters, defaultDashboardHours } from './dashboard-filter-state';
 import { ExportTray } from './export-dialog-tray';
 import { MonitorFilters } from './filter-fields';
 import { Notifications, type NotificationLink } from './notifications';
@@ -18,25 +18,30 @@ import { ShellPalette } from './shell-palette';
 import { ShellSidebar } from './shell-sidebar';
 import { ThemeService } from './theme';
 import { LiveStatus } from './ui/live-status';
-import { Icon } from './ui/icon';
+import { ShellIcon } from './ui/shell-icon';
 import { SidebarTooltip } from './ui/sidebar-tooltip';
 import { restoreOverlayFocus } from './ui/overlay-focus';
 import { PageHeader, type PageHeaderSlots } from './ui/page-header';
 import { WorkspaceService } from './workspace';
-import { classes, type ForestClass } from './detections';
+import { classes, type ForestClass } from './detection-classes';
+import { WallDisplay } from './wall-display';
 
 @Component({
   selector: 'fimra-root',
-  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray, SidebarTooltip],
+  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, ShellIcon, LiveStatus, PageHeader, ExportTray, SidebarTooltip],
   providers: [ShellNavigation, ShellSidebar],
   templateUrl: './app.html',
-  host: { '(window:keydown)': 'shortcut($event)', '(window:pointerdown)': 'pointerInput()' }
+  host: {
+    '(window:keydown)': 'shortcut($event)', '(window:pointerdown)': 'pointerInput()',
+    '[attr.data-wall-display]': "wallDisplay.enabled() ? '' : null"
+  }
 })
 export class App implements OnInit {
   protected readonly msg = translate;
   readonly workspace = inject(WorkspaceService);
   readonly auth = inject(AuthService);
   readonly appearance = inject(ThemeService);
+  protected readonly wallDisplay = inject(WallDisplay);
   readonly navigation = inject(ShellNavigation);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);

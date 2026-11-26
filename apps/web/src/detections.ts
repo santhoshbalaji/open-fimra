@@ -6,11 +6,8 @@ import { ageColours, mapColours } from './token-values';
 import { isApiRequest } from './config';
 import type { Theme } from './theme';
 
-export const classes = {
-  inside: 'Inside forest', near_edge: 'Near the forest edge',
-  outside: 'Outside forest', fixed_heat_source: 'Suspected fixed heat source'
-};
-export type ForestClass = keyof typeof classes;
+import type { ForestClass } from './detection-classes';
+export { classes, type ForestClass } from './detection-classes';
 export const shortClasses: Record<ForestClass, string> = {
   inside: 'Inside', near_edge: 'Edge', outside: 'Outside', fixed_heat_source: 'Fixed heat'
 };

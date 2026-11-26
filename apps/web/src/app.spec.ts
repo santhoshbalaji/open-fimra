@@ -8,6 +8,7 @@ import { App } from './app';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ThemeService } from './theme';
+import { WallDisplay } from './wall-display';
 import { WorkspaceService } from './workspace';
 
 @Component({
@@ -51,8 +52,9 @@ describe('App shell', () => {
   }
 
   afterEach(() => {
-    localStorage.removeItem('fimra.lowBandwidth');
     vi.unstubAllGlobals();
+    localStorage.removeItem('fimra.lowBandwidth');
+    localStorage.removeItem('fimra.wallDisplay');
   });
 
   it('renders a screen’s freshness and actions in the shared page header', async () => {
@@ -63,6 +65,33 @@ describe('App shell', () => {
     expect(header?.querySelector('h1')?.textContent).toBe('Map');
     expect(header?.textContent).toContain('Updated just now');
     expect(header?.textContent).toContain('Page action');
+  });
+
+  it('starts in normal display mode and applies a saved wall display choice', () => {
+    const { fixture, page } = open();
+    const wallDisplay = TestBed.inject(WallDisplay);
+    expect(page.hasAttribute('data-wall-display')).toBe(false);
+
+    wallDisplay.toggle();
+    fixture.detectChanges();
+    expect(page.hasAttribute('data-wall-display')).toBe(true);
+    expect(localStorage.getItem('fimra.wallDisplay')).toBe('true');
+
+    // A new browser load reads the saved choice.
+    expect(new WallDisplay().enabled()).toBe(true);
+    wallDisplay.toggle();
+    fixture.detectChanges();
+    expect(page.hasAttribute('data-wall-display')).toBe(false);
+    expect(new WallDisplay().enabled()).toBe(false);
+  });
+
+  it('uses the wall display choice for this load when storage is blocked', () => {
+    const blocked = () => { throw new DOMException('Storage is blocked', 'SecurityError'); };
+    vi.stubGlobal('localStorage', { getItem: blocked, setItem: blocked });
+    const wallDisplay = new WallDisplay();
+    expect(wallDisplay.enabled()).toBe(false);
+    wallDisplay.toggle();
+    expect(wallDisplay.enabled()).toBe(true);
   });
 
   it('reads and saves the low-bandwidth preference through the labelled switch', async () => {

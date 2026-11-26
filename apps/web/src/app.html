@@ -25,13 +25,10 @@
         </button>
         <button data-variant="ghost" class="shell-button theme-trigger" (click)="appearance.toggle()"
                 [attr.aria-label]=" msg('Dark theme') " [attr.aria-pressed]="appearance.theme() === 'dark'">
-          @defer (on immediate) {
-            @if (appearance.theme() === 'dark') { <svg fimraIcon="sun" aria-hidden="true"></svg> }
-            @else { <svg fimraIcon="moon" aria-hidden="true"></svg> }
-          }
+          <svg [fimraIcon]="appearance.theme() === 'dark' ? 'sun' : 'moon'" aria-hidden="true"></svg>
         </button>
-        @defer (on immediate) { <fimra-export-tray /> }
-        @defer (on immediate) { <fimra-notifications (openNotice)="openNotice($event)" /> }
+        @defer (on idle) { <fimra-export-tray /> }
+        @defer (on idle) { <fimra-notifications (openNotice)="openNotice($event)" /> }
         @defer (on immediate) { <fimra-shell-account [name]="name" /> }
         @placeholder { <span class="user-trigger user-name">{{ name }}</span> }
       </div>

@@ -1,17 +1,18 @@
 import { translate } from './language';
 import { Component, computed, inject, input } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger } from '@spartan-ng/helm/dropdown-menu';
+import { HlmDropdownMenu, HlmDropdownMenuCheckbox, HlmDropdownMenuCheckboxIndicator, HlmDropdownMenuItem, HlmDropdownMenuTrigger } from '@spartan-ng/helm/dropdown-menu';
 import { language, languageName } from './language';
 import { LanguagePreference } from './language-preference';
 import { AuthService } from './auth';
 import { ShellNavigation } from './shell-navigation';
 import { Icon } from './ui/icon';
+import { WallDisplay } from './wall-display';
 import { WorkspaceService } from './workspace';
 
 @Component({
   selector: 'fimra-shell-account',
-  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuItem, HlmDropdownMenuTrigger, Icon],
+  imports: [HlmButton, HlmDropdownMenu, HlmDropdownMenuCheckbox, HlmDropdownMenuCheckboxIndicator, HlmDropdownMenuItem, HlmDropdownMenuTrigger, Icon],
   template: `
     <button hlmBtn variant="ghost" [hlmDropdownMenuTrigger]="account" class="user-trigger account-trigger"
             [attr.aria-label]="msg('Account for ') + name() + ', ' + initials()" [title]="name()">
@@ -31,6 +32,9 @@ import { WorkspaceService } from './workspace';
           <button hlmDropdownMenuItem role="menuitemradio" [attr.aria-checked]="code === language()"
                   [attr.lang]="code" (triggered)="preference.choose(code)">{{ languageName(code) }}</button>
         }
+        <button hlmDropdownMenuCheckbox [checked]="wallDisplay.enabled()" [keepOpen]="false" (triggered)="wallDisplay.toggle()">
+          {{ msg('Wall display') }}<hlm-dropdown-menu-checkbox-indicator />
+        </button>
         <button hlmDropdownMenuItem (triggered)="auth.signOut(true)">{{ msg('Switch account') }}</button>
         <button hlmDropdownMenuItem (triggered)="auth.signOut()">{{ msg('Sign out') }}</button>
       </hlm-dropdown-menu>
@@ -39,6 +43,7 @@ import { WorkspaceService } from './workspace';
 })
 export class ShellAccount {
   protected readonly msg = translate;
+  protected readonly wallDisplay = inject(WallDisplay);
   protected readonly preference = inject(LanguagePreference);
   protected readonly language = language;
   protected readonly languageName = languageName;
