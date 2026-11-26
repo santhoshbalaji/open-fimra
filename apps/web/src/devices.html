@@ -1,8 +1,4 @@
-<div class="mx-auto grid max-w-[1160px] gap-4 px-4 pt-6 pb-10 sm:px-8">
-  <div class="flex flex-wrap items-center gap-3">
-    <h2 class="text-display">Field phones</h2>
-    <button hlmBtn variant="outline" class="ml-auto" (click)="closed.emit()">Back to the control room</button>
-  </div>
+<div class="grid gap-4 px-(--page-gutter) pb-10">
   <p class="max-w-prose text-muted-foreground">
     Each sign-in to the field app on a phone is listed here. A phone gets new fire alerts as notifications while it is
     signed in. If a phone is lost, wipe it: it deletes its field data and sign-in the next time it connects.
@@ -22,7 +18,7 @@
 
   <section hlmCard aria-labelledby="mine-heading">
     <hlm-card-header>
-      <h3 hlmCardTitle id="mine-heading" class="text-subhead">Your phones</h3>
+      <h2 hlmCardTitle id="mine-heading" class="text-subhead">Your phones</h2>
       <p hlmCardDescription>Remove a phone you no longer use. It stops getting notifications at once.</p>
     </hlm-card-header>
     <div hlmCardContent>
@@ -46,7 +42,7 @@
                     </td>
                     <td hlmTd><ng-container *ngTemplateOutlet="status; context: { $implicit: device }" /></td>
                     <td hlmTd class="max-sm:hidden">{{ device.push ? 'On' : 'Off' }}</td>
-                    <td hlmTd class="tabular-nums max-sm:hidden">{{ device.lastSeenAt | date: 'd MMM y, HH:mm' }}</td>
+                    <td hlmTd class="tabular-nums max-sm:hidden"><time [attr.datetime]="device.lastSeenAt">{{ dateTime(device.lastSeenAt) }}</time></td>
                     <td hlmTd class="text-right whitespace-nowrap">
                       @if (device.status === 'active') {
                         <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Remove ' + platform(device) + ', app ' + device.appVersion"
@@ -76,7 +72,7 @@
   @if (manages()) {
     <section hlmCard aria-labelledby="area-heading">
       <hlm-card-header>
-        <h3 hlmCardTitle id="area-heading" class="text-subhead">Phones in your area</h3>
+        <h2 hlmCardTitle id="area-heading" class="text-subhead">Phones in your area</h2>
         <p hlmCardDescription>Phones of people with a role in your units. A wipe cannot be undone.</p>
       </hlm-card-header>
       <div hlmCardContent>
@@ -105,7 +101,7 @@
                         <ng-container *ngTemplateOutlet="status; context: { $implicit: device }" />
                         @if (device.wipeRequestedBy) { <span class="block text-xs text-muted-foreground">By {{ device.wipeRequestedBy }}</span> }
                       </td>
-                      <td hlmTd class="tabular-nums max-sm:hidden">{{ device.lastSeenAt | date: 'd MMM y, HH:mm' }}</td>
+                      <td hlmTd class="tabular-nums max-sm:hidden"><time [attr.datetime]="device.lastSeenAt">{{ dateTime(device.lastSeenAt) }}</time></td>
                       <td hlmTd class="text-right">
                         @if (canWipe(device)) {
                           <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Wipe the phone of ' + owner(device)"

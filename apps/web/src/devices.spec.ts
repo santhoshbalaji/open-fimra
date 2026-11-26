@@ -22,6 +22,7 @@ describe('Devices', () => {
   let http: HttpTestingController;
   const sessionEnded = vi.fn();
   const workspace = signal<{ slug: string } | null>({ slug: 'demo' });
+  const roles = signal([{ role: 'division_officer' }]);
   const text = () => document.body.textContent as string;
   const button = (label: string): HTMLButtonElement | undefined =>
     [...document.querySelectorAll('button')].find(element => element.textContent.trim() === label);
@@ -30,15 +31,15 @@ describe('Devices', () => {
   beforeEach(() => {
     stubLayoutApis();
     workspace.set({ slug: 'demo' });
+    roles.set([{ role: 'division_officer' }]);
     TestBed.configureTestingModule({ imports: [Devices], providers: [
       provideHttpClient(), provideHttpClientTesting(),
       { provide: AuthService, useValue: { sessionEnded } },
-      { provide: WorkspaceService, useValue: { current: workspace } },
+      { provide: WorkspaceService, useValue: { current: workspace, roles } },
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test/' } }
     ] });
     fixture = TestBed.createComponent(Devices);
     http = TestBed.inject(HttpTestingController);
-    fixture.detectChanges();
   });
 
   afterEach(() => {
@@ -47,21 +48,24 @@ describe('Devices', () => {
     sessionEnded.mockReset();
   });
 
-  it('lists your phones with a status label and hides the area for people who manage none', () => {
+  it('lists your phones without requesting the area list for field staff', () => {
+    roles.set([{ role: 'field_staff' }]);
+    fixture.detectChanges();
     http.expectOne(mineURL).flush({ items: [phone, { ...phone, id: 'x', status: 'wiped', push: false }] });
-    http.expectOne(areaURL).flush({ error: 'A state administrator or division officer role is required.' },
-      { status: 403, statusText: 'Forbidden' });
+    http.expectNone(areaURL);
     fixture.detectChanges();
     const rows = [...fixture.nativeElement.querySelectorAll('.my-phones tbody tr')].map(row => (row as HTMLElement).textContent);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toContain('Android phone');
     expect(rows[0]).toContain('Signed in');
+    expect(rows[0]).toContain('3:00 pm IST');
     expect(rows[1]).toContain('Data deleted');
     expect(text()).not.toContain('Phones in your area');
     expect(text()).not.toContain('could not load');
   });
 
   it('wipes a phone in the area after confirmation', () => {
+    fixture.detectChanges();
     http.expectOne(mineURL).flush({ items: [] });
     http.expectOne(areaURL).flush({ items: [guardPhone] });
     fixture.detectChanges();
@@ -83,6 +87,7 @@ describe('Devices', () => {
   });
 
   it('removes one of your phones after confirmation', () => {
+    fixture.detectChanges();
     http.expectOne(mineURL).flush({ items: [phone] });
     http.expectOne(areaURL).flush({ items: [] });
     fixture.detectChanges();
@@ -100,6 +105,7 @@ describe('Devices', () => {
   });
 
   it('ends the session when the API refuses the token', () => {
+    fixture.detectChanges();
     http.expectOne(mineURL).flush({ error: 'Signed out.' }, { status: 401, statusText: 'Unauthorized' });
     http.expectOne(areaURL).flush({ items: [] });
     fixture.detectChanges();

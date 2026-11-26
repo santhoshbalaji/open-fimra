@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, inject, output, signal } from '@angular/core';
-import { DatePipe, NgTemplateOutlet } from '@angular/common';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -14,6 +14,7 @@ import { WEB_CONFIG } from './config';
 import { EmptyState } from './ui/empty-state';
 import { Icon, IconName } from './ui/icon';
 import { WorkspaceService } from './workspace';
+import { defaultWorkspaceFormat } from './workspace-format';
 
 export type DeviceStatus = 'active' | 'signed_out' | 'removed' | 'wipe_pending' | 'wiped';
 
@@ -37,7 +38,7 @@ interface Pending { device: Device; action: 'remove' | 'wipe'; area: boolean }
 /** Field phones: your own, and for administrators those in their part of the hierarchy. */
 @Component({
   selector: 'fimra-devices',
-  imports: [DatePipe, NgTemplateOutlet, EmptyState, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmDialogImports, HlmSkeleton,
+  imports: [NgTemplateOutlet, EmptyState, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmDialogImports, HlmSkeleton,
     HlmTableImports, Icon],
   templateUrl: './devices.html',
   host: { class: 'block h-full overflow-auto' }
@@ -46,8 +47,8 @@ export class Devices implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
-  private readonly workspace = inject(WorkspaceService).current;
-  readonly closed = output<void>();
+  private readonly workspace = inject(WorkspaceService);
+  readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
   readonly mine = signal<Device[] | null>(null);
   /** Null while loading, and stays null for people who manage no phones. */
   readonly area = signal<Device[] | null>(null);
@@ -65,8 +66,8 @@ export class Devices implements OnInit {
       next: page => this.mine.set(page.items),
       error: (error: HttpErrorResponse) => this.failed(error)
     });
-    const slug = this.workspace()?.slug;
-    if (!slug) return;
+    const slug = this.workspace.current()?.slug;
+    if (!slug || !this.workspace.roles().some(({ role }) => role === 'state_admin' || role === 'division_officer')) return;
     this.http.get<{ items: Device[] }>(this.api + '/api/v1/workspaces/' + encodeURIComponent(slug) + '/devices').subscribe({
       next: page => { this.manages.set(true); this.area.set(page.items); },
       error: (error: HttpErrorResponse) => { if (error.status !== 403) this.failed(error); }
@@ -93,7 +94,7 @@ export class Devices implements OnInit {
     const pending = this.pending();
     if (!pending) return;
     const { device, action, area } = pending;
-    const slug = this.workspace()?.slug ?? '';
+    const slug = this.workspace.current()?.slug ?? '';
     const url = action === 'remove' ? this.api + '/api/v1/devices/' + encodeURIComponent(device.id)
       : area ? this.api + '/api/v1/workspaces/' + encodeURIComponent(slug) + '/devices/' + encodeURIComponent(device.id) + '/wipe'
         : this.api + '/api/v1/devices/' + encodeURIComponent(device.id) + '/wipe';

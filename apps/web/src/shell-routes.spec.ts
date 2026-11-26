@@ -11,8 +11,11 @@ import { ShellNavigation } from './shell-navigation';
 import { shellRoutes } from './shell-routes';
 import { WorkspaceService } from './workspace';
 
-@Component({ template: '' })
-class Screen {}
+@Component({ selector: 'fimra-test-screen', template: '' })
+class Screen {
+  canLeave = true;
+  confirmLeaving(): Promise<boolean> { return Promise.resolve(this.canLeave); }
+}
 
 describe('Shell routes', () => {
   function prepare(role: string, path: string) {
@@ -70,5 +73,17 @@ describe('Shell routes', () => {
     const { router } = prepare('state_admin', 'ds');
     await RouterTestingHarness.create('/?workspace=demo&view=feed-health');
     expect(router.url).toBe('/dashboard?workspace=demo&view=feed-health');
+  });
+
+  it('leaves the form templates route only after the designer allows it', async () => {
+    const { router } = prepare('state_admin', 'ds');
+    const harness = await RouterTestingHarness.create();
+    const forms = await harness.navigateByUrl('/settings/forms?workspace=demo', Screen);
+    forms.canLeave = false;
+    expect(await router.navigateByUrl('/settings/gis?workspace=demo')).toBe(false);
+    expect(router.url).toBe('/settings/forms?workspace=demo');
+    forms.canLeave = true;
+    expect(await router.navigateByUrl('/settings/gis?workspace=demo')).toBe(true);
+    expect(router.url).toBe('/settings/gis?workspace=demo');
   });
 });

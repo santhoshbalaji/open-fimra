@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
+import { Component, type TemplateRef, inject, signal, viewChild } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { WEB_CONFIG } from './config';
 import { SetupWizard } from './setup-wizard';
@@ -11,18 +11,29 @@ import { WorkspaceService } from './workspace';
   imports: [HlmButton, SetupWizard],
   host: { class: 'block h-full overflow-auto' },
   template: `
-    @if (workspace.setupPending()) {
-      <fimra-setup-wizard (finished)="finished()" (leave)="navigation.monitor()" (openLayers)="navigation.go('/settings/layers')" />
-    } @else {
-      <section class="welcome">
-        <h2>First-run setup is complete</h2>
+    <ng-template #primary>
+      @if (!workspace.setupPending()) {
         <button hlmBtn [disabled]="busy()" (click)="reopen()">Reopen setup</button>
+      }
+    </ng-template>
+    <ng-template #secondary>
+      @if (workspace.setupPending()) {
+        <button hlmBtn variant="ghost" type="button" (click)="navigation.monitor()">Leave setup for now</button>
+      }
+    </ng-template>
+    @if (workspace.setupPending()) {
+      <fimra-setup-wizard (finished)="finished()" (openLayers)="navigation.go('/settings/layers')" />
+    } @else {
+      <section class="grid gap-2 px-(--page-gutter) pb-12">
+        <p>First-run setup is complete.</p>
         @if (message()) { <p role="alert">{{ message() }}</p> }
       </section>
     }
   `
 })
 export class SetupScreen {
+  readonly pagePrimary = viewChild<TemplateRef<unknown>>('primary');
+  readonly pageSecondary = viewChild<TemplateRef<unknown>>('secondary');
   readonly workspace = inject(WorkspaceService);
   readonly navigation = inject(ShellNavigation);
   private readonly http = inject(HttpClient);

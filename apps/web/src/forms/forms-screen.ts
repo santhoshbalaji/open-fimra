@@ -1,6 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { DatePipe } from '@angular/common';
-import { Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, type TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -16,6 +15,7 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Icon } from '../ui/icon';
 import { StatusBadge } from '../ui/status-badge';
 import { WorkspaceService } from '../workspace';
+import { defaultWorkspaceFormat } from '../workspace-format';
 import { FormDesigner, ParentTemplate } from './form-designer';
 import { TemplateRules, sameJSON } from './form-locks';
 import { FormDefinition, blankForm, textOf } from './form-model';
@@ -61,7 +61,7 @@ const formIdPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
  */
 @Component({
   selector: 'fimra-forms-screen',
-  imports: [DatePipe, FormDesigner, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmInput, HlmSkeleton, HlmTextarea, Icon, StatusBadge],
+  imports: [FormDesigner, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmInput, HlmSkeleton, HlmTextarea, Icon, StatusBadge],
   templateUrl: './forms-screen.html',
   host: { class: 'block h-full overflow-auto' }
 })
@@ -73,13 +73,17 @@ export class FormsScreen implements OnInit {
   private readonly injector = inject(Injector);
   private readonly designer = viewChild(FormDesigner);
   private readonly designerTitle = viewChild<ElementRef<HTMLHeadingElement>>('designerTitle');
+  private readonly listHeading = viewChild<ElementRef<HTMLHeadingElement>>('listHeading');
   private readonly startId = viewChild<ElementRef<HTMLInputElement>>('startId');
   private confirmingPublish = false;
+  private leaving?: Promise<boolean>;
   readonly workspace = inject(WorkspaceService);
-  readonly closed = output<void>();
+  readonly pagePrimary = viewChild<TemplateRef<unknown>>('primary');
+  readonly pageSecondary = viewChild<TemplateRef<unknown>>('secondary');
   readonly levels: Level[] = ['national', 'state', 'division'];
   readonly levelWords = levelWords;
   readonly text = textOf;
+  readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
 
   readonly forms = signal<FormSummary[] | null>(null);
   readonly error = signal('');
@@ -366,11 +370,27 @@ export class FormsScreen implements OnInit {
     });
   }
 
-  closeDesigner(): void {
-    if (this.dirty() && !confirm('Leave without saving your changes?')) return;
+  confirmLeaving(trigger?: HTMLElement): boolean | Promise<boolean> {
+    if (this.busy() || this.confirmingPublish) return false;
+    if (!this.dirty()) return true;
+    this.leaving ??= this.dialogs.open({
+      heading: 'Leave without saving?',
+      detail: 'Changes since your last save will be lost.',
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+      trigger
+    }).finally(() => { this.leaving = undefined; });
+    return this.leaving;
+  }
+
+  async closeDesigner(trigger: HTMLElement): Promise<void> {
+    const leave = this.confirmLeaving(trigger);
+    if (leave === false || (leave !== true && !await leave)) return;
     this.editing.set(null);
     this.error.set('');
     this.serverProblems.set([]);
+    afterNextRender(() => this.listHeading()?.nativeElement.focus(), { injector: this.injector });
   }
 
   // National templates arrive as files from the national body.

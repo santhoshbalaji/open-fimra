@@ -1,11 +1,11 @@
-<div class="mx-auto grid max-w-[1160px] gap-5 px-4 pt-6 pb-10 sm:px-8">
-  <fimra-page-header title="Layer catalog" [headingLevel]="2" [scope]="workspaceName">
-    <button #addButton hlmBtn pagePrimary id="add-layer" type="button" [disabled]="busy() || !catalog()" (click)="openLayer(addButton)">
-      <svg fimraIcon="plus" aria-hidden="true" class="size-4"></svg>
-      Add layer
-    </button>
-  </fimra-page-header>
+<ng-template #primary>
+  <button #addButton hlmBtn id="add-layer" type="button" [disabled]="busy() || !catalog()" (click)="openLayer(addButton)">
+    <svg fimraIcon="plus" aria-hidden="true" class="size-4"></svg>
+    Add layer
+  </button>
+</ng-template>
 
+<div class="grid gap-5 px-(--page-gutter) pb-10">
   <ng-template #checksCell let-row>
     <fimra-layer-status [status]="row.draft?.status ?? row.published?.status" [blocked]="!!row.draft?.blocksPublish && row.draft?.status !== 'failed'" />
   </ng-template>

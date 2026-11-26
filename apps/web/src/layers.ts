@@ -19,7 +19,6 @@ import { DataTable, TableColumn, TablePage } from './ui/data-table';
 import { FieldErrorSummary } from './ui/field-error-summary';
 import { Icon } from './ui/icon';
 import { LiveStatus } from './ui/live-status';
-import { PageHeader } from './ui/page-header';
 import { SidePanel } from './ui/side-panel';
 import { DataState, StateRegion } from './ui/state-region';
 import { WorkspaceService } from './workspace';
@@ -63,7 +62,7 @@ interface Preview {
 @Component({
   selector: 'fimra-layers',
   imports: [DataTable, FieldErrorSummary, LayerChecks, LayerStatusBadge, LayerPreviewMap,
-    LiveStatus, PageHeader, SidePanel, StateRegion, HlmAlertImports, HlmButton, HlmCheckbox, HlmFieldImports,
+    LiveStatus, SidePanel, StateRegion, HlmAlertImports, HlmButton, HlmCheckbox, HlmFieldImports,
     HlmInput, HlmLabel, HlmSelectImports, Icon],
   templateUrl: './layers.html',
   host: { class: 'block h-full overflow-auto scroll-pb-16' }
@@ -81,6 +80,7 @@ export class Layers implements OnInit {
   private readonly panel = viewChild.required(SidePanel);
   private readonly checksCell = viewChild<TemplateRef<{ $implicit: Layer }>>('checksCell');
   private readonly timeCell = viewChild<TemplateRef<{ $implicit: Layer }>>('timeCell');
+  readonly pagePrimary = viewChild<TemplateRef<unknown>>('primary');
   private watch?: Subscription;
   private catalogWatch?: Subscription;
   private catalogRequest?: Subscription;
@@ -106,7 +106,7 @@ export class Layers implements OnInit {
     { id: 'kind', label: 'Kind', value: row => this.roleLabels[row.role] },
     { id: 'published', label: 'Published', value: row => this.versionLabel(row.published) },
     { id: 'draft', label: 'Draft', value: row => this.versionLabel(row.draft) },
-    { id: 'checks', label: 'Check status', value: () => '', cell: this.checksCell() },
+    { id: 'checks', label: 'Version status', value: () => '', cell: this.checksCell() },
     { id: 'change', label: 'Last change', value: () => '', cell: this.timeCell() }
   ]);
 
