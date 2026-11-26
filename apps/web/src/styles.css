@@ -43,12 +43,18 @@ main { flex: 1; min-height: 0; }
   margin-inline: auto;
 }
 .shell-page-header { padding: 0.75rem var(--page-gutter); }
-.shell-page-header h1:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+.monitor-header { padding-block: var(--spacing); }
+.monitor-header > header { align-items: center; justify-content: flex-start; gap: 0.5rem 1rem; }
+.monitor-header .page-heading { flex: 0 1 auto; }
+.monitor-header .page-actions, .monitor-filters { flex: 1 1 0; }
+#task h1[tabindex="-1"]:focus { outline: none; }
+#task h1[data-keyboard-focus]:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
 .page-frame > .page-content { flex: 1; min-height: 0; overflow: auto; }
-.topbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); }
+.page-content[tabindex="0"]:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: calc(-1 * var(--focus-width)); }
+.topbar { display: flex; align-items: center; gap: 12px; padding: 4px 16px; border-bottom: 1px solid var(--color-border); }
 .header-actions { display: flex; align-items: center; gap: 4px; margin-inline-start: auto; }
 .destination-drawer { display: none; }
-.desktop-destinations { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding: 4px 16px; background: var(--color-card); border-bottom: 1px solid var(--color-border); }
+.desktop-destinations { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding: 2px 16px; background: var(--color-card); border-bottom: 1px solid var(--color-border); }
 .destination-group { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
 .destination-label, .workspace-scope, .search-trigger kbd { color: var(--color-text-secondary); font-size: var(--text-label); }
 .destination-label { padding-inline: 8px 4px; }
@@ -109,12 +115,13 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 .view-switch { gap: 4px; padding: 4px; border-radius: var(--radius-card); background: var(--color-background); }
 .view-switch [aria-pressed=true] { color: var(--color-brand); background: var(--color-card); box-shadow: var(--shadow-panel); }
 
-.alert-panel { width: clamp(316px, 30vw, 460px); background: var(--color-card); border-left: 1px solid var(--color-border); padding: 16px; overflow: auto; overscroll-behavior: contain; }
+.alert-panel { width: clamp(316px, 30vw, 460px); background: var(--color-card); border-left: 1px solid var(--color-border); padding: 8px var(--page-gutter); overflow: auto; overscroll-behavior: contain; }
 .queue-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 .queue-heading h2 { font-weight: 600; font-size: var(--text-title); }
+.queue-freshness { display: none; }
 .step-meta time, .alert-table small, .step-timeline small, .step-timeline time { color: var(--color-text-secondary); font-size: var(--text-label); }
 .step-timeline li { overflow-wrap: anywhere; }
-.queue-tabs { margin: 12px 0; padding-bottom: 8px; border-bottom: 1px solid var(--color-border); gap: 4px; }
+.queue-tabs { margin: 4px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-border); gap: 4px; }
 .queue-tabs [aria-pressed=true] { background: var(--color-brand-soft); color: var(--color-brand); }
 .queue-tabs span { font-variant-numeric: tabular-nums; }
 .alert-table { table-layout: fixed; }
@@ -145,7 +152,10 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
 .export-actions { justify-content: flex-end; }
 .export-hint, .export-progress { font-size: var(--text-label); color: var(--color-text-secondary); }
 .export-error { color: var(--color-danger); }
-@media (width < 48rem) {
+@media (width < 75rem) {
+  .desktop-destinations .destination-label { display: none; }
+}
+@media (width < 56rem) {
   .topbar { padding: 6px 8px; gap: 6px; }
   .topbar .logo, .desktop-destinations, .theme-trigger, .search-trigger kbd, .account-trigger .chevron { display: none; }
   .destination-drawer { display: block; }
@@ -162,6 +172,21 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
   .view-switch { width: fit-content; }
   .alert-panel { display: none; }
   .show-queue:not(.show-details) .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }
+}
+@media screen and (width >= 120rem) and (height >= 60rem) {
+  :root {
+    --monitor-label-size: var(--text-display);
+    --monitor-label-line-height: var(--text-display--line-height);
+  }
+  .queue-heading { flex-wrap: wrap; }
+  .queue-freshness { display: block; margin-inline-end: auto; }
+  .workspace-panes:not(.show-queue) .queue-freshness { order: 1; flex-basis: 100%; }
+  .queue-freshness,
+  .page-frame [pageFreshness],
+  fimra-demo-map :is(.map-key, .alert-scan .row-open, .scan-line, .step-meta > time, .scan-line [data-slot=badge]) {
+    font-size: var(--monitor-label-size);
+    line-height: var(--monitor-label-line-height);
+  }
 }
 /* Printing shows the open screen's content only, such as a situation report.
    It comes last so that it wins over the screen rules above. */

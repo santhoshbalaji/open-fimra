@@ -11,8 +11,8 @@
   }
 
   <ng-template #status let-device>
-    <span hlmBadge variant="outline" class="gap-1.5 text-text">
-      <svg [fimraIcon]="statusOf(device).icon" aria-hidden="true" class="size-4"></svg> {{ statusOf(device).label }}
+    <span hlmBadge variant="outline" class="phone-status gap-1.5 text-text">
+      <svg [fimraIcon]="statusOf(device).icon" aria-hidden="true" class="size-4 shrink-0"></svg> {{ statusOf(device).label }}
     </span>
   </ng-template>
 
@@ -24,7 +24,7 @@
     <div hlmCardContent>
       @if (mine(); as mine) {
         @if (mine.length) {
-          <div hlmTableContainer class="rounded-control border border-border" tabindex="0" aria-labelledby="mine-heading">
+          <div hlmTableContainer class="rounded-control border border-border" tabindex="0" role="region" aria-label="Your field phones table">
             <table hlmTable class="my-phones">
               <caption class="sr-only">Your field phones</caption>
               <thead hlmTHead>
@@ -43,7 +43,7 @@
                     <td hlmTd><ng-container *ngTemplateOutlet="status; context: { $implicit: device }" /></td>
                     <td hlmTd class="max-sm:hidden">{{ device.push ? 'On' : 'Off' }}</td>
                     <td hlmTd class="tabular-nums max-sm:hidden"><time [attr.datetime]="device.lastSeenAt">{{ dateTime(device.lastSeenAt) }}</time></td>
-                    <td hlmTd class="text-right whitespace-nowrap">
+                    <td hlmTd class="phone-actions text-right whitespace-nowrap">
                       @if (device.status === 'active') {
                         <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Remove ' + platform(device) + ', app ' + device.appVersion"
                                 (click)="pending.set({ device, action: 'remove', area: false })">Remove</button>
@@ -78,7 +78,7 @@
       <div hlmCardContent>
         @if (area(); as area) {
           @if (area.length) {
-            <div hlmTableContainer class="rounded-control border border-border" tabindex="0" aria-labelledby="area-heading">
+            <div hlmTableContainer class="rounded-control border border-border" tabindex="0" role="region" aria-label="Area field phones table">
               <table hlmTable class="area-phones">
                 <caption class="sr-only">Field phones in your area</caption>
                 <thead hlmTHead>
@@ -102,7 +102,7 @@
                         @if (device.wipeRequestedBy) { <span class="block text-xs text-muted-foreground">By {{ device.wipeRequestedBy }}</span> }
                       </td>
                       <td hlmTd class="tabular-nums max-sm:hidden"><time [attr.datetime]="device.lastSeenAt">{{ dateTime(device.lastSeenAt) }}</time></td>
-                      <td hlmTd class="text-right">
+                      <td hlmTd class="phone-actions text-right">
                         @if (canWipe(device)) {
                           <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Wipe the phone of ' + owner(device)"
                                   (click)="pending.set({ device, action: 'wipe', area: true })">Wipe</button>

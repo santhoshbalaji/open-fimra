@@ -1,6 +1,6 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { HlmDialogImports } from '@spartan-ng/helm/dialog';
+import { HlmDialog, HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { ShellNavigation, type DestinationPath } from './shell-navigation';
 import { ThemeService } from './theme';
@@ -9,7 +9,7 @@ import { ThemeService } from './theme';
   selector: 'fimra-shell-palette',
   imports: [HlmButton, HlmDialogImports, HlmInput],
   template: `
-    <hlm-dialog [state]="open() ? 'open' : 'closed'" (closed)="dialogClosed()" aria-modal="true">
+    <hlm-dialog [state]="open() ? 'open' : 'closed'" [restoreFocus]="false" (closed)="dialogClosed()" aria-modal="true">
       <hlm-dialog-content *hlmDialogPortal class="shell-palette">
         <h2 hlmDialogTitle>Search destinations</h2>
         <p hlmDialogDescription>Use the arrow keys to move, Enter to open and Escape to close.</p>
@@ -36,6 +36,7 @@ export class ShellPalette {
   readonly index = signal(0);
   private readonly navigation = inject(ShellNavigation);
   private readonly appearance = inject(ThemeService);
+  private readonly dialog = viewChild.required(HlmDialog);
   private pending?: () => void;
   private readonly actions = [
     { name: 'Toggle theme', group: 'Action', run: () => this.appearance.toggle() },
@@ -60,7 +61,7 @@ export class ShellPalette {
     const command = this.results()[index];
     if (command) {
       this.pending = command.run;
-      this.closed.emit();
+      this.dialog().close();
     }
   }
 

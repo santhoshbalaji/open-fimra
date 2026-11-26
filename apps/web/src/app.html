@@ -17,7 +17,7 @@
         <p class="workspace-scope" [title]="scope()">{{ scope() || 'Assigned units' }}</p>
       </div>
       <div class="header-actions">
-        <button data-variant="ghost" class="shell-button search-trigger" (click)="paletteOpen.set(true)"
+        <button #search data-variant="ghost" class="shell-button search-trigger" (click)="openPalette(search)"
                 title="Search destinations" aria-keyshortcuts="Control+K Meta+K">
           <span>Search</span><kbd>⌘/Ctrl K</kbd>
         </button>
@@ -90,12 +90,13 @@
     }
     @if (workspace.current()) {
       @if (destination) {
-        <fimra-page-header class="shell-page-header" [title]="destination.name" [scope]="scope() || 'Assigned units'">
+        <fimra-page-header class="shell-page-header" [class.monitor-header]="showFilters()"
+                           [title]="destination.name" [scope]="showFilters() ? '' : scope() || 'Assigned units'">
           @if (headerSlots()?.pageFreshness?.(); as freshness) {
             <ng-container pageFreshness [ngTemplateOutlet]="freshness" />
           }
           @if (showFilters()) {
-            <div pageSecondary class="min-w-0">
+            <div pageSecondary class="monitor-filters min-w-0">
               @defer (on immediate) { <fimra-monitor-filters /> }
             </div>
           }
@@ -107,13 +108,15 @@
           }
         </fimra-page-header>
       }
-      <div class="page-content">
+      @let phoneLists = destination?.path === '/settings/devices';
+      <div class="page-content" [attr.tabindex]="phoneLists ? 0 : null"
+           [attr.role]="phoneLists ? 'region' : null" [attr.aria-label]="phoneLists ? 'Phone lists' : null">
         <router-outlet (activate)="screenOpened($event)" (deactivate)="headerSlots.set(null)" />
       </div>
     }
   </main>
   @defer (when paletteOpen()) {
-    <fimra-shell-palette [open]="paletteOpen()" (closed)="paletteOpen.set(false)" (reselected)="focusPage()" />
+    <fimra-shell-palette [open]="paletteOpen()" (closed)="closePalette()" (reselected)="focusPage()" />
   }
 } @else {
   <main id="task" tabindex="-1" class="welcome">

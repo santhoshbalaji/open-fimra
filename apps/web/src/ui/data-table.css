@@ -79,5 +79,9 @@ summary:focus-visible, .table-scroll:focus-visible, input:focus-visible {
   padding: calc(var(--spacing) * 3);
 }
 th:has(.sort), .selection, .actions { padding-block: 0; }
+thead .sort { padding-inline: 0; }
 .selection { inline-size: 1%; }
 thead .sort:focus-visible { outline-offset: calc(-1 * var(--focus-width)); }
+@media (48rem <= width < 56rem) {
+  th:not(.selection), td:not(.selection) { min-inline-size: 0; }
+}

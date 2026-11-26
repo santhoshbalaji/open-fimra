@@ -134,6 +134,9 @@
   <aside #queuePanel class="alert-panel" aria-labelledby="queue-title" fimraListScroll>
     <div class="queue-heading">
       <h2 id="queue-title" #queueTitle tabindex="-1">Alert queue</h2>
+      @if (queue.lastUpdated(); as updated) {
+        <p class="queue-freshness">Updated <time [attr.datetime]="updated.toISOString()">{{ dateTime(updated.getTime()) }}</time></p>
+      }
       @if (!queue.allQueues() && !queue.listScope() && exportEndpoint(); as endpoint) {
         <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
           <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download"></svg> Export</button>
@@ -155,16 +158,18 @@
         <button hlmBtn variant="outline" (click)="queue.clearListScope()">Clear alert filter</button>
       </div>
     }
-    <div class="queue-tabs" role="group" aria-label="Alert queues">
-      @if (queue.allQueues() || queue.listScope()) {
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.allQueues()" (click)="queue.switchTo('all')">All queues</button>
-      }
-      @for (tab of queue.tabs(); track tab) {
-        <button hlmBtn variant="ghost" [attr.aria-pressed]="!queue.allQueues() && queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
-          @if (queue.page(); as page) { <span>{{ page.counts[tab] || 0 }}</span> }
-        </button>
-      }
-    </div>
+    @if (queue.tabs().length > 1 || queue.allQueues() || queue.listScope()) {
+      <div class="queue-tabs" role="group" aria-label="Alert queues">
+        @if (queue.allQueues() || queue.listScope()) {
+          <button hlmBtn variant="ghost" [attr.aria-pressed]="queue.allQueues()" (click)="queue.switchTo('all')">All queues</button>
+        }
+        @for (tab of queue.tabs(); track tab) {
+          <button hlmBtn variant="ghost" [attr.aria-pressed]="!queue.allQueues() && queue.active() === tab" (click)="queue.switchTo(tab)">{{ queueLabels[tab] }}
+            @if (queue.page(); as page) { <span>{{ page.counts[tab] || 0 }}</span> }
+          </button>
+        }
+      </div>
+    }
     @if (alertsView()) {
       <fimra-data-table [caption]="queueCaption()" [columns]="queueColumns()"
         [page]="queue.table()" [scrollKey]="navigation.url()" [state]="queue.state()" [rowKey]="rowKey" [rowLabel]="rowLabel" [phoneCards]="true"
