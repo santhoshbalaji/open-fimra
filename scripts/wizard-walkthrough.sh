@@ -25,6 +25,7 @@ fi
 
 setup_code=WALK-THRU-CODE-2345
 fake_key=0123456789abcdef0123456789abcdef
+mail_from="wizard-walk-$(node -p 'crypto.randomUUID()')@example.invalid"
 work=$(mktemp -d)
 pids=()
 worker=
@@ -40,7 +41,6 @@ if ss -ltn | grep -q "127.0.0.1:$web_port "; then
   exit 1
 fi
 
-"${compose[@]}" exec -T db sh -c "dropdb -U \"\$POSTGRES_USER\" --if-exists --force $WALK_DB && createdb -U \"\$POSTGRES_USER\" $WALK_DB"
 go run "github.com/pressly/goose/v3/cmd/goose@$GOOSE_VERSION" -dir db/migrations postgres "$WALK_DATABASE_URL" up > /dev/null
 worker=$("${compose[@]}" run -d --rm -e PGDATABASE="$WALK_DB" geo-worker)
 
@@ -72,7 +72,7 @@ pids+=($!)
 (
   cd services/api
   FIMRA_WALKTHROUGH=1 FIMRA_DATABASE_URL="$WALK_DATABASE_URL" FIMRA_SETUP_CODE="$setup_code" \
-    FIMRA_SMTP_ADDR="$MAIL_SMTP" FIMRA_SMTP_FROM=open-fimra@example.invalid FIMRA_SMTP_SECURITY=local \
+    FIMRA_SMTP_ADDR="$MAIL_SMTP" FIMRA_SMTP_FROM="$mail_from" FIMRA_SMTP_SECURITY=local \
     FIMRA_WEB_URL="http://127.0.0.1:$web_port" FIMRA_CORS_ORIGINS="http://127.0.0.1:$web_port" FIMRA_HTTP_ADDR="$API_ADDR" \
     exec "$work/api.test" -test.v -test.run '^TestWizardWalkthroughServer$' -test.timeout 20m > "$work/api.log" 2>&1
 ) &
@@ -88,7 +88,7 @@ mkdir -p "$SHOTS"
 if ! docker run --rm --network host --init \
   -v "$work:/work" -v "$PWD/scripts/wizard-walkthrough.mjs:/work/walkthrough.mjs:ro" \
   -v "$PWD/seed/demo-state:/seed:ro" -v "$SHOTS:/shots" \
-  -e WEB="http://127.0.0.1:$web_port" -e MAIL="http://$MAIL_HTTP" -e SEED=/seed -e SHOTS=/shots \
+  -e WEB="http://127.0.0.1:$web_port" -e MAIL="http://$MAIL_HTTP" -e MAIL_FROM="$mail_from" -e SEED=/seed -e SHOTS=/shots \
   -e SETUP_CODE="$setup_code" -e FIRMS_KEY="$fake_key" -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -e AXE_VERSION="$axe_version" \
   "$PLAYWRIGHT_IMAGE" bash -c 'cd /work && npm install --no-save playwright@1.63.0 "@axe-core/playwright@$AXE_VERSION" && node walkthrough.mjs'
 then

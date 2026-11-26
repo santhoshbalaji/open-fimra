@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
 )
@@ -33,8 +34,12 @@ func TestSubmissionExportIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
 	cfg := loadConfig()
-	if !strings.Contains(cfg.databaseURL, "fimra_submission_export_test") {
-		t.Fatal("This test commits reports that can never be deleted. Point FIMRA_DATABASE_URL at fimra_submission_export_test.")
+	conn, err := pgx.ParseConfig(cfg.databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conn.Database != "fimra_submission_export_test" && !strings.HasSuffix(conn.Database, "__sub_export") {
+		t.Fatal("This test commits reports that can never be deleted. Run make submission-export-test-integration for a fresh test database.")
 	}
 	pool, err := pgxpool.New(ctx, cfg.databaseURL)
 	if err != nil {

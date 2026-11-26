@@ -106,7 +106,7 @@ Both create their own database, `fimra_mobile_test`, beside the development one 
 
 The integration tests sign the beat guard in through the real `open-fimra-mobile` client with PKCE, with a scripted browser filling in the Keycloak form. They check that the client refuses password sign-in and a request without a proof key, that each demo user sees only their own alerts and tiles, and that the beat guard can acknowledge an alert exactly once. They also register the beat guard's phone, check who can see it, have the division officer wipe it and check that the phone's next call deletes its data and returns it to sign-in. Other demo users get their tokens from the development-only `open-fimra-dev-cli` client.
 
-The walkthrough builds the app for a browser, serves it on `127.0.0.1:4300` (`MOBILE_WEB_PORT`, 4300 to 4303) and signs in as the beat guard at phone size. It sets the server under **Server settings**, checks the list and the map, acknowledges an alert, opens **Notifications and phones**, has the division officer wipe the phone through the API, checks that the next start returns to sign-in with the reason, and saves light and dark screenshots to `~/open-fimra-screenshots/field-app` (`MOBILE_SHOTS`). The browser build exists only for these tests. It serves its own copy of MapLibre GL JS, which `make mobile-web` downloads from the npm registry and checks against its published checksum.
+The walkthrough builds the app for a browser, serves it on `127.0.0.1:4300` (`MOBILE_WEB_PORT`, 4300 to 4309) and signs in as the beat guard at phone size. It sets the server under **Server settings**, checks the list and the map, acknowledges an alert, opens **Notifications and phones**, has the division officer wipe the phone through the API, checks that the next start returns to sign-in with the reason, and saves light and dark screenshots to `~/open-fimra-screenshots/field-app` (`MOBILE_SHOTS`). The browser build exists only for these tests. It serves its own copy of MapLibre GL JS, which `make mobile-web` downloads from the npm registry and checks against its published checksum.
 
 ## Run it on a phone or an emulator
 
@@ -126,7 +126,7 @@ Debug builds allow plain HTTP so they can reach a development stack. Release bui
 
 ### The sign-in client
 
-The development realm has a public client, `open-fimra-mobile`, with the authorisation code flow, a required S256 proof key and no password sign-in. It returns to `org.openfimra.field:/callback`, which the app receives through `flutter_web_auth_2`. It also accepts `http://127.0.0.1:4300/auth.html` to `4303` and the same ports on `localhost`, for the browser test build only. A real installation creates the same client without the loopback addresses. See [CONTRIBUTING.md](../../CONTRIBUTING.md#setting-up).
+The development realm has a public client, `open-fimra-mobile`, with the authorisation code flow, a required S256 proof key and no password sign-in. It returns to `org.openfimra.field:/callback`, which the app receives through `flutter_web_auth_2`. It also accepts `http://127.0.0.1:4300/auth.html` to `4309` and the same ports on `localhost`, for the browser test build only. A real installation creates the same client without the loopback addresses. See [CONTRIBUTING.md](../../CONTRIBUTING.md#setting-up).
 
 ## Layout
 

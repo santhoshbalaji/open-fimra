@@ -23,12 +23,24 @@
         "http://127.0.0.1:4202/*",
         "http://localhost:4202/*",
         "http://127.0.0.1:4203/*",
-        "http://localhost:4203/*"
+        "http://localhost:4203/*",
+        "http://127.0.0.1:4204/*",
+        "http://localhost:4204/*",
+        "http://127.0.0.1:4205/*",
+        "http://localhost:4205/*",
+        "http://127.0.0.1:4206/*",
+        "http://localhost:4206/*",
+        "http://127.0.0.1:4207/*",
+        "http://localhost:4207/*",
+        "http://127.0.0.1:4208/*",
+        "http://localhost:4208/*",
+        "http://127.0.0.1:4209/*",
+        "http://localhost:4209/*"
       ],
       "webOrigins": ["+"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://127.0.0.1:4200/*##http://localhost:4200/*##http://127.0.0.1:4201/*##http://localhost:4201/*##http://127.0.0.1:4202/*##http://localhost:4202/*##http://127.0.0.1:4203/*##http://localhost:4203/*"
+        "post.logout.redirect.uris": "http://127.0.0.1:4200/*##http://localhost:4200/*##http://127.0.0.1:4201/*##http://localhost:4201/*##http://127.0.0.1:4202/*##http://localhost:4202/*##http://127.0.0.1:4203/*##http://localhost:4203/*##http://127.0.0.1:4204/*##http://localhost:4204/*##http://127.0.0.1:4205/*##http://localhost:4205/*##http://127.0.0.1:4206/*##http://localhost:4206/*##http://127.0.0.1:4207/*##http://localhost:4207/*##http://127.0.0.1:4208/*##http://localhost:4208/*##http://127.0.0.1:4209/*##http://localhost:4209/*"
       },
       "protocolMappers": [
         {
@@ -62,7 +74,19 @@
         "http://127.0.0.1:4302/auth.html",
         "http://localhost:4302/auth.html",
         "http://127.0.0.1:4303/auth.html",
-        "http://localhost:4303/auth.html"
+        "http://localhost:4303/auth.html",
+        "http://127.0.0.1:4304/auth.html",
+        "http://localhost:4304/auth.html",
+        "http://127.0.0.1:4305/auth.html",
+        "http://localhost:4305/auth.html",
+        "http://127.0.0.1:4306/auth.html",
+        "http://localhost:4306/auth.html",
+        "http://127.0.0.1:4307/auth.html",
+        "http://localhost:4307/auth.html",
+        "http://127.0.0.1:4308/auth.html",
+        "http://localhost:4308/auth.html",
+        "http://127.0.0.1:4309/auth.html",
+        "http://localhost:4309/auth.html"
       ],
       "webOrigins": ["+"],
       "attributes": {

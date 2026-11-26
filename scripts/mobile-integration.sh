@@ -35,8 +35,7 @@ psql_test() {
   "${compose[@]}" exec -T db sh -c "psql -X -q -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d $MOBILE_DB"
 }
 
-echo "Creating the test database $MOBILE_DB"
-"${compose[@]}" exec -T db sh -c "dropdb -U \"\$POSTGRES_USER\" --if-exists --force $MOBILE_DB && createdb -U \"\$POSTGRES_USER\" $MOBILE_DB"
+echo "Migrating the test database $MOBILE_DB"
 go run "github.com/pressly/goose/v3/cmd/goose@$GOOSE_VERSION" -dir db/migrations postgres "$MOBILE_DATABASE_URL" up > /dev/null
 
 (cd services/api && go build -o "$work/api" .)
@@ -80,15 +79,15 @@ case $MODE in
   walkthrough)
     : "${SHOTS:?}" "${PLAYWRIGHT_IMAGE:?}"
     if ss -ltn | grep -q "127.0.0.1:$MOBILE_WEB_PORT "; then
-      echo "Port $MOBILE_WEB_PORT is in use. Choose another with MOBILE_WEB_PORT (4300 to 4303)." >&2
+      echo "Port $MOBILE_WEB_PORT is in use. Choose another with MOBILE_WEB_PORT (4300 to 4309)." >&2
       exit 1
     fi
     python3 -I scripts/serve-static.py apps/mobile/build/web "$MOBILE_WEB_PORT" > "$work/web.log" 2>&1 &
     pids+=($!)
-    mkdir -p "$SHOTS" "$HOME/.cache/open-fimra-walkthrough"
-    cp scripts/mobile-walkthrough.mjs "$HOME/.cache/open-fimra-walkthrough/mobile-walkthrough.mjs"
+    mkdir -p "$SHOTS" "$work/browser"
+    cp scripts/mobile-walkthrough.mjs "$work/browser/mobile-walkthrough.mjs"
     if ! docker run --rm --network host --init --memory "${MOBILE_MEMORY:-4g}" --cpus "${MOBILE_CPUS:-2}" \
-      -v "$HOME/.cache/open-fimra-walkthrough:/work" -v "$SHOTS:/shots" \
+      -v "$work/browser:/work" -v "$SHOTS:/shots" \
       -e WEB="$web_origin" -e API="http://$MOBILE_API_ADDR" -e ISSUER="$FIMRA_OIDC_ISSUER" -e SHOTS=/shots \
       -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 "$PLAYWRIGHT_IMAGE" \
       bash -c 'cd /work && { [ -d node_modules/playwright ] || npm install --no-save --silent playwright@1.63.0; } && node mobile-walkthrough.mjs'

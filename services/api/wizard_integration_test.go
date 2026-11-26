@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,7 +63,8 @@ func TestWizardIntegration(t *testing.T) {
 	const setupCode = "WZRD-TEST-CODE-2345"
 
 	t.Setenv("FIMRA_SMTP_ADDR", os.Getenv("FIMRA_TEST_MAILPIT_SMTP"))
-	t.Setenv("FIMRA_SMTP_FROM", "open-fimra@example.invalid")
+	sender := "wizard-test-" + strings.ToLower(rand.Text()) + "@example.invalid"
+	t.Setenv("FIMRA_SMTP_FROM", sender)
 	t.Setenv("FIMRA_SMTP_SECURITY", "local")
 	t.Setenv("FIMRA_SMTP_USERNAME", "")
 	t.Setenv("FIMRA_SMTP_PASSWORD", "")
@@ -420,16 +422,12 @@ func TestWizardIntegration(t *testing.T) {
 
 	section("starter forms", pack.enable)
 
-	beforeMail := map[string]int{}
 	section("invite officers", func(t *testing.T) {
 		invites := []invitationRequest{
 			{Email: "Division.Officer@example.invalid", Role: "division_officer", UnitPath: "ds.c1.d1"},
 			{Email: "beat.guard@example.invalid", Role: "field_staff", UnitPath: "ds.c1.d1.r2.b05"},
 			{Email: "no.role@example.invalid", Role: "field_staff", UnitPath: "ds.c1.d1.r1.b01"},
 			{Email: "late.officer@example.invalid", Role: "field_staff", UnitPath: "ds.c1.d1.r1.b01"},
-		}
-		for _, invite := range invites {
-			beforeMail[strings.ToLower(invite.Email)] = countInvitationMail(t, ctx, strings.ToLower(invite.Email))
 		}
 		call("state.admin", http.MethodPost, base+"/invitations", invitationRequest{Email: "a@b@example.invalid", Role: "field_staff", UnitPath: "ds"}, http.StatusBadRequest, nil)
 		call("state.admin", http.MethodPost, base+"/invitations", invitationRequest{Email: "x@example.invalid", Role: "field_staff", UnitPath: "ds.c9"}, http.StatusBadRequest, nil)
@@ -462,8 +460,8 @@ func TestWizardIntegration(t *testing.T) {
 		}
 		for _, invite := range invites {
 			address := strings.ToLower(invite.Email)
-			if got := countInvitationMail(t, ctx, address); got != beforeMail[address]+1 {
-				t.Fatalf("the mail catcher has %d invitations for a test address, want %d", got, beforeMail[address]+1)
+			if got := countInvitationMail(t, ctx, sender, address); got != 1 {
+				t.Fatalf("the mail catcher has %d invitations for a test address, want 1", got)
 			}
 		}
 		call("state.admin", http.MethodPost, base+"/setup/steps/invitations", map[string]string{"status": "done"}, http.StatusOK, nil)
@@ -687,10 +685,10 @@ func repairedBeats(t *testing.T) []byte {
 	return encoded
 }
 
-func countInvitationMail(t *testing.T, ctx context.Context, address string) int {
+func countInvitationMail(t *testing.T, ctx context.Context, sender, address string) int {
 	t.Helper()
 	endpoint := os.Getenv("FIMRA_TEST_MAILPIT_URL") + "/api/v1/search?query=" +
-		url.QueryEscape(`to:"`+address+`" subject:"You are invited to Open FIMRA"`)
+		url.QueryEscape(`from:"`+sender+`" to:"`+address+`" subject:"You are invited to Open FIMRA"`)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		t.Fatal(err)

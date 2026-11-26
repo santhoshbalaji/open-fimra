@@ -3,23 +3,28 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-COMPOSE_FILE := deploy/compose/compose.dev.yml
+override COMPOSE_FILE := deploy/compose/compose.dev.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE) $(if $(wildcard .env),--env-file .env)
 
 # Database settings match the defaults in compose.dev.yml; .env overrides them.
 ifneq ($(wildcard .env),)
 include .env
 endif
+
+FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
+WEB_PORT ?= 4200
+database-url = postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(1)?sslmode=disable
+include scripts/shared-worktree.mk
+
 FIMRA_DB_NAME ?= fimra
 FIMRA_DB_USER ?= fimra
 FIMRA_DB_PASSWORD ?= fimra-dev
 FIMRA_DB_PORT ?= 15432
-DATABASE_URL ?= postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(FIMRA_DB_NAME)?sslmode=disable
+DATABASE_URL ?= $(call database-url,$(FIMRA_DB_NAME))
 FIMRA_DATABASE_URL ?= $(DATABASE_URL)
 FIMRA_KEYCLOAK_PORT ?= 18180
 FIMRA_OIDC_ISSUER ?= http://127.0.0.1:$(FIMRA_KEYCLOAK_PORT)/realms/open-fimra
 FIMRA_OIDC_AUDIENCE ?= open-fimra-api
-FIMRA_HTTP_ADDR ?= 127.0.0.1:18090
 FIMRA_UPLOAD_DIR ?= .geo-uploads
 FIMRA_MAILPIT_HTTP_PORT ?= 18025
 FIMRA_MAILPIT_SMTP_PORT ?= 11025
@@ -37,7 +42,13 @@ REPORT_CHECK_DIR := $(CURDIR)/.situation-reports-check
 
 GOOSE_VERSION := v3.30.1
 GOOSE := go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(DATABASE_URL)"
-PSQL := $(COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+DB_COMPOSE ?= $(COMPOSE)
+GEO_COMPOSE ?= $(COMPOSE)
+# The dev container may have been created with a different .env. Preserve
+# its original database selection in standalone mode.
+PSQL_DB = $(if $(filter 1,$(FIMRA_SHARED)),$(FIMRA_DB_NAME),$$POSTGRES_DB)
+PSQL := $(DB_COMPOSE) exec -T db sh -c 'psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$(PSQL_DB)"'
+recreate-db ?= $(DB_COMPOSE) exec -T db sh -ec 'dropdb -U "$$POSTGRES_USER" --if-exists --force -- "$$1"; createdb -U "$$POSTGRES_USER" -- "$$1"' sh "$(1)"
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
 .PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections
@@ -86,34 +97,56 @@ BACKFILL_FLAGS = -workspace "$(WORKSPACE)" -from "$(FROM)" -to "$(TO)" -products
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-22s %s\n", $$1, $$2}'
 
-dev: ## Start the development stack (PostGIS and Keycloak) and wait until it is healthy
+ifeq ($(FIMRA_SHARED),1)
+dev db-up mail-up push-up: | shared-up
+
+dev-logs:
+	$(SHARED_COMPOSE) logs -f
+
+dev-ps: shared-ps
+
+dev-down dev-reset:
+	@echo 'Shared mode leaves the stack running. Use worktree-db-drop for your databases or shared-down to stop the stack for everyone.' >&2
+	@exit 2
+else
+dev:
 	$(COMPOSE) up -d --wait
 	@$(COMPOSE) ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
-dev-down: ## Stop the development stack, keeping its data
+dev-down:
 	$(COMPOSE) --profile geo --profile mail --profile push down
 
-dev-reset: ## Stop the development stack and delete its data
+dev-reset:
 	$(COMPOSE) --profile geo --profile mail --profile push down --volumes
 
-.PHONY: mail-up push-up
-mail-up: ## Start the local mail catcher
+mail-up:
 	$(COMPOSE) up -d --wait mailpit
 
-push-up: ## Start the local push server (ntfy) for field app notifications
+push-up:
 	$(COMPOSE) up -d --wait ntfy
 
-dev-logs: ## Follow the development stack's logs
+dev-logs:
 	$(COMPOSE) --profile geo --profile mail --profile push logs -f
 
-dev-ps: ## Show the development stack's containers
+dev-ps:
 	$(COMPOSE) --profile geo --profile mail --profile push ps
 
-db-up: ## Start only the development database and wait until it is healthy
+db-up:
 	$(COMPOSE) up -d --wait db
+endif
+
+.PHONY: mail-up push-up
+dev: ## Start the development stack and wait until it is healthy
+dev-down: ## Stop the standalone development stack, keeping its data
+dev-reset: ## Stop the standalone development stack and delete its data
+mail-up: ## Start the local mail catcher
+push-up: ## Start the local push server (ntfy) for field app notifications
+dev-logs: ## Follow the development stack's logs
+dev-ps: ## Show the development stack's containers
+db-up: ## Start the development database and wait until it is healthy
 
 db-shell: ## Open psql in the development database
-	$(COMPOSE) exec db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+	$(DB_COMPOSE) exec db sh -c 'psql -U "$$POSTGRES_USER" -d "$(PSQL_DB)"'
 
 db-migrate: ## Apply all database migrations
 	$(GOOSE) up
@@ -133,17 +166,23 @@ db-test: ## Check that migrations apply, roll back and reapply, then run the sch
 seed: ## Regenerate the synthetic demo state in seed/demo-state
 	python3 seed/generate.py
 
+# The seed loader is shared by the check (rollback) and worktree setup (commit).
+define demo-seed-sql
+	echo 'BEGIN;'; \
+	echo "SELECT pg_advisory_xact_lock(hashtext('open-fimra:demo-seed'));"; \
+	echo "SELECT NOT EXISTS (SELECT 1 FROM workspaces WHERE slug = 'demo') AS demo_missing"; \
+	printf '%s\n' '\gset' '\if :demo_missing'; \
+	cat seed/demo-state/load.sql; \
+	printf '%s\n' '\endif'; \
+	cat seed/demo-state/roles.sql;
+endef
+
 seed-test: ## Check the demo state is up to date, then load it and run the reference check
 	python3 seed/generate.py --check
 	$(GOOSE) up
 	@set -o pipefail; { \
-		echo 'BEGIN;'; \
-		echo "SELECT pg_advisory_xact_lock(hashtext('open-fimra:demo-seed'));"; \
-		echo "SELECT NOT EXISTS (SELECT 1 FROM workspaces WHERE slug = 'demo') AS demo_missing"; \
-		printf '%s\n' '\gset' '\if :demo_missing'; \
-		cat seed/demo-state/load.sql; \
-		printf '%s\n' '\endif'; \
-		cat seed/demo-state/roles.sql seed/demo-state/reference.sql seed/tests/reference-check.sql; \
+		$(demo-seed-sql) \
+		cat seed/demo-state/reference.sql seed/tests/reference-check.sql; \
 		echo 'SET CONSTRAINTS ALL IMMEDIATE;'; \
 		echo 'ROLLBACK;'; \
 	} | $(PSQL)
@@ -185,56 +224,59 @@ rotate-settings-key: ## Seal every saved secret with FIMRA_SETTINGS_KEY; list th
 # The wizard test needs a database with only migrations applied. It makes a
 # fresh one beside the development database and runs a geo worker on it.
 WIZARD_DB := fimra_wizard_test
-WIZARD_DATABASE_URL := postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(WIZARD_DB)?sslmode=disable
-wizard-test-integration: export FIMRA_DATABASE_URL := $(WIZARD_DATABASE_URL)
+WIZARD_DATABASE_URL := $(call database-url,$(WIZARD_DB))
 wizard-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 wizard-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 wizard-test-integration: export FIMRA_TEST_MAILPIT_URL := http://127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT)
 wizard-test-integration: export FIMRA_TEST_MAILPIT_SMTP := 127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT)
 wizard-test-integration: mail-up ## Take an empty, migrated database to a working alert map through the first-run wizard
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
-	$(COMPOSE) build geo-worker
-	$(COMPOSE) exec -T db sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists --force $(WIZARD_DB) && createdb -U "$$POSTGRES_USER" $(WIZARD_DB)'
+	$(GEO_COMPOSE) build geo-worker
+	$(call recreate-db,$(WIZARD_DB))
 	go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(WIZARD_DATABASE_URL)" up
-	@set -e; worker=$$($(COMPOSE) run -d --rm -e PGDATABASE=$(WIZARD_DB) geo-worker); \
+	@set -e; worker=$$($(GEO_COMPOSE) run -d --rm -e PGDATABASE=$(WIZARD_DB) geo-worker); \
 		trap 'docker stop "$$worker" > /dev/null' EXIT; \
-		cd services/api && FIMRA_WIZARD_INTEGRATION=1 go test -run '^TestWizardIntegration$$' -count=1 -v .
+		cd services/api && FIMRA_DATABASE_URL="$(WIZARD_DATABASE_URL)" FIMRA_WIZARD_INTEGRATION=1 go test -run '^TestWizardIntegration$$' -count=1 -v .
 
 WALKTHROUGH_SHOTS ?= $(HOME)/open-fimra-screenshots/first-run-wizard
 WALK_DB ?= fimra_walkthrough
 .PHONY: wizard-walkthrough
 wizard-walkthrough: mail-up web-build ## Drive the wizard in headless Chromium on a fresh database and save screenshots outside the repository
-	$(COMPOSE) build geo-worker
-	WALK_DB="$(WALK_DB)" \
-	WALK_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(WALK_DB)?sslmode=disable" \
+	$(GEO_COMPOSE) build geo-worker
+	$(call recreate-db,$(WALK_DB))
+	WEB_PORT=$(WEB_PORT) WALK_DB="$(WALK_DB)" \
+	WALK_DATABASE_URL="$(call database-url,$(WALK_DB))" \
 	SHOTS="$(WALKTHROUGH_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	MAIL_SMTP=127.0.0.1:$(FIMRA_MAILPIT_SMTP_PORT) MAIL_HTTP=127.0.0.1:$(FIMRA_MAILPIT_HTTP_PORT) \
 	GOOSE_VERSION=$(GOOSE_VERSION) PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble \
-	COMPOSE_CMD="$(COMPOSE)" FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
+	COMPOSE_CMD="$(GEO_COMPOSE)" FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
 	scripts/wizard-walkthrough.sh
 
+FORMS_WALK_DB := fimra_forms_walkthrough
 FORMS_WALKTHROUGH_SHOTS ?= $(HOME)/open-fimra-screenshots/form-designer
 .PHONY: form-designer-walkthrough
 form-designer-walkthrough: web-build ## Extend a national template in the form designer in headless Chromium, with screenshots outside the repository
-	WALK_DB=fimra_forms_walkthrough \
-	WALK_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/fimra_forms_walkthrough?sslmode=disable" \
+	$(call recreate-db,$(FORMS_WALK_DB))
+	WEB_PORT=$(WEB_PORT) WALK_DATABASE_URL="$(call database-url,$(FORMS_WALK_DB))" \
 	SHOTS="$(FORMS_WALKTHROUGH_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	GOOSE_VERSION=$(GOOSE_VERSION) PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble \
-	COMPOSE_CMD="$(COMPOSE)" FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
+	FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
 	scripts/form-designer-walkthrough.sh
 
 # The S3 attachment test needs an S3-compatible server. This starts rclone's
 # small one for the test only; it is not a choice of store for installs.
 S3_TEST_IMAGE ?= rclone/rclone:1.76.0
-S3_TEST_PORT ?= 19020
+S3_TEST_PORT ?= $(if $(filter 1,$(FIMRA_SHARED)),0,19020)
+S3_TEST_NAME := $(if $(filter 1,$(FIMRA_SHARED)),$(FIMRA_DB_NAME),$(or $(COMPOSE_PROJECT_NAME),open-fimra-dev))-s3-test
 .PHONY: attachments-s3-test
 attachments-s3-test: ## Check S3 attachment storage against a throwaway S3-compatible server
-	@set -e; name=$${COMPOSE_PROJECT_NAME:-open-fimra-dev}-s3-test; \
+	@set -e; name="$(S3_TEST_NAME)"; \
 		docker run -d --rm --name "$$name" --memory 128m -p 127.0.0.1:$(S3_TEST_PORT):8080 $(S3_TEST_IMAGE) \
 			serve s3 --auth-key fimra-test-key,fimra-test-secret --addr :8080 /data > /dev/null; \
 		trap 'docker stop "$$name" > /dev/null' EXIT; \
-		for i in $$(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:$(S3_TEST_PORT)/ && break; sleep 0.5; done; \
-		cd services/api && FIMRA_TEST_S3_ENDPOINT=http://127.0.0.1:$(S3_TEST_PORT) FIMRA_TEST_S3_BUCKET=fimra-test \
+		endpoint=http://$$(docker port "$$name" 8080/tcp); \
+		for i in $$(seq 1 30); do curl -s -o /dev/null "$$endpoint/" && break; sleep 0.5; done; \
+		cd services/api && FIMRA_TEST_S3_ENDPOINT="$$endpoint" FIMRA_TEST_S3_BUCKET=fimra-test \
 			FIMRA_TEST_S3_ACCESS_KEY=fimra-test-key FIMRA_TEST_S3_SECRET_KEY=fimra-test-secret \
 			go test -run '^TestS3AttachmentsIntegration$$' -count=1 -v .
 
@@ -260,6 +302,8 @@ check: token-check ## Run the repository checks that continuous integration runs
 	scripts/check-repo.sh
 	python3 seed/generate.py --check
 	$(COMPOSE) config --quiet
+	$(SHARED_COMPOSE) config --quiet
+	docker compose --env-file /dev/null -f deploy/compose/compose.geo.yml config --quiet
 	@echo "Compose file is valid."
 
 # The standalone Dart SDK can check the output without fetching Flutter packages.
@@ -282,8 +326,13 @@ PNPM ?= corepack pnpm
 web-install: ## Install the web app's locked dependencies
 	cd apps/web && $(PNPM) install --frozen-lockfile
 
-web-dev: ## Serve the web app on 127.0.0.1:4200
-	cd apps/web && $(PNPM) run dev
+web-dev: ## Serve the web app on the loopback WEB_PORT (default 4200)
+ifeq ($(FIMRA_SHARED),1)
+	cd apps/web && $(PNPM) run dev --port $(WEB_PORT) \
+		--define 'FIMRA_DEV_CONFIG={"issuer":"$(FIMRA_OIDC_ISSUER)","clientId":"open-fimra-web","apiBaseUrl":"http://$(FIMRA_HTTP_ADDR)"}'
+else
+	cd apps/web && $(PNPM) run dev --port $(WEB_PORT)
+endif
 
 web-build: ## Build the web app for distribution
 	cd apps/web && $(PNPM) run build
@@ -294,7 +343,7 @@ web-test: ## Run the web unit tests
 web-lint: ## Lint the web app and its templates
 	cd apps/web && $(PNPM) run lint
 
-.PHONY: geo-worker-up geo-test geo-test-integration export-test-integration submission-export-test-integration situation-report-test-integration
+.PHONY: geo-worker-up geo-worker-down geo-test geo-test-integration export-test-integration submission-export-test-integration situation-report-test-integration
 # The XLSForm tests round-trip the example forms from packages/form-schema.
 FORM_EXAMPLES_MOUNT = -v "$(CURDIR)/packages/form-schema/examples:/form-examples:ro"
 # The situation report test checks the PDF colours against the design tokens.
@@ -302,12 +351,15 @@ DESIGN_TOKENS_MOUNT = -v "$(CURDIR)/docs/design-system/tokens.json:/design-token
 
 geo-worker-up: ## Build and start the geo worker for layer imports, exports and situation report PDFs
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
-	$(COMPOSE) up -d --build geo-worker
+	$(GEO_COMPOSE) up -d --build geo-worker
+
+geo-worker-down: ## Remove the geo worker for this checkout
+	$(GEO_COMPOSE) rm -sf geo-worker
 
 geo-test: ## Run the geo worker unit tests in the GDAL container
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)"
-	$(COMPOSE) build geo-worker
-	$(COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) $(DESIGN_TOKENS_MOUNT) geo-worker python -m unittest discover -v
+	$(GEO_COMPOSE) build geo-worker
+	$(GEO_COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) $(DESIGN_TOKENS_MOUNT) geo-worker python -m unittest discover -v
 
 geo-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 geo-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
@@ -322,25 +374,24 @@ export-test-integration: ## Export as each demo user on the running stack, then 
 	install -d -m 700 "$(EXPORT_CHECK_DIR)"
 	cd services/api && FIMRA_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
 		go test -run '^TestExportIntegration$$' -count=1 -v .
-	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
+	$(GEO_COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
 
 # Field reports can never be deleted, so this test uses its own database and a
 # geo worker that reads it, like the first-run wizard tests.
 SUBMISSION_EXPORT_DB := fimra_submission_export_test
-SUBMISSION_EXPORT_DATABASE_URL := postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/$(SUBMISSION_EXPORT_DB)?sslmode=disable
-submission-export-test-integration: export FIMRA_DATABASE_URL := $(SUBMISSION_EXPORT_DATABASE_URL)
+SUBMISSION_EXPORT_DATABASE_URL := $(call database-url,$(SUBMISSION_EXPORT_DB))
 submission-export-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
 submission-export-test-integration: export FIMRA_OIDC_AUDIENCE := $(FIMRA_OIDC_AUDIENCE)
 submission-export-test-integration: ## A division officer approves a first report, then field reports are exported as each demo user and read back with OGR
 	install -d -m 700 "$(FIMRA_UPLOAD_DIR)" "$(FIMRA_EXPORT_DIR)" "$(EXPORT_CHECK_DIR)"
-	$(COMPOSE) build geo-worker
-	$(COMPOSE) exec -T db sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists --force $(SUBMISSION_EXPORT_DB) && createdb -U "$$POSTGRES_USER" $(SUBMISSION_EXPORT_DB)'
+	$(GEO_COMPOSE) build geo-worker
+	$(call recreate-db,$(SUBMISSION_EXPORT_DB))
 	go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) -dir db/migrations postgres "$(SUBMISSION_EXPORT_DATABASE_URL)" up
-	@set -e; worker=$$($(COMPOSE) run -d --rm -e PGDATABASE=$(SUBMISSION_EXPORT_DB) geo-worker); \
+	@set -e; worker=$$($(GEO_COMPOSE) run -d --rm -e PGDATABASE=$(SUBMISSION_EXPORT_DB) geo-worker); \
 		trap 'docker stop "$$worker" > /dev/null' EXIT; \
-		cd services/api && FIMRA_SUBMISSION_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
+		cd services/api && FIMRA_DATABASE_URL="$(SUBMISSION_EXPORT_DATABASE_URL)" FIMRA_SUBMISSION_EXPORT_INTEGRATION=1 FIMRA_EXPORT_CHECK_DIR="$(EXPORT_CHECK_DIR)" \
 			go test -run '^TestSubmissionExportIntegration$$' -count=1 -v .
-	$(COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
+	$(GEO_COMPOSE) run --rm --no-deps -v "$(EXPORT_CHECK_DIR):/check:ro" geo-worker sh -c 'python readback.py /check/*'
 
 situation-report-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 situation-report-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
@@ -349,34 +400,34 @@ situation-report-test-integration: ## Make a situation report PDF as each demo u
 	install -d -m 700 "$(REPORT_CHECK_DIR)"
 	cd services/api && FIMRA_REPORT_INTEGRATION=1 FIMRA_REPORT_CHECK_DIR="$(REPORT_CHECK_DIR)" \
 		go test -run '^TestSituationReportIntegration$$' -count=1 -v .
-	$(COMPOSE) run --rm --no-deps -v "$(REPORT_CHECK_DIR):/check:ro" geo-worker python report_check.py /check
+	$(GEO_COMPOSE) run --rm --no-deps -v "$(REPORT_CHECK_DIR):/check:ro" geo-worker python report_check.py /check
 
 # XLSForm conversion (PLAN.md section 5.4). Output goes to the ignored .xlsforms/ folder unless OUT is given.
 .PHONY: xlsform-import xlsform-export xlsform-test-integration xlsform-odk-check
 XLSFORM_OUT = $(abspath $(or $(OUT),.xlsforms))
-XLSFORM_RUN = install -d -m 700 "$(XLSFORM_OUT)" && $(COMPOSE) run --rm --no-deps \
+XLSFORM_RUN = install -d -m 700 "$(XLSFORM_OUT)" && $(GEO_COMPOSE) run --rm --no-deps \
 	-v "$(abspath $(FILE)):/in/$(notdir $(FILE)):ro" -v "$(XLSFORM_OUT):/out" geo-worker python xlsform_cli.py
 PYXFORM_VERSION := 3.1.0
 PYTHON_IMAGE := python:3.12.12-slim
 
 xlsform-import: ## Convert an XLSForm given FILE to a draft form and a review report in OUT (default .xlsforms/)
 	@test -f "$(FILE)" || { echo "Give the workbook as FILE=path/to/form.xlsx"; exit 2; }
-	$(COMPOSE) build geo-worker
+	$(GEO_COMPOSE) build geo-worker
 	$(XLSFORM_RUN) import "/in/$(notdir $(FILE))" /out
 
 xlsform-export: ## Convert a form file given FILE to an XLSForm in OUT (default .xlsforms/)
 	@test -f "$(FILE)" || { echo "Give the form as FILE=path/to/form.json"; exit 2; }
-	$(COMPOSE) build geo-worker
+	$(GEO_COMPOSE) build geo-worker
 	$(XLSFORM_RUN) export "/in/$(notdir $(FILE))" /out
 
 xlsform-test-integration: ## Run XLSForm conversion jobs through the worker on the running, migrated database
-	$(COMPOSE) build geo-worker
-	$(COMPOSE) run --rm -e FIMRA_FORM_JOB_TEST=1 $(FORM_EXAMPLES_MOUNT) geo-worker python -m unittest -v test_form_jobs
+	$(GEO_COMPOSE) build geo-worker
+	$(GEO_COMPOSE) run --rm -e FIMRA_FORM_JOB_TEST=1 $(FORM_EXAMPLES_MOUNT) geo-worker python -m unittest -v test_form_jobs
 
 xlsform-odk-check: ## Export every example form and convert it with pyxform, the converter ODK uses
-	$(COMPOSE) build geo-worker
+	$(GEO_COMPOSE) build geo-worker
 	install -d -m 700 "$(CURDIR)/.xlsforms/odk-check"
-	$(COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) -v "$(CURDIR)/.xlsforms/odk-check:/out" geo-worker \
+	$(GEO_COMPOSE) run --rm --no-deps $(FORM_EXAMPLES_MOUNT) -v "$(CURDIR)/.xlsforms/odk-check:/out" geo-worker \
 		sh -c 'for f in /form-examples/*.json; do python xlsform_cli.py export "$$f" /out > /dev/null || exit 1; done'
 	docker run --rm -v "$(CURDIR)/.xlsforms/odk-check:/xls:ro" $(PYTHON_IMAGE) sh -c \
 		'pip install --quiet --disable-pip-version-check --root-user-action=ignore pyxform==$(PYXFORM_VERSION) && \
@@ -392,8 +443,8 @@ MOBILE_CPUS ?= 2
 # Extra docker run flags, for example a network setting your machine needs.
 MOBILE_DOCKER_FLAGS ?=
 # Addresses built into the Android test build. The app can change them under Server settings.
-MOBILE_API_URL ?= http://127.0.0.1:18090
-MOBILE_OIDC_ISSUER ?= http://127.0.0.1:18180/realms/open-fimra
+MOBILE_API_URL ?= http://$(FIMRA_HTTP_ADDR)
+MOBILE_OIDC_ISSUER ?= $(FIMRA_OIDC_ISSUER)
 MOBILE_TEST_API_ADDR ?= 127.0.0.1:18099
 MOBILE_WEB_PORT ?= 4300
 MOBILE_SHOTS ?= $(HOME)/open-fimra-screenshots/field-app
@@ -433,41 +484,44 @@ mobile-web: mobile-deps ## Build the field app for a browser, for automated test
 	scripts/fetch-maplibre-js.sh $(MAPLIBRE_JS_VERSION) $(MAPLIBRE_JS_SHA512) apps/mobile/web/vendor/maplibre-gl
 	$(MOBILE_RUN) flutter --suppress-analytics build web --release --no-web-resources-cdn
 
-MOBILE_SCRIPT_ENV = MOBILE_DB=fimra_mobile_test \
-	MOBILE_DATABASE_URL="postgres://$(FIMRA_DB_USER):$(FIMRA_DB_PASSWORD)@127.0.0.1:$(FIMRA_DB_PORT)/fimra_mobile_test?sslmode=disable" \
+MOBILE_DB := fimra_mobile_test
+MOBILE_SCRIPT_ENV = MOBILE_DB=$(MOBILE_DB) \
+	MOBILE_DATABASE_URL="$(call database-url,$(MOBILE_DB))" \
 	MOBILE_API_ADDR=$(MOBILE_TEST_API_ADDR) MOBILE_WEB_PORT=$(MOBILE_WEB_PORT) \
 	FIMRA_OIDC_ISSUER="$(FIMRA_OIDC_ISSUER)" FIMRA_OIDC_AUDIENCE="$(FIMRA_OIDC_AUDIENCE)" \
-	GOOSE_VERSION=$(GOOSE_VERSION) COMPOSE_CMD="$(COMPOSE)" SHOTS="$(MOBILE_SHOTS)" \
+	GOOSE_VERSION=$(GOOSE_VERSION) COMPOSE_CMD="$(DB_COMPOSE)" SHOTS="$(MOBILE_SHOTS)" \
 	PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble FLUTTER_IMAGE=$(FLUTTER_IMAGE) \
 	MOBILE_MEMORY=$(MOBILE_MEMORY) MOBILE_CPUS=$(MOBILE_CPUS) MOBILE_DOCKER_FLAGS="$(MOBILE_DOCKER_FLAGS)"
 
 mobile-test-integration: mobile-deps ## Test the field app's API client as each demo user against a fresh copy of the demo data
+	$(call recreate-db,$(MOBILE_DB))
 	MODE=test $(MOBILE_SCRIPT_ENV) scripts/mobile-integration.sh
 
 mobile-walkthrough: mobile-web ## Sign in to the browser build as the beat guard in headless Chromium, acknowledge an alert and save screenshots outside the repository
+	$(call recreate-db,$(MOBILE_DB))
 	MODE=walkthrough $(MOBILE_SCRIPT_ENV) scripts/mobile-integration.sh
 
 SHELL_SHOTS ?= $(HOME)/open-fimra-screenshots/u4
 .PHONY: shell-walkthrough
 shell-walkthrough: web-build ## Check routes, history and shell accessibility against the seeded development stack
-	SHOTS="$(SHELL_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	WEB_PORT=$(WEB_PORT) SHOTS="$(SHELL_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh
 
 INCIDENT_SHOTS ?= $(HOME)/open-fimra-screenshots/u7
 .PHONY: incident-walkthrough
 incident-walkthrough: web-build ## Check incident triage, role visibility and accessibility against the seeded development stack
-	SHOTS="$(INCIDENT_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	WEB_PORT=$(WEB_PORT) SHOTS="$(INCIDENT_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh incident-walkthrough.mjs
 
 LAYER_SHOTS ?= $(HOME)/open-fimra-screenshots/u14
 .PHONY: layers-walkthrough
 layers-walkthrough: web-build ## Review and publish synthetic layers in Chromium on an isolated, seeded stack with a geo worker
-	SHOTS="$(LAYER_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	WEB_PORT=$(WEB_PORT) SHOTS="$(LAYER_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh layers-walkthrough.mjs
 
 NOTIFICATION_SHOTS ?= $(HOME)/open-fimra-screenshots/u9
 .PHONY: notifications-walkthrough
 notifications-walkthrough: web-build ## Check the inbox by keyboard and with axe on the seeded development stack
 	$(PSQL) < scripts/notifications-walkthrough.sql
-	SHOTS="$(NOTIFICATION_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	WEB_PORT=$(WEB_PORT) SHOTS="$(NOTIFICATION_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh notifications-walkthrough.mjs
