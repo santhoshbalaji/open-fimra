@@ -4,6 +4,7 @@ member_outcomes AS (
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
         'alertId', wi.alert_id::text, 'fromLabel', s.label, 'reason',
         CASE
+            WHEN $4='reopened' THEN 'case_only'
             WHEN wi.current_step = $4 THEN 'already_at_step'
             WHEN t.to_step IS NULL AND s.terminal THEN 'closed'
             WHEN t.to_step IS NULL THEN 'different_step'

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:fimra_field/src/api/api_client.dart';
+import 'package:fimra_field/src/api/models.dart';
 import 'package:fimra_field/src/data/field_store.dart';
 import 'package:fimra_field/src/data/offline_repository.dart';
 import 'package:fimra_field/src/data/outbox.dart';
@@ -170,6 +171,71 @@ void main() {
     expect(object(jsonDecode(failed['body'] as String)['location']), arrival['location']);
     expect(jsonDecode(failed['body'] as String)['note'], 'At the gate');
     expect((await store.reports('other')), isEmpty);
+  });
+
+  test('late response updates retry with the same times and send in order', () async {
+    final posted = <Json>[];
+    final api = FimraApi(
+      baseUrl: 'http://example.invalid',
+      token: ({forceRefresh = false}) async => 'token',
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Json;
+        posted.add(body);
+        if (posted.length == 1) return http.Response('{}', 503);
+        return http.Response(
+          jsonEncode({
+            'id': posted.length.toString(),
+            'step': body['step'],
+            'at': '2026-01-01T11:30:00Z',
+            'syncedAt': '2026-01-01T12:00:00Z',
+          }),
+          200,
+        );
+      }),
+    );
+    final actual = DateTime.utc(2026, 1, 1, 10);
+    final estimate = DateTime.utc(2026, 1, 1, 11);
+    final requests = [
+      (
+        'reached_site',
+        StepRequest(
+          step: 'flash_update',
+          clientId: 'one',
+          actualAt: actual,
+          response: {'status': 'Active', 'threats': 'Access track'},
+        ),
+      ),
+      (
+        'flash_update',
+        StepRequest(
+          step: 'response_update',
+          clientId: 'two',
+          estimatedAt: estimate,
+          response: {'status': 'Crew in place'},
+        ),
+      ),
+      ('flash_update', StepRequest(step: 'controlled', clientId: 'three', actualAt: actual)),
+      ('controlled', StepRequest(step: 'extinguished', clientId: 'four', estimatedAt: estimate)),
+    ];
+    for (final (from, step) in requests) {
+      await store.enqueueStep(
+        'guard',
+        'demo',
+        '42',
+        step.step,
+        step.toJson(),
+        fromStep: from,
+        generation: store.generation,
+      );
+    }
+    final outbox = ReportOutbox(api, store);
+    await outbox.send('guard');
+    await outbox.send('guard', retry: true);
+    expect(posted, [requests.first.$2.toJson(), for (final (_, step) in requests) step.toJson()]);
+    final saved = await store.reports('guard', alert: '42');
+    expect(saved.every((row) => row['received_at'] == '2026-01-01T12:00:00.000Z'), isTrue);
+    final estimates = saved.map((row) => (jsonDecode(row['body'] as String) as Json)['estimatedAt']);
+    expect(estimates.whereType<String>(), [estimate.toIso8601String(), estimate.toIso8601String()]);
   });
 
   test('lost upload and report responses resume with three files and one report', () async {

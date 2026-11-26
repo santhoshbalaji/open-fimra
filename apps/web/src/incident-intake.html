@@ -1,0 +1,30 @@
+<button hlmBtn variant="outline" type="button" class="self-start" [attr.aria-expanded]="open()"
+  [disabled]="busy()" (click)="toggle()">{{ open() ? msg('Cancel') : msg('Add a report') }}</button>
+@if (open()) {
+  <form class="grid gap-3 my-3 p-3 rounded-control border border-border"
+    (submit)="$event.preventDefault(); save(source.value, observed.value, latitude.value, longitude.value, note.value, join.checked)">
+    <label class="grid gap-1">{{ msg('Report source') }}
+      <select #source class="rounded-control border border-border bg-surface p-2">
+        @for (item of sources; track item.id) { <option [value]="item.id">{{ msg(item.label) }}</option> }
+      </select>
+    </label>
+    <label class="grid gap-1">{{ msg('Time observed') }}
+      <input hlmInput #observed type="datetime-local" required />
+    </label>
+    <div class="grid gap-2 sm:grid-cols-2">
+      <label class="grid gap-1">{{ msg('Latitude') }}
+        <input hlmInput #latitude type="number" step="any" min="-90" max="90" required />
+      </label>
+      <label class="grid gap-1">{{ msg('Longitude') }}
+        <input hlmInput #longitude type="number" step="any" min="-180" max="180" required />
+      </label>
+    </div>
+    <label class="grid gap-1">{{ msg('Note (optional)') }}<textarea hlmTextarea #note maxlength="2000" rows="2"></textarea></label>
+    <label [hidden]="!incidentId()">
+      <input #join type="checkbox" [checked]="!!incidentId()" [disabled]="!incidentId()" />
+      {{ msg('Link to open incident #{0}', [incidentId()]) }}
+    </label>
+    <button hlmBtn type="submit" class="justify-self-start" [busy]="busy()">{{ msg('Save report') }}</button>
+  </form>
+}
+<fimra-live-status [message]="message()" />

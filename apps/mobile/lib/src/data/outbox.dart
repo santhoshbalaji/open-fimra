@@ -42,10 +42,15 @@ class ReportOutbox {
           final receipt = await api.recordStep(slug, alert, StepRequest.fromJson(body));
           if (!current()) return changed;
           await store.updateReport(id, {
-            'received_at': receipt.at.toUtc().toIso8601String(),
+            'received_at': (receipt.syncedAt ?? receipt.at).toUtc().toIso8601String(),
             'error': null,
             'retry_at': null,
-            'body': jsonEncode({'step': body['step'], 'clientTime': body['clientTime']}),
+            'body': jsonEncode({
+              'step': body['step'],
+              'at': receipt.at.toUtc().toIso8601String(),
+              for (final key in ['clientTime', 'actualAt', 'estimatedAt'])
+                if (body.containsKey(key)) key: body[key],
+            }),
           }, generation);
           changed.add(slug);
           continue;

@@ -82,6 +82,10 @@ func notificationTitle(event string) string {
 		return "New fire alert"
 	case "alert_overdue":
 		return "Fire alert overdue"
+	case "incident_overdue":
+		return "Incident response overdue"
+	case "incident_escalated":
+		return "Incident response escalated"
 	default:
 		return "Feed needs attention"
 	}

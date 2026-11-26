@@ -56,11 +56,15 @@ routed AS (
     -- The alert insert trigger opens its workflow, joins it to an incident
     -- and notifies the responsible officers in this transaction.
     INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path,
-                        hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids, boundary_snapshot)
+                        hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids, boundary_snapshot, intake_incident_id)
     SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*,
            (match).hierarchy_unit_paths, (match).unit_paths, (match).forest_class, (match).triage_reason,
-           (match).layer_version_ids, (match).boundary_snapshot
-    FROM matched CROSS JOIN LATERAL alert_route(match) route
+           (match).layer_version_ids, (match).boundary_snapshot, $9
+    FROM matched CROSS JOIN LATERAL (
+        SELECT * FROM alert_route(match)
+        UNION ALL SELECT 'triage', NULL::uuid, NULL::ltree
+        WHERE $8 AND (match).forest_class IN ('outside','fixed_heat_source')
+    ) route
     RETURNING id
 )
 SELECT EXISTS (SELECT FROM matched), (SELECT (match).forest_class FROM matched), (SELECT id FROM routed)`
@@ -180,7 +184,7 @@ WHERE f.workspace_id = $1 AND f.form_key = $2 AND v.version = $3 AND v.published
 	var forestClass *string
 	var alert *int64
 	if err := tx.QueryRow(ctx, manualReportSQL, access.workspaceID, manualSource, manualProduct, in.ID, observed,
-		string(location), raw).Scan(&inWorkspace, &forestClass, &alert); err != nil {
+		string(location), raw, false, nil).Scan(&inWorkspace, &forestClass, &alert); err != nil {
 		return 0, err
 	}
 	switch {

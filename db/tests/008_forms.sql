@@ -22,7 +22,7 @@ SELECT workspace_id, detection_id, observed_at, '{}', 'triage', '{}', '{}', 'ins
 
 CREATE TEMP TABLE ids AS
 SELECT (SELECT id FROM alerts WHERE workspace_id = '00000000-0000-0000-0000-000000000008') AS alert,
-       (SELECT id FROM workflow_templates WHERE workspace_id IS NULL) AS template;
+       (SELECT i.template_id FROM workflow_instances i JOIN alerts a ON a.id=i.alert_id WHERE a.workspace_id='00000000-0000-0000-0000-000000000008' LIMIT 1) AS template;
 
 INSERT INTO forms (workspace_id, form_key) VALUES ('00000000-0000-0000-0000-000000000008', 'test-report');
 INSERT INTO form_versions (form_id, version, source, definition, columns)

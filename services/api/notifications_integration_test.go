@@ -196,7 +196,7 @@ func checkNotificationEndpoints(t *testing.T, ctx context.Context, tx pgx.Tx, sl
 	}
 	var defaults []notificationRule
 	if res := request("a1", "GET", rules, ""); res.Code != 200 ||
-		json.Unmarshal(res.Body.Bytes(), &defaults) != nil || len(defaults) != 13 {
+		json.Unmarshal(res.Body.Bytes(), &defaults) != nil || len(defaults) != 17 {
 		t.Fatalf("default rules: %d %s", res.Code, res.Body)
 	}
 	if res := request("a1", "POST", rules, `[{"event":"alert_new","recipients":"root","channel":"in_app","forestClass":"inside"}]`); res.Code != 200 ||

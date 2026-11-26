@@ -34,7 +34,13 @@ visible AS (
 ),
 filtered AS (
     SELECT v.id, v.last_time,
-           GREATEST(v.last_time, CASE WHEN wi.current_step <> 'new' THEN wi.entered_at END) AS activity_at
+           GREATEST(v.last_time, CASE WHEN wi.current_step <> 'new' THEN wi.entered_at END,
+               (SELECT max(l.recorded_at) FROM step_log l WHERE l.incident_id=v.id AND l.to_step='response_update'),
+               (SELECT max(l.recorded_at) FROM members m JOIN step_log l ON l.alert_id=m.id
+                WHERE m.incident_id=v.id AND l.from_step IS NOT NULL AND l.incident_step_id IS NULL
+                  AND workflow_template_extended(l.template_id)),
+               (SELECT max(f.received_at) FROM members m JOIN fire_intake f ON f.alert_id=m.id WHERE m.incident_id=v.id)
+           ) AS activity_at
     FROM visible v
     JOIN workflow_instances wi ON wi.incident_id = v.id
     WHERE $6 = '' OR wi.current_step = $6
@@ -65,8 +71,11 @@ member_places AS (
 details AS (
     SELECT p.id::text AS id, wi.current_step AS status, s.label AS step_label, wi.entered_at AS step_time,
            s.terminal,
-           EXISTS (SELECT FROM workflow_transitions t WHERE t.template_id=wi.template_id
-                   AND t.from_step=wi.current_step AND now() > wi.entered_at+t.time_limit) AS overdue,
+           i.merged_into IS NULL AND CASE WHEN workflow_template_extended(wi.template_id)
+               THEN EXISTS (SELECT FROM incident_response_target(i.workspace_id,wi.template_id,wi.current_step,wi.entered_at) t
+                            WHERE t.due_at < now())
+               ELSE alert_due_at(wi.template_id,wi.current_step,wi.entered_at) < now()
+           END IS TRUE AS overdue,
            i.created_at, i.merged_into::text AS merged_into, i.merged_at,
            p.last_time AS last_observed_time, p.activity_at, p.cursor_time,
            floor(extract(epoch FROM p.last_time))::bigint AS last_observed_at,

@@ -79,7 +79,7 @@ func (a api) starterPack(w http.ResponseWriter, r *http.Request) {
 // the forms it added, each with the steps it left alone.
 func enableStarterPack(ctx context.Context, tx pgx.Tx, access workspaceAccess, subject string) (map[string][]packSkip, error) {
 	// Two requests at once must not both add the same form.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('open-fimra:starter-pack:' || $1, 0))`, access.workspaceID); err != nil {
+	if _, err := tx.Exec(ctx, workflowFormsLock, access.workspaceID); err != nil {
 		return nil, err
 	}
 	var templateID int64
@@ -162,7 +162,7 @@ func readPackState(ctx context.Context, tx pgx.Tx, workspaceID string, added map
 		var present bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM forms WHERE workspace_id = $1 AND form_key = $2),
     COALESCE((SELECT array_agg(fa.step ORDER BY fa.step) FROM forms f JOIN form_assignments fa ON fa.form_id = f.id
-              JOIN workflow_templates t ON t.id = fa.template_id AND (t.workspace_id IS NULL OR t.workspace_id = f.workspace_id)
+              JOIN workflow_templates t ON t.id = fa.template_id AND t.id = workspace_workflow_template(f.workspace_id)
               WHERE f.workspace_id = $1 AND f.form_key = $2), '{}')`, workspaceID, form.Key).Scan(&present, &item.Assigned); err != nil {
 			return state, err
 		}

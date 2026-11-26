@@ -1,4 +1,5 @@
 import { translate } from './language';
+import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
@@ -15,19 +16,23 @@ import { restoreOverlayFocus } from './ui/overlay-focus';
 import { workspaceFormat } from './workspace-format';
 import { firstValueFrom } from 'rxjs';
 
-const milestones = new Set(['acknowledged', 'reached_site', 'controlled', 'extinguished', 'closed']);
+const milestones = new Set(['acknowledged', 'assigned', 'reached_site', 'flash_update', 'controlled', 'extinguished', 'watch', 'reopened', 'closed', 'intake', 'merge', 'split']);
 
-interface Move { step: string; label: string; location_required: boolean; can_override: boolean; terminal: boolean; missingReports?: string[] }
+interface Move { step: string; label: string; location_required: boolean; can_override: boolean; terminal: boolean; extended?: boolean; missingReports?: string[] }
 export interface WorkflowEntry {
   step: string; label: string; at: string; actor: string | null; note: string; reason: string;
+  actualAt?: string | null; estimatedAt?: string | null; syncedAt?: string | null;
+  response?: { status: string; estimatedExtent?: string; threats?: string; helpNeeded?: string; nextContact?: string } | null;
+  alertId?: string | null; relatedIncidentId?: string | null;
   latitude: number | null; longitude: number | null; reportPending: boolean;
   /** Incident entries: how many of the member alerts you can see moved with this step. */
   alertsMoved?: number;
   /** Alert entries: the incident whose step moved this alert. */
   incidentId?: string | null;
 }
-interface History { entries: WorkflowEntry[] | null; moves: Move[]; mergedInto?: string | null }
+interface History { entries: WorkflowEntry[] | null; moves: Move[]; mergedInto?: string | null; canManageMembers?: boolean }
 const unchangedReasons = {
+  case_only: 'This action applies to the incident only.',
   already_at_step: 'Already at this step.',
   closed: 'Already closed.',
   different_step: 'This move is unavailable from the alert’s current step.',
@@ -44,7 +49,7 @@ interface IncidentReceipt extends IncidentImpact { alertsMoved: number }
 
 @Component({
   selector: 'fimra-workflow',
-  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmTextareaImports, RouterLink, StateRegion, Timeline, LiveStatus],
+  imports: [HlmButtonImports, HlmCheckboxImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmTextareaImports, RouterLink, StateRegion, Timeline, LiveStatus],
   templateUrl: './workflow.html'
 })
 export class Workflow {
@@ -54,6 +59,8 @@ export class Workflow {
   readonly now = input<number>();
   /** What the workflow belongs to, for its wording. */
   readonly subject = input<'alert' | 'incident'>('alert');
+  readonly refresh = input(0);
+  readonly incidentLink = input<(id: string) => UrlTree>();
   readonly alertLink = input<(id: string) => UrlTree>();
   readonly changed = output<void>();
   readonly reportNeeded = output<string>();
@@ -98,16 +105,31 @@ export class Workflow {
   protected readonly nowDate = computed(() => new Date(this.now() ?? Date.now()));
   readonly timeline = computed<TimelineEvent[]>(() => {
     const incident = this.subject() === 'incident';
+    const displayTime = (time: string) => workspaceFormat.dateTime(new Date(time));
     return (this.history()?.entries ?? []).map((entry, index, all) => ({
       id: `${entry.at}/${index}`,
       title: translate(entry.label),
-      at: new Date(entry.at),
-      milestone: index === 0 || index === all.length - 1 || milestones.has(entry.step),
+      at: new Date(entry.actualAt || (entry.step !== 'team_sent' && entry.estimatedAt) || entry.at),
+      link: entry.relatedIncidentId ? this.incidentLink()?.(entry.relatedIncidentId) :
+        entry.alertId ? this.alertLink()?.(entry.alertId) : undefined,
+      milestone: index === 0 || index === all.length - 1 || milestones.has(entry.step) || (entry.step === 'team_sent' && !!entry.estimatedAt),
       detail: [
         entry.actor || translate('Recorded automatically'),
         incident && entry.latitude != null && `${entry.latitude}, ${entry.longitude}`,
         entry.note,
-        entry.reason && translate('Location exception: {0}', [entry.reason]),
+        entry.reason && (entry.step === 'reopened' ? translate('Reopening reason: {0}', [entry.reason]) :
+          translate('Location exception: {0}', [entry.reason])),
+        entry.actualAt && translate('Actual time: {0}', [displayTime(entry.actualAt)]),
+        entry.estimatedAt && (entry.step === 'team_sent' ? translate('Estimated arrival: {0}', [displayTime(entry.estimatedAt)]) :
+          translate('Estimated time: {0}', [displayTime(entry.estimatedAt)])),
+        (entry.actualAt || entry.estimatedAt) && entry.syncedAt && translate('Synced at: {0}', [displayTime(entry.syncedAt)]),
+        entry.response?.status && translate('Fire status: {0}', [entry.response.status]),
+        entry.response?.estimatedExtent && translate('Estimated extent: {0}', [entry.response.estimatedExtent]),
+        entry.response?.threats && translate('Threats: {0}', [entry.response.threats]),
+        entry.response?.helpNeeded && translate('Help needed: {0}', [entry.response.helpNeeded]),
+        entry.response?.nextContact && translate('Next contact: {0}', [displayTime(entry.response.nextContact)]),
+        entry.alertId && translate('Alert #{0}', [entry.alertId]),
+        entry.relatedIncidentId && translate('Incident #{0}', [entry.relatedIncidentId]),
         entry.reportPending && translate('Waiting for a report'),
         entry.alertsMoved ? translate('Moved {0} {1}', [workspaceFormat.number(entry.alertsMoved), translate(entry.alertsMoved === 1 ? 'alert' : 'alerts')]) : '',
         entry.incidentId && translate('Recorded on incident #{0}', [entry.incidentId])
@@ -120,6 +142,7 @@ export class Workflow {
     effect(cleanup => {
       const url = this.url();
       this.stepTime();
+      this.refresh();
       this.version();
       if (previousUrl !== url) {
         this.history.set(null);
@@ -188,7 +211,7 @@ export class Workflow {
     afterNextRender(() => restoreOverlayFocus(this.trigger ?? null, this.resultTarget()?.nativeElement), { injector: this.injector });
   }
 
-  protected async save(note: string, reason: string, submit: HTMLElement): Promise<void> {
+  protected async save(form: HTMLFormElement, note: string, reason: string, submit: HTMLElement): Promise<void> {
     const move = this.move();
     if (!move || this.busy() || this.loading() || this.loadError() || this.pendingReport()) return;
     const preview = this.preview();
@@ -197,6 +220,13 @@ export class Workflow {
     const url = this.url();
     const current = () => !this.lifetime.destroyed && this.url() === url;
     const exception = this.exception();
+    const fields = new FormData(form);
+    const text = (key: string) => String(fields.get(key) ?? '').trim();
+    const date = (key: string) => text(key) ? new Date(text(key)).toISOString() : undefined;
+    const actualAt = date('actualAt');
+    const estimatedAt = date('estimatedAt');
+    const response = text('status') ? { status: text('status'), estimatedExtent: text('estimatedExtent'),
+      threats: text('threats'), helpNeeded: text('helpNeeded'), nextContact: date('nextContact') } : undefined;
     this.busy.set(true);
     try {
       if (move.terminal && !await this.confirm.open({
@@ -226,7 +256,7 @@ export class Workflow {
       if (!current()) return;
       this.result.set(translate('Saving ') + translate(move.label) + '…');
       const receipt = await firstValueFrom(this.http.post<IncidentReceipt>(url + '/steps', { step: move.step, note, location,
-        reason: exception ? reason.trim() : '', clientId: crypto.randomUUID() }));
+        reason: exception || move.step === 'reopened' ? reason.trim() : '', actualAt, estimatedAt, response, clientId: crypto.randomUUID() }));
       if (!current()) return;
       this.chosen.set(null);
       if (incident) this.receipt.set(receipt);
@@ -239,7 +269,7 @@ export class Workflow {
       const reason = error instanceof HttpErrorResponse && typeof error.error?.error === 'string' ? error.error.error :
         translate('Check the timeline before trying again.');
       this.result.set(error instanceof HttpErrorResponse && error.status === 403 ?
-        translate('Permission denied. ') + reason : translate('Step not saved. ') + reason);
+        translate('Permission denied. ') + translate(reason) : translate('Step not saved. ') + translate(reason));
       if (error instanceof HttpErrorResponse && (error.status === 409 || error.status === 422)) {
         this.reload();
         if (error.status === 409) {

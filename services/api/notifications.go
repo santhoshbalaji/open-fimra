@@ -150,7 +150,7 @@ type notificationRule struct {
 }
 
 func (r notificationRule) valid() bool {
-	return slices.Contains([]string{"alert_new", "alert_overdue", "feed_open"}, r.Event) &&
+	return slices.Contains([]string{"alert_new", "alert_overdue", "feed_open", "incident_overdue", "incident_escalated"}, r.Event) &&
 		slices.Contains([]string{"field_staff", "division_officer", "reviewers", "root"}, r.Recipients) &&
 		slices.Contains([]string{"in_app", "email", "push"}, r.Channel) &&
 		slices.Contains([]string{"", "unit", "edge_review", "triage"}, r.Queue) &&

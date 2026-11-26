@@ -17,6 +17,7 @@ import '../theme/status_icons.dart';
 import 'alert_map.dart';
 import 'home.dart';
 import 'outbox_screen.dart';
+import 'step_time_field.dart';
 import 'widgets.dart';
 
 /// A point from the phone's location service.
@@ -261,15 +262,26 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
   Widget _actions(List<Json> queue) {
     final history = _history;
     final forms = objects(_reportData?['forms']);
-    final reached = {for (final entry in history?.entries ?? <HistoryEntry>[]) entry.step: entry.at};
+    final reached = {
+      for (final entry in history?.entries ?? <HistoryEntry>[])
+        entry.step: entry.actualAt ?? entry.estimatedAt ?? entry.at,
+    };
     var current = _alert.status;
     for (final row in queue) {
       if (row['from_step'] != current) continue;
       if (row['error'] != null && row['retry_at'] == null) break;
       final body = _body(row);
       final step = body['step'] as String;
+      if (step == 'response_update') continue;
       current = step;
-      final at = body['clientTime'] as String? ?? (row['received_at'] as String?) ?? body['deviceTime'] as String?;
+      final at =
+          (body['actualAt'] ??
+                  (step == 'team_sent' ? null : body['estimatedAt']) ??
+                  body['clientTime'] ??
+                  body['at'] ??
+                  row['received_at'] ??
+                  body['deviceTime'])
+              as String?;
       if (at != null) reached[step] = DateTime.parse(at);
     }
     final moves = (current == _alert.status ? history?.moves : history?.offlineMoves[current]) ?? const [];
@@ -450,7 +462,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
         _problem = null;
       });
     } on ApiException catch (error) {
-      if (mounted) setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = fieldProblem(context, error.message));
     }
   }
 
@@ -636,8 +648,11 @@ class _TimelineEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final p = FimraColours.of(context);
+    final words = fieldText(context);
+    final response = entry.response;
+    final nextContact = DateTime.tryParse(response?['nextContact'] as String? ?? '');
     final details = [
-      formatTime(entry.at, context),
+      formatTime(entry.actualAt ?? (entry.step == 'team_sent' ? null : entry.estimatedAt) ?? entry.at, context),
       entry.actor ?? fieldText(context).system,
       if (entry.latitude != null) fieldText(context).withLocation,
     ].join(' · ');
@@ -656,7 +671,29 @@ class _TimelineEntry extends StatelessWidget {
                 Text(details, style: text.bodySmall),
                 if (entry.note.isNotEmpty) Text(entry.note, style: text.bodyMedium),
                 if (entry.reason.isNotEmpty)
-                  Text(fieldText(context).locationExceptionReason(entry.reason), style: text.bodyMedium),
+                  Text(
+                    entry.step == 'reopened' ? words.reopeningReason : words.locationExceptionReason(entry.reason),
+                    style: text.bodyMedium,
+                  ),
+                if (entry.reason.isNotEmpty && entry.step == 'reopened') Text(entry.reason, style: text.bodyMedium),
+                if (entry.estimatedAt case final estimate?)
+                  Text(
+                    '${entry.step == 'team_sent' ? words.estimatedArrival : words.estimatedStepTime} · ${formatTime(estimate, context)}',
+                    style: text.bodyMedium,
+                  ),
+                if (entry.syncedAt case final synced? when entry.actualAt != null || entry.estimatedAt != null)
+                  Text(words.lastSynced(formatTime(synced, context)), style: text.bodySmall),
+                if (response != null)
+                  for (final (key, label) in [
+                    ('status', words.fireStatus),
+                    ('estimatedExtent', words.estimatedExtent),
+                    ('threats', words.responseThreats),
+                    ('helpNeeded', words.helpNeeded),
+                  ])
+                    if (response[key] case final String value when value.isNotEmpty)
+                      Text('$label · $value', style: text.bodyMedium),
+                if (nextContact != null)
+                  Text('${words.nextContact} · ${formatTime(nextContact, context)}', style: text.bodyMedium),
                 if (entry.reportPending) StatusBadge.step(fieldText(context).waitingForAReport),
               ],
             ),
@@ -690,9 +727,18 @@ class StepSheet extends StatefulWidget {
 class _StepSheetState extends State<StepSheet> {
   final _note = TextEditingController();
   final _reason = TextEditingController();
+  final _status = TextEditingController();
+  final _extent = TextEditingController();
+  final _threats = TextEditingController();
+  final _help = TextEditingController();
+  DateTime? _actualAt;
+  DateTime? _estimatedAt;
+  DateTime? _nextContact;
+  bool get _isUpdate => widget.move.step == 'flash_update' || widget.move.step == 'response_update';
 
   /// One ID per attempt, so pressing Save again after a lost answer is safe.
   final _clientId = randomToken(18);
+  DateTime? _clientTime;
   bool _exception = false;
   bool _busy = false;
   String? _problem;
@@ -701,13 +747,30 @@ class _StepSheetState extends State<StepSheet> {
   void dispose() {
     _note.dispose();
     _reason.dispose();
+    _status.dispose();
+    _extent.dispose();
+    _threats.dispose();
+    _help.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     final move = widget.move;
-    if (_exception && _reason.text.trim().isEmpty) {
+    if ((_exception || move.step == 'reopened') && _reason.text.trim().isEmpty) {
       setState(() => _problem = fieldText(context).giveAReasonForRecording);
+      return;
+    }
+    final words = fieldText(context);
+    if (_isUpdate && _status.text.trim().isEmpty) {
+      setState(() => _problem = words.fireStatusRequired);
+      return;
+    }
+    if (move.step == 'assigned' && _note.text.trim().isEmpty) {
+      setState(() => _problem = words.assigneeRequired);
+      return;
+    }
+    if (move.extended && move.step == 'team_sent' && _estimatedAt == null) {
+      setState(() => _problem = words.estimatedArrivalRequired);
       return;
     }
     setState(() {
@@ -721,9 +784,20 @@ class _StepSheetState extends State<StepSheet> {
       final request = StepRequest(
         step: move.step,
         clientId: _clientId,
-        clientTime: widget.view.services.offline == null ? null : DateTime.now(),
+        clientTime: widget.view.services.offline == null ? null : (_clientTime ??= DateTime.now()),
+        actualAt: _actualAt,
+        estimatedAt: _estimatedAt,
+        response: _isUpdate
+            ? {
+                'status': _status.text.trim(),
+                if (_extent.text.trim().isNotEmpty) 'estimatedExtent': _extent.text.trim(),
+                if (_threats.text.trim().isNotEmpty) 'threats': _threats.text.trim(),
+                if (_help.text.trim().isNotEmpty) 'helpNeeded': _help.text.trim(),
+                if (_nextContact != null) 'nextContact': _nextContact!.toUtc().toIso8601String(),
+              }
+            : null,
         note: _note.text.trim(),
-        reason: _exception ? _reason.text.trim() : '',
+        reason: _exception || move.step == 'reopened' ? _reason.text.trim() : '',
         latitude: point?.latitude,
         longitude: point?.longitude,
       );
@@ -738,7 +812,7 @@ class _StepSheetState extends State<StepSheet> {
     } on LocationProblem catch (error) {
       if (mounted) setState(() => _problem = error.message(context));
     } on ApiException catch (error) {
-      if (mounted) setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = fieldProblem(context, error.message));
     } on StateError {
       if (mounted) setState(() => _problem = fieldText(context).couldNotSaveThisStep);
     } on Exception {
@@ -752,6 +826,7 @@ class _StepSheetState extends State<StepSheet> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final move = widget.move;
+    final words = fieldText(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
@@ -775,8 +850,48 @@ class _StepSheetState extends State<StepSheet> {
                 controller: _note,
                 maxLines: 3,
                 minLines: 1,
-                decoration: InputDecoration(labelText: fieldText(context).noteOptional),
+                decoration: InputDecoration(
+                  labelText: move.step == 'assigned' ? words.assignedTeam : words.noteOptional,
+                ),
               ),
+              if (move.extended) ...[
+                StepTimeField(
+                  label: words.actualStepTime,
+                  value: _actualAt,
+                  onChanged: _busy ? null : (value) => setState(() => _actualAt = value),
+                ),
+                StepTimeField(
+                  label: move.step == 'team_sent' ? words.estimatedArrival : words.estimatedStepTime,
+                  allowFuture: move.step == 'team_sent',
+                  value: _estimatedAt,
+                  onChanged: _busy ? null : (value) => setState(() => _estimatedAt = value),
+                ),
+              ],
+              if (_isUpdate) ...[
+                for (final (controller, label) in [
+                  (_status, words.fireStatus),
+                  (_extent, words.estimatedExtent),
+                  (_threats, words.responseThreats),
+                  (_help, words.helpNeeded),
+                ])
+                  TextField(
+                    controller: controller,
+                    enabled: !_busy,
+                    maxLength: 300,
+                    decoration: InputDecoration(labelText: label),
+                  ),
+                StepTimeField(
+                  label: words.nextContact,
+                  allowFuture: true,
+                  value: _nextContact,
+                  onChanged: _busy ? null : (value) => setState(() => _nextContact = value),
+                ),
+              ],
+              if (move.step == 'reopened')
+                TextField(
+                  controller: _reason,
+                  decoration: InputDecoration(labelText: words.reopeningReason),
+                ),
               if (move.locationRequired && move.canOverride) ...[
                 const SizedBox(height: 8),
                 CheckboxListTile(

@@ -431,7 +431,18 @@ func TestWizardIntegration(t *testing.T) {
 		call("state.admin", http.MethodPost, base+"/setup/steps/firms", map[string]string{"status": "done"}, http.StatusOK, nil)
 	})
 
-	section("starter forms", pack.enable)
+	section("starter forms", func(t *testing.T) {
+		var settings responseSettings
+		call("state.admin", http.MethodGet, base+"/settings/incident-response", nil, http.StatusOK, &settings)
+		if !settings.Extended {
+			t.Fatal("new workspaces should default to extended incident response")
+		}
+		// Set up a case using the workflow a workspace had before migration.
+		if _, err := pool.Exec(ctx, "UPDATE workspaces SET extended_incident_response=false WHERE slug=$1", slug); err != nil {
+			t.Fatal(err)
+		}
+		pack.enable(t)
+	})
 
 	section("invite officers", func(t *testing.T) {
 		invites := []invitationRequest{
@@ -599,7 +610,18 @@ func TestWizardIntegration(t *testing.T) {
 		}
 	})
 
-	section("starter forms on the default workflow", pack.workflow)
+	section("starter forms on the original workflow after opting in", func(t *testing.T) {
+		call("state.admin", http.MethodPut, base+"/settings/incident-response",
+			responseSettings{Extended: true, Targets: []responseTarget{}}, http.StatusOK, nil)
+		var packState packAnswer
+		call("state.admin", http.MethodGet, base+"/starter-pack", nil, http.StatusOK, &packState)
+		for _, form := range packState.Forms {
+			if len(form.Steps) != len(form.Assigned) {
+				t.Fatalf("starter form assignments missing from extended workflow: %+v", form)
+			}
+		}
+		pack.workflow(t)
+	})
 	section("manual fire report", pack.manualReport)
 
 	section("no secrets or addresses leak", func(t *testing.T) {
