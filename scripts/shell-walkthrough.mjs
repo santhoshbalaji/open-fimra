@@ -98,6 +98,7 @@ try {
   await signIn(page, 'state.admin');
   await expect(page.getByRole('heading', { name: 'Map', level: 1 })).toBeVisible();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await expect(page.locator('fimra-monitor-filters')).toBeVisible();
   const skip = page.getByRole('link', { name: 'Skip to content' });
   await skip.focus();
   const originalURL = page.url();
@@ -117,7 +118,7 @@ try {
       await page.emulateMedia({ colorScheme: theme });
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expect(page.locator('.account-trigger')).toBeVisible();
-      await axe(page, `Shell ${size} ${theme}`, ['.topbar', '.desktop-destinations', '.workspace-controls']);
+      await axe(page, `Shell ${size} ${theme}`, ['.topbar', '.desktop-destinations', 'fimra-monitor-filters']);
       await page.screenshot({ path: join(SHOTS, `shell-${size}-${theme}.png`) });
       if (size === 'phone') {
         const account = page.locator('.account-trigger');
@@ -144,7 +145,7 @@ try {
   await page.setViewportSize(desktop);
   await expect(page.locator('#detection-picker')).toBeEnabled();
   await page.locator('#detection-picker').press('Space');
-  await page.getByRole('option').first().click();
+  await page.getByRole('option', { name: /· #\d+$/ }).first().click();
   await expect(page).toHaveURL(/detection=/);
   await expect(page.locator('.detail-card')).toBeVisible();
   await page.reload();
@@ -165,12 +166,27 @@ try {
   await drawer.getByRole('link', { name: 'Alerts', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Alerts' })).toBeFocused();
   await page.getByRole('button', { name: 'Filters', exact: true }).click();
-  await page.locator('#hours').evaluate(input => {
-    input.value = '144';
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  const filters = page.getByRole('dialog', { name: 'Filters' });
+  await filters.getByRole('combobox', { name: 'Period' }).selectOption('custom');
+  await filters.getByRole('spinbutton', { name: 'Hours back from now' }).fill('144');
+  await filters.getByRole('button', { name: 'Apply period' }).click();
   await expect(page).toHaveURL(/hours=144/);
-  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  const unit = filters.getByRole('button', { name: 'Unit All assigned units' });
+  await unit.press('Enter');
+  const search = filters.getByRole('searchbox', { name: 'Search units' });
+  await expect(search).toBeFocused();
+  await search.fill('Hill Division');
+  await expect(filters.getByText('1 unit found.')).toHaveAttribute('role', 'status');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(filters.getByRole('button', { name: 'Hill Division (Division)' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/unitPath=ds\.c1\.d1/);
+  await expect(filters.getByRole('button', { name: 'Unit Hill Division (Division)' })).toBeFocused();
+  await filters.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByRole('button', { name: 'Filters', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Remove filter Hill Division (Division)' }).click();
+  await expect(page).not.toHaveURL(/unitPath=/);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page).toHaveURL(/cursor=/);
   await expect(page.getByText('Page 2', { exact: true })).toBeVisible();

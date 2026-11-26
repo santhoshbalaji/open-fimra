@@ -112,7 +112,7 @@ try {
       await expect(key.getByText('Reported incident', { exact: true })).toBeVisible();
 
       await picker.press('Space');
-      await expect(page.getByRole('option').first()).toBeVisible();
+      await expect(page.getByRole('option', { name: /· #\d+$/ }).first()).toBeVisible();
       await page.keyboard.press('Home');
       await page.keyboard.press('Enter');
       await expect(detail.getByRole('heading', { name: 'Detected observation' })).toBeVisible();

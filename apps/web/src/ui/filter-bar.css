@@ -1,4 +1,4 @@
-.chip {
+.filter-bar-chip {
   display: flex;
   align-items: center;
   gap: calc(var(--spacing) * 2);
@@ -9,8 +9,73 @@
   border: 1px solid var(--filter-chip-border);
   border-radius: var(--filter-chip-radius);
 }
-.chip:hover { background: var(--filter-chip-selected); }
-.chip:focus-visible {
+.filter-bar-chip:hover { background: var(--filter-chip-selected); }
+.filter-bar-chip:focus-visible {
   outline: var(--focus-width) solid var(--role-focus);
   outline-offset: var(--focus-offset);
+}
+
+.filter-bar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  min-width: 0;
+  max-width: 100%;
+}
+.filter-bar-controls .scope-filter-field {
+  width: min(12rem, 100%);
+  min-width: 0;
+  gap: calc(var(--spacing) * 1);
+}
+.scope-filter-field [data-slot="field-label"], .scope-filter-label, .scope-filter-toggle {
+  font-size: var(--text-label);
+  line-height: 1.25rem;
+}
+.scope-filter-field [data-slot="field-label"] { min-height: 0; }
+.scope-filter-field [data-slot="select-trigger"] {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  white-space: normal;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.filter-bar-controls .scope-filter-toggle {
+  width: auto;
+  min-height: 2.25rem;
+  margin-block-start: 1.5rem;
+  align-items: center;
+}
+.unit-filter-field { position: relative; }
+.unit-filter-options {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  min-width: min(17rem, 100vw);
+  display: grid;
+  gap: calc(var(--spacing) * 2);
+}
+.unit-filter-results {
+  display: grid;
+  max-height: min(17rem, 35dvh);
+  overflow: auto;
+}
+.unit-filter-results button {
+  height: auto;
+  min-height: 2.25rem;
+  justify-content: flex-start;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.unit-filter-results button[aria-current="true"] { font-weight: 700; }
+
+.filter-sheet-controls { display: grid; }
+.filter-sheet-controls .scope-filter-field { width: 100%; }
+.filter-sheet-controls .scope-filter-toggle { margin-block-start: 0; }
+.filter-sheet-controls .unit-filter-options { position: static; min-width: 0; }
+@media (any-pointer: coarse) {
+  .filter-sheet-controls :is(input, select, button) { min-height: var(--target-web); }
 }

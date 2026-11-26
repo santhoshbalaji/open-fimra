@@ -30,7 +30,7 @@ describe('Control-room dashboard', () => {
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting(), AlertQueue,
         { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test' } },
         { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }),
-          jurisdictions: signal([['ds.c1', 'Demo Circle']]), deny: vi.fn() } },
+          jurisdictions: signal([['ds.c1', 'Demo Circle']]), allowsScope: () => true, deny: vi.fn() } },
         { provide: AuthService, useValue: { sessionEnded: vi.fn() } }]
     });
   });
@@ -48,7 +48,11 @@ describe('Control-room dashboard', () => {
     const page = fixture.nativeElement as HTMLElement;
     expect(page.textContent).toContain('Loading dashboard');
     vi.advanceTimersByTime(0);
-    TestBed.inject(HttpTestingController).expectOne(r => r.url.endsWith('/summary')).flush(response);
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne(r => r.url.endsWith('/situation-report/units')).flush({
+      units: [{ path: 'ds.c1', name: 'Demo Circle', levelLabel: 'Circle' }]
+    });
+    http.expectOne(r => r.url.endsWith('/summary')).flush(response);
     fixture.detectChanges();
     return { fixture, page };
   }
@@ -61,12 +65,12 @@ describe('Control-room dashboard', () => {
     const { page } = open();
 
     const header = page.querySelector('fimra-page-header');
-    expect(header?.textContent).toContain('Demo State · Demo Circle · Units under ds.c1 · Inside forest · Past 72 hours');
+    expect(header?.textContent).toContain('Demo State · Demo Circle (Circle) · Inside forest · Last 3 days');
     expect(header?.textContent).toContain('Last successful update');
     expect(header?.querySelector('time')?.getAttribute('datetime')).toBe('2026-11-26T12:00:00.000Z');
     const [today, active] = page.querySelectorAll('fimra-stat-tile');
     expect(today.textContent).toContain('Since midnight, India Standard Time');
-    expect(active.textContent).toContain('Past 72 hours');
+    expect(active.textContent).toContain('Last 3 days');
     expect(active.querySelector('time')?.textContent).toContain('IST');
   });
 

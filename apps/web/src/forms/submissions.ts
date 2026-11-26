@@ -7,8 +7,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { AuthService } from '../auth';
-import { DashboardFilters, defaultDashboardHours } from '../dashboard-filters';
-import { classes } from '../detections';
+import { DashboardFilters, ScopeFilters } from '../dashboard-filters';
 import { FilterFields } from '../filter-fields';
 import { ShellNavigation } from '../shell-navigation';
 import { DataTable, type TableColumn, type TablePage, type TablePosition } from '../ui/data-table';
@@ -28,6 +27,7 @@ export type DecisionFilter = Decision | '';
 export interface ReportFilters { form: string; decision: DecisionFilter; formLabel: string }
 
 const statuses = { pending: 'Submitted', approved: 'Approved', returned: 'Returned' };
+const filterStatuses = { ...statuses, pending: 'Awaiting review' };
 const firstPage: TablePosition = { cursor: null, previousCursors: [], sort: { columnId: 'received', direction: 'descending' } };
 const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, position: firstPage };
 
@@ -46,18 +46,18 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
       <fimra-filter-bar [filters]="activeFilters()" (remove)="removeFilter($event)" (clearAll)="clearFilters()">
         <ng-template fimraFilterControls>
           <fimra-filter-fields [forReports]="true" />
-          <hlm-field class="report-form-filter"><label hlmFieldLabel for="report-decision">Report status</label>
+          <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-decision">Report status</label>
             <hlm-select [value]="decision() || 'all'" (valueChange)="setFilter('decision', $event)">
-              <hlm-select-trigger buttonId="report-decision">{{ decision() ? statuses[decision() || 'pending'] : 'All statuses' }}</hlm-select-trigger>
+              <hlm-select-trigger buttonId="report-decision">{{ decision() ? filterStatuses[decision() || 'pending'] : 'All statuses' }}</hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
                 <hlm-select-item value="all">All statuses</hlm-select-item>
-                <hlm-select-item value="pending">Submitted</hlm-select-item>
+                <hlm-select-item value="pending">{{ filterStatuses.pending }}</hlm-select-item>
                 <hlm-select-item value="returned">Returned</hlm-select-item>
                 <hlm-select-item value="approved">Approved</hlm-select-item>
               </hlm-select-content>
             </hlm-select>
           </hlm-field>
-          <hlm-field class="report-form-filter"><label hlmFieldLabel for="report-form">Form</label>
+          <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-form">Form</label>
             <hlm-select [value]="form() || 'all'" (valueChange)="setFilter('form', $event === 'all' ? null : $event)">
               <hlm-select-trigger buttonId="report-form">{{ formLabel() }}</hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
@@ -93,7 +93,7 @@ export class Submissions {
   readonly endpoint = input.required<string>();
   readonly now = input.required<number>();
   readonly filtersChanged = output<ReportFilters>();
-  protected readonly statuses = statuses;
+  protected readonly filterStatuses = filterStatuses;
   protected readonly page = signal<TablePage<SubmissionRow>>(emptyPage);
   protected readonly state = signal<DataState>({ kind: 'loading', heading: 'Loading field reports' });
   protected readonly forms = signal<WorkspaceForm[]>([]);
@@ -108,6 +108,7 @@ export class Submissions {
   protected readonly phoneCards = toSignal(
     inject(BreakpointObserver).observe(workspacePhone).pipe(map(result => result.matches)), { requireSync: true });
   private readonly filters = inject(DashboardFilters);
+  private readonly scopeFilters = inject(ScopeFilters);
   private trigger: HTMLElement | null = null;
   protected readonly decision = computed<DecisionFilter>(() => {
     const value = this.navigation.query().get('decision');
@@ -123,15 +124,9 @@ export class Submissions {
     new Set(this.navigation.query().get('reportColumns')?.split(',') ?? []));
   protected readonly activeFilters = computed(() => {
     const filters = [];
-    if (this.decision()) filters.push({ id: 'decision', label: statuses[this.decision() || 'pending'] });
+    if (this.decision()) filters.push({ id: 'decision', label: filterStatuses[this.decision() || 'pending'] });
     if (this.form()) filters.push({ id: 'form', label: this.formLabel() });
-    const hours = this.filters.hours();
-    if (hours !== defaultDashboardHours) filters.push({ id: 'hours', label: `Past ${hours} ${hours === 1 ? 'hour' : 'hours'}` });
-    const forest = this.filters.forestClass();
-    if (forest) filters.push({ id: 'class', label: classes[forest] });
-    const scope = this.filters.unitPath();
-    if (scope) filters.push({ id: 'unitPath', label: this.workspace.jurisdictions().find(([path]) => path === scope)?.[1] ?? scope });
-    return filters;
+    return [...filters, ...this.scopeFilters.active()];
   });
   private readonly cursor = computed(() => this.navigation.query().get('cursor'));
   private readonly previous = computed(() => this.navigation.query().get('reportPages'));

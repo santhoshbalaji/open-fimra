@@ -39,7 +39,7 @@ try {
     const tables = dashboard.locator('table');
     const total = tables.locator('tfoot td').first();
     await expect(active).toBeVisible();
-    await expect(dashboard.locator('fimra-page-header')).toContainText('Units under ds.c1 · Inside forest · Past 144 hours');
+    await expect(dashboard.locator('fimra-page-header')).toContainText(/\(Circle\) · Inside forest · Last 6 days/);
     await expect(dashboard.locator('fimra-page-header time')).toContainText('IST');
     for (const theme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme: theme });
@@ -54,7 +54,7 @@ try {
       if (size === 'phone') {
         await dashboard.getByRole('button', { name: 'Filters', exact: true }).click();
         const sheet = page.getByRole('dialog', { name: 'Filters' });
-        await expect(sheet.getByRole('textbox', { name: 'Unit path' })).toBeVisible();
+        await expect(sheet.getByRole('button', { name: /^Unit / })).toBeVisible();
         await check(page, 'filters-' + size + '-' + theme);
         await sheet.getByRole('button', { name: 'Done' }).click();
         await expect(dashboard.getByRole('button', { name: 'Filters', exact: true })).toBeFocused();

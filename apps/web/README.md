@@ -4,7 +4,7 @@ Sign in with your department account to open your first assigned workspace. The 
 
 **Monitor** contains **Map**, **Alerts** and **Incidents**. **Reports** contains **Field reports** and **Situation report**. The shell also links to **Dashboard** and the **Settings** screens your role can use. On a phone, open **Menu** to switch destinations. Use **Search** or Ctrl+K (Command+K on a Mac) to find a destination by name. Links keep the selected workspace and filters. Refresh keeps the current view, and Back restores the previous view and its list position.
 
-The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. **Layers and legend** lets you show and hide map layers. The small key stays on the map and the full legend follows the layers and zoom.
+The map starts with the past seven days and refreshes every minute. Choose a period such as the last three days, or set a custom window from one to 720 hours. Narrow the view by forest class or search for a unit by name or level. On a phone, open **Filters** first. All classes are selected at first. **Layers and legend** lets you show and hide map layers. The small key stays on the map and the full legend follows the layers and zoom.
 
 Click a point or use the **Detections in view** menu to select it in both views. The detail panel shows the observation, any alert you may see and its linked incident. Times use your local time zone. Press Escape to close the details and return to where you opened them. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit workspace to map** to return to the workspace boundary.
 
@@ -17,7 +17,7 @@ The chart has a matching data table. **Low bandwidth** keeps the numbers, table 
 
 ## Incidents
 
-Choose **Monitor → Incidents** to see alerts grouped into fires close together in place and time. The list uses the same time window, forest class and unit path. Each row shows how many alerts you can see, their places, when the fire was last seen and the incident's own step. Open an incident to read its timeline and record a step. Choose **Show incident on map** to see its alerts on the map. A step on the incident also moves each member alert that you could move the same way. Choose a member alert to open its own details. A merged incident links to the incident that now holds its alerts. The incident screen loads only when you open it, so it adds nothing to the first download.
+Choose **Monitor → Incidents** to see alerts grouped into fires close together in place and time. The list uses the same time window, forest class and unit. Each row shows how many alerts you can see, their places, when the fire was last seen and the incident's own step. Open an incident to read its timeline and record a step. Choose **Show incident on map** to see its alerts on the map. A step on the incident also moves each member alert that you could move the same way. Choose a member alert to open its own details. A merged incident links to the incident that now holds its alerts. The incident screen loads only when you open it, so it adds nothing to the first download.
 
 ## Forms
 
@@ -36,13 +36,13 @@ The designer and its validator load only when you open **Form templates**, so th
 
 When a workflow step has a report form, the alert's details list it under **Reports**. Choose **Fill in** once the alert has reached the step. The form opens in a dialog, a page at a time, in the language you choose when the form has translations. Questions appear and disappear with their conditions, cascading lists offer only the choices that go with the earlier answer, and calculated values and values from the alert fill in by themselves. Add or remove entries of a repeating group, such as teams. Type a position as longitude and latitude or add your own position; tracks and areas take one position per line. Photos and files upload to the alert as you add them, and a signature is drawn in the box and saved. **Send report** checks the answers with the server's rules first and lists what needs fixing beside each question. The server's own problems show the same way. A form filled in over several steps shows the earlier answers read-only.
 
-Choose **Reports → Field reports** to list field reports with the shared time window, forest class and unit path. The tabs show reports waiting for a decision, approved, returned or all, and you can pick one form. Open a report to read it with the form version it was filled in on. A supervising officer on the alert, a division officer at division level or above or a state administrator, can **Approve** it or **Return with a note**. A returned report no longer counts, so the alert waits for a new one. Decisions never change. **Export** beside the list exports the same reports; with one form chosen, the file has a column for each answer.
+Choose **Reports → Field reports** to list field reports with the shared time window, forest class and unit. Choose **Awaiting review**, **Approved**, **Returned** or **All statuses** under **Report status**. You can also pick one form. Open a report to read it with the form version it was filled in on. A supervising officer on the alert, a division officer at division level or above or a state administrator, can **Approve** it or **Return with a note**. A returned report no longer counts, so the alert waits for a new one. Decisions never change. **Export** beside the list exports the same reports; with one form chosen, the file has a column for each answer.
 
 The report screens load only when you open them, so they add nothing to the first download.
 
 ## Exports
 
-Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit path, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.
+Choose **Export** beside the alert queue title to save what you can see as a file. Choose alerts or the detections on the map, then a format. GeoPackage is recommended for QGIS. The export uses the shared time window, forest class and unit, and for alerts the queue you have open or all queues you can see. The dialog shows progress and then a download button. Only you can download the file, until it expires. Press Escape or **Close** to return to the **Export** button.
 
 ## Situation reports
 

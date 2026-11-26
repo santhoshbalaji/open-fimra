@@ -58,7 +58,7 @@ label[data-slot]:has(input), [data-slot=field-label] { min-height: var(--target-
 
 /* Coarse input can be available alongside a mouse. Keep touch targets in either density. */
 @media (any-pointer: coarse) {
-  :root, [data-density] { --target-web: var(--spacing-target-web); }
+  :root, [data-density] { --target-web: var(--target-mobile); }
 }
 [data-slot=table-cell], time { font-variant-numeric: tabular-nums; }
 

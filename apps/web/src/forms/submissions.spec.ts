@@ -7,6 +7,7 @@ import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../auth';
 import { DashboardFilters } from '../dashboard-filters';
+import { WEB_CONFIG } from '../config';
 import { stubLayoutApis } from '../overlay-testing';
 import { ShellNavigation } from '../shell-navigation';
 import { WorkspaceService } from '../workspace';
@@ -40,7 +41,12 @@ describe('Field reports queue', () => {
       provideSpartanHlm(), provideHttpClient(), provideHttpClientTesting(),
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } },
       { provide: ShellNavigation, useValue: { query, update: setParams } },
-      { provide: WorkspaceService, useValue: { jurisdictions: () => [['ds.c1.d1', 'Demo Division']] } }
+      { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test' } },
+      { provide: WorkspaceService, useValue: {
+        current: signal({ slug: 'demo', name: 'Demo State' }),
+        jurisdictions: () => [['ds.c1.d1', 'Demo Division']],
+        allowsScope: () => true
+      } }
     ] });
     http = TestBed.inject(HttpTestingController);
   });
@@ -52,6 +58,9 @@ describe('Field reports queue', () => {
     fixture.componentRef.setInput('now', 1);
     fixture.detectChanges();
     http.expectOne(endpoint + '/forms').flush([]);
+    http.expectOne(endpoint + '/situation-report/units').flush({
+      units: [{ path: 'ds.c1.d1', name: 'Demo Division', levelLabel: 'Division' }]
+    });
     const element = fixture.nativeElement as HTMLElement;
     const button = (label: string) => Array.from(element.querySelectorAll('button')).find(btn => btn.textContent.trim().startsWith(label))!;
     return { fixture, element, button };
@@ -105,6 +114,7 @@ describe('Field reports queue', () => {
 
   it('offers Retry after a failed request and describes an empty result', () => {
     const { fixture, element, button } = render();
+    expect(element.querySelector('[aria-label="Active filters"]')?.textContent).toContain('Awaiting review');
     request().flush({}, { status: 500, statusText: 'Error' });
     fixture.detectChanges();
     expect(element.textContent).toContain('Field reports could not load');

@@ -7,7 +7,7 @@ import { AuthService } from './auth';
 import { Bootstrap } from './bootstrap';
 import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
 import { ExportTray } from './export-dialog-tray';
-import { FilterFields } from './filter-fields';
+import { MonitorFilters } from './filter-fields';
 import { Notifications, type NotificationLink } from './notifications';
 import { ShellNavigation, homePath } from './shell-navigation';
 import { ShellAccount } from './shell-account';
@@ -22,7 +22,7 @@ import { classes, type ForestClass } from './detections';
 
 @Component({
   selector: 'fimra-root',
-  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, FilterFields, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray],
+  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray],
   providers: [ShellNavigation],
   templateUrl: './app.html',
   host: { '(window:keydown)': 'shortcut($event)' }
@@ -38,7 +38,6 @@ export class App implements OnInit {
   private readonly filters = inject(DashboardFilters);
   private readonly authOpened = signal(false);
   private routed = false;
-  readonly filtersOpen = signal(false);
   readonly drawerRequest = signal<{ trigger: HTMLElement } | null>(null);
   readonly paletteOpen = signal(false);
   readonly routeAnnouncement = signal('');
@@ -52,7 +51,8 @@ export class App implements OnInit {
   readonly scope = computed(() => {
     const unit = this.navigation.query().get('unitPath');
     const jurisdictions = this.workspace.jurisdictions();
-    if (unit) return jurisdictions.find(([path]) => path === unit)?.[1] || unit;
+    const selected = jurisdictions.find(([path]) => path === unit);
+    if (selected) return selected[1];
     const [first] = jurisdictions;
     if (jurisdictions.length === 1 && first && !first[0].includes('.') && first[1] === this.workspace.current()?.name) {
       return 'All units';
@@ -89,10 +89,6 @@ export class App implements OnInit {
       const forest = query.get('class');
       this.filters.forestClass.set(forest && Object.hasOwn(classes, forest) ? forest as ForestClass : '');
       this.filters.unitPath.set(query.get('unitPath') ?? '');
-    });
-    effect(() => {
-      this.navigation.path();
-      this.filtersOpen.set(false);
     });
   }
 

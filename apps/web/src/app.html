@@ -95,11 +95,8 @@
             <ng-container pageFreshness [ngTemplateOutlet]="freshness" />
           }
           @if (showFilters()) {
-            <div pageSecondary class="workspace-controls" [class.filters-open]="filtersOpen()">
-              <button data-variant="outline" class="shell-button filter-toggle" [attr.aria-expanded]="filtersOpen()"
-                      aria-controls="map-filters" (click)="filtersOpen.set(!filtersOpen())">Filters</button>
-              @defer (on immediate) { <fimra-filter-fields /> }
-              @placeholder { <div id="map-filters"></div> }
+            <div pageSecondary class="min-w-0">
+              @defer (on immediate) { <fimra-monitor-filters /> }
             </div>
           }
           @if (headerSlots()?.pageSecondary?.(); as secondary) {

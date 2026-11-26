@@ -1,5 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component, signal, viewChild, type TemplateRef } from '@angular/core';
 import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
@@ -23,11 +23,13 @@ class Screen {
 
 describe('App shell', () => {
   function open(hasWorkspace = true) {
-    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }));
     const workspace = {
       current: signal(hasWorkspace ? {slug: 'demo', name: 'Demo'} : null),
       loaded: signal(true), failed: signal(false), canManageLayers: signal(false), canDesignForms: signal(false),
-      workspaces: signal([]), jurisdictions: signal([['ds.c1.d1', 'Demo division']]), bootstrapAvailable: signal(false)
+      workspaces: signal([]), jurisdictions: signal([['ds.c1.d1', 'Demo division']]),
+      allowsScope: (path: string) => path === 'ds.c1.d1' || path.startsWith('ds.c1.d1.'),
+      bootstrapAvailable: signal(false)
     };
     const auth = {
       user: signal({profile: {name: 'Demo Officer', email: 'officer@example.invalid'}}),
@@ -79,6 +81,31 @@ describe('App shell', () => {
     fixture.detectChanges();
     expect(toggle.getAttribute('aria-checked')).toBe('false');
     expect(localStorage.getItem('fimra.lowBandwidth')).toBe('false');
+  });
+
+  it('resolves a legacy scope and offers only units that can be selected', async () => {
+    const {fixture, page} = open();
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/monitor/map?workspace=demo&hours=53&unitPath=ds.c1.d1.r1');
+    fixture.detectChanges();
+    for (const block of await fixture.getDeferBlocks()) await block.render(DeferBlockState.Complete);
+    TestBed.inject(HttpTestingController).expectOne(request => request.url.endsWith('/situation-report/units')).flush({
+      units: [
+        { path: 'ds.c1.d1.r1', name: 'Demo Range', levelLabel: 'Range' },
+        { path: 'ds.c2.d1', name: 'Other Division', levelLabel: 'Division' }
+      ]
+    });
+    fixture.detectChanges();
+
+    expect(page.querySelector<HTMLSelectElement>('#filter-period')?.value).toBe('custom');
+    expect(page.querySelector<HTMLInputElement>('#filter-hours')?.value).toBe('53');
+    const unit = page.querySelector<HTMLButtonElement>('.unit-filter-field button')!;
+    expect(unit.textContent.trim()).toBe('Demo Range (Range)');
+    unit.click();
+    fixture.detectChanges();
+    expect(page.querySelector('.unit-filter-results')?.textContent).toContain('Demo Range (Range)');
+    expect(page.querySelector('.unit-filter-results')?.textContent).not.toContain('Other Division');
+    expect(router.url).toContain('hours=53&unitPath=ds.c1.d1.r1');
   });
 
   it('explains restricted access and offers an account switch', () => {
