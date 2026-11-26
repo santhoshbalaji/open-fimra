@@ -3,11 +3,7 @@ import '../api/models.dart';
 
 /// The app's single way to read and change field data.
 ///
-/// Screens talk to this interface, never to the API client. Today the only
-/// implementation calls the API online. Offline storage and sync (slice 26)
-/// add an implementation that keeps assigned alerts on the phone and queues
-/// steps, without changing the screens. Every step carries a client ID, so a
-/// queued step can be sent again safely.
+/// The phone implementation can read a saved copy of the workspace.
 abstract interface class AlertRepository {
   Future<Profile> profile();
   Future<WorkspaceMap> workspace(String slug);

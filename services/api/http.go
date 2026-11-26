@@ -87,6 +87,8 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	authed.Get("/api/v1/workspaces/{slug}/alerts/{id}/submissions", a.submissions)
 	authed.Post("/api/v1/workspaces/{slug}/alerts/{id}/submissions", a.submissions)
 	authed.Put("/api/v1/workspaces/{slug}/alerts/{id}/attachments/{attachment}", a.uploadAttachment)
+	authed.Get("/api/v1/workspaces/{slug}/alerts/{id}/attachments/{attachment}", a.attachmentReceipt)
+	authed.Get("/api/v1/workspaces/{slug}/offline-reference", a.offlineReference)
 	authed.Get("/api/v1/workspaces/{slug}/attachments/{attachment}", a.downloadAttachment)
 	authed.Get("/api/v1/workspaces/{slug}/submissions", a.submissionList)
 	authed.Get("/api/v1/workspaces/{slug}/submissions/{submission}", a.submission)

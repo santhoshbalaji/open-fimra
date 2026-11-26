@@ -102,3 +102,21 @@ func (a api) referenceTile(w http.ResponseWriter, r *http.Request) {
 		a.logger.Warn("Could not send reference tile", "error", err)
 	}
 }
+
+// offlineReference returns simplified features within the caller's current grants.
+func (a api) offlineReference(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	var result json.RawMessage
+	err := a.reader.QueryRow(ctx, offlineReferenceSQL,
+		r.Context().Value(identityKey{}).(identity).Subject, chi.URLParam(r, "slug")).Scan(&result)
+	if err != nil {
+		a.referenceError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(w, http.StatusOK, result)
+}
+
+//go:embed offline_reference.sql
+var offlineReferenceSQL string

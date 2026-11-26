@@ -9,6 +9,7 @@ import 'alert_detail.dart';
 import 'alert_list.dart';
 import 'alert_map.dart';
 import 'devices.dart';
+import 'outbox_screen.dart';
 import 'widgets.dart';
 
 /// Builds the map tab. Widget tests pass a stand-in.
@@ -34,7 +35,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Profile? _profile;
   WorkspaceView? _view;
   String? _problem;
@@ -46,14 +47,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.services.devices?.openRequest.addListener(_openRequested);
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.services.devices?.openRequest.removeListener(_openRequested);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(widget.services.offline?.sync());
+    }
   }
 
   /// Opens the alert of a tapped notification. The push message held only
@@ -106,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
             : WorkspaceView(services: widget.services, profile: profile, workspace: workspace, map: map);
         _loading = false;
       });
+      if (workspace != null) widget.services.offline?.activate(workspace.slug);
       // A notification tapped while the app was starting opens now.
       unawaited(_openRequested());
     } on DeviceActionException {
@@ -133,6 +144,29 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (changed == true) await _listKey.currentState?.reload();
+  }
+
+  Future<void> _signOut() async {
+    final repo = widget.services.offline;
+    if (repo != null) {
+      final reports = await repo.reportStatus();
+      if (!mounted) return;
+      if (reports.any((row) => row['received_at'] == null)) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Sign out and clear the outbox?'),
+            content: const Text('Signing out deletes reports that are still waiting to send.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
+            ],
+          ),
+        );
+        if (!mounted || confirmed != true) return;
+      }
+    }
+    await widget.services.signOut();
   }
 
   void _openDevices() {
@@ -197,7 +231,11 @@ class _HomeScreenState extends State<HomeScreen> {
             onSelected: (value) {
               if (value == 'workspace') _chooseWorkspace();
               if (value == 'devices') _openDevices();
-              if (value == 'sign-out') widget.services.signOut();
+              final repo = widget.services.offline;
+              if (value == 'outbox' && repo != null) {
+                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: repo)));
+              }
+              if (value == 'sign-out') unawaited(_signOut());
             },
             itemBuilder: (context) => [
               PopupMenuItem(
@@ -207,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (multiple) const PopupMenuItem(value: 'workspace', child: Text('Change workspace')),
               if (widget.services.devices != null)
                 const PopupMenuItem(value: 'devices', child: Text('Notifications and phones')),
+              if (widget.services.offline != null) const PopupMenuItem(value: 'outbox', child: Text('Report outbox')),
               const PopupMenuItem(value: 'sign-out', child: Text('Sign out')),
             ],
           ),

@@ -2,8 +2,6 @@
 
 The Flutter app for forest staff in the field, Android first. Staff sign in with their department account, see the fire alerts for their own area as a list and on a map, open an alert and record workflow steps such as **Acknowledged**.
 
-This first version works online. Keeping alerts, forms and maps on the phone, and sending reports when a signal returns, is the next stage (slice 26 in [PLAN.md](../../PLAN.md#15-next-steps)). Screens already read and write through one repository layer (`lib/src/data/alert_repository.dart`), so offline storage can be added behind it without changing them.
-
 ## What it does
 
 - **Sign-in.** The app opens the department's sign-in page in a browser tab and uses the authorisation code flow with a one-time proof key (PKCE). The app never sees the password and has no client secret. It keeps the tokens in the Android Keystore and renews them before they expire. **Sign out** ends the session on the sign-in server too.
@@ -15,6 +13,14 @@ This first version works online. Keeping alerts, forms and maps on the phone, an
 - **Alert details and steps.** An alert shows where and when it was seen, its source and its timeline. The buttons offer only the steps the user's role allows next. Field steps such as **Reached site** save the phone's location, which must be near the fire. Supervising officers can record a reason instead. Each step carries a client ID, so pressing **Save** again after a lost answer records it once.
 
 The interface uses the shared [design tokens](../../docs/design-system/tokens.json) in a light and a dark theme that follow the phone's setting, the Inter font bundled with the app, the [project logo](../../docs/design-system/logo) and touch targets of at least 48 pixels.
+
+## Reports without a signal
+
+Open a workspace with a connection and check **Last synced** on the alert list. The phone keeps the alerts visible to your account from the past seven days, their timelines, assigned form versions and a simplified map of your area. You can open a saved alert, see its location on the map and fill in its form without a connection. Photos can come from the camera or gallery. Location questions can use the phone's GPS, and area questions can use the map. In a staged form, answers from earlier stages are read-only.
+
+**Save to outbox** keeps the completed report and its files on the phone. Open **Report outbox** to see reports waiting to send or the reason a report could not send. The app retries temporary failures while it is open, and **Sync now** checks for a connection immediately. It sends each file separately and then sends the report. The server checks any queued workflow step and returns the result. The saved timeline updates when the phone reads it from the server.
+
+The Android app keeps field data in its private SQLite database. The browser test build uses the online alert screens. SQLite uses the BSD-licensed `sqflite` Flutter plugin, and tests use `sqflite_common_ffi` to exercise the same database on Linux. The Flutter team's BSD-licensed `image_picker` and `file_selector` plugins provide camera, gallery and file access. The Flutter team’s BSD-licensed `path_provider` plugin locates the private cache so temporary photo copies can be deleted.
 
 ## Notifications
 
@@ -44,13 +50,15 @@ What a wipe deletes, in order:
 | --- | --- |
 | Alert notifications shown on the phone | The Android notification shade |
 | The push registration with the push app | The push app, which forgets the phone's address |
-| Map areas saved for offline use | MapLibre's offline store (none yet; slice 26 adds offline maps) |
+| Map areas saved by MapLibre | MapLibre's offline store |
+| Saved alerts, maps, forms and queued reports with their files | The app's private SQLite database |
+| Temporary photo copies | The app's private cache |
 | The phone's registration ID | The Android Keystore |
 | Sign-in tokens | The Android Keystore |
 
-The list lives in one place, `fieldDataOnPhone` in `lib/src/device/local_data.dart`. Anything new the app keeps on the phone, such as the offline alerts, forms and queued reports of slice 26, must be added there.
+The list lives in one place, `fieldDataOnPhone` in `lib/src/device/local_data.dart`. Add new kinds of field data to that list.
 
-A wipe keeps the server settings, which are not personal data, so the user can sign in again. This version of the app does not save alerts on the phone: it reads them from the API each time, and the API marks its answers and map tiles `no-store` so they are not kept. The sign-in page's cookies belong to the phone's browser; ending the session on the sign-in server makes them useless.
+A wipe keeps the server settings, which are not personal data, so the user can sign in again. Signing out removes saved workspace data and the outbox from this phone. The sign-in page's cookies belong to the phone's browser; ending the session on the sign-in server makes them useless.
 
 A phone that was removed from the account (`device_revoked`) signs out without the wipe list. Signing out tells the API, stops push and forgets the registration ID. The next sign-in makes a new registration.
 

@@ -1,11 +1,19 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../auth/pkce.dart';
+import '../data/field_store.dart';
+import '../device/device_store.dart';
+import '../forms/report_form.dart';
 import '../theme/app_theme.dart';
+import 'alert_map.dart';
 import 'home.dart';
+import 'outbox_screen.dart';
 import 'widgets.dart';
 
 /// A point from the phone's location service.
@@ -13,6 +21,14 @@ typedef Locate = Future<({double latitude, double longitude})> Function();
 
 /// Asks for permission and reads the current position.
 Future<({double latitude, double longitude})> deviceLocation() async {
+  await ensureLocationPermission();
+  final position = await Geolocator.getCurrentPosition(
+    locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 30)),
+  );
+  return (latitude: position.latitude, longitude: position.longitude);
+}
+
+Future<void> ensureLocationPermission() async {
   if (!await Geolocator.isLocationServiceEnabled()) {
     throw const LocationProblem('Location is switched off. Switch it on and try again.');
   }
@@ -21,10 +37,6 @@ Future<({double latitude, double longitude})> deviceLocation() async {
   if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
     throw const LocationProblem('The app needs your location for this step. Allow location access and try again.');
   }
-  final position = await Geolocator.getCurrentPosition(
-    locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 30)),
-  );
-  return (latitude: position.latitude, longitude: position.longitude);
 }
 
 class LocationProblem implements Exception {
@@ -48,17 +60,208 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
   AlertHistory? _history;
   String? _problem;
   bool _changed = false;
+  Json? _reportData;
+  String? _reportsProblem;
+  DateTime? _lastSynced;
 
   String get _slug => widget.view.workspace.slug;
 
   @override
   void initState() {
     super.initState();
+    final repo = widget.view.services.offline;
+    _lastSynced = repo?.lastSynced;
+    repo?.changes.addListener(_syncChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    widget.view.services.offline?.changes.removeListener(_syncChanged);
+    super.dispose();
+  }
+
+  void _syncChanged() {
+    final stamp = widget.view.services.offline?.lastSynced;
+    if (mounted && stamp != null && stamp != _lastSynced) {
+      _lastSynced = stamp;
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _loadReports() async {
+    final repo = widget.view.services.offline;
+    if (repo == null) return;
+    try {
+      final data = await repo.reportsForAlert(_slug, _alert.id);
+      if (mounted) {
+        setState(() {
+          _reportData = data;
+          _reportsProblem = null;
+        });
+      }
+    } on DeviceActionException {
+      return;
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          _reportData = null;
+          _reportsProblem = error.message;
+        });
+      }
+    }
+  }
+
+  Future<void> _fill(Json assignment, WorkflowMove? move) async {
+    final repo = widget.view.services.offline!;
+    final generation = repo.store.generation;
+    final definition = object(assignment['definition']);
+    final step = assignment['step'] as String;
+    final form = assignment['form'] as String;
+    final stages = objects(definition['stages']);
+    final stage = stages.indexWhere((row) => row['workflowStep'] == step);
+    final earlierSteps = stages.take(stage < 0 ? 0 : stage).map((row) => row['workflowStep']).toList();
+    final reports = objects(_reportData?['submissions']);
+    final initial = <String, dynamic>{};
+    for (final earlier in earlierSteps) {
+      final report = reports
+          .where(
+            (row) => row['form'] == form && row['step'] == earlier && object(row['approval'])['decision'] != 'returned',
+          )
+          .lastOrNull;
+      initial.addAll(object(report?['values']));
+    }
+    final reference = await repo.savedReference(_slug);
+    if (!mounted || repo.store.generation != generation) return;
+    final raised = _alert.raisedAt;
+    final title = assignment['title'] as String;
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ReportForm(
+          definition: definition,
+          step: step,
+          initial: initial,
+          attachments: object(_reportData?['attachments']),
+          reference: reference,
+          move: move,
+          locate: widget.locate,
+          alert: {
+            'alert-id': _alert.id,
+            'observed-at': _alert.observedAt.toUtc().toIso8601String(),
+            if (raised != null) 'raised-at': raised.toUtc().toIso8601String(),
+            'location': {
+              'type': 'Point',
+              'coordinates': [_alert.longitude, _alert.latitude],
+            },
+            if (_alert.unitPath != null) 'unit': _alert.placeName(widget.view.map),
+            'forest-class': _alert.forestClass,
+            'source': _alert.source,
+            'confidence': _alert.confidence,
+            'fire-power': _alert.frpMw,
+          },
+          save: (values, files, queuedStep) => repo.queueReport(
+            _slug,
+            _alert.id,
+            title,
+            {
+              'id': newDeviceId(),
+              'form': form,
+              'version': assignment['version'],
+              'step': step,
+              'deviceTime': DateTime.now().toUtc().toIso8601String(),
+              'location': ?queuedStep?.toJson()['location'],
+              'values': values,
+            },
+            files,
+            step: queuedStep,
+            generation: generation,
+          ),
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      _changed = true;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report saved to the outbox.')));
+    }
+  }
+
+  Widget _reports(AlertHistory? history) {
+    final repo = widget.view.services.offline!;
+    return ValueListenableBuilder(
+      valueListenable: repo.changes,
+      builder: (context, _, _) => FutureBuilder<List<Json>>(
+        future: repo.reportStatus(workspace: _slug, alert: _alert.id),
+        builder: (context, snapshot) {
+          final forms = objects(_reportData?['forms']);
+          final queue = (snapshot.data ?? []);
+          final submissions = objects(_reportData?['submissions']);
+          final problem = _reportsProblem;
+          if (forms.isEmpty && queue.isEmpty && submissions.isEmpty && problem == null) return const SizedBox.shrink();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              Text('Reports', style: Theme.of(context).textTheme.titleMedium),
+              if (problem != null) Text(problem),
+              for (final assignment in forms) ...[
+                Builder(
+                  builder: (context) {
+                    final step = assignment['step'] as String;
+                    final entry = history?.entries.where((entry) => entry.step == step).lastOrNull;
+                    final move = history?.moves.where((move) => move.step == step).firstOrNull;
+                    final saved = queue.where((row) {
+                      final body = jsonDecode(row['body'] as String) as Json;
+                      return body['form'] == assignment['form'] && body['step'] == step;
+                    }).lastOrNull;
+                    final sent = assignment['submitted'] == true || saved?['received_at'] != null;
+                    final label = entry?.label ?? move?.label ?? step.replaceAll('_', ' ');
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${assignment['title']}'),
+                      subtitle: Text(
+                        [
+                          label,
+                          if (sent)
+                            'Sent'
+                          else if (saved?['error'] != null)
+                            'Could not send. Open the outbox for details.'
+                          else if (saved != null)
+                            'Waiting to send',
+                        ].join(' · '),
+                      ),
+                      trailing: sent
+                          ? const Icon(Icons.cloud_done_outlined)
+                          : saved != null
+                          ? IconButton(
+                              tooltip: 'Report outbox',
+                              icon: const Icon(Icons.outbox_outlined),
+                              onPressed: () => Navigator.of(
+                                context,
+                              ).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: repo))),
+                            )
+                          : snapshot.hasData && (entry != null || move != null)
+                          ? OutlinedButton(
+                              onPressed: () => _fill(assignment, entry != null ? null : move),
+                              child: const Text('Fill in'),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+              ],
+              for (final report in submissions)
+                if (object(report['approval'])['decision'] case final String decision)
+                  Text('Report version ${report['version']} · ${decision == 'approved' ? 'Approved' : 'Returned'}'),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _load() async {
     final repo = widget.view.services.repository;
+    unawaited(_loadReports());
     try {
       final results = await Future.wait([repo.alert(_slug, _alert.id), repo.history(_slug, _alert.id)]);
       if (!mounted) return;
@@ -111,6 +314,24 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
               ),
               const SizedBox(height: 16),
               _Facts(alert: _alert, map: widget.view.map),
+              if (widget.view.services.offline != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(title: const Text('Alert map')),
+                          body: AlertMapView(view: widget.view, focus: _alert, onOpen: (_) {}),
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.map_outlined),
+                    label: const Text('View alert map'),
+                  ),
+                ),
+                _reports(history),
+              ],
               const SizedBox(height: 24),
               if (_problem != null)
                 MessageView(

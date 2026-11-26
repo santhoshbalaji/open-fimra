@@ -200,6 +200,7 @@ class Alert {
     required this.stepTime,
     required this.overdue,
     required this.observedAt,
+    this.raisedAt,
     required this.latitude,
     required this.longitude,
     required this.forestClass,
@@ -235,6 +236,7 @@ class Alert {
       observedAt:
           DateTime.tryParse(_string(json['observed_time'])) ??
           DateTime.fromMillisecondsSinceEpoch(((json['observed_at'] as num?) ?? 0).toInt() * 1000, isUtc: true),
+      raisedAt: DateTime.tryParse(_string(json['created_at'])),
       latitude: _double(json['latitude']) ?? 0,
       longitude: _double(json['longitude']) ?? 0,
       forestClass: _string(json['forest_class']),
@@ -257,6 +259,7 @@ class Alert {
   final DateTime? stepTime;
   final bool overdue;
   final DateTime observedAt;
+  final DateTime? raisedAt;
   final double latitude;
   final double longitude;
   final String forestClass;

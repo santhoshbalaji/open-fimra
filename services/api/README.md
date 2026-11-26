@@ -505,6 +505,8 @@ curl -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: image/jpeg" \
 
 The API accepts JPEG, PNG and WebP images, PDF, ZIP, plain text and CSV, up to `FIMRA_ATTACHMENT_MAX_MB` (25 MB by default). Images, PDF and ZIP files must look like the type they claim. The first upload gets 201, a retry of the same file gets 200, and another file with the same ID gets 409. `GET /api/v1/workspaces/{slug}/attachments/{id}` downloads a file as an attachment, never shown inline.
 
+After a dropped connection, the uploader can request `GET /api/v1/workspaces/{slug}/alerts/{id}/attachments/{attachment}`. It returns the stored file's name, type, size and SHA-256 hash. Only the original uploader can check the receipt while they still have access to the alert. The phone compares the receipt to its queued file before moving on. A report is accepted after all files it references are stored.
+
 Attachments are never overwritten. Each file is stored once under its SHA-256 hash, and its record cannot change. Uploads and downloads need the same access to the alert as its detail view, and both are recorded in the audit log. Photos are stored exactly as taken, including any location in their EXIF data. [PLAN.md section 6](../../PLAN.md#6-permissions-security-and-compliance) requires that location data is removed from photos before any public release, so a public view of attachments must strip it first.
 
 | Variable | Default |
@@ -516,6 +518,10 @@ Attachments are never overwritten. Each file is stored once under its SHA-256 ha
 | `FIMRA_S3_ACCESS_KEY`, `FIMRA_S3_SECRET_KEY` | For `s3`: the store's keys. Keep them in `.env`. |
 
 The project does not yet bundle an S3-compatible store; which one is an open question in [PLAN.md section 14](../../PLAN.md#14-facts-and-access-to-confirm). `make attachments-s3-test` checks the S3 path against a small S3-compatible server that runs for the test only.
+
+### Offline field maps
+
+`GET /api/v1/workspaces/{slug}/offline-reference` returns a GeoJSON feature collection of simplified unit outlines, forest areas and exclusions. It includes units under the caller's current grants and clips forest areas and exclusions to those grants. A caller needs a role in the workspace. The field app stores this collection with the alerts and forms it can open without a signal.
 
 ### Flat views
 

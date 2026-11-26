@@ -1,8 +1,6 @@
 /// Everything the field app keeps on the phone, and how a wipe deletes it.
 ///
-/// This is the one list. When the app keeps something new on the phone, such
-/// as the offline alerts, forms, map layers and queued reports of slice 26,
-/// add a step here so a wipe deletes it too. The steps are built in
+/// Add a step here when the app stores a new kind of field data. The steps are built in
 /// `AppServices.connect`; see the field app guide for the list in words.
 class LocalData {
   LocalData(this.steps);
@@ -39,12 +37,16 @@ LocalData fieldDataOnPhone({
   required Future<void> Function() notifications,
   required Future<void> Function() pushRegistration,
   required Future<void> Function() offlineMaps,
+  Future<void> Function()? offlineReports,
+  Future<void> Function()? mediaCache,
   required Future<void> Function() deviceId,
   required Future<void> Function() signInTokens,
 }) => LocalData([
   WipeStep('Alert notifications shown on the phone', notifications),
   WipeStep('The push registration with the push app', pushRegistration),
   WipeStep('Map areas saved for offline use', offlineMaps),
+  if (offlineReports != null) WipeStep('Saved alerts, maps, forms and queued reports', offlineReports),
+  if (mediaCache != null) WipeStep('Temporary photo copies', mediaCache),
   WipeStep("This phone's registration ID", deviceId),
   WipeStep('Sign-in tokens', signInTokens),
 ]);

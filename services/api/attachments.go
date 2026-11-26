@@ -195,6 +195,30 @@ FROM attachments WHERE id = $1`, attachmentID, subject); err != nil {
 	writeJSON(w, status, result)
 }
 
+// attachmentReceipt lets the uploader recover from losing the upload response
+// without sending the bytes again. The phone compares the receipt to its file.
+func (a api) attachmentReceipt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	alert, err := alertRoute(r)
+	id := chi.URLParam(r, "attachment")
+	if err != nil || !uuidPattern.MatchString(id) {
+		writeError(w, http.StatusBadRequest, "Provide a valid alert and attachment ID.")
+		return
+	}
+	var result json.RawMessage
+	err = a.reader.QueryRow(ctx, `SELECT `+attachmentJSON+`
+FROM attachments a WHERE a.id = $1 AND a.alert_id = $2
+AND EXISTS (SELECT FROM alert_roles($3, $4, a.alert_id) WHERE user_id = a.uploaded_by)`,
+		id, alert, r.Context().Value(identityKey{}).(identity).Subject, chi.URLParam(r, "slug")).Scan(&result)
+	if err != nil {
+		a.writeProblem(w, err, "Attachment not found.", "Could not check the attachment")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // downloadAttachment sends a stored file to a caller who can see its alert,
 // with the same checks as the alert's detail, and records the download.
 func (a api) downloadAttachment(w http.ResponseWriter, r *http.Request) {
