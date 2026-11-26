@@ -4,11 +4,16 @@
     <button hlmBtn variant="outline" (click)="appearance.toggle()">
       {{ appearance.theme() === 'light' ? 'Use dark theme' : 'Use light theme' }}
     </button>
+    <button hlmBtn variant="outline" (click)="toggleDensity()">
+      {{ density() === 'comfortable' ? 'Use compact density' : 'Use comfortable density' }}
+    </button>
   </div>
 </header>
 <main class="guide">
   <h1 class="text-display">Design system</h1>
-  <section><h2>Colour</h2>
+  <section><h2>Token roles</h2>
+    <p>Primitives define the palettes, type, spacing, corners, shadows and motion. Semantic tokens name jobs such as canvas, text, divider and control boundary. Component tokens assign those jobs to controls, rows and overlays. Map symbols, chart series and the logo each have their own colours.</p>
+    <h3>Colour</h3>
     <p>Contrast with the card surface in the {{ appearance.theme() }} theme.</p>
     <div class="swatches">
       @for (swatch of palette(); track swatch.name) {
@@ -18,19 +23,33 @@
   </section>
   <section><h2>Type</h2>
     @for (size of sizes; track size[0]) {
-      <div [style.font-size.px]="size[1]" [style.font-weight]="'var(--text-' + size[0] + '--font-weight)'"
+      <div [style.font-size.px]="size[1].sizePx" [style.font-weight]="'var(--text-' + size[0] + '--font-weight)'"
         [style.line-height]="'var(--text-' + size[0] + '--line-height)'"
-        [style.letter-spacing]="'var(--text-' + size[0] + '--letter-spacing)'">{{ size[0] }} · {{ size[1] }} px · Demo forest</div>
+        [style.letter-spacing]="'var(--text-' + size[0] + '--letter-spacing)'">{{ size[0] }} · {{ size[1].sizePx }}/{{ size[1].lineHeightPx }} px · Demo forest</div>
     }
     <p>Inter is bundled. Indian scripts use device fonts. वन क्षेत्र</p>
   </section>
   <section><h2>Spacing and corners</h2>
-    <div class="group-row">@for (units of [1,2,3,4,6,8]; track units) {
+    <div class="group-row">@for (units of [1,2,3,4,6,8,12]; track units) {
       <span><i class="measure" [style.width]="'calc(var(--spacing) * ' + units + ')'"></i>{{ units * 4 }} px</span>
     }</div>
     <div class="group-row">@for (item of radius; track item[0]) {
-      <span class="bg-brand-soft px-4 py-2" [style.border-radius.px]="item[1]">{{ item[0] }} · {{ item[1] }} px</span>
+      <span class="bg-brand-soft px-4 py-2" [style.border-radius.px]="item[1]">{{ item[0] === 'pill' ? 'Full' : item[0] + ' · ' + item[1] + ' px' }}</span>
     }</div>
+  </section>
+  <section><h2>Density</h2>
+    <p>Either density works with either theme. Primary touch targets stay at least 44 CSS px on the web and 48 logical px in the field app.</p>
+    <div class="fields">
+      @for (mode of densities; track mode[0]) {
+        <div [attr.data-density]="mode[0]">
+          <h3 class="capitalize">{{ mode[0] }}</h3>
+          <p>{{ mode[1].controlPx }} px controls and {{ mode[1].rowPx }} px rows</p>
+          <button class="sample-chip">Forest</button>
+          <div class="sample-row">Demo range</div>
+          <div class="sample-row" data-state="selected">Selected range</div>
+        </div>
+      }
+    </div>
   </section>
   <section><h2>Map key</h2>
     <div class="group-row">@for (symbol of symbols; track symbol[0]) {

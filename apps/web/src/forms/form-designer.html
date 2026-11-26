@@ -18,7 +18,7 @@
     @if (problems().length + serverProblems().length) {
       {{ problems().length + serverProblems().length }} {{ problems().length + serverProblems().length === 1 ? 'problem' : 'problems' }} to fix before publishing
     } @else {
-      <span class="text-good">No problems found</span>
+      <span class="text-success-text">No problems found</span>
     }
   </h3>
   @if (problems().length + serverProblems().length) {
@@ -43,7 +43,7 @@
     <div class="mt-4 grid gap-2">
       <label for="form-file" class="font-medium">The form as a file, in the form format</label>
       <p class="text-muted-foreground">Edit stages, shared lists and layout here. Apply the file to check it and see it in the designer.</p>
-      <textarea hlmTextarea id="form-file" class="min-h-[420px] font-mono text-sm" spellcheck="false" [readOnly]="readonly()"
+      <textarea hlmTextarea id="form-file" class="min-h-[420px] text-sm" spellcheck="false" [readOnly]="readonly()"
                 [value]="fileText()" (input)="setFileText($event)"></textarea>
       @if (fileError()) { <p class="text-danger" role="alert">{{ fileError() }}</p> }
       @if (!readonly()) { <button hlmBtn class="justify-self-start" (click)="applyFile()">Apply the file</button> }
@@ -299,7 +299,7 @@
           <input hlmInput id="prop-decimals" type="number" min="0" max="6" [value]="numberOf('decimals')" (change)="setNumber('decimals', $event)"></div>
       </div>
       <div class="grid gap-1"><label for="prop-calculate" class="font-medium">Calculation</label>
-        <textarea hlmTextarea id="prop-calculate" class="min-h-28 font-mono text-sm" spellcheck="false" [value]="jsonOf('calculate')"
+        <textarea hlmTextarea id="prop-calculate" class="min-h-28 text-sm" spellcheck="false" [value]="jsonOf('calculate')"
                   (change)="setJSON('calculate', $event)" aria-describedby="prop-calculate-help"></textarea>
         <p id="prop-calculate-help" class="text-label text-muted-foreground">For example {{ '{' }}"op": "sum", "group": "teams", "field": "members"{{ '}' }}. The form format lists every calculation.</p>
         @if (jsonError()) { <p class="text-danger" role="alert">{{ jsonError() }}</p> }
@@ -348,7 +348,7 @@
     <legend class="font-medium">When to show it</legend>
     @if (rules === null) {
       <label for="prop-show-when" class="text-label text-muted-foreground">This condition is too complex for the simple editor. Edit it as JSON.</label>
-      <textarea hlmTextarea id="prop-show-when" class="min-h-28 font-mono text-sm" spellcheck="false" [value]="jsonOf('showWhen')" (change)="setJSON('showWhen', $event)"></textarea>
+      <textarea hlmTextarea id="prop-show-when" class="min-h-28 text-sm" spellcheck="false" [value]="jsonOf('showWhen')" (change)="setJSON('showWhen', $event)"></textarea>
       @if (jsonError()) { <p class="text-danger" role="alert">{{ jsonError() }}</p> }
     } @else {
       @if (rules.length === 0) { <p class="text-muted-foreground">Always shown.</p> }

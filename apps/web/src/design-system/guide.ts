@@ -2,7 +2,7 @@ import { Component, DestroyRef, Injector, afterNextRender, computed, inject, sig
 import { bootstrapApplication } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
-import tokens from '../../../../docs/design-system/tokens.json';
+import { ageColours, ageLabels, chartSeries, density, interfaceColours, mapColours, radii, typeScale } from '../token-values';
 import { classes } from '../detections';
 import { ThemeService } from '../theme';
 import { EmptyState } from '../ui/empty-state';
@@ -57,21 +57,30 @@ export class DesignGuide {
   readonly appearance = inject(ThemeService);
   readonly palette = computed(() => {
     const mode = this.appearance.theme();
-    const colors = tokens.color;
-    const card = luminance(colors[mode].card);
-    const entries = { ...colors[mode], ...colors.status,
-      ...Object.fromEntries(colors.chart[mode].map((color, i) => ['Chart ' + (i + 1), color])),
-      ...Object.fromEntries(colors.fireAge[mode].map((color, i) => [colors.fireAge.steps[i], color])) };
+    const colors = interfaceColours[mode];
+    const card = luminance(colors.surface);
+    const entries = { ...colors,
+      ...Object.fromEntries(Object.entries(mapColours[mode]).map(([name, value]) => ['Map ' + name, value])),
+      ...Object.fromEntries(chartSeries[mode].map((color, i) => ['Chart ' + (i + 1), color])),
+      ...Object.fromEntries(ageColours[mode].map((color, i) => [ageLabels[i], color])) };
     return Object.entries(entries).filter(([, color]) => color.startsWith('#')).map(([name, color]) => {
       const value = luminance(color);
       return { name: name.replace(/[A-Z]/g, c => ' ' + c.toLowerCase()).trim(), color,
         ratio: ((Math.max(value, card) + 0.05) / (Math.min(value, card) + 0.05)).toFixed(2) };
     });
   });
-  readonly sizes = Object.entries(tokens.font.sizePx);
-  readonly radius = Object.entries(tokens.radiusPx);
+  readonly sizes = Object.entries(typeScale);
+  readonly radius = Object.entries(radii);
   readonly symbols = Object.entries(classes);
-  readonly ages = tokens.color.fireAge.steps;
+  readonly ages = ageLabels;
+  readonly densities = Object.entries(density);
+  readonly density = signal<keyof typeof density>('comfortable');
+
+  toggleDensity() {
+    this.density.update(value => value === 'comfortable' ? 'compact' : 'comfortable');
+    document.documentElement.dataset['density'] = this.density();
+  }
+
   readonly variants = ['primary', 'secondary', 'outline', 'ghost', 'destructive', 'link'] as const;
   readonly alertVariants = ['default', 'destructive'] as const;
   readonly badges = ['default', 'secondary', 'outline', 'ghost', 'destructive', 'link'] as const;

@@ -1,43 +1,72 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 :root {
-  --background: var(--color-background);
-  --card: var(--color-card);
-  --border: var(--color-border);
+  --background: var(--color-canvas);
+  --card: var(--color-surface);
+  --border: var(--color-divider);
   color-scheme: light;
-  --target-web: var(--spacing-target-web);
   --radius: var(--radius-card);
   --foreground: var(--color-text);
   --card-foreground: var(--color-text);
-  --popover: var(--color-card);
-  --popover-foreground: var(--color-text);
-  --primary: var(--color-brand);
-  --primary-foreground: var(--color-brand-foreground);
-  --secondary: var(--color-brand-soft);
-  --secondary-foreground: var(--color-brand);
-  --accent: var(--color-brand-soft);
-  --accent-foreground: var(--color-brand);
-  --muted: var(--color-background);
+  --popover: var(--overlay-background);
+  --popover-foreground: var(--overlay-text);
+  --primary: var(--color-action);
+  --primary-foreground: var(--color-action-text);
+  --secondary: var(--color-selected);
+  --secondary-foreground: var(--color-action);
+  --accent: var(--color-selected);
+  --accent-foreground: var(--color-action);
+  --muted: var(--color-canvas);
   --muted-foreground: var(--color-text-secondary);
   --destructive: var(--color-danger);
-  --input: var(--color-neutral-mark);
-  --ring: var(--color-brand);
+  --input: var(--color-control-boundary);
+  --ring: var(--color-focus);
 }
 :root[data-theme=dark] { color-scheme: dark; }
+:root, [data-density] { --target-web: var(--density-control-px); }
 
 [data-slot]:focus-visible {
-  outline: 3px solid var(--ring);
-  outline-offset: 2px;
+  outline: var(--focus-width) solid var(--ring);
+  outline-offset: var(--focus-offset);
   box-shadow: none;
 }
 [data-slot]:is(button, a, input, select, textarea, [role=option], [role=menuitem]),
 label[data-slot]:has(input), [data-slot=field-label] { min-height: var(--target-web); min-width: var(--target-web); }
+/* These controls use the full boundary colour on a known surface. */
+:is([data-slot=input], [data-slot=textarea], [data-slot=select-trigger]) {
+  background-color: var(--color-surface);
+}
+[data-slot=button]:is(.border-border, .border-input) {
+  border-color: var(--input);
+  background-color: var(--background);
+}
+[data-slot=button]:is(.border-border, .border-input):hover { background-color: var(--muted); }
+:where([data-slot=button], [data-slot=input], [data-slot=select-trigger]).h-9 { height: auto; }
+[data-slot=button].size-9 { width: var(--target-web); height: var(--target-web); }
+:where([data-slot=table-row]) { height: var(--table-row-height); }
+[data-slot=table-row][data-state=selected] { background-color: var(--table-row-selected); }
+
+:is([data-slot=dropdown-menu], [data-slot=dropdown-menu-sub], [data-slot=select-content]) {
+  box-shadow: var(--overlay-menu-shadow);
+  animation-duration: var(--motion-menu);
+}
+:is([data-slot=dialog-content], [data-slot=sheet-content]) {
+  box-shadow: var(--overlay-dialog-shadow);
+  border-radius: var(--overlay-radius);
+  animation-duration: var(--motion-dialog);
+  transition-duration: var(--motion-dialog);
+}
+
+/* Coarse input can be available alongside a mouse. Keep touch targets in either density. */
+@media (any-pointer: coarse) {
+  :root, [data-density] { --target-web: var(--spacing-target-web); }
+}
 [data-slot=table-cell], time { font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: var(--motion-reduced) !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0s !important;
+    transition-duration: var(--motion-reduced) !important;
     transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
@@ -60,8 +89,8 @@ brn-radio [data-slot=indicator] {
 }
 brn-radio:has(input:focus-visible) [data-slot=radio-group-indicator],
 button:is([role=checkbox], [role=switch]):focus-visible {
-  outline: 3px solid var(--ring);
-  outline-offset: 2px;
+  outline: var(--focus-width) solid var(--ring);
+  outline-offset: var(--focus-offset);
   box-shadow: none;
 }
 label[data-slot=label]:has(hlm-checkbox, hlm-switch, hlm-radio) { min-height: var(--target-web); }
@@ -69,12 +98,17 @@ label[data-slot=label]:has(hlm-checkbox, hlm-switch, hlm-radio) { min-height: va
   --radius-md: var(--radius-control);
   --radius-lg: var(--radius-card);
   --text-xs: var(--text-label);
+  --text-xs--line-height: var(--text-label--line-height);
   --text-sm: var(--text-body);
+  --text-sm--line-height: var(--text-body--line-height);
   --text-base: var(--text-subhead);
+  --text-base--line-height: var(--text-subhead--line-height);
   --text-lg: var(--text-title);
+  --text-lg--line-height: var(--text-title--line-height);
   --text-xl: var(--text-display);
+  --text-xl--line-height: var(--text-display--line-height);
 }
 
 @layer base {
-  :where([data-slot]) { border-color: var(--color-border); }
+  :where([data-slot]) { border-color: var(--color-divider); }
 }

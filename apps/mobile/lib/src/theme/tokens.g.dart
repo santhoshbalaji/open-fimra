@@ -5,36 +5,104 @@ import 'dart:ui';
 
 /// One theme's interface colours.
 class FimraPalette {
+  /// Builds a palette using the original named colours.
   const FimraPalette({
-    required this.background,
-    required this.card,
+    required Color background,
+    required Color card,
+    required Color border,
+    required Color brand,
+    required Color brandForeground,
+    required Color brandSoft,
+    required Color mapBackground,
+    required Color mapLine,
+    required Color neutralMark,
+    required Color text,
+    required Color textSecondary,
+    required Color danger,
+    required Color scrim,
+    required List<Color> fireAge,
+    required List<Color> chart,
+  }) : this._roles(
+         canvas: background,
+         surface: card,
+         divider: border,
+         action: brand,
+         actionText: brandForeground,
+         selected: brandSoft,
+         mapBackground: mapBackground,
+         mapLine: mapLine,
+         neutralMark: neutralMark,
+         text: text,
+         textSecondary: textSecondary,
+         danger: danger,
+         scrim: scrim,
+         fireAge: fireAge,
+         chart: chart,
+         surfaceRaised: card,
+         controlBoundary: textSecondary,
+         focus: brand,
+         successText: text,
+         shadow: const Color(0xFF000000),
+         mapLand: card,
+         mapForest: neutralMark,
+         mapAgeOutline: card,
+         mapSelection: brand,
+       );
+
+  const FimraPalette._roles({
+    required this.canvas,
+    required this.surface,
     required this.text,
     required this.textSecondary,
-    required this.border,
-    required this.brand,
-    required this.brandForeground,
-    required this.brandSoft,
+    required this.divider,
+    required this.action,
+    required this.actionText,
+    required this.selected,
     required this.danger,
     required this.scrim,
+    required this.surfaceRaised,
+    required this.controlBoundary,
+    required this.focus,
+    required this.successText,
+    required this.shadow,
     required this.mapBackground,
     required this.mapLine,
     required this.neutralMark,
+    required this.mapLand,
+    required this.mapForest,
+    required this.mapAgeOutline,
+    required this.mapSelection,
     required this.fireAge,
     required this.chart,
   });
-  final Color background;
-  final Color card;
+  final Color canvas;
+  final Color surface;
   final Color text;
   final Color textSecondary;
-  final Color border;
-  final Color brand;
-  final Color brandForeground;
-  final Color brandSoft;
+  final Color divider;
+  final Color action;
+  final Color actionText;
+  final Color selected;
   final Color danger;
   final Color scrim;
+  final Color surfaceRaised;
+  final Color controlBoundary;
+  final Color focus;
+  final Color successText;
+  final Color shadow;
   final Color mapBackground;
   final Color mapLine;
   final Color neutralMark;
+  final Color mapLand;
+  final Color mapForest;
+  final Color mapAgeOutline;
+  final Color mapSelection;
+  Color get background => canvas;
+  Color get card => surface;
+  Color get border => divider;
+  Color get brand => action;
+  Color get brandForeground => actionText;
+  Color get brandSoft => selected;
 
   /// Fire-age colours. Index 0 is the most recent detection.
   final List<Color> fireAge;
@@ -43,20 +111,29 @@ class FimraPalette {
   final List<Color> chart;
 }
 
-const lightPalette = FimraPalette(
-  background: Color(0xFFF5F6F4),
-  card: Color(0xFFFFFFFF),
+const lightPalette = FimraPalette._roles(
+  canvas: Color(0xFFF5F6F4),
+  surface: Color(0xFFFFFFFF),
   text: Color(0xFF141816),
   textSecondary: Color(0xFF56615B),
-  border: Color(0xFFDDE2DE),
-  brand: Color(0xFF1F5A70),
-  brandForeground: Color(0xFFFFFFFF),
-  brandSoft: Color(0xFFE2EBEE),
+  divider: Color(0xFFDDE2DE),
+  action: Color(0xFF1F5A70),
+  actionText: Color(0xFFFFFFFF),
+  selected: Color(0xFFE2EBEE),
   danger: Color(0xFF9D2626),
   scrim: Color(0x59000000),
+  surfaceRaised: Color(0xFFFFFFFF),
+  controlBoundary: Color(0xFF737F78),
+  focus: Color(0xFF1F5A70),
+  successText: Color(0xFF246526),
+  shadow: Color(0xFF000000),
   mapBackground: Color(0xFFE9ECE8),
   mapLine: Color(0xFFCFD5D0),
   neutralMark: Color(0xFF7A857F),
+  mapLand: Color(0xFFFFFFFF),
+  mapForest: Color(0xFF1AA373),
+  mapAgeOutline: Color(0xFF26180F),
+  mapSelection: Color(0xFF1F5A70),
   fireAge: [Color(0xFF8F1D14), Color(0xFFC8401F), Color(0xFFCB602D), Color(0xFFCB8154)],
   chart: [
     Color(0xFF2A78D6),
@@ -70,20 +147,29 @@ const lightPalette = FimraPalette(
   ],
 );
 
-const darkPalette = FimraPalette(
-  background: Color(0xFF121413),
-  card: Color(0xFF1B1E1C),
+const darkPalette = FimraPalette._roles(
+  canvas: Color(0xFF121413),
+  surface: Color(0xFF1B1E1C),
   text: Color(0xFFEEF1EF),
   textSecondary: Color(0xFFA7B1AB),
-  border: Color(0xFF2D3430),
-  brand: Color(0xFF97B5C1),
-  brandForeground: Color(0xFF0A1A23),
-  brandSoft: Color(0xFF1C2B31),
+  divider: Color(0xFF2D3430),
+  action: Color(0xFF97B5C1),
+  actionText: Color(0xFF0A1A23),
+  selected: Color(0xFF1C2B31),
   danger: Color(0xFFFFA5A5),
   scrim: Color(0x85000000),
+  surfaceRaised: Color(0xFF242925),
+  controlBoundary: Color(0xFF87938B),
+  focus: Color(0xFFABD6E7),
+  successText: Color(0xFF9BDB92),
+  shadow: Color(0xFF000000),
   mapBackground: Color(0xFF1F2422),
   mapLine: Color(0xFF2F3632),
   neutralMark: Color(0xFF8B958F),
+  mapLand: Color(0xFF1B1E1C),
+  mapForest: Color(0xFF199E70),
+  mapAgeOutline: Color(0xFFEEF1EF),
+  mapSelection: Color(0xFF97B5C1),
   fireAge: [Color(0xFFFFB38A), Color(0xFFF0834A), Color(0xFFD1552A), Color(0xFFB44F31)],
   chart: [
     Color(0xFF3987E5),
@@ -128,18 +214,47 @@ class FimraTypeStep {
 }
 
 abstract final class FimraType {
-  static const label = FimraTypeStep(12, 16, 500, 0.012);
-  static const body = FimraTypeStep(14, 20, 400, 0);
+  static const label = FimraTypeStep(12, 18, 500, 0.012);
+  static const body = FimraTypeStep(14, 22, 400, 0);
   static const subhead = FimraTypeStep(16, 24, 600, -0.01);
   static const title = FimraTypeStep(20, 28, 600, -0.02);
   static const display = FimraTypeStep(24, 32, 650, -0.025);
+  static const figure = FimraTypeStep(32, 40, 650, -0.025);
 }
 
 abstract final class FimraSize {
   /// Smallest touch target on the phone app, in logical pixels.
   static const double touchTarget = 48;
   static const double spaceUnit = 4;
+  static const spaceSteps = [4, 8, 12, 16, 24, 32, 48];
+  static const double focusWidth = 3;
+  static const double focusOffset = 2;
   static const double radiusControl = 6;
   static const double radiusCard = 8;
-  static const double radiusPill = 999;
+  static const double radiusPanel = 12;
+  static const double radiusPill = 9999;
 }
+
+/// The visual density is independent of brightness.
+enum FimraDensity {
+  comfortable(40, 48),
+  compact(32, 36);
+
+  const FimraDensity(this.controlHeight, this.rowHeight);
+  final double controlHeight;
+  final double rowHeight;
+}
+
+abstract final class FimraElevation {
+  static const double menu = 3;
+  static const double dialog = 6;
+}
+
+abstract final class FimraMotion {
+  static const control = Duration(milliseconds: 100);
+  static const menu = Duration(milliseconds: 100);
+  static const dialog = Duration(milliseconds: 200);
+  static const reduced = Duration(milliseconds: 0);
+}
+
+const mapForestOpacity = 0.34;

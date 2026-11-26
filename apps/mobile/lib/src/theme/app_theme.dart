@@ -6,13 +6,15 @@ export 'tokens.g.dart';
 
 /// Gives widgets the current theme's token palette.
 class FimraColours extends ThemeExtension<FimraColours> {
-  const FimraColours(this.palette);
+  const FimraColours(this.palette, {this.density = FimraDensity.comfortable});
   final FimraPalette palette;
+  final FimraDensity density;
 
   static FimraPalette of(BuildContext context) => Theme.of(context).extension<FimraColours>()!.palette;
 
   @override
-  FimraColours copyWith({FimraPalette? palette}) => FimraColours(palette ?? this.palette);
+  FimraColours copyWith({FimraPalette? palette, FimraDensity? density}) =>
+      FimraColours(palette ?? this.palette, density: density ?? this.density);
 
   @override
   FimraColours lerp(FimraColours? other, double t) => t < 0.5 || other == null ? this : other;
@@ -30,32 +32,32 @@ TextStyle _style(FimraTypeStep step, Color colour) => TextStyle(
 );
 
 /// Builds the light or dark theme from the shared design tokens.
-ThemeData fimraTheme(Brightness brightness) {
+ThemeData fimraTheme(Brightness brightness, {FimraDensity density = FimraDensity.comfortable}) {
   final p = brightness == Brightness.light ? lightPalette : darkPalette;
   final scheme = ColorScheme(
     brightness: brightness,
-    primary: p.brand,
-    onPrimary: p.brandForeground,
-    primaryContainer: p.brandSoft,
+    primary: p.action,
+    onPrimary: p.actionText,
+    primaryContainer: p.selected,
     onPrimaryContainer: p.text,
-    secondary: p.brand,
-    onSecondary: p.brandForeground,
-    secondaryContainer: p.brandSoft,
+    secondary: p.action,
+    onSecondary: p.actionText,
+    secondaryContainer: p.selected,
     onSecondaryContainer: p.text,
     error: p.danger,
-    onError: brightness == Brightness.light ? p.card : p.background,
-    surface: p.card,
+    onError: brightness == Brightness.light ? p.surface : p.canvas,
+    surface: p.surface,
     onSurface: p.text,
     onSurfaceVariant: p.textSecondary,
-    surfaceContainerLowest: p.background,
-    surfaceContainerLow: p.background,
-    surfaceContainer: p.card,
-    surfaceContainerHigh: p.card,
-    surfaceContainerHighest: p.brandSoft,
-    outline: p.border,
-    outlineVariant: p.border,
+    surfaceContainerLowest: p.canvas,
+    surfaceContainerLow: p.canvas,
+    surfaceContainer: p.surface,
+    surfaceContainerHigh: p.surfaceRaised,
+    surfaceContainerHighest: p.selected,
+    outline: p.controlBoundary,
+    outlineVariant: p.divider,
     scrim: p.scrim,
-    shadow: const Color(0xFF000000),
+    shadow: p.shadow,
   );
   final text = TextTheme(
     headlineSmall: _style(FimraType.display, p.text),
@@ -76,37 +78,40 @@ ThemeData fimraTheme(Brightness brightness) {
     labelSmall: _style(FimraType.label, p.textSecondary),
   );
   const minimum = Size(FimraSize.touchTarget, FimraSize.touchTarget);
-  final control = RoundedRectangleBorder(borderRadius: BorderRadius.circular(FimraSize.radiusControl));
+  final controlRadius = BorderRadius.circular(FimraSize.radiusControl);
+  final panelRadius = BorderRadius.circular(FimraSize.radiusPanel);
+  final control = RoundedRectangleBorder(borderRadius: controlRadius);
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
     fontFamily: 'Inter',
     textTheme: text,
-    scaffoldBackgroundColor: p.background,
+    scaffoldBackgroundColor: p.canvas,
     materialTapTargetSize: MaterialTapTargetSize.padded,
     visualDensity: VisualDensity.standard,
-    extensions: [FimraColours(p)],
+    extensions: [FimraColours(p, density: density)],
+    focusColor: p.focus,
     appBarTheme: AppBarTheme(
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       foregroundColor: p.text,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 1,
       titleTextStyle: text.titleMedium,
-      shape: Border(bottom: BorderSide(color: p.border)),
+      shape: Border(bottom: BorderSide(color: p.divider)),
     ),
     cardTheme: CardThemeData(
-      color: p.card,
+      color: p.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(FimraSize.radiusCard),
-        side: BorderSide(color: p.border),
+        side: BorderSide(color: p.divider),
       ),
     ),
-    dividerTheme: DividerThemeData(color: p.border, space: 1, thickness: 1),
+    dividerTheme: DividerThemeData(color: p.divider, space: 1, thickness: 1),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(minimumSize: minimum, shape: control, textStyle: text.labelLarge),
     ),
@@ -114,7 +119,7 @@ ThemeData fimraTheme(Brightness brightness) {
       style: OutlinedButton.styleFrom(
         minimumSize: minimum,
         shape: control,
-        side: BorderSide(color: p.border),
+        side: BorderSide(color: p.controlBoundary),
         foregroundColor: p.text,
         textStyle: text.labelLarge,
       ),
@@ -125,17 +130,31 @@ ThemeData fimraTheme(Brightness brightness) {
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: minimum)),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: p.card,
+      fillColor: p.surface,
       constraints: const BoxConstraints(minHeight: FimraSize.touchTarget),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(FimraSize.radiusControl)),
+      border: OutlineInputBorder(borderRadius: controlRadius),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(FimraSize.radiusControl),
-        borderSide: BorderSide(color: p.border),
+        borderRadius: controlRadius,
+        borderSide: BorderSide(color: p.controlBoundary),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: controlRadius,
+        borderSide: BorderSide(color: p.focus, width: FimraSize.focusWidth),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: controlRadius,
+        borderSide: BorderSide(color: p.focus, width: FimraSize.focusWidth),
       ),
     ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: p.surfaceRaised,
+      elevation: FimraElevation.dialog,
+      shape: RoundedRectangleBorder(borderRadius: panelRadius),
+    ),
+    popupMenuTheme: PopupMenuThemeData(color: p.surfaceRaised, elevation: FimraElevation.menu, shape: control),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: p.card,
-      indicatorColor: p.brandSoft,
+      backgroundColor: p.surface,
+      indicatorColor: p.selected,
       surfaceTintColor: Colors.transparent,
       labelTextStyle: WidgetStatePropertyAll(text.labelMedium),
       height: 64,
@@ -148,11 +167,11 @@ ThemeData fimraTheme(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: p.text,
-      contentTextStyle: text.bodyMedium?.copyWith(color: p.background),
+      contentTextStyle: text.bodyMedium?.copyWith(color: p.canvas),
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: p.card,
-      side: BorderSide(color: p.border),
+      backgroundColor: p.surface,
+      side: BorderSide(color: p.controlBoundary),
       labelStyle: text.labelMedium,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FimraSize.radiusPill)),
     ),

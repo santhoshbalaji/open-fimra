@@ -5,7 +5,7 @@
 @import './helm-theme.css';
 
 html, body, fimra-root { height: 100%; margin: 0; }
-body { font: var(--text-body)/1.5 var(--font-sans); color: var(--color-text); background: var(--color-background); }
+body { font: var(--text-body)/var(--text-body--line-height) var(--font-sans); color: var(--color-text); background: var(--color-background); }
 fimra-root { display: flex; flex-direction: column; height: 100dvh; }
 main { flex: 1; min-height: 0; }
 .topbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--color-border); }
@@ -30,7 +30,9 @@ main { flex: 1; min-height: 0; }
 button:not([role=checkbox], [role=switch]) { cursor: pointer; min-height: var(--target-web); min-width: var(--target-web); }
 button:disabled { cursor: default; opacity: .55; }
 button[data-busy]:not(:disabled) { cursor: wait; }
-button:not([data-slot], [role]):focus-visible, canvas:focus-visible { outline: 3px solid var(--color-brand); outline-offset: -3px; }
+button:not([data-slot], [role]):focus-visible, canvas:focus-visible { outline: var(--focus-width) solid var(--color-focus); outline-offset: var(--focus-offset); }
+/* The map fills its clipping container. Draw its focus ring inside the canvas. */
+canvas:focus-visible { outline-offset: calc(-1 * var(--focus-width)); }
 button:not([data-slot], [role]):hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
 button svg { width: 18px; height: 18px; flex: none; }
 button .chevron { width: 14px; }
@@ -48,7 +50,7 @@ button .chevron { width: 14px; }
 .map-key ul { padding: 4px 8px; }
 .map-key li { display: flex; align-items: center; gap: 8px; line-height: 1.5; font-size: var(--text-label); }
 .key-line { width: 23px; border-top-style: solid; border-color: var(--color-text-secondary); }
-.key-forest { border: 1px solid var(--color-text-secondary); width: 23px; height: 10px; background: color-mix(in srgb, var(--color-chart-3) 34%, var(--color-card)); }
+.key-forest { border: 1px solid var(--color-text-secondary); width: 23px; height: 10px; background: color-mix(in srgb, var(--map-forest) calc(var(--map-forest-opacity) * 100%), var(--map-land)); }
 .key-kiln { width: 10px; height: 10px; margin-inline: 6.5px; background: var(--color-neutral-mark); border: 2px solid var(--color-text); }
 .map-message { position: absolute; top: 16px; left: 16px; max-width: 65%; padding: 12px; }
 .fire-controls { position: absolute; left: 16px; top: 16px; max-width: calc(100% - 84px); display: grid; gap: 6px; }

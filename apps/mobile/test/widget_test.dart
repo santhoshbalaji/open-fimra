@@ -113,7 +113,10 @@ void main() {
 
     expect(find.text('Hill Division (D1)'), findsOneWidget);
     expect(find.text('Inside forest'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Acknowledged'));
+    final acknowledge = find.widgetWithText(FilledButton, 'Acknowledged');
+    await tester.ensureVisible(acknowledge);
+    await tester.pumpAndSettle();
+    await tester.tap(acknowledge);
     await tester.pumpAndSettle();
     expect(find.text('This is saved with your name and the time.'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'On my way.');
