@@ -144,7 +144,7 @@ func checkReferenceMatches(t *testing.T, ctx context.Context, tx pgx.Tx, workspa
 	       OR (a.queue='triage' AND a.unit_path IS NOT NULL)
 	       OR m.triage_reason IS DISTINCT FROM r.expected_triage
 	       OR f.code IS DISTINCT FROM r.expected_forest_code
-	       OR ARRAY(SELECT p FROM unnest(m.unit_paths) p WHERE nlevel(p) = 5 ORDER BY p)
+	       OR ARRAY(SELECT p::ltree FROM jsonb_array_elements_text(m.beat_paths -> (SELECT id::text FROM hierarchies WHERE workspace_id = m.workspace_id AND slug = 'territorial')) p ORDER BY p)
 	        <> ARRAY(SELECT p FROM unnest(r.expected_beats) p ORDER BY p)
 	       OR (m.forest_class = 'inside' AND (m.forest_feature_id IS NULL OR m.forest_distance_m IS DISTINCT FROM 0::real))
 	       OR (m.forest_class = 'near_edge' AND (m.forest_distance_m IS NULL OR m.forest_distance_m NOT BETWEEN 1 AND 500))
@@ -238,8 +238,8 @@ func checkTiles(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix, sour
 	    VALUES ($1, $2, 'z-alternate', 'Alternate', 'other');
 	    INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels)
 	    SELECT $1, depth, slug, '{"en":"Alternate"}' FROM hierarchy_levels WHERE hierarchy_id = $3 AND depth < 3;
-	    INSERT INTO units (hierarchy_id, depth, code, name, path, geom)
-	    SELECT $1, depth, code, name, path, ST_Multi(ST_Buffer(ST_SetSRID(ST_Point(86.457995, 16.418498), 4326), 0.001))
+	    INSERT INTO units (hierarchy_id, depth, code, name, path, geom, valid_from)
+	    SELECT $1, depth, code, name, path, ST_Multi(ST_Buffer(ST_SetSRID(ST_Point(86.457995, 16.418498), 4326), 0.001)), '-infinity'
 	    FROM units WHERE hierarchy_id = $3 AND path @> 'ds.c1.d1'::ltree;
 	`
 	if _, err := tx.Exec(ctx, addHierarchy, pgx.QueryExecModeSimpleProtocol, prefix+"50", prefix+"01", prefix+"10"); err != nil {

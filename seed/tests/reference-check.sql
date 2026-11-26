@@ -29,7 +29,7 @@ DECLARE
   ws uuid := (SELECT id FROM workspaces WHERE slug = 'demo');
 BEGIN
   ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
-          WHERE h.workspace_id = ws AND u.depth = 4) = 24, 'the demo state has 24 beats';
+          WHERE h.workspace_id = ws AND u.depth = 5) = 24, 'the demo state has 24 beats';
 
   ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
           WHERE h.workspace_id = ws AND u.depth > 0
@@ -38,8 +38,12 @@ BEGIN
     'every unit below the state has a parent';
 
   ASSERT (SELECT count(*) FROM units a JOIN units b ON a.hierarchy_id = b.hierarchy_id AND a.id < b.id
-          WHERE a.depth = 4 AND b.depth = 4 AND ST_Overlaps(a.geom, b.geom)) = 1,
+          WHERE a.depth = 5 AND b.depth = 5 AND ST_Overlaps(a.geom, b.geom)) = 1,
     'exactly one pair of beats overlaps';
+
+  ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
+          WHERE h.workspace_id = ws AND u.depth = 5 AND nlevel(u.path) = 6) = 1,
+    'one beat has a section and the others skip it';
 
   ASSERT (SELECT ST_NumInteriorRings(ST_GeometryN(geom, 1)) FROM layer_features WHERE code = 'F02') = 1,
     'forest F02 has a hole';
@@ -72,7 +76,7 @@ beats AS (
   FROM units u
   JOIN hierarchies h ON h.id = u.hierarchy_id
   JOIN ws ON ws.id = h.workspace_id
-  WHERE u.depth = 4 AND u.valid_to IS NULL
+  WHERE u.depth = 5 AND u.valid_to IS NULL
 ),
 classified AS (
   SELECT r.*,

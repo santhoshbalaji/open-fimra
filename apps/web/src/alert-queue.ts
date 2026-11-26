@@ -1,3 +1,4 @@
+import type { OverlayMatch } from './boundary-overlays';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AuthService } from './auth';
@@ -29,6 +30,7 @@ export interface AlertRow extends Detection {
   due_at?: string | null;
   can_assign?: boolean;
   assignment?: AlertAssignment | null;
+  overlay_matches?: OverlayMatch[];
   next_action?: string;
   queue: Queue;
   longitude: number;

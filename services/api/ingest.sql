@@ -53,10 +53,12 @@ linked AS (
 matched AS (
     INSERT INTO detection_matches (workspace_id, detection_id, observed_at, forest_class,
                                    forest_distance_m, forest_feature_id, unit_paths, hierarchy,
-                                   hierarchy_unit_paths, triage_reason, layer_version_ids, matched_at)
+                                   hierarchy_unit_paths, triage_reason, layer_version_ids, matched_at,
+                                   beat_paths, boundary_snapshot)
     SELECT m.workspace_id, m.detection_id, m.observed_at, m.forest_class,
            m.forest_distance_m, m.forest_feature_id, m.unit_paths, m.hierarchy,
-           m.hierarchy_unit_paths, m.triage_reason, m.layer_version_ids, clock_timestamp()
+           m.hierarchy_unit_paths, m.triage_reason, m.layer_version_ids, clock_timestamp(),
+           m.beat_paths, m.boundary_snapshot
     FROM inserted d
     CROSS JOIN workspaces w
     CROSS JOIN LATERAL classify_detection(w.id, d.id, d.observed_at, d.geom) m
@@ -68,10 +70,10 @@ matched AS (
 routed AS (
     -- The alert insert trigger opens its workflow in this transaction.
     INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path,
-                        hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids)
+                        hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids, boundary_snapshot)
     SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*,
            (match).hierarchy_unit_paths, (match).unit_paths, (match).forest_class, (match).triage_reason,
-           (match).layer_version_ids
+           (match).layer_version_ids, (match).boundary_snapshot
     FROM matched CROSS JOIN LATERAL alert_route(match) route
     ON CONFLICT DO NOTHING
 )

@@ -39,10 +39,12 @@ export interface Detection {
 }
 
 export type Places = Record<string, { code?: string; name?: string } | undefined>;
-export interface PlaceLevel { hierarchy: string; depth: number; slug: string; labels: { en: string } }
+export interface PlaceLevel { hierarchy: string; depth: number; slug: string; optional?: boolean; labels: { en: string } }
 export interface Place { label: string; name: string; code: string }
 
-const fallbackLevels = ['beat', 'range', 'division', 'circle'];
+const fallbackLevels = {
+  beat: 'Beat', section: 'Section', range: 'Range', sub_division: 'Sub-division', division: 'Division', circle: 'Circle'
+};
 
 /**
  * The places a detection falls in, from the smallest unit to the largest below the workspace itself,
@@ -53,10 +55,10 @@ export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'
   if (typeof detection.places === 'string') {
     try { places = detection.places ? JSON.parse(detection.places) as Places : {}; } catch { places = {}; }
   } else if (detection.places) places = detection.places;
-  const own = levels.filter(level => level.hierarchy === detection.place_hierarchy && level.depth > 0);
+  const own = levels.filter(level => level.hierarchy === detection.place_hierarchy && level.depth > 0 && (!level.optional || places[level.slug]));
   const rows = own.length
     ? [...own].sort((a, b) => b.depth - a.depth).map(level => ({ slug: level.slug, label: level.labels.en || level.slug }))
-    : fallbackLevels.filter(slug => places[slug]).map(slug => ({ slug, label: slug[0].toUpperCase() + slug.slice(1) }));
+    : Object.entries(fallbackLevels).filter(([slug]) => places[slug]).map(([slug, label]) => ({ slug, label }));
   return rows.map(({ slug, label }) => ({ label, name: places[slug]?.name ?? '', code: places[slug]?.code ?? '' }));
 }
 

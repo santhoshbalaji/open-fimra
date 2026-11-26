@@ -48,7 +48,7 @@ func (a api) workspaceMap(w http.ResponseWriter, r *http.Request) {
             FROM alert_grants g JOIN units u ON u.hierarchy_id = g.hierarchy_id AND u.current_path = g.unit_path
             WHERE g.workspace_id = w.id AND g.oidc_subject = $1 HAVING ST_Extent(u.geom) IS NOT NULL),
         'levels', COALESCE((SELECT jsonb_agg(jsonb_build_object('hierarchy', h.slug, 'depth', l.depth,
-            'slug', l.slug, 'labels', l.labels) ORDER BY h.slug, l.depth)
+            'slug', l.slug, 'labels', l.labels, 'optional', l.optional) ORDER BY h.slug, l.depth)
             FROM hierarchies h JOIN hierarchy_levels l ON l.hierarchy_id = h.id
             WHERE h.workspace_id = w.id), '[]'))`+memberWorkspace,
 		r.Context().Value(identityKey{}).(identity).Subject, chi.URLParam(r, "slug")).Scan(&info)

@@ -11,21 +11,21 @@ compared AS (
            old_beats.paths AS old_beats, new_beats.paths AS new_beats,
            old_route.queue AS old_queue, new_route.queue AS new_queue
     FROM candidates d
-    CROSS JOIN LATERAL classify_detection($1, d.id, d.observed_at, d.geom) live
+    CROSS JOIN LATERAL classify_detection_at($1, d.id, d.observed_at, d.geom, NULL, NULL) live
     CROSS JOIN LATERAL classify_detection($1, d.id, d.observed_at, d.geom, $2) draft
     LEFT JOIN LATERAL alert_route(live) old_route ON true
     LEFT JOIN LATERAL alert_route(draft) new_route ON true
     CROSS JOIN LATERAL (
         SELECT array_agg(h.slug || '/' || p.path ORDER BY h.slug, p.path) AS paths
-        FROM hierarchies h JOIN hierarchy_levels l ON l.hierarchy_id = h.id AND l.slug = 'beat'
-        CROSS JOIN LATERAL jsonb_array_elements_text(live.hierarchy_unit_paths -> h.id::text) p(path)
-        WHERE h.workspace_id = $1 AND nlevel(p.path::ltree) = l.depth + 1
+        FROM hierarchies h
+        CROSS JOIN LATERAL jsonb_array_elements_text(live.beat_paths -> h.id::text) p(path)
+        WHERE h.workspace_id = $1
     ) old_beats
     CROSS JOIN LATERAL (
         SELECT array_agg(h.slug || '/' || p.path ORDER BY h.slug, p.path) AS paths
-        FROM hierarchies h JOIN hierarchy_levels l ON l.hierarchy_id = h.id AND l.slug = 'beat'
-        CROSS JOIN LATERAL jsonb_array_elements_text(draft.hierarchy_unit_paths -> h.id::text) p(path)
-        WHERE h.workspace_id = $1 AND nlevel(p.path::ltree) = l.depth + 1
+        FROM hierarchies h
+        CROSS JOIN LATERAL jsonb_array_elements_text(draft.beat_paths -> h.id::text) p(path)
+        WHERE h.workspace_id = $1
     ) new_beats
 ),
 changes AS (

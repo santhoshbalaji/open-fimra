@@ -16,7 +16,7 @@
     WHERE h.id=coalesce($8::uuid, (SELECT hierarchy_id FROM grants ORDER BY depth, unit_path LIMIT 1))
 ), place_levels AS (
     SELECT l.depth, l.slug FROM hierarchy_levels l JOIN place_context c ON c.hierarchy_id=l.hierarchy_id
-    WHERE l.depth > c.depth
+    WHERE l.depth > c.depth AND NOT l.optional
     ORDER BY l.depth DESC LIMIT 3
 ), period_alerts AS MATERIALIZED (
     SELECT v.*, a.forest_class, a.observed_at, a.hierarchy, a.hierarchy_unit_paths, d.geom, im.incident_id,
@@ -75,7 +75,7 @@
     -- The units one level below the report's unit, or the caller's own units.
     SELECT u.hierarchy_id, u.depth, u.code, u.name, u.path, u.geom FROM units u
     WHERE u.valid_to IS NULL AND CASE WHEN EXISTS (SELECT FROM report_unit)
-        THEN u.hierarchy_id=$8::uuid AND u.depth=(SELECT depth+1 FROM report_unit) AND u.path <@ $9::ltree
+        THEN u.hierarchy_id=$8::uuid AND u.depth > 0 AND subpath(u.path, 0, -1) = $9::ltree
         ELSE (u.hierarchy_id,u.path) IN (SELECT hierarchy_id,unit_path FROM grants) END
     ORDER BY u.path LIMIT 500
 ), unit_counts AS (
@@ -141,8 +141,9 @@ SELECT jsonb_build_object(
     'units', (SELECT coalesce(jsonb_agg(jsonb_build_object('code',code,'name',name,'path',path::text,
             'alerts',alerts,'active',active,'overdue',overdue,'pendingReports',pending_reports,
             'formsMissing',forms_missing) ORDER BY path),'[]') FROM unit_counts),
-    'unitLevel', (SELECT l.labels->>'en' FROM unit_rows r JOIN hierarchy_levels l
-            ON (l.hierarchy_id,l.depth)=(r.hierarchy_id,r.depth) LIMIT 1),
+    'unitLevel', (SELECT CASE WHEN count(DISTINCT l.slug) > 1 THEN 'Unit' ELSE min(l.labels->>'en') END
+            FROM unit_rows r JOIN hierarchy_levels l
+            ON (l.hierarchy_id,l.depth)=(r.hierarchy_id,r.depth)),
     'map', jsonb_build_object(
         'bounds', (SELECT jsonb_build_array(ST_XMin(box),ST_YMin(box),ST_XMax(box),ST_YMax(box)) FROM extent WHERE box IS NOT NULL),
         'outline', (SELECT ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom,(SELECT t FROM tolerance)),5)::jsonb FROM outline),

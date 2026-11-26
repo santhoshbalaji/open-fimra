@@ -45,14 +45,15 @@ the version and re-matches detections through the Go job queue. See the
   files may contain up to
   128 entries and 128 MiB after unpacking.
 - Hierarchy drafts go into `draft_units`. They have their own paths, parent
-  codes and parent paths. Each child layer can use a ready draft from the
-  preceding level or the current published units there. A missing parent code
+  codes and parent paths. Each child layer can use a ready parent draft or
+  current published parents. When a branch skips an optional sub-division
+  or section, its parent code names the next unit up the branch. A missing parent code
   gets a suggestion from the largest shared area. A missing unit code gets a
   suggestion based on its name, such as `B16` for `Beat 16`. Unresolved paths
-  are saved empty for review. Matching and role grants read the live `units`
-  table.
-- Overlaps and gaps larger than one square metre go to review. The worker
-  compares coverage against the parent footprints or the workspace boundary
+  are saved empty for review. Role grants follow the current paths in `units`.
+  At ingest, matching uses unit versions covering the observation time.
+- Overlaps larger than one square metre go to review. Required levels also
+  check gaps against the parent footprints or the workspace boundary
   at the root level. When there is no reference footprint, it looks for
   enclosed gaps. A forest draft uses the selected coverage draft or the
   workspace's deepest current territorial level to check for forest outside

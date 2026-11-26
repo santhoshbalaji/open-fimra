@@ -328,7 +328,8 @@ func TestGISLinkIntegration(t *testing.T) {
 		err := pool.QueryRow(ctx, `
 			SELECT count(*) FILTER (WHERE l.role = 'forest'), count(*) FILTER (WHERE l.role = 'exclusion'),
 			       (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
-			        WHERE h.workspace_id = w.id AND u.depth = 4 AND u.valid_to IS NULL)
+			        JOIN hierarchy_levels level USING (hierarchy_id, depth)
+			        WHERE h.workspace_id = w.id AND level.slug = 'beat' AND u.valid_to IS NULL)
 			FROM workspaces w JOIN layers l ON l.workspace_id = w.id
 			JOIN layer_versions v ON v.layer_id = l.id AND v.status = 'published'
 			JOIN layer_features f ON f.layer_version_id = v.id
@@ -338,7 +339,7 @@ func TestGISLinkIntegration(t *testing.T) {
 		}
 		for _, user := range users[:3] {
 			key := keys[user].Key
-			for collection, want := range map[string]int64{"layer-forest": forest, "layer-exclusions": exclusions, "units-territorial-beat": beats} {
+			for collection, want := range map[string]int64{"layer-forest": forest, "layer-exclusions": exclusions, "units-territorial-beat": beats, "units-territorial-section": 1} {
 				if got := ogcIDs(key, collection, "limit=7"); int64(len(got)) != want {
 					t.Fatalf("%s %s: %d features, want %d", user, collection, len(got), want)
 				}
@@ -351,7 +352,7 @@ func TestGISLinkIntegration(t *testing.T) {
 				Links []ogcLink `json:"links"`
 			} `json:"collections"`
 		}
-		if a.code != http.StatusOK || json.Unmarshal(a.body, &list) != nil || len(list.Collections) != 9 {
+		if a.code != http.StatusOK || json.Unmarshal(a.body, &list) != nil || len(list.Collections) != 10 {
 			t.Fatalf("collections: HTTP %d %s", a.code, a.body)
 		}
 	})
@@ -552,7 +553,7 @@ ogrinfo -ro -so -al -oo PAGE_SIZE=40 --config GDAL_HTTP_HEADER_FILE /tmp/headers
 		user, body, _ := strings.Cut(section, "\n")
 		names := layer.FindAllStringSubmatch(body, -1)
 		counts := count.FindAllStringSubmatch(body, -1)
-		if len(names) != 9 || len(counts) != len(names) {
+		if len(names) != 10 || len(counts) != len(names) {
 			t.Fatalf("%s: ogrinfo found %d layers and %d counts", user, len(names), len(counts))
 		}
 		for i, name := range names {

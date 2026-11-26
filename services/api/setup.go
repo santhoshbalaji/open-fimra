@@ -291,10 +291,11 @@ type setupStep struct {
 }
 
 type setupLevel struct {
-	Depth  int16       `json:"depth"`
-	Slug   string      `json:"slug"`
-	Labels levelLabels `json:"labels"`
-	Units  int64       `json:"units"`
+	Depth    int16       `json:"depth"`
+	Slug     string      `json:"slug"`
+	Labels   levelLabels `json:"labels"`
+	Units    int64       `json:"units"`
+	Optional bool        `json:"optional"`
 }
 
 type setupUpload struct {
@@ -402,7 +403,7 @@ func (a api) loadSetupState(ctx context.Context, s setupContext) (setupState, er
 
 	rows, err := a.pool.Query(ctx, `
 		SELECT hl.depth, hl.slug, hl.labels, (SELECT count(*) FROM units u WHERE u.hierarchy_id = hl.hierarchy_id
-			AND u.depth = hl.depth AND u.valid_to IS NULL AND u.layer_version_id IS NOT NULL)
+			AND u.depth = hl.depth AND u.valid_to IS NULL AND u.layer_version_id IS NOT NULL), hl.optional
 		FROM hierarchy_levels hl WHERE hl.hierarchy_id = $1 ORDER BY hl.depth
 	`, s.hierarchyID)
 	if err != nil {
@@ -417,7 +418,7 @@ func (a api) loadSetupState(ctx context.Context, s setupContext) (setupState, er
 		depth := level.Depth
 		state.Layers = append(state.Layers, setupLayer{
 			Key: fmt.Sprintf("level:%d", depth), Slug: wizardLayerSlug(s.hierarchy, level.Slug),
-			Name: level.Labels["en"] + " boundaries", Role: "hierarchy", Depth: &depth, Required: true,
+			Name: level.Labels["en"] + " boundaries", Role: "hierarchy", Depth: &depth, Required: !level.Optional,
 		})
 	}
 	state.Layers = append(state.Layers,
@@ -568,11 +569,17 @@ func (a api) setupHierarchy(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("remove unused levels: %w", err)
 		}
 		for depth, level := range req.Levels {
+			optional := false
+			if depth > 0 && depth+1 < len(req.Levels) {
+				parent, child := req.Levels[depth-1].Slug, req.Levels[depth+1].Slug
+				optional = (parent == "division" && level.Slug == "sub_division" && child == "range") ||
+					(parent == "range" && level.Slug == "section" && child == "beat")
+			}
 			labels, _ := json.Marshal(level.Labels)
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels) VALUES ($1, $2, $3, $4)
+				INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels, optional) VALUES ($1, $2, $3, $4, $5)
 				ON CONFLICT (hierarchy_id, depth) DO UPDATE SET labels = EXCLUDED.labels
-			`, s.hierarchyID, depth, level.Slug, labels); err != nil {
+			`, s.hierarchyID, depth, level.Slug, labels, optional); err != nil {
 				return fmt.Errorf("save level %d: %w", depth, err)
 			}
 		}

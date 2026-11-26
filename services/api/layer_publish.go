@@ -81,6 +81,8 @@ func readLayerDraft(ctx context.Context, tx pgx.Tx, workspace, version pgtype.UU
 			WHEN d.hierarchy_id IS NULL THEN ''
 			WHEN d.depth IS NULL OR NOT EXISTS (SELECT 1 FROM draft_units WHERE layer_version_id = $1)
 				THEN 'The hierarchy draft must contain units at one level.'
+			WHEN NOT EXISTS (SELECT 1 FROM hierarchy_levels WHERE hierarchy_id = d.hierarchy_id AND depth = d.depth)
+				THEN 'This hierarchy level no longer exists. Upload a new draft.'
 			WHEN d.depth = 0 AND EXISTS (
 				SELECT 1 FROM units root WHERE root.hierarchy_id = d.hierarchy_id AND root.depth = 0
 					AND root.valid_to IS NULL AND root.layer_version_id IS NULL AND root.geom IS NULL
@@ -102,17 +104,21 @@ func readLayerDraft(ctx context.Context, tx pgx.Tx, workspace, version pgtype.UU
 				SELECT 1 FROM draft_units u WHERE u.layer_version_id = $1 AND (
 					u.path IS NULL OR u.depth <> d.depth OR (d.depth > 0 AND NOT EXISTS (
 						SELECT 1 FROM units p WHERE p.hierarchy_id = d.hierarchy_id
-							AND p.current_path = subpath(u.path, 0, d.depth)
-							AND (d.parent_version IS NULL OR p.layer_version_id = d.parent_version)
+							AND p.current_path = u.parent_path
+                            AND hierarchy_parent_allowed(d.hierarchy_id, d.depth, p.depth)
+							AND (p.layer_version_id = d.parent_version OR NOT EXISTS (
+                                SELECT 1 FROM draft_units referenced
+                                WHERE referenced.layer_version_id = d.parent_version AND referenced.depth = p.depth
+                            ))
 					))
 				)
 			) THEN 'Some units have no current parent. Check the mapping and upload a new draft.'
 			WHEN EXISTS (
-				SELECT 1 FROM units child WHERE child.hierarchy_id = d.hierarchy_id
-					AND child.valid_to IS NULL AND child.depth = d.depth + 1 AND NOT EXISTS (
-						SELECT 1 FROM draft_units u WHERE u.layer_version_id = $1
-							AND u.path = subpath(child.path, 0, child.depth)
-					)
+				SELECT 1 FROM units parent JOIN units child ON child.hierarchy_id = parent.hierarchy_id
+                    AND child.depth > parent.depth AND child.valid_to IS NULL
+                    AND subpath(child.path, 0, -1) = parent.current_path
+                WHERE parent.hierarchy_id = d.hierarchy_id AND parent.depth = d.depth
+                    AND NOT EXISTS (SELECT 1 FROM draft_units u WHERE u.layer_version_id = $1 AND u.path = parent.path)
 			) THEN 'The draft would leave current child units without a parent.'
 			ELSE '' END
 		FROM draft d
@@ -337,8 +343,16 @@ func (a api) commitLayerPublish(ctx context.Context, tx pgx.Tx, workspace, versi
 		}
 		_, err = tx.Exec(ctx, `
 			INSERT INTO units (hierarchy_id, depth, code, name, path, geom, layer_version_id, valid_from)
-			SELECT $2, depth, code, name, path, geom, layer_version_id, $3
-			FROM draft_units WHERE layer_version_id = $1
+			SELECT $2, d.depth, d.code, d.name, d.path, d.geom, d.layer_version_id,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM workspace_setup s WHERE s.hierarchy_id = $2 AND s.finished_at IS NULL
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM units previous WHERE previous.hierarchy_id = $2
+                      AND (previous.depth = d.depth OR (level.optional AND previous.depth > d.depth))
+                      AND previous.geom IS NOT NULL
+                ) THEN '-infinity'::timestamptz ELSE $3 END
+			FROM draft_units d JOIN hierarchy_levels level ON level.hierarchy_id = $2 AND level.depth = d.depth
+            WHERE d.layer_version_id = $1
 		`, version, draft.hierarchyID, effective)
 		if err != nil {
 			return fmt.Errorf("open new units: %w", err)
@@ -362,7 +376,14 @@ func (a api) commitLayerPublish(ctx context.Context, tx pgx.Tx, workspace, versi
 		return fmt.Errorf("retire previous layer version: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		UPDATE layer_versions SET status = 'published', published_at = $2 WHERE id = $1
+		UPDATE layer_versions v SET status = 'published', published_at = $2,
+            overlay_kind = previous.overlay_kind,
+            overlay_from = CASE WHEN previous.overlay_kind IS NOT NULL THEN $2 END,
+            effective_from = CASE WHEN l.role IN ('forest', 'exclusion') AND previous.id IS NULL
+                AND EXISTS (SELECT 1 FROM workspace_setup s WHERE s.workspace_id = l.workspace_id AND s.finished_at IS NULL)
+                THEN '-infinity'::timestamptz END
+        FROM layers l LEFT JOIN layer_versions previous ON previous.layer_id = l.id AND previous.retired_at = $2
+        WHERE v.id = $1 AND l.id = v.layer_id
 	`, version, effective); err != nil {
 		return fmt.Errorf("publish draft: %w", err)
 	}

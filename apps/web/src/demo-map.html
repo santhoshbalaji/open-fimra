@@ -223,6 +223,16 @@
           <time [attr.datetime]="alert.step_time">Updated {{ dateTime(alert.step_time) }}</time>
         </div>
       } @else { <p>No alert available for this detection.</p> }
+      @if (alert?.overlay_matches?.length) {
+        <ul class="grid gap-1">
+          @for (match of alert?.overlay_matches; track match.versionId + '/' + match.featureId) {
+            <li class="wrap-anywhere">
+              {{ match.kind === 'protected_area' ? 'Inside' : overlayKindLabels[match.kind] }}:
+              {{ match.name }}@if (match.zone) { ({{ match.zone }}) }
+            </li>
+          }
+        </ul>
+      }
       @if (alert?.assignment; as receipt) {
         <div #assignmentReceipt class="assignment-receipt" tabindex="-1">
           <p class="font-semibold">Assigned to {{ receipt.unitName }}</p>

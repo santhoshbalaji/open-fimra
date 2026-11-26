@@ -1,3 +1,4 @@
+import { overlayKindLabels, type OverlayKind } from './boundary-overlays';
 import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, Injector, OnInit, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
@@ -30,7 +31,7 @@ type ImportField = 'nameField' | 'codeField' | 'parentCodeField' | 'sourceLayer'
 const importFields: ImportField[] = ['nameField', 'codeField', 'parentCodeField', 'sourceLayer'];
 interface Version extends VersionName {
   versionId: string; layerSlug: string; sourceFile: string | null; depth: number | null;
-  status: LayerStatus; blocksPublish: boolean; hasImport: boolean; fields: Partial<Record<ImportField, string>>;
+  status: LayerStatus; overlayKind?: OverlayKind | null; blocksPublish: boolean; hasImport: boolean; fields: Partial<Record<ImportField, string>>;
 }
 interface Layer {
   slug: string; name: string; role: Role; hierarchy: string | null; depth: number | null;
@@ -146,11 +147,13 @@ export class Layers implements OnInit {
   readonly mapURL = computed(() => this.versionURL() + '/map');
   readonly confirming = signal(false);
   readonly removeGrants = signal(false);
-  readonly operation = signal<'upload' | 'preview' | 'publish' | null>(null);
+  readonly operation = signal<'upload' | 'preview' | 'publish' | 'overlay' | null>(null);
   readonly busy = computed(() => this.operation() !== null || this.confirming());
   readonly uploading = signal(false);
   readonly draftState = signal<DataState>({ kind: 'ready' });
   readonly error = signal('');
+  readonly overlayKinds = Object.keys(overlayKindLabels) as OverlayKind[];
+  readonly overlayKindLabels = overlayKindLabels;
   readonly needsReplacement = computed(() => this.draft()?.status === 'failed' ||
     !!this.draft()?.problems.some(problem => problem.blocksPublish));
   readonly announce = computed(() => {
@@ -158,6 +161,7 @@ export class Layers implements OnInit {
       case 'upload': return 'Saving layer upload.';
       case 'preview': return 'Checking past detections.';
       case 'publish': return 'Publishing layer.';
+      case 'overlay': return 'Saving overlay kind.';
     }
     const draft = this.draft();
     if (draft?.status === 'pending') return 'Upload saved. The file is being checked.';
@@ -380,6 +384,12 @@ export class Layers implements OnInit {
       this.watchDraft({ ...draft, status: 'published', rematch: { status: 'pending', processed: 0, alertsCreated: 0 } });
       this.focus('layer-review');
     });
+  }
+
+  markOverlay(version: Version, kind: string): void {
+    if (!kind || this.busy()) return;
+    const url = this.base + '/' + encodeURIComponent(version.versionId) + '/overlay';
+    this.run('overlay', this.http.put(url, { kind }), () => this.loadCatalog());
   }
 
   changeNote(change: Change): string {

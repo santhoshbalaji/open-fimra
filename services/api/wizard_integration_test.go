@@ -260,6 +260,17 @@ func TestWizardIntegration(t *testing.T) {
 		if len(state.Presets) < 2 || state.Mode != "state" || state.Steps["workspace"].Status != "done" {
 			t.Fatalf("unexpected initial setup state: %+v", state)
 		}
+		optional, _ := findPreset("circle-division-subdivision-range-section-beat")
+		optional.Levels = append([]presetLevel(nil), optional.Levels...)
+		optional.Levels[5].Labels = levelLabels{"en": "Round", "hi": "अनुभाग"}
+		var optionalState setupState
+		call("state.admin", http.MethodPost, base+"/setup/hierarchy",
+			hierarchyRequest{Preset: optional.Slug, Levels: optional.Levels}, http.StatusOK, &optionalState)
+		if len(optionalState.Levels) != 7 || !optionalState.Levels[3].Optional || !optionalState.Levels[5].Optional ||
+			optionalState.Levels[5].Labels["en"] != "Round" || optionalState.Layers[3].Required || optionalState.Layers[5].Required {
+			t.Fatalf("unexpected optional hierarchy: %+v", optionalState.Levels)
+		}
+
 		levels := make([]presetLevel, len(preset.Levels))
 		for i, level := range preset.Levels {
 			levels[i] = presetLevel{Slug: level.Slug, Labels: levelLabels{"en": level.Labels["en"], "hi": level.Labels["hi"]}}

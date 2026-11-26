@@ -6,6 +6,7 @@ database rejects any later change to that list. This module reads only those
 rows, by their keys, and writes them to a file.
 """
 
+import json
 import logging
 import os
 import re
@@ -95,10 +96,13 @@ DETECTION_FIELDS = [
     _field("forest_class", "forest_cls", "string", "inside, near_edge, outside or fixed_heat_source."),
     _field("triage_reason", "triage", "string",
            "Why the point needs review: shared_boundary, overlapping_units or no_unit. Empty when it does not."),
+    _field("boundary_version_ids", "boundaries", "string", "Version identifiers of boundaries used at observation time."),
 ]
 ALERT_FIELDS = [
     _field("alert_id", "alert_id", "int64", "Open FIMRA alert ID."),
-    _field("queue", "queue", "string", "The alert queue: unit, edge_review or triage."),
+    _field("queue", "queue", "string", "The original alert queue: unit, edge_review or triage."),
+    _field("dispatch_hierarchy_id", "dispatch_h", "string", "The hierarchy of the original alert assignment."),
+    _field("dispatch_unit_path", "dispatch", "string", "The unit path first assigned by alert routing."),
     _field("alert_created_at", "alert_time", "datetime", "When the alert was created, in UTC (ISO 8601)."),
     _field("step", "step", "string", "The alert's current workflow step, such as new or acknowledged."),
     _field("step_label", "step_label", "string", "The current workflow step as the workflow names it."),
@@ -181,7 +185,7 @@ def export_fields(kind, levels, answers=()):
         for part, word in (("code", "code"), ("name", "name")):
             name = f"{level.prefix}{level.level}_{part}"
             fields.append(Field(name, short_name(name, taken), "string",
-                                f"{level.label} {word} when the detection was matched ({level.hierarchy} hierarchy)."))
+                                f"{level.label} {word} at observation time ({level.hierarchy} hierarchy)."))
     fields = fields + TAIL_FIELDS
     for answer in answers:
         fields.append(Field(answer.name, answer_short_name(answer.name, taken), answer.kind, answer.description))
@@ -349,7 +353,11 @@ def write_data(fmt, path, layer_name, fields, rows, levels, items):
             values = row_values(row, levels)
             feature = ogr.Feature(definition)
             for index, f in zip(indexes, fields):
-                _set(feature, index, f.kind, values.get(f.name), native_time)
+                value = values.get(f.name)
+                if short and f.name == "boundary_version_ids" and value and len(value) > 254:
+                    # The archive carries the complete list for these rows.
+                    continue
+                _set(feature, index, f.kind, value, native_time)
             if fmt == "kml":
                 feature.SetField("Name", placemark_name(values))
                 feature.SetField("Description", placemark_description(values))
@@ -389,6 +397,14 @@ def write_export(work_dir, final_path, meta, levels, rows, generated_at, answers
             # KMZ readers expect the KML first.
             for part in sorted(work_dir.glob(f"{data_path.stem}.*")):
                 archive.write(part, part.name)
+            if fmt == "shapefile":
+                long_lists = [
+                    {**{key: row[key] for key in ("detection_id", "alert_id", "submission_id") if row.get(key)},
+                     "boundary_version_ids": json.loads(row["boundary_version_ids"])}
+                    for row in rows if len(row.get("boundary_version_ids") or "") > 254
+                ]
+                if long_lists:
+                    archive.writestr("boundary_versions.json", json.dumps(long_lists))
             archive.writestr("README.txt", readme_text(items, fields))
         os.replace(packed, final_path)
     else:
@@ -402,13 +418,20 @@ ROWS_SQL = """
            sub.step AS report_step, rs.label AS report_step_label, sub.received_at, sub.device_time,
            CASE WHEN sub.id IS NOT NULL THEN COALESCE(ap.decision, 'pending') END AS decision,
            ap.decided_at, ST_X(sub.location) AS report_longitude, ST_Y(sub.location) AS report_latitude,
-           a.queue, a.created_at AS alert_created_at,
+           COALESCE(r.dispatch->>'queue', a.queue) AS queue,
+           CASE WHEN r.dispatch IS NULL THEN a.hierarchy_id::text ELSE r.dispatch->>'hierarchyId' END AS dispatch_hierarchy_id,
+           CASE WHEN r.dispatch IS NULL THEN a.unit_path::text ELSE r.dispatch->>'unitPath' END AS dispatch_unit_path,
+           a.created_at AS alert_created_at,
            r.observed_at, d.source, d.product, d.satellite,
-           -- Alerts keep the class, reason and units they were routed with.
-           COALESCE(a.forest_class, m.forest_class) AS forest_class,
-           CASE WHEN a.id IS NULL THEN m.triage_reason
+           COALESCE(r.boundary_snapshot->>'forestClass', a.forest_class, m.forest_class) AS forest_class,
+           CASE WHEN r.boundary_snapshot IS NOT NULL THEN r.boundary_snapshot->>'triageReason'
+                WHEN a.id IS NULL THEN m.triage_reason
                 ELSE COALESCE(a.triage_reason, CASE WHEN a.queue = 'triage' THEN 'no_unit' END) END AS triage_reason,
-           COALESCE(a.hierarchy, m.hierarchy) AS hierarchy, f.code AS forest_feature_code,
+           CASE WHEN r.boundary_snapshot IS NULL THEN COALESCE(a.hierarchy, m.hierarchy)
+                ELSE COALESCE(r.boundary_snapshot->'hierarchy', '{}') END AS hierarchy,
+           COALESCE(r.boundary_snapshot->'layerVersionIds', to_jsonb(COALESCE(a.layer_version_ids, m.layer_version_ids)))::text
+               AS boundary_version_ids,
+           f.code AS forest_feature_code,
            d.frp_mw, d.confidence, ST_X(d.geom) AS longitude, ST_Y(d.geom) AS latitude,
            i.current_step AS step, s.label AS step_label, i.entered_at AS step_entered_at,
            im.incident_id
@@ -417,7 +440,8 @@ ROWS_SQL = """
                               = (r.workspace_id, r.detection_id, r.observed_at)
     JOIN detections d ON (d.id, d.observed_at) = (r.detection_id, r.observed_at)
     LEFT JOIN alerts a ON a.id = r.alert_id
-    LEFT JOIN layer_features f ON f.id = m.forest_feature_id
+    LEFT JOIN layer_features f ON f.id = CASE WHEN r.boundary_snapshot IS NULL THEN m.forest_feature_id
+        ELSE (r.boundary_snapshot->>'forestFeatureId')::bigint END
     LEFT JOIN workflow_instances i ON i.alert_id = r.alert_id
     LEFT JOIN workflow_steps s ON (s.template_id, s.slug) = (i.template_id, i.current_step)
     LEFT JOIN incident_members im ON im.alert_id = r.alert_id
