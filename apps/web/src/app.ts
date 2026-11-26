@@ -6,6 +6,7 @@ import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { AuthService } from './auth';
 import { Bootstrap } from './bootstrap';
 import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
+import { ExportTray } from './export-dialog-tray';
 import { FilterFields } from './filter-fields';
 import { Notifications, type NotificationLink } from './notifications';
 import { ShellNavigation, homePath } from './shell-navigation';
@@ -20,7 +21,7 @@ import { classes, type ForestClass } from './detections';
 
 @Component({
   selector: 'fimra-root',
-  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmButton, HlmToaster, Bootstrap, FilterFields, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus],
+  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmButton, HlmToaster, Bootstrap, FilterFields, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, ExportTray],
   providers: [ShellNavigation],
   templateUrl: './app.html',
   host: { '(window:keydown)': 'shortcut($event)' }

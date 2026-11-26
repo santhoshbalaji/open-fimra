@@ -268,6 +268,27 @@ func TestExportIntegration(t *testing.T) {
 		return
 	}
 
+	t.Run("recent jobs are private to the requester", func(t *testing.T) {
+		for user, job := range exports {
+			code, data, headers := call(http.MethodGet, base+"/exports", user, nil)
+			var page struct{ Items []exportStatus }
+			if code != http.StatusOK || headers.Get("Cache-Control") != "private, no-store" ||
+				json.Unmarshal(data, &page) != nil || len(page.Items) > 20 {
+				t.Fatalf("export history for %s: HTTP %d %s", user, code, data)
+			}
+			if !slices.ContainsFunc(page.Items, func(item exportStatus) bool {
+				return item.ID == job.ID && item.Status == "ready" && item.FileName == job.FileName
+			}) {
+				t.Errorf("%s cannot reopen their ready export", user)
+			}
+			for other, otherJob := range exports {
+				if other != user && slices.ContainsFunc(page.Items, func(item exportStatus) bool { return item.ID == otherJob.ID }) {
+					t.Errorf("%s can see an export requested by %s", user, other)
+				}
+			}
+		}
+	})
+
 	t.Run("filters match the alert queue", func(t *testing.T) {
 		want := alertIDs("state.admin", "hours=24&queue=unit&status=new&class=inside&unitPath=ds.c1.d1")
 		status := request("state.admin", map[string]any{"kind": "alerts", "format": "geojson", "hours": 24,
@@ -300,6 +321,7 @@ func TestExportIntegration(t *testing.T) {
 			want               int
 		}{
 			{http.MethodPost, base + "/exports", "no.role", map[string]any{"kind": "alerts", "format": "gpkg"}, http.StatusForbidden},
+			{http.MethodGet, base + "/exports", "no.role", nil, http.StatusForbidden},
 			{http.MethodGet, base + "/exports/" + admin.ID, "no.role", nil, http.StatusForbidden},
 			{http.MethodGet, base + "/exports/" + admin.ID, "division.officer", nil, http.StatusNotFound},
 			{http.MethodGet, base + "/exports/" + admin.ID + "/file", "division.officer", nil, http.StatusNotFound},

@@ -25,6 +25,7 @@
             @else { <svg fimraIcon="moon" aria-hidden="true"></svg> }
           }
         </button>
+        @defer (on immediate) { <fimra-export-tray /> }
         @defer (on immediate) { <fimra-notifications (openNotice)="openNotice($event)" /> }
         @defer (on immediate) { <fimra-shell-account [name]="name" /> }
         @placeholder { <span class="user-trigger user-name">{{ name }}</span> }

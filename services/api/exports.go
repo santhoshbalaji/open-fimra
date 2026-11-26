@@ -230,17 +230,28 @@ func (a api) createExport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, status)
 }
 
-// readExport returns the caller's own export. Other users' exports are not found.
-func (a api) readExport(ctx context.Context, slug string, id pgtype.UUID, subject string) (exportStatus, error) {
-	var s exportStatus
-	var fileKey *string
-	var workspace string
-	err := a.pool.QueryRow(ctx, `
+const exportStatusFields = `
 		SELECT e.id::text, e.kind, e.format, e.status, e.filters, e.row_count, e.feature_count, e.file_bytes,
 		       e.file_key, e.created_at, e.finished_at, e.expires_at, e.error_message, w.slug
 		FROM exports e JOIN workspaces w ON w.id = e.workspace_id
+`
+
+// readExport returns the caller's own export. Other users' exports are not found.
+func (a api) readExport(ctx context.Context, slug string, id pgtype.UUID, subject string) (exportStatus, error) {
+	return scanExport(a.pool.QueryRow(ctx, exportStatusFields+`
 		WHERE e.id = $1 AND w.slug = $2 AND e.requested_by = $3
-	`, id, slug, subject).Scan(&s.ID, &s.Kind, &s.Format, &s.Status, &s.Filters, &s.RowCount, &s.FeatureCount,
+	`, id, slug, subject))
+}
+
+type exportScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanExport(row exportScanner) (exportStatus, error) {
+	var s exportStatus
+	var fileKey *string
+	var workspace string
+	err := row.Scan(&s.ID, &s.Kind, &s.Format, &s.Status, &s.Filters, &s.RowCount, &s.FeatureCount,
 		&s.FileBytes, &fileKey, &s.CreatedAt, &s.FinishedAt, &s.ExpiresAt, &s.Error, &workspace)
 	if err != nil {
 		return s, err
@@ -268,18 +279,7 @@ func (a api) ownExport(w http.ResponseWriter, r *http.Request) (exportStatus, pg
 		writeError(w, http.StatusNotFound, "The export was not found.")
 		return exportStatus{}, id, false
 	}
-	var member bool
-	err := a.pool.QueryRow(r.Context(), `
-		SELECT EXISTS (SELECT 1 FROM role_assignments a JOIN users u ON u.id = a.user_id
-		               JOIN workspaces w ON w.id = a.workspace_id
-		               WHERE u.oidc_subject = $1 AND w.slug = $2)
-	`, caller.Subject, slug).Scan(&member)
-	if err != nil {
-		a.exportError(w, "Could not check the export grant", err)
-		return exportStatus{}, id, false
-	}
-	if !member {
-		writeError(w, http.StatusForbidden, "A role in this workspace is required.")
+	if !a.allowExportRead(w, r.Context(), caller.Subject, slug) {
 		return exportStatus{}, id, false
 	}
 	status, err := a.readExport(r.Context(), slug, id, caller.Subject)
@@ -292,6 +292,51 @@ func (a api) ownExport(w http.ResponseWriter, r *http.Request) (exportStatus, pg
 		return status, id, false
 	}
 	return status, id, true
+}
+
+func (a api) allowExportRead(w http.ResponseWriter, ctx context.Context, subject, slug string) bool {
+	var member bool
+	err := a.pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM role_assignments a JOIN users u ON u.id = a.user_id
+		               JOIN workspaces w ON w.id = a.workspace_id
+		               WHERE u.oidc_subject = $1 AND w.slug = $2)
+	`, subject, slug).Scan(&member)
+	if err != nil {
+		a.exportError(w, "Could not check the export grant", err)
+		return false
+	}
+	if !member {
+		writeError(w, http.StatusForbidden, "A role in this workspace is required.")
+		return false
+	}
+	return true
+}
+
+func (a api) listExports(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	caller := r.Context().Value(identityKey{}).(identity)
+	slug := chi.URLParam(r, "slug")
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	if !a.allowExportRead(w, ctx, caller.Subject, slug) {
+		return
+	}
+	rows, err := a.pool.Query(ctx, exportStatusFields+`
+		WHERE w.slug = $1 AND e.requested_by = $2
+		ORDER BY e.created_at DESC, e.id DESC LIMIT 20
+	`, slug, caller.Subject)
+	if err != nil {
+		a.exportError(w, "Could not list exports", err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (exportStatus, error) {
+		return scanExport(row)
+	})
+	if err != nil {
+		a.exportError(w, "Could not list exports", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (a api) exportStatus(w http.ResponseWriter, r *http.Request) {
