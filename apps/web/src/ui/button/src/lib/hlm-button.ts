@@ -46,7 +46,7 @@ export type ButtonVariants = VariantProps<typeof buttonVariants>;
 		'data-slot': 'button',
 		'[attr.data-busy]': 'busy() ? "" : null',
 		'[attr.aria-busy]': 'busy() || null',
-		'[attr.aria-disabled]': 'busy() || null',
+		'[attr.aria-disabled]': 'ariaDisabled() || busy() || null',
 	},
 })
 export class HlmButton {
@@ -58,6 +58,7 @@ export class HlmButton {
 
 	public readonly size = input<ButtonVariants['size']>(this._config.size);
 	public readonly busy = input(false, { transform: booleanAttribute });
+	public readonly ariaDisabled = input(false, { transform: booleanAttribute });
 
 	constructor() {
 		classes(() => [
@@ -68,13 +69,13 @@ export class HlmButton {
 
 		// Capture activation before application handlers and native form submission, keeping focus in place.
 		const element = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
-		const preventBusyActivation = (event: Event) => {
-			if (!this.busy()) return;
+		const preventDisabledActivation = (event: Event) => {
+			if (!this.busy() && !this.ariaDisabled()) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 		};
-		element.addEventListener('click', preventBusyActivation, true);
-		inject(DestroyRef).onDestroy(() => element.removeEventListener('click', preventBusyActivation, true));
+		element.addEventListener('click', preventDisabledActivation, true);
+		inject(DestroyRef).onDestroy(() => element.removeEventListener('click', preventDisabledActivation, true));
 	}
 
 	setClass(classes: string): void {

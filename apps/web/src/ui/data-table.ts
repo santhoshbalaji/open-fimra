@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, input, model, output } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HlmButton } from '@spartan-ng/helm/button';
+import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { map } from 'rxjs';
 import { ShellListScroll } from '../shell-list-scroll';
 import { defaultWorkspaceFormat } from '../workspace-format';
@@ -43,7 +44,7 @@ const ready: DataState = { kind: 'ready' };
 @Component({
   selector: 'fimra-data-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, Icon, LiveStatus, NgTemplateOutlet, ShellListScroll, StateRegion],
+  imports: [HlmButton, HlmSkeleton, Icon, LiveStatus, NgTemplateOutlet, ShellListScroll, StateRegion],
   host: { class: 'block min-w-0' },
   styleUrls: ['./workspace-target.css', './data-table.css'],
   templateUrl: './data-table.html'
@@ -74,6 +75,7 @@ export class DataTable<Row> {
     { requireSync: true }
   );
   protected readonly cards = computed(() => this.phoneCards() && this.phone());
+  protected readonly placeholderRows = [1, 2, 3];
   protected readonly visibleColumns = computed(() => this.columns().filter(column => this.isVisible(column)));
   protected readonly rowHeadingCell = computed(() => this.columns().find(column => column.rowHeading)?.cell);
   protected readonly sort = computed(() => this.page().position.sort);

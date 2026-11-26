@@ -195,10 +195,19 @@ describe('Notifications', () => {
     fixture.detectChanges();
     expect(inbox().textContent).toContain('Could not load notifications.');
     expect(row(alert.id)).toBeTruthy();
+    const markAll = button('Mark all as read');
+    expect(markAll.getAttribute('aria-disabled')).toBe('true');
+    markAll.click();
+    http.expectNone({ method: 'POST', url: endpoint + '/read-all' });
     button('Retry').click();
-    get().flush(empty);
+    get().flush(page);
     fixture.detectChanges();
-    expect(inbox().textContent).toContain('You have no notifications.');
+    expect(markAll.hasAttribute('aria-disabled')).toBe(false);
+
+    button('Unread').click();
+    get('view=unread').flush(empty);
+    fixture.detectChanges();
+    expect(inbox().textContent).toContain('You have no unread notifications.');
     expect(row(alert.id)).toBeNull();
   });
 });

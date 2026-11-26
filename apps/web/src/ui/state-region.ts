@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, input, output } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { Icon, IconName } from './icon';
 import { LiveStatus } from './live-status';
@@ -25,11 +26,13 @@ const messages = {
 @Component({
   selector: 'fimra-state-region',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton, Icon, LiveStatus],
+  imports: [HlmButton, Icon, LiveStatus, NgTemplateOutlet],
   template: `
     <fimra-live-status class="sr-only" [message]="announcement()" />
     <div #region tabindex="-1" class="rounded-control focus-visible:outline-2 focus-visible:outline-ring">
-      @if (message(); as message) {
+      @if (placeholder(); as template) {
+        <div aria-hidden="true"><ng-container [ngTemplateOutlet]="template" /></div>
+      } @else if (message(); as message) {
         <div class="flex flex-wrap items-start justify-between gap-3 rounded-control border border-border bg-card p-4">
           <div class="flex min-w-0 items-start gap-2">
             <svg [fimraIcon]="message.icon" aria-hidden="true" class="mt-0.5 size-4 shrink-0"
@@ -53,13 +56,19 @@ const messages = {
 })
 export class StateRegion {
   readonly state = input.required<DataState>();
+  /** An optional decorative skeleton for the initial load. Supply no interactive content. */
+  readonly loadingPlaceholder = input<TemplateRef<unknown>>();
   readonly retry = output<void>();
+
+  protected readonly placeholder = computed(() => this.state().kind === 'loading' ? this.loadingPlaceholder() : undefined);
 
   protected readonly message = computed(() => {
     const state = this.state();
     if (state.kind === 'ready') return null;
     const fallback = messages[state.kind];
-    return { heading: state.heading?.trim() || fallback.heading, detail: state.detail?.trim(), icon: fallback.icon };
+    const detail = state.detail?.trim() ||
+      (state.kind === 'error' && state.keepContent ? 'Showing the last available data.' : undefined);
+    return { heading: state.heading?.trim() || fallback.heading, detail, icon: fallback.icon };
   });
 
   protected readonly showContent = computed(() => {

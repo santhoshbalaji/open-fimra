@@ -174,6 +174,7 @@ export class Submissions {
     });
 
     let lastRequest = '';
+    let loadedAt: Date | null = null;
     effect(onCleanup => {
       const endpoint = this.endpoint();
       const cursor = this.cursor();
@@ -192,20 +193,36 @@ export class Submissions {
       this.now();
       this.attempt();
       const key = endpoint + JSON.stringify(params);
-      if (key !== lastRequest || untracked(this.state).kind === 'error') {
+      if (key !== lastRequest) {
+        this.page.set(emptyPage);
+        loadedAt = null;
+      }
+      const observed = loadedAt;
+      if (observed) {
+        this.state.set({
+          kind: 'stale', heading: 'Refreshing field reports',
+          observedAt: { dateTime: observed.toISOString(), label: defaultWorkspaceFormat.dateTime(observed) }
+        });
+      } else if (key !== lastRequest || untracked(this.state).kind === 'error') {
         this.state.set({ kind: 'loading', heading: 'Loading field reports' });
       }
       lastRequest = key;
       const request = this.http.get<Page>(endpoint + '/submissions', { params }).subscribe({
         next: page => {
+          loadedAt = page.items.length ? new Date() : null;
           this.page.set({ rows: page.items, nextCursor: page.nextCursor ?? null, position });
           this.state.set(page.items.length || cursor ? { kind: 'ready' } :
             { kind: 'empty', heading: 'No field reports match', detail: 'Change the filters to see more reports.' });
         },
         error: (error: HttpErrorResponse) => {
+          const lostAccess = error.status === 401 || error.status === 403;
+          if (lostAccess) {
+            loadedAt = null;
+            this.page.set(emptyPage);
+          }
           if (error.status === 401) this.auth.sessionEnded();
           this.state.set(error.status === 403 ? { kind: 'forbidden' } :
-            { kind: 'error', heading: 'Field reports could not load' });
+            { kind: 'error', heading: 'Field reports could not load', keepContent: !!observed && !lostAccess });
         }
       });
       onCleanup(() => request.unsubscribe());
