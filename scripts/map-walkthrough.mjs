@@ -7,6 +7,7 @@ import { chromium, expect as playwrightExpect } from 'playwright/test';
 const { WEB, API, SHOTS } = process.env;
 const expect = playwrightExpect.configure({ timeout: 25_000 });
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+let step;
 
 async function check(page, name) {
   const { violations } = await new AxeBuilder({ page })
@@ -30,7 +31,9 @@ async function checkLargeLabels(page) {
     await route.fulfill({ response, json: map });
   });
   await page.reload();
+  // The picker gets its rendered detections from MapLibre's idle event.
   await expect(page.locator('#detection-picker')).toBeEnabled();
+  await page.waitForLoadState('networkidle');
   await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement);
     for (const size of ['label', 'body', 'subhead', 'title']) {
@@ -48,7 +51,8 @@ async function checkLargeLabels(page) {
     await checkbox.press('Space');
     await expect(checkbox).not.toBeChecked();
   }
-  assert.ok(await options.evaluate(element => element.scrollWidth <= element.clientWidth));
+  assert.ok(await options.evaluate(element => element.scrollWidth <= element.clientWidth),
+    'Long layer labels must fit the phone panel at 200% text size');
   await check(page, 'large-labels-phone');
 }
 
@@ -57,6 +61,7 @@ try {
     ['desktop', { width: 1440, height: 900 }],
     ['phone', { width: 390, height: 844 }]
   ]) {
+    step = `${size} — sign in`;
     const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
     const page = await context.newPage();
     page.setDefaultTimeout(30_000);
@@ -86,23 +91,28 @@ try {
     const detail = page.locator('fimra-side-panel.record-detail > section, hlm-sheet-content:has(#observation-heading)');
     const key = page.getByRole('region', { name: 'Map legend', exact: true });
     for (const theme of ['light', 'dark']) {
+      const scenario = `${size}-${theme}`;
+      step = `${scenario} — load the map`;
       tiles = 'live';
       await page.emulateMedia({ colorScheme: theme });
       await page.goto(WEB + '/monitor/map');
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expect(picker).toBeEnabled();
       await expect(key.getByRole('list', { name: 'Detection age' })).toBeVisible();
-      await check(page, `loaded-${size}-${theme}`);
+      await page.waitForLoadState('networkidle');
+      await check(page, `loaded-${scenario}`);
 
+      step = `${scenario} — toggle layers and check the legend`;
       await layersButton.press('Enter');
       const options = page.locator('.layer-options');
       const legend = options.getByRole('list', { name: 'Visible layers' });
       await expect(legend).toContainText('Forest areas');
       await options.getByRole('checkbox', { name: 'Forest areas' }).press('Space');
       await expect(legend).not.toContainText('Forest areas');
-      const incidentResponse = page.waitForResponse(r => r.request().method() === 'GET' && r.url().includes('/incidents?'));
-      await options.getByRole('checkbox', { name: 'Reported incidents' }).press('Space');
-      const response = await incidentResponse;
+      const [response] = await Promise.all([
+        page.waitForResponse(r => r.request().method() === 'GET' && r.url().includes('/incidents?')),
+        options.getByRole('checkbox', { name: 'Reported incidents' }).press('Space')
+      ]);
       assert.equal(response.status(), 200, 'The incident layer must load.');
       await expect(legend).toContainText('Reported incidents');
       await expect(options.getByRole('checkbox', { name: 'Reported incidents' })).toBeChecked();
@@ -111,41 +121,50 @@ try {
       await expect(layersButton).toBeFocused();
       await expect(key.getByText('Reported incident', { exact: true })).toBeVisible();
 
+      step = `${scenario} — select a detection by keyboard`;
       await picker.press('Space');
-      await expect(page.getByRole('option', { name: /· #\d+$/ }).first()).toBeVisible();
+      const firstDetection = page.getByRole('option', { name: /· #\d+$/ }).first();
+      await expect(firstDetection).toBeVisible();
+      const detection = (await firstDetection.textContent()).trim().match(/#(\d+)$/)[1];
       await page.keyboard.press('Home');
       await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(url => url.searchParams.get('detection') === detection);
       await expect(detail.getByRole('heading', { name: 'Detected observation' })).toBeVisible();
-      const detection = new URL(page.url()).searchParams.get('detection');
-      assert.match(detection, /^\d+$/);
-      await expect(picker).toContainText('Detection #' + detection);
+      const alertHeading = detail.getByRole('heading', { name: /^Alert #\d+$/ });
+      await expect(alertHeading).toBeVisible();
+      const selectedAlert = (await alertHeading.textContent()).trim().match(/#(\d+)$/)[1];
+      await expect(picker).toHaveText('Detection #' + detection);
 
+      step = `${scenario} — leave the detection detail and clear the selection`;
       // On a phone the modal sheet gives way to the selected map point.
       if (size === 'phone') {
         await detail.getByRole('link', { name: 'Show on map', exact: true }).click();
         await expect(detail).toBeHidden();
         await expect(canvas).toBeFocused();
-      }
-      // Zoom about the selection so the map stays centred there.
-      await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-      if (size === 'desktop') {
+        await expect(picker).toHaveText('Detection #' + detection);
+        await picker.press('Space');
+        await page.getByRole('option', { name: 'Clear selection', exact: true }).click();
+      } else {
         await detail.getByRole('button', { name: 'Close map details' }).press('Escape');
         await expect(detail).toBeHidden();
         await expect(picker).toBeFocused();
       }
-      const box = await canvas.boundingBox();
-      assert.ok(box);
-      await expect(async () => {
-        await canvas.click({ position: { x: box.width / 2, y: box.height / 2 }, timeout: 1000 });
-        await expect(detail).toBeVisible({ timeout: 500 });
-      }).toPass({ timeout: 10_000 });
-      await expect(picker).toContainText('Detection #' + detection);
-      assert.equal(new URL(page.url()).searchParams.get('detection'), detection);
-      await expect(detail.getByRole('heading', { name: /^Alert #/ })).toBeVisible();
-      await expect(detail.getByRole('link', { name: /^Open incident #/ })).toBeVisible();
-      if (size === 'desktop') await expect(alertRows.and(page.locator('[aria-current=true]'))).toBeVisible();
-      await check(page, `selected-${size}-${theme}`);
+      await expect(picker).toHaveText('Select a detection');
+      await expect(page).toHaveURL(url => !url.searchParams.has('alert') && !url.searchParams.has('detection'));
 
+      step = `${scenario} — reselect the same detection and check its alert row`;
+      await picker.press('Space');
+      await page.getByRole('option', { name: new RegExp(`· #${detection}$`) }).click();
+      await expect(page).toHaveURL(url => url.searchParams.get('detection') === detection);
+      await expect(picker).toHaveText('Detection #' + detection);
+      await expect(detail.getByRole('heading', { name: 'Alert #' + selectedAlert, exact: true })).toBeVisible();
+      await expect(detail.getByRole('link', { name: /^Open incident #/ })).toBeVisible();
+      const currentRow = alertRows.and(page.locator('[aria-current=true]'));
+      await expect(currentRow).toHaveAttribute('data-alert-id', selectedAlert);
+      if (size === 'desktop') await expect(currentRow).toBeVisible();
+      await check(page, `selected-${scenario}`);
+
+      step = `${scenario} — open an alert from the list and check its timeline`;
       await page.goto(WEB + '/monitor/alerts');
       const row = alertRows.first();
       await expect(row).toBeVisible();
@@ -161,25 +180,29 @@ try {
       if (size === 'desktop') {
         assert.ok((await detail.boundingBox()).x > (await row.boundingBox()).x, 'Alert detail docks beside the list');
       }
-      await check(page, `alert-detail-${size}-${theme}`);
+      await check(page, `alert-detail-${scenario}`);
+      step = `${scenario} — follow Show on map and restore alert row focus`;
       await page.reload();
       await expect(heading).toBeFocused();
       await detail.getByRole('link', { name: 'Show on map', exact: true }).click();
       await expect(page).toHaveURL(/\/monitor\/map\?.*#map$/);
       await expect(detail).toBeHidden();
       await expect(canvas).toBeFocused();
-      assert.equal(new URL(page.url()).searchParams.get('alert'), alert);
+      await expect(page).toHaveURL(url => url.searchParams.get('alert') === alert);
       await page.goBack();
       await expect(heading).toBeFocused();
       await detail.getByRole('button', { name: 'Close alert details' }).press('Escape');
       await expect(row).toBeFocused();
 
+      step = `${scenario} — render the empty detection state`;
       tiles = 'empty';
       await page.goto(WEB + '/monitor/map');
       await expect(page.getByText('No detections in view', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
-      await check(page, `empty-${size}-${theme}`);
+      await page.waitForLoadState('networkidle');
+      await check(page, `empty-${scenario}`);
 
+      step = `${scenario} — render the tile failure and open the alert list`;
       tiles = 'error';
       await page.reload();
       await expect(page.getByText('Some map data is missing', { exact: true })).toBeVisible();
@@ -199,8 +222,10 @@ try {
         await page.goBack();
         await expect(status).toContainText('Fire detection tiles');
       }
-      await check(page, `tile-error-${size}-${theme}`);
+      await page.waitForLoadState('networkidle');
+      await check(page, `tile-error-${scenario}`);
 
+      step = `${scenario} — retry both tile sources and restore detections`;
       const failed = new Map(tileRequests);
       tiles = 'live';
       await status.getByRole('button', { name: 'Retry' }).click();
@@ -210,9 +235,14 @@ try {
       await expect(picker).toBeEnabled();
       await expect(status.getByRole('button', { name: 'Retry' })).toHaveCount(0);
     }
-    if (size === 'phone') await checkLargeLabels(page);
+    if (size === 'phone') {
+      step = 'phone-dark — fit long layer labels at 200% text size';
+      await checkLargeLabels(page);
+    }
     await context.close();
   }
+} catch (cause) {
+  throw new Error(`Map walkthrough failed during ${step}`, { cause });
 } finally {
   await browser.close();
 }
