@@ -2,7 +2,7 @@ import { HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectT
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmField, HlmFieldLabel } from '@spartan-ng/helm/field';
 import { HlmSwitch } from '@spartan-ng/helm/switch';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
 import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
 import { ShellNavigation } from './shell-navigation';
 import { WorkspaceService } from './workspace';
@@ -15,7 +15,7 @@ import { classes, ForestClass } from './detections';
 @Component({
   selector: 'fimra-filter-fields',
   imports: [HlmField, HlmFieldLabel, HlmInput, HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger, HlmSwitch],
-  host: { class: 'filter-fields', id: 'map-filters' },
+  host: { class: 'filter-fields', id: 'map-filters', '[class.report-filter-fields]': 'forReports()' },
   template: `
     <hlm-field><label hlmFieldLabel for="hours">Past {{ filters.hours() }} {{ filters.hours() === 1 ? 'hour' : 'hours' }}</label>
       <input hlmInput id="hours" #hours type="range" min="1" max="720" [value]="filters.hours()" (change)="setFilter('hours', hours.value)">
@@ -33,10 +33,11 @@ import { classes, ForestClass } from './detections';
         (change)="selectScope(path)">
       @if (scopeError()) { <span role="status">{{ scopeError() }}</span> }
     </hlm-field>
-    <label hlmFieldLabel for="low-bandwidth"><hlm-switch inputId="low-bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> Low bandwidth</label>
+    @if (!forReports()) { <label hlmFieldLabel for="low-bandwidth"><hlm-switch inputId="low-bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> Low bandwidth</label> }
   `
 })
 export class FilterFields {
+  readonly forReports = input(false);
   readonly filters = inject(DashboardFilters);
   readonly classes = classes;
   private readonly navigation = inject(ShellNavigation, { optional: true });
@@ -65,7 +66,7 @@ export class FilterFields {
 
   setFilter(key: 'hours' | 'class' | 'unitPath', value: string): void {
     if (this.navigation) {
-      this.navigation.update({ [key]: value || null, cursor: null, alert: null, detection: null, incident: null, report: null });
+      this.navigation.update({ [key]: value || null, cursor: null, reportPages: null, alert: null, detection: null, incident: null, report: null });
     } else if (key === 'hours') {
       this.filters.hours.set(value ? +value : defaultDashboardHours);
     } else if (key === 'class') {

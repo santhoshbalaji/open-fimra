@@ -1,6 +1,6 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, input, model, output } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { map } from 'rxjs';
@@ -68,7 +68,7 @@ export class DataTable<Row> {
   readonly pageRequest = output<TablePosition>();
   readonly retry = output<void>();
 
-  private readonly hiddenColumns = signal<ReadonlySet<string>>(new Set());
+  readonly hiddenColumns = model<ReadonlySet<string>>(new Set());
   private readonly phone = toSignal(
     inject(BreakpointObserver).observe(workspacePhone).pipe(map(result => result.matches)),
     { requireSync: true }

@@ -107,14 +107,16 @@ describe('Form renderer', () => {
     const problems = el.querySelector('#form-problems')!;
     expect(problems.textContent).toContain('“Team reached the site at” is required.');
     expect(problems.textContent).toContain('Team 1: “Team name” is required.');
-    expect(problems.textContent).not.toContain('reached_at');
+    expect(problems.querySelector('a[href="#field-reached_at"]')).toBeTruthy();
+    expect(problems.querySelector('a[href="#field-team_name-teams-0"]')).toBeTruthy();
     http.expectNone(workspace + '/alerts/7/submissions');
   });
 
   it('sends checked answers to the alert and shows the server’s problems beside the questions', async () => {
-    const { el, fixture, press, component } = render({ initial: complete });
+    const { el, fixture, press } = render({ initial: complete });
     for (let i = 0; i < 3; i++) press('Next');
     press('Send report');
+    expect(el.querySelector('fimra-live-status')!.textContent).toBe('Saving report…');
     const post = http.expectOne(workspace + '/alerts/7/submissions');
     expect(post.request.body).toMatchObject({ form: 'first-report', version: 1, step: 'first_report',
       values: { fire_status: 'controlled', site_photos: [photo], teams: [{ team_name: 'Demo Team A', members: 6 }] } });
@@ -125,10 +127,12 @@ describe('Form renderer', () => {
       { status: 422, statusText: 'Unprocessable' });
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(el.querySelector('#form-problems')!.textContent).toContain('The answers do not fit the form.');
+    expect(el.querySelector('[role=alert]')!.textContent).toContain('The answers do not fit the form.');
+    expect(el.querySelector('fimra-status-badge')!.textContent).toContain('Refused');
     expect(el.querySelector('#form-problems')!.textContent).toContain('“Area burnt so far” must be at least 0.');
-    component.show(explain('Field "estimated_area" must be at least 0.', component.tree(), 'en'));
-    fixture.detectChanges();
+    const link = el.querySelector<HTMLAnchorElement>('a[href="#field-estimated_area"]')!;
+    link.click();
+    TestBed.tick();
     expect(el.textContent).toContain('Area burnt so far');
     expect(el.querySelector('.form-field.invalid')?.textContent).toContain('must be at least 0.');
     const field = el.querySelector('#field-estimated_area')!;
@@ -144,12 +148,13 @@ describe('Form renderer', () => {
     press('Next');
     press('Next');
     press('Send report');
-    const problem = Array.from(el.querySelectorAll<HTMLButtonElement>('#form-problems button'))
+    const problem = Array.from(el.querySelectorAll<HTMLAnchorElement>('#form-problems a'))
       .find(button => button.textContent.includes('“Likely cause”'));
     expect(problem).toBeDefined();
     problem!.click();
     TestBed.tick();
     const trigger = el.querySelector('button#field-cause')!;
+    expect(document.activeElement).toBe(trigger);
     expect(trigger.getAttribute('aria-describedby')?.split(' ')).toContain('field-cause-errors');
     expect(el.querySelector('#field-cause-errors')?.textContent).toContain('“Likely cause” is required.');
   });

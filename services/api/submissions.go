@@ -482,6 +482,11 @@ func (a api) submissionList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	sort := q.Get("sort")
+	if sort != "" && sort != "oldest" {
+		writeError(w, http.StatusBadRequest, "Unknown report sort order.")
+		return
+	}
 	form, decision := q.Get("form"), q.Get("decision")
 	if (form != "" && !formKeyPattern.MatchString(form)) || !slices.Contains([]string{"", "pending", "approved", "returned"}, decision) {
 		writeError(w, http.StatusBadRequest, "Unknown form or decision.")
@@ -514,7 +519,7 @@ func (a api) submissionList(w http.ResponseWriter, r *http.Request) {
 	var allowed, knownStatus bool
 	var page submissionPage
 	err = a.reader.QueryRow(ctx, submissionListSQL, caller.Subject, chi.URLParam(r, "slug"), f.hours, f.queue, f.status,
-		f.class, f.path, form, decision, alertID, f.before, beforeID, f.limit+1).Scan(&allowed, &knownStatus, &page.Counts, &page.Items)
+		f.class, f.path, form, decision, alertID, f.before, beforeID, f.limit+1, sort == "oldest").Scan(&allowed, &knownStatus, &page.Counts, &page.Items)
 	if err != nil {
 		a.logger.Error("Could not read submissions", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load the submissions.")

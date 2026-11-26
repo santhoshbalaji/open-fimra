@@ -42,7 +42,7 @@ export class App implements OnInit {
   readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
   readonly showFilters = computed(() => {
     const view = this.navigation.destination();
-    return view && 'filters' in view;
+    return view && 'filters' in view && view.path !== '/reports/field';
   });
   readonly scope = computed(() => {
     const unit = this.navigation.query().get('unitPath');

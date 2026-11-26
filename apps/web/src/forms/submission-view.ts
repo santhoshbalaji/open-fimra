@@ -1,17 +1,20 @@
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
-import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
+import { RouterLink } from '@angular/router';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
-import { toast } from '@spartan-ng/brain/sonner';
+
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth';
+import { ShellNavigation } from '../shell-navigation';
+import { LiveStatus } from '../ui/live-status';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { StateRegion, type DataState } from '../ui/state-region';
 import { StatusBadge } from '../ui/status-badge';
 import { defaultWorkspaceFormat } from '../workspace-format';
 import { decisionLabels, serverProblems, type FormVersion, type Submission } from './form-api';
+import { textIn } from './form-text';
 import { FormPresentation } from './form-presentation';
 
 /**
@@ -21,54 +24,80 @@ import { FormPresentation } from './form-presentation';
  */
 @Component({
   selector: 'fimra-submission-view',
-  imports: [HlmButtonImports, HlmFieldImports, HlmSkeletonImports, HlmTextareaImports, StatusBadge, StateRegion, FormPresentation],
+  imports: [HlmButtonImports, HlmFieldImports, HlmTextareaImports, LiveStatus, RouterLink, StatusBadge, StateRegion, FormPresentation],
   host: { class: 'submission-view' },
   template: `
-    @if (submission(); as s) {
-      <p class="submission-meta">Version {{ s.version }} · sent by {{ s.submittedBy }} · received {{ time(s.receivedAt) }}
-        @if (s.deviceTime) { · saved on the device {{ time(s.deviceTime) }} }
-        · alert #{{ s.alertId }}</p>
-      <section class="approval" aria-labelledby="approval-title">
-        <h4 id="approval-title">Decision</h4>
-        @if (s.approval; as a) {
-          <p #decisionResult tabindex="-1"><fimra-status-badge [icon]="a.decision === 'approved' ? 'complete' : 'overdue'" [label]="labels[a.decision]" />
-            by {{ a.by }}, {{ time(a.at) }}</p>
-          @if (a.note) { <p class="approval-note">{{ a.note }}</p> }
-        } @else if (s.canApprove) {
-          @if (returning()) {
-            <form novalidate (submit)="$event.preventDefault(); decide('returned', note.value)">
-              <hlm-field><label hlmFieldLabel for="return-note">Why is the report returned?</label>
-                <textarea hlmTextarea id="return-note" #note maxlength="2000" required></textarea>
-              </hlm-field>
-              <p class="form-hint">The report no longer counts, so the alert waits for a new one at its step.</p>
-              <div class="form-actions">
-                <button hlmBtn type="submit" [disabled]="busy()">Return the report</button>
-                <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="returning.set(false)">Cancel</button>
-              </div>
-            </form>
-          } @else {
-            <p>{{ labels.pending }}. A decision cannot be changed later.</p>
-            <div class="form-actions">
-              <button #approve hlmBtn type="button" [busy]="busy()" (click)="approveReport(approve)">Approve</button>
-              <button hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="returning.set(true)">Return with a note</button>
-            </div>
+    <fimra-live-status class="sr-only" [message]="announcement()" />
+    <fimra-state-region [state]="reportState()" (retry)="reloadReport()">
+      @if (submission(); as s) {
+        <header class="submission-header">
+          <h3>{{ title() }}</h3>
+          <p class="submission-meta">Version {{ s.version }}</p>
+          <dl class="submission-facts">
+            <div><dt>Sender</dt><dd>{{ s.submittedBy }}</dd></div>
+            <div><dt>Related alert</dt><dd>
+              @if (navigation) {
+                <a class="report-alert-link" [routerLink]="navigation.href('/monitor/alerts', { alert: s.alertId })">Alert #{{ s.alertId }}</a>
+              } @else { Alert #{{ s.alertId }} }
+            </dd></div>
+            <div><dt>Decision</dt><dd #decisionResult tabindex="-1">
+              <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
+                [label]="s.approval ? labels[s.approval.decision] : 'Submitted'" />
+              @if (!s.approval) { <span class="submission-meta">{{ labels.pending }}</span> }
+            </dd></div>
+            <div><dt>Received</dt><dd><time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time></dd></div>
+          </dl>
+        </header>
+
+        <fimra-state-region class="block" [state]="formState()" (retry)="retryForm()">
+          @if (definition(); as form) {
+            <fimra-form-presentation mode="historical" [definition]="form" [step]="s.step"
+              [values]="s.values" [workspaceUrl]="workspaceUrl()" />
           }
-        } @else {
-          <p>{{ labels.pending }} from a supervising officer.</p>
+        </fimra-state-region>
+
+        @if (!s.approval && s.canApprove && definition()) {
+          <section class="approval" aria-label="Review actions">
+            <h4>Review actions</h4>
+            @if (returning()) {
+              <form novalidate (submit)="$event.preventDefault(); decide('returned', note.value)">
+                <hlm-field>
+                  <label hlmFieldLabel for="return-note">Why is the report returned?</label>
+                  <textarea #note hlmTextarea id="return-note" maxlength="2000" required [readOnly]="busy()" [forceInvalid]="!!noteError()"
+                    (input)="noteError.set('')"></textarea>
+                  <p hlmFieldDescription id="return-hint">The alert will need a new report at this step.</p>
+                  @if (noteError()) { <hlm-field-error id="return-error" forceShow>{{ noteError() }}</hlm-field-error> }
+                </hlm-field>
+                <div class="form-actions">
+                  <button hlmBtn type="submit" [busy]="busy()">Return the report</button>
+                  <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelReturn()">Cancel</button>
+                </div>
+              </form>
+            } @else {
+              <div class="form-actions">
+                <button #approve hlmBtn type="button" [busy]="busy()" (click)="approveReport(approve)">Approve</button>
+                <button #returnTrigger hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="startReturn()">Return with a note</button>
+              </div>
+            }
+          </section>
         }
-        @if (message()) { <p role="alert">{{ message() }}</p> }
-      </section>
-      <fimra-state-region [state]="formState()" (retry)="retryForm()">
-        @if (definition(); as form) {
-          <fimra-form-presentation mode="historical" [definition]="form" [step]="s.step"
-            [values]="s.values" [workspaceUrl]="workspaceUrl()" />
-        }
-      </fimra-state-region>
-    } @else if (message()) {
-      <p role="status">{{ message() }}</p>
-    } @else {
-      <div role="status" aria-label="Loading the report" class="grid gap-2"><hlm-skeleton class="h-10" /><hlm-skeleton class="h-24" /></div>
-    }
+        @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
+
+        <section class="approval" aria-label="Report history">
+          <h4>Report history</h4>
+          <ol class="report-history" role="list">
+            <li>Submitted by {{ s.submittedBy }} · <time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time>
+              @if (s.deviceTime) { <p class="submission-meta">Saved on the device {{ time(s.deviceTime) }}</p> }
+            </li>
+            @if (s.approval; as a) {
+              <li>{{ labels[a.decision] }} by {{ a.by }} · <time [attr.datetime]="a.at">{{ time(a.at) }}</time>
+                @if (a.note) { <p class="approval-note">{{ a.note }}</p> }
+              </li>
+            }
+          </ol>
+        </section>
+      }
+    </fimra-state-region>
   `
 })
 export class SubmissionView {
@@ -77,6 +106,13 @@ export class SubmissionView {
   readonly decided = output<Submission>();
   readonly submission = signal<Submission | null>(null);
   readonly message = signal('');
+  protected readonly reportState = signal<DataState>({ kind: 'loading', heading: 'Loading the report' });
+  protected readonly announcement = signal('');
+  protected readonly noteError = signal('');
+  protected readonly navigation = inject(ShellNavigation, { optional: true });
+  private readonly noteInput = viewChild<ElementRef<HTMLTextAreaElement>>('note');
+  private readonly returnTrigger = viewChild<ElementRef<HTMLButtonElement>>('returnTrigger');
+  private readonly reportAttempt = signal(0);
   readonly busy = signal(false);
   readonly returning = signal(false);
   readonly labels = decisionLabels;
@@ -89,6 +125,7 @@ export class SubmissionView {
   private readonly decisionResult = viewChild<ElementRef<HTMLElement>>('decisionResult');
   protected readonly definition = signal<FormVersion['definition'] | null>(null);
   protected readonly formState = signal<DataState>({ kind: 'loading', heading: 'Loading the form version' });
+  protected readonly title = computed(() => textIn(this.definition()?.['title'], 'en') || this.submission()?.form);
   private readonly formAttempt = signal(0);
   private readonly formUrl = computed(() => {
     const report = this.submission();
@@ -98,14 +135,22 @@ export class SubmissionView {
   constructor() {
     effect(onCleanup => {
       const url = this.workspaceUrl() + '/submissions/' + this.submissionId();
+      this.reportAttempt();
       this.submission.set(null);
+      this.reportState.set({ kind: 'loading', heading: 'Loading the report' });
       this.message.set('');
+      this.announcement.set('');
+      this.noteError.set('');
       this.returning.set(false);
       const request = this.http.get<Submission>(url).subscribe({
-        next: s => this.submission.set(s),
+        next: s => {
+          this.submission.set(s);
+          this.reportState.set({ kind: 'ready' });
+        },
         error: (error: HttpErrorResponse) => {
           if (error.status === 401) this.auth.sessionEnded();
-          this.message.set(error.status === 404 ? 'You cannot see this report.' : 'The report could not load. Try again.');
+          this.reportState.set(error.status === 403 || error.status === 404 ?
+            { kind: 'forbidden', heading: 'This report is unavailable' } : { kind: 'error', heading: 'The report could not load' });
         }
       });
       onCleanup(() => request.unsubscribe());
@@ -130,6 +175,23 @@ export class SubmissionView {
       });
       onCleanup(() => request.unsubscribe());
     });
+  }
+
+  protected reloadReport(): void {
+    this.reportAttempt.update(attempt => attempt + 1);
+  }
+
+  protected startReturn(): void {
+    this.message.set('');
+    this.returning.set(true);
+    afterNextRender(() => this.noteInput()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  protected cancelReturn(): void {
+    this.noteError.set('');
+    this.message.set('');
+    this.returning.set(false);
+    afterNextRender(() => this.returnTrigger()?.nativeElement.focus(), { injector: this.injector });
   }
 
   protected retryForm(): void {
@@ -159,31 +221,45 @@ export class SubmissionView {
 
   async decide(decision: 'approved' | 'returned', note: string): Promise<void> {
     const current = this.submission();
-    if (!current || this.busy()) return;
+    if (!current?.canApprove || current.approval || this.busy()) return;
     if (decision === 'returned' && !note.trim()) {
-      this.message.set('Say why the report is returned.');
+      this.noteError.set('Say why the report is returned.');
+      this.noteInput()?.nativeElement.focus();
       return;
     }
     this.busy.set(true);
+    this.announcement.set('Saving decision…');
     this.message.set('');
+    this.noteError.set('');
+    const url = this.workspaceUrl() + '/submissions/' + current.id;
     try {
-      const saved = await firstValueFrom(this.http.post<Submission>(this.workspaceUrl() + '/submissions/' + current.id + '/approval',
+      const saved = await firstValueFrom(this.http.post<Submission>(url + '/approval',
         { decision, note: note.trim() }));
+      if (this.lifetime.destroyed || this.submission() !== current) return;
       this.submission.set(saved);
       this.returning.set(false);
-      toast.success(decision === 'approved' ? 'Report approved.' : 'Report returned.');
+      this.announcement.set(decision === 'approved' ? 'Report approved.' : 'Report returned.');
       this.decided.emit(saved);
-      if (decision === 'approved') this.focusDecision();
+      this.focusDecision();
     } catch (error) {
       const failed = error as HttpErrorResponse;
       if (failed.status === 401) { this.auth.sessionEnded(); return; }
-      this.message.set(failed.status === 403 ? 'Only a supervising officer on this alert can decide.' : serverProblems(failed).message);
+      if (this.lifetime.destroyed || this.submission() !== current) return;
+      this.announcement.set('');
+      this.message.set(serverProblems(failed).message);
       if (failed.status === 409) {
-        // Someone else decided first. Show their decision.
-        this.http.get<Submission>(this.workspaceUrl() + '/submissions/' + current.id).subscribe({ next: s => {
-          this.submission.set(s);
-          if (decision === 'approved') this.focusDecision();
-        } });
+        // Another officer decided first. Keep the server's message and show the saved decision.
+        try {
+          const decided = await firstValueFrom(this.http.get<Submission>(url));
+          if (!this.lifetime.destroyed && this.submission() === current) {
+            this.submission.set(decided);
+            this.returning.set(false);
+            this.decided.emit(decided);
+            this.focusDecision();
+          }
+        } catch (error) {
+          if ((error as HttpErrorResponse).status === 401) this.auth.sessionEnded();
+        }
       }
     } finally {
       this.busy.set(false);

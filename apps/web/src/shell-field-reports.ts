@@ -13,7 +13,7 @@ import { Icon } from './ui/icon';
   imports: [ExportDialog, HlmButton, HlmDialogImports, Icon, ShellListScroll, Submissions],
   template: `
     <div class="shell-list" fimraListScroll>
-      <section class="shell-list-body" aria-label="Field reports">
+      <section class="shell-list-body field-report-screen" aria-label="Field reports">
         <div class="queue-heading">
           <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
             <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download" aria-hidden="true"></svg> Export</button>
@@ -27,7 +27,7 @@ import { Icon } from './ui/icon';
             </hlm-dialog-content>
           </hlm-dialog>
         </div>
-        <fimra-submissions [endpoint]="endpoint()" [now]="now()" (openAlert)="openAlert($event.id)" (filtersChanged)="reportFilters.set($event)" />
+        <fimra-submissions [endpoint]="endpoint()" [now]="now()" (filtersChanged)="reportFilters.set($event)" />
       </section>
     </div>
   `,

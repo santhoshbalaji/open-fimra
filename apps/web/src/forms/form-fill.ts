@@ -9,9 +9,11 @@ import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, ViewEncapsulation, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, ViewEncapsulation, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
 import { AnswerSession, FormTree, readForm, type EntryPath, type Node, type StoredAttachment } from '@open-fimra/form-schema/answers';
-import { toast } from '@spartan-ng/brain/sonner';
+import { FieldErrorSummary } from '../ui/field-error-summary';
+import { LiveStatus } from '../ui/live-status';
+import { StatusBadge } from '../ui/status-badge';
 import { BrnField } from '@spartan-ng/brain/field';
 import { firstValueFrom } from 'rxjs';
 import type { AlertRow } from '../alert-queue';
@@ -79,7 +81,7 @@ export function toLocalInput(value: unknown): string {
 @Component({
   selector: 'fimra-form-fill',
   imports: [BrnField, HlmButtonImports, HlmCheckboxImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports,
-    HlmSkeletonImports, HlmTextareaImports, NgTemplateOutlet, ShapeInput, SignaturePad],
+    HlmSkeletonImports, HlmTextareaImports, FieldErrorSummary, LiveStatus, StatusBadge, NgTemplateOutlet, ShapeInput, SignaturePad],
   templateUrl: './form-fill.html',
   styleUrl: './forms.css',
   encapsulation: ViewEncapsulation.None,
@@ -98,6 +100,8 @@ export class FormFill {
   readonly initial = input<Obj>({});
   /** The form file, when the caller has it already. */
   readonly definition = input<Obj | null>(null);
+  readonly stepLabel = input('');
+  readonly currentStepLabel = input('');
   readonly submitted = output<Submission>();
   readonly cancelled = output<void>();
 
@@ -112,6 +116,14 @@ export class FormFill {
   readonly busy = signal(false);
   readonly serverMessage = signal('');
   readonly serverList = signal<string[]>([]);
+  protected readonly saved = signal<Submission | null>(null);
+  protected readonly refused = signal(false);
+
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly summary = viewChild(FieldErrorSummary);
+  private readonly feedback = viewChild<ElementRef<HTMLElement>>('feedback');
+  private readonly savedResult = viewChild<ElementRef<HTMLElement>>('savedResult');
 
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
@@ -164,6 +176,15 @@ export class FormFill {
     return (this.session()?.problems ?? []).map(message => explain(message, tree, this.language()));
   });
   readonly serverProblems = computed<Problem[]>(() => this.serverList().map(message => explain(message, this.tree(), this.language())));
+  protected readonly summaryProblems = computed(() => [
+    ...(this.tried() ? this.problems() : []), ...this.serverProblems()
+  ].map(problem => {
+    const node = problem.field ? this.tree()?.byKey.get(problem.field) : undefined;
+    return { ...problem, fieldId: node ? this.fieldId(node, problem.path) : null };
+  }));
+  protected readonly fieldErrors = computed(() => this.summaryProblems().flatMap(problem =>
+    problem.fieldId ? [{ fieldId: problem.fieldId, message: problem.message }] : []));
+  protected readonly otherErrors = computed(() => this.summaryProblems().filter(problem => !problem.fieldId));
   readonly languageName = languageName;
 
   constructor() {
@@ -288,7 +309,11 @@ export class FormFill {
 
   set(node: Node, path: Path, value: unknown): void {
     this.values.update(values => setIn(values, path, node.key, value));
-    this.serverMessage.set('');
+    const pathKey = pathId(path);
+    this.serverList.update(messages => messages.filter(message => {
+      const issue = explain(message, this.tree(), this.language());
+      return issue.field !== node.key || pathId(issue.path) !== pathKey;
+    }));
   }
 
   setNumber(node: Node, path: Path, raw: string): void {
@@ -471,28 +496,41 @@ export class FormFill {
     queueMicrotask(() => document.getElementById('form-page-title')?.focus());
   }
 
-  /** Opens the page that holds a field with a problem, and moves to it. */
-  show(problem: Problem): void {
-    const tree = this.tree();
-    let node = problem.field ? tree?.byKey.get(problem.field) : undefined;
+  protected showField(id: string): void {
+    const problem = this.summaryProblems().find(issue => issue.fieldId === id);
+    if (!problem) return;
+    let node = this.tree()?.byKey.get(problem.field!);
     while (node?.parent) node = node.parent;
     const index = node ? this.pages().findIndex(p => p.sections.includes(node)) : -1;
     if (index >= 0) this.page.set(index);
-    if (problem.field && node) {
-      const id = 'field-' + problem.field + (problem.path.length ? '-' + pathId(problem.path) : '');
-      queueMicrotask(() => document.getElementById(id)?.focus());
-    }
+    afterNextRender(() => {
+      const target = this.host.querySelector<HTMLElement>('#' + id)
+        ?? this.host.querySelector<HTMLElement>('#' + id + '-container');
+      if (!target) return;
+      for (let parent = target.parentElement; parent && parent !== this.host; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+      }
+      target.focus();
+    }, { injector: this.injector });
+  }
+
+  private focusFeedback(): void {
+    afterNextRender(() => {
+      if (this.fieldErrors().length) this.summary()?.focus();
+      else this.feedback()?.nativeElement.focus();
+    }, { injector: this.injector });
   }
 
   async submit(): Promise<void> {
-    this.tried.set(true);
-    this.serverMessage.set('');
-    this.serverList.set([]);
     const session = this.session();
     const alert = this.alertKey();
-    if (!session || !alert || this.busy()) return;
+    if (!session || !alert || this.busy() || this.uploading() || this.saved()) return;
+    this.tried.set(true);
+    this.refused.set(false);
+    this.serverMessage.set('');
+    this.serverList.set([]);
     if (!session.answers) {
-      queueMicrotask(() => document.getElementById('form-problems')?.focus());
+      this.focusFeedback();
       return;
     }
     const body = { form: this.form(), version: this.version(), step: this.step(), values: session.answers };
@@ -508,7 +546,8 @@ export class FormFill {
       const saved = await firstValueFrom(this.http.post<Submission>(this.workspaceUrl() + '/alerts/' + alert + '/submissions',
         { id: this.submissionId, ...body, deviceTime: this.deviceTime }));
       if (this.lifetime.destroyed) return;
-      toast.success(this.title() + ' submitted.');
+      this.saved.set(saved);
+      afterNextRender(() => this.savedResult()?.nativeElement.focus(), { injector: this.injector });
       this.submitted.emit(saved);
     } catch (error) {
       const failed = error as HttpErrorResponse;
@@ -516,9 +555,10 @@ export class FormFill {
       const { message, problems } = serverProblems(failed);
       // Only a request that may have arrived is sent again with the same ID.
       if (failed.status !== 0 && failed.status < 500) this.lastSent = '';
-      this.serverMessage.set(failed.status === 404 ? 'You can no longer see this alert.' : message);
+      this.refused.set(true);
+      this.serverMessage.set(message);
       this.serverList.set(problems);
-      queueMicrotask(() => document.getElementById('form-problems')?.focus());
+      this.focusFeedback();
     } finally {
       this.busy.set(false);
     }
