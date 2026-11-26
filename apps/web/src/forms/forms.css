@@ -64,8 +64,6 @@ fimra-alert-reports h3 { font-weight: 600; margin: 12px 0 8px; }
 }
 .field-report-screen { max-width: 1200px; }
 .report-queue { display: grid; min-width: 0; gap: 16px; }
-.filter-fields.report-filter-fields { display: flex; }
-.report-form-filter { width: auto; margin: 0; }
 .report-open { padding-inline: 0; height: auto; min-height: 44px; white-space: normal; text-align: start; }
 .submission-view > fimra-state-region > div > div,
 .submission-header, .submission-facts, .report-history { display: grid; gap: 12px; }

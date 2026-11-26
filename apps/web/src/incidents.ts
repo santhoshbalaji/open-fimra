@@ -6,6 +6,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { EMPTY, expand, reduce } from 'rxjs';
 import type { AlertRow } from './alert-queue';
 import { AuthService } from './auth';
+import { filterPeriodLabel } from './dashboard-filters';
 import { classes, type ForestClass } from './detections';
 import { ShellListScroll } from './shell-list-scroll';
 import { ShellNavigation, recordId } from './shell-navigation';
@@ -70,7 +71,7 @@ export class Incidents {
   protected readonly tableKey = computed(() => this.listKey() + '/table');
   protected readonly listKey = computed(() => this.incidentsUrl() + '?' + JSON.stringify(this.params()));
   protected readonly scope = computed(() => [
-    `Past ${this.hours()} ${this.hours() === '1' ? 'hour' : 'hours'}`, this.forest() && classes[this.forest()!], this.unit()
+    filterPeriodLabel(Number(this.hours())), this.forest() && classes[this.forest()!]
   ].filter(Boolean).join(' · '));
 
   protected readonly format = defaultWorkspaceFormat;

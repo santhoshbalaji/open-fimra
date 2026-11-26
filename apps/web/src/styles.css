@@ -89,7 +89,7 @@ button .chevron { width: 14px; }
 fimra-dashboard { display: block; height: 100%; overflow: auto; }
 
 
-.workspace-controls, .filter-fields, .view-switch, .queue-tabs, .workflow-moves, .export-actions, .step-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.view-switch, .queue-tabs, .workflow-moves, .export-actions, .step-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .shell-list { display: block; height: 100%; overflow: auto; }
 .shell-list-body { padding: 16px var(--page-gutter, 16px); }
 #task { overflow: auto; }
@@ -105,14 +105,9 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
   .page-content > fimra-dashboard fimra-page-header h1,
   .page-content > fimra-situation-report #report-title { display: none; }
 }
+.filter-card label { font-size: var(--text-label); min-height: 20px; }
 .view-switch { gap: 4px; padding: 4px; border-radius: var(--radius-card); background: var(--color-background); }
 .view-switch [aria-pressed=true] { color: var(--color-brand); background: var(--color-card); box-shadow: var(--shadow-panel); }
-.filter-fields { gap: 8px 16px; }
-.filter-fields hlm-field { width: auto; max-width: 200px; gap: 0; }
-.filter-fields input { max-width: 148px; accent-color: var(--color-brand); }
-.filter-fields input[type=range] { width: 128px; height: 32px; padding: 0; border: 0; background: transparent; box-shadow: none; }
-.filter-fields label, .filter-card label { font-size: var(--text-label); min-height: 20px; }
-.filter-toggle { display: none; }
 
 .alert-panel { width: clamp(316px, 30vw, 460px); background: var(--color-card); border-left: 1px solid var(--color-border); padding: 16px; overflow: auto; overscroll-behavior: contain; }
 .queue-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
@@ -164,9 +159,6 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
   .account-trigger .account-initials { display: inline; }
 }
 @media (max-width: 840px) {
-  .filter-toggle { display: block; }
-  .workspace-controls .filter-fields { display: none; }
-  .workspace-controls.filters-open .filter-fields { display: flex; width: 100%; padding: 8px; }
   .view-switch { width: fit-content; }
   .alert-panel { display: none; }
   .show-queue:not(.show-details) .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }

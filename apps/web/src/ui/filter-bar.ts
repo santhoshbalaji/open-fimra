@@ -1,7 +1,7 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, Directive, ElementRef, TemplateRef, computed, contentChild, inject, input, output,
+  ChangeDetectionStrategy, Component, Directive, ElementRef, TemplateRef, ViewEncapsulation, computed, contentChild, inject, input, output,
   viewChildren
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -28,24 +28,25 @@ export class FilterControls {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HlmButton, Icon, LiveStatus, NgTemplateOutlet, SidePanel],
   host: { class: 'block min-w-0' },
-  styleUrls: ['./workspace-target.css', './filter-bar.css'],
+  encapsulation: ViewEncapsulation.None,
+  styleUrls: ['./filter-bar.css'],
   template: `
     <div class="grid gap-2">
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="min-w-0">
         @if (controls(); as controls) {
           @if (phone()) {
             <button #edit type="button" hlmBtn variant="outline" aria-haspopup="dialog"
               [attr.aria-expanded]="panel.open()" (click)="panel.show(edit, summary)">Filters</button>
             <fimra-side-panel #panel="fimraSidePanel" heading="Filters">
               @if (panel.open()) {
-                <div class="filter-sheet-controls grid gap-3">
+                <div class="filter-bar-controls filter-sheet-controls">
                   <ng-container [ngTemplateOutlet]="controls.template" />
                   <button type="button" hlmBtn variant="outline" class="justify-self-start" (click)="panel.close()">Done</button>
                 </div>
               }
             </fimra-side-panel>
           } @else {
-            <ng-container [ngTemplateOutlet]="controls.template" />
+            <div class="filter-bar-controls"><ng-container [ngTemplateOutlet]="controls.template" /></div>
           }
         }
       </div>
@@ -57,7 +58,7 @@ export class FilterControls {
           <ul role="list" aria-label="Active filters" class="flex min-w-0 flex-wrap gap-2">
             @for (filter of filters(); track filter.id) {
               <li class="min-w-0">
-                <button #chip type="button" class="chip" (click)="removeFilter(filter.id, $index, summary)">
+                <button #chip type="button" class="filter-bar-chip" (click)="removeFilter(filter.id, $index, summary)">
                   <span class="sr-only">Remove filter </span>
                   <span class="min-w-0 wrap-anywhere">{{ filter.label }}</span>
                   <svg fimraIcon="circle-x" aria-hidden="true" class="size-4 shrink-0"></svg>

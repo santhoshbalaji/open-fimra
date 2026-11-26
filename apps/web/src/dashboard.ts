@@ -8,7 +8,7 @@ import { alertGroupLabels, queueLabels, stepLabel } from './alert-queue';
 import { AuthService } from './auth';
 import { ClassChart } from './class-chart';
 import { WEB_CONFIG } from './config';
-import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
+import { DashboardFilters, ScopeFilters, filterPeriodLabel, setScopeFilters } from './dashboard-filters';
 import { detectionCatalog, detectionSeries } from './dashboard.series';
 import { classes, sourceLabel } from './detections';
 import { FilterFields } from './filter-fields';
@@ -56,8 +56,6 @@ const milestones = [
   { key: 'controlled', label: 'Controlled' }
 ];
 
-type FilterKey = 'hours' | 'class' | 'unitPath';
-
 @Component({
   selector: 'fimra-dashboard',
   imports: [ClassChart, FilterBar, FilterControls, FilterFields, HlmCardImports, HlmTableImports, PageHeader, StateRegion, StatTile, StatusBadge],
@@ -91,16 +89,14 @@ export class Dashboard {
   readonly stepLabel = stepLabel;
   readonly format = defaultWorkspaceFormat;
 
-  readonly period = computed(() => {
-    const hours = this.filters.hours();
-    return 'Past ' + this.format.number(hours) + (hours === 1 ? ' hour' : ' hours');
-  });
+  private readonly scopeFilters = inject(ScopeFilters);
+  readonly period = computed(() => filterPeriodLabel(this.filters.hours()));
   readonly jurisdiction = computed(() => {
     const name = this.workspace.current()?.name;
     const grants = this.workspace.jurisdictions().map(([, label]) => label);
     const scope = [name, ...grants.filter(label => label !== name)].filter(Boolean).join(' · ') || 'Your assigned area';
-    const unit = this.filters.unitPath();
-    return unit ? scope + ' · Units under ' + unit : scope;
+    if (!this.filters.unitPath()) return scope;
+    return [name, this.scopeFilters.unitLabel()].filter(Boolean).join(' · ');
   });
   readonly forestScope = computed(() => {
     const forest = this.filters.forestClass();
@@ -108,13 +104,7 @@ export class Dashboard {
   });
   readonly scope = computed(() => [this.jurisdiction(), this.forestScope(), this.period()].join(' · '));
 
-  readonly activeFilters = computed<{ id: FilterKey; label: string }[]>(() => {
-    const active: { id: FilterKey; label: string }[] = [];
-    if (this.filters.hours() !== defaultDashboardHours) active.push({ id: 'hours', label: this.period() });
-    if (this.filters.forestClass()) active.push({ id: 'class', label: this.forestScope() });
-    if (this.filters.unitPath()) active.push({ id: 'unitPath', label: this.filters.unitPath() });
-    return active;
-  });
+  readonly activeFilters = this.scopeFilters.active;
 
   private readonly catalog = computed(() => detectionCatalog(this.summary()?.detections ?? {}, this.summary()?.today ?? {}));
   readonly chartRows = computed(() => detectionSeries(this.summary()?.detections ?? {}, this.filters.forestClass(), this.catalog()));
@@ -189,13 +179,7 @@ export class Dashboard {
   }
 
   clearFilters(key?: string): void {
-    if (this.navigation) {
-      this.navigation.update(key ? { [key]: null } : { hours: null, class: null, unitPath: null });
-    } else {
-      if (!key || key === 'hours') this.filters.hours.set(defaultDashboardHours);
-      if (!key || key === 'class') this.filters.forestClass.set('');
-      if (!key || key === 'unitPath') this.filters.unitPath.set('');
-    }
+    setScopeFilters(this.filters, this.navigation, key ? { [key]: null } : { hours: null, class: null, unitPath: null });
   }
 
   alertRoute(extra: { queue?: string; group?: string; status?: string }) {
