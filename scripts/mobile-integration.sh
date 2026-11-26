@@ -52,7 +52,7 @@ web_origin="http://127.0.0.1:$MOBILE_WEB_PORT"
   FIMRA_DATABASE_URL="$MOBILE_DATABASE_URL" FIMRA_HTTP_ADDR="$MOBILE_API_ADDR" \
     FIMRA_OIDC_ISSUER="$FIMRA_OIDC_ISSUER" FIMRA_OIDC_AUDIENCE="$FIMRA_OIDC_AUDIENCE" \
     FIMRA_CORS_ORIGINS="$web_origin,http://localhost:$MOBILE_WEB_PORT" FIMRA_FIRMS_MAP_KEY='' FIMRA_SMTP_ADDR='' \
-    FIMRA_UPLOAD_DIR="$work/uploads" FIMRA_EXPORT_DIR="$work/exports" \
+    FIMRA_UPLOAD_DIR="$work/uploads" FIMRA_EXPORT_DIR="$work/exports" FIMRA_ATTACHMENT_DIR="$work/attachments" \
     exec "$work/api" > "$work/api.log" 2>&1
 ) &
 pids+=($!)

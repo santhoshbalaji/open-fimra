@@ -11,9 +11,10 @@ import 'widgets.dart';
 
 /// The alerts the user may see, newest first.
 class AlertListView extends StatefulWidget {
-  const AlertListView({super.key, required this.view, required this.onOpen, this.clock});
+  const AlertListView({super.key, required this.view, required this.onOpen, this.clock, this.onOpenOutboxAlert});
   final WorkspaceView view;
   final void Function(Alert alert) onOpen;
+  final OpenOutboxAlert? onOpenOutboxAlert;
   final DateTime Function()? clock;
 
   @override
@@ -28,6 +29,7 @@ class AlertListViewState extends State<AlertListView> {
   String? _problem;
   bool _loading = true;
   bool _loadingMore = false;
+  DateTime? _lastSynced;
 
   /// Null shows every queue the user may see.
   AlertQueue? _queue;
@@ -35,7 +37,23 @@ class AlertListViewState extends State<AlertListView> {
   @override
   void initState() {
     super.initState();
+    final repo = widget.view.services.offline;
+    _lastSynced = repo?.lastSynced;
+    repo?.changes.addListener(_syncChanged);
     reload(refresh: false);
+  }
+
+  @override
+  void dispose() {
+    widget.view.services.offline?.changes.removeListener(_syncChanged);
+    super.dispose();
+  }
+
+  void _syncChanged() {
+    final stamp = widget.view.services.offline?.lastSynced;
+    if (stamp == null || stamp == _lastSynced) return;
+    _lastSynced = stamp;
+    unawaited(reload(refresh: false));
   }
 
   /// Reads the first page again, for example after a step was recorded.
@@ -60,7 +78,7 @@ class AlertListViewState extends State<AlertListView> {
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
-        _problem = error.message;
+        _problem = error.offline ? 'Check your connection and try again.' : error.message;
         _loading = false;
       });
     }
@@ -110,7 +128,11 @@ class AlertListViewState extends State<AlertListView> {
           SliverToBoxAdapter(child: _header(context, total)),
           if (widget.view.services.offline case final repo?)
             SliverToBoxAdapter(
-              child: FieldSyncStatus(repo: repo, workspace: widget.view.workspace.slug),
+              child: FieldSyncStatus(
+                repo: repo,
+                workspace: widget.view.workspace.slug,
+                onOpenAlert: widget.onOpenOutboxAlert,
+              ),
             ),
           if (problem != null)
             SliverFillRemaining(

@@ -118,10 +118,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Beat 01 · Alert #41'), findsOneWidget);
-    expect(find.text('25 Nov 2026, 1:30 pm IST'), findsOneWidget);
+    expect(find.text('Seen 25 Nov 2026, 1:30 pm IST'), findsOneWidget);
+    expect(find.text('Demo data'), findsNothing);
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
     expect(find.text('Demo data'), findsOneWidget);
     expect(find.text('VIIRS (Suomi NPP), near real time'), findsOneWidget);
     expect(find.text('Nominal'), findsOneWidget);
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
     final timeline = find.text('25 Nov 2026, 1:30 pm IST · System');
     await tester.scrollUntilVisible(timeline, 150);
     expect(timeline.hitTestable(), findsOneWidget);
@@ -188,16 +193,25 @@ void main() {
     ]);
   });
 
-  testWidgets('a beat guard acknowledges an alert', (tester) async {
+  testWidgets('the next action and connection are visible at 360 by 800', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final harness = Harness();
     await signIn(tester, harness);
     await tester.tap(find.widgetWithText(Card, 'New'));
     await tester.pumpAndSettle();
 
+    final acknowledge = find.widgetWithText(FilledButton, 'Acknowledge');
+    expect(acknowledge.hitTestable(), findsOneWidget);
+    expect(find.text('Connected').hitTestable(), findsOneWidget);
+    expect(find.text('Hill Division (D1)'), findsNothing);
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
     expect(find.text('Hill Division (D1)'), findsOneWidget);
     expect(find.text('Inside forest'), findsOneWidget);
-    final acknowledge = find.widgetWithText(FilledButton, 'Acknowledged');
-    await tester.scrollUntilVisible(acknowledge, 180);
+    await tester.tap(find.text('Details'));
     await tester.pumpAndSettle();
     await tester.tap(acknowledge);
     await tester.pumpAndSettle();
@@ -309,7 +323,8 @@ void main() {
     expect(harness.deviceApi.registrations, hasLength(1));
     harness.notifier.onOpen!(PushNotice.parse(utf8.encode(jsonEncode(alertPush())))!);
     await tester.pumpAndSettle();
-    expect(find.text('Hill Division (D1)'), findsOneWidget);
+    expect(find.text('Alert details'), findsOneWidget);
+    expect(find.text('Beat 01 · Alert #41'), findsOneWidget);
     expect(harness.devices!.openRequest.value, isNull);
   });
 
@@ -317,7 +332,8 @@ void main() {
     final harness = Harness();
     harness.notifier.launch = PushNotice.parse(utf8.encode(jsonEncode(alertPush())));
     await signIn(tester, harness);
-    expect(find.text('Hill Division (D1)'), findsOneWidget);
+    expect(find.text('Alert details'), findsOneWidget);
+    expect(find.text('Beat 01 · Alert #41'), findsOneWidget);
   });
 
   testWidgets('a phone wiped while in use deletes its data and returns to sign-in', (tester) async {

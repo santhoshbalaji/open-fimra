@@ -129,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
       setState(() {
-        _problem = error.message;
+        _problem = error.offline ? 'Connect to the internet and try again.' : error.message;
         _loading = false;
       });
     }
@@ -146,6 +146,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (changed == true) await _listKey.currentState?.reload();
   }
 
+  Future<void> _openOutboxAlert(String slug, String id) async {
+    if (_view?.workspace.slug != slug) await _load(slug);
+    if (!mounted || _view?.workspace.slug != slug) return;
+    try {
+      final alert = await widget.services.repository.alert(slug, id);
+      if (mounted) await _open(alert);
+    } on DeviceActionException {
+      return;
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      final message = error.offline ? 'Connect to the internet to open this alert.' : error.message;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   Future<void> _signOut() async {
     final repo = widget.services.offline;
     if (repo != null) {
@@ -156,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Sign out and clear the outbox?'),
-            content: const Text('Signing out deletes reports that are still waiting to send.'),
+            content: const Text('Signing out deletes drafts and work waiting to send.'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
               FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
@@ -234,7 +249,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               if (value == 'devices') _openDevices();
               final repo = widget.services.offline;
               if (value == 'outbox' && repo != null) {
-                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: repo)));
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => OutboxScreen(repo: repo, onOpenAlert: _openOutboxAlert),
+                  ),
+                );
               }
               if (value == 'sign-out') unawaited(_signOut());
             },
@@ -295,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return IndexedStack(
       index: _tab,
       children: [
-        AlertListView(key: _listKey, view: view, onOpen: _open),
+        AlertListView(key: _listKey, view: view, onOpen: _open, onOpenOutboxAlert: _openOutboxAlert),
         // The map is built the first time its tab opens, then kept.
         _mapBuilt ? (widget.mapBuilder ?? _defaultMap)(context, view, _open) : const SizedBox.shrink(),
       ],

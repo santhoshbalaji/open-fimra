@@ -105,9 +105,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add team'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('en').first);
+    await tester.tap(find.text('English').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('hi').last);
+    await tester.tap(find.text('हिन्दी').last);
     await tester.pumpAndSettle();
     expect(find.text('पहली रिपोर्ट'), findsOneWidget);
     expect(find.text('दल का नाम *'), findsOneWidget);
@@ -122,5 +122,86 @@ void main() {
       ],
     });
     expect(files?.single.id, id);
+  });
+
+  testWidgets('Back keeps an incomplete report and its photo, and required fields start visible', (tester) async {
+    const id = '00000000-0000-4000-8000-000000000001';
+    const definition = {
+      'title': {'en': 'First report'},
+      'sections': [
+        {
+          'key': 'summary',
+          'title': {'en': 'Summary'},
+          'items': [
+            {
+              'key': 'reached_at',
+              'type': 'date-time',
+              'label': {'en': 'Team reached the site at'},
+              'required': true,
+            },
+            {
+              'key': 'photo',
+              'type': 'photo',
+              'label': {'en': 'Site photo'},
+              'required': true,
+            },
+          ],
+        },
+      ],
+      'layout': {
+        'items': [
+          {'item': 'summary', 'collapsed': true},
+        ],
+      },
+    };
+    Json values = {};
+    List<ReportFile> files = [];
+    String? language;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: fimraTheme(Brightness.light),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ReportForm(
+                    definition: definition,
+                    step: 'first_report',
+                    alert: const {},
+                    draftValues: values,
+                    draftFiles: files,
+                    draftLanguage: language,
+                    saveDraft: (answers, attachments, selectedLanguage) async {
+                      values = answers;
+                      files = attachments;
+                      language = selectedLanguage;
+                    },
+                    pick: (_) async => ReportFile(id, 'site.jpg', 'image/jpeg', Uint8List.fromList([1, 2, 3])),
+                    save: (_, _, _) async => fail('An unfinished draft must not send'),
+                  ),
+                ),
+              ),
+              child: const Text('Open report'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open report'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose Team reached the site at').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Choose photo'));
+    await tester.pumpAndSettle();
+    expect(values, {
+      'photo': [id],
+    });
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open report'));
+    await tester.pumpAndSettle();
+    expect(find.text('site.jpg'), findsOneWidget);
+    expect(find.text('Save draft'), findsOneWidget);
+    expect(find.text('Send when connected'), findsOneWidget);
   });
 }

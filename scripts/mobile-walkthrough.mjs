@@ -66,7 +66,12 @@ async function openApp(context) {
 
 let current;
 try {
-  const context = await browser.newContext({ ...phone, colorScheme: 'light' });
+  const context = await browser.newContext({
+    ...phone,
+    colorScheme: 'light',
+    permissions: ['geolocation'],
+    geolocation: { latitude: 16.347, longitude: 86.2264, accuracy: 20 },
+  });
   const page = await openApp(context);
   current = page;
   const signIn = page.getByRole('button', { name: 'Sign in', exact: true });
@@ -149,22 +154,34 @@ try {
   step('The visible Close button dismisses the map key.');
 
   await page.getByRole('tab', { name: 'Alerts' }).or(page.getByRole('button', { name: 'Alerts' })).first().click();
+  await page.setViewportSize({ width: 360, height: 800 });
   await cards.first().click();
-  await shown(page, 'Hill Division (D1)').waitFor();
+  const acknowledge = page.getByRole('button', { name: 'Acknowledge', exact: true });
+  const connected = shown(page, 'Connected', true);
+  for (const target of [acknowledge, connected]) {
+    await target.waitFor();
+    const box = await target.boundingBox();
+    if (!box || box.y < 0 || box.y + box.height > 800) throw new Error('Expected the action and connection above the fold');
+  }
   await shown(page, 'IST').waitFor();
-  await themes(page, '06-alert');
+  await themes(page, '06-alert-360x800');
+  const details = page.getByLabel(/^Details\b/).or(page.getByText('Details', { exact: true })).first();
+  if (await shown(page, 'Hill Division (D1)').isVisible()) throw new Error('Detection details started expanded');
+  await details.click();
+  await shown(page, 'Hill Division (D1)').waitFor();
+  await details.click();
   const showOnMap = page.getByRole('button', { name: 'Show on map', exact: true });
   await showOnMap.click();
   await shown(page, 'Alert map', true).waitFor();
   await page.getByRole('button', { name: 'Map key', exact: true }).waitFor();
-  await page.waitForTimeout(3000);
+  await page.getByRole('button', { name: 'Show my location', exact: true }).click();
+  await page.locator('.maplibregl-user-location-dot').waitFor({ timeout: 15_000 });
+  step('The map shows the phone location after location access is granted.');
   await themes(page, '06-alert-map');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await showOnMap.waitFor();
   step('The alert shows its place, detection details and IST time. Show on map opens a focused map.');
 
-  const acknowledge = page.getByRole('button', { name: 'Acknowledged' });
-  await scrollTo(page, acknowledge);
   await acknowledge.click();
   await typeInto(page, 'Note (optional)', 'On my way.');
   await themes(page, '07-acknowledge');

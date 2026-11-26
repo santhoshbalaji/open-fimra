@@ -10,8 +10,8 @@ import 'alert_repository.dart';
 import 'field_store.dart';
 import 'outbox.dart';
 
-/// Online for fresh state and workflow writes, with a saved workspace for
-/// offline reads. Reports and files leave the phone through the outbox.
+/// Reads fresh state when connected. The saved workspace and outbox let
+/// staff work offline.
 class OfflineAlertRepository extends OnlineAlertRepository {
   OfflineAlertRepository(super.api, this.store, this.account) : outbox = ReportOutbox(api, store);
 
@@ -174,6 +174,39 @@ class OfflineAlertRepository extends OnlineAlertRepository {
     return owner == null ? [] : store.reports(owner, workspace: workspace, alert: alert);
   }
 
+  String get _signedInOwner => _owner ?? (throw const ApiException(401, 'Sign in again before saving.'));
+
+  Future<void> queueStep(String slug, String alert, WorkflowMove move, String fromStep, StepRequest request) async {
+    await store.enqueueStep(
+      _signedInOwner,
+      slug,
+      alert,
+      move.label,
+      request.toJson(),
+      fromStep: fromStep,
+      generation: store.generation,
+    );
+    _notify();
+    _sendSoon();
+  }
+
+  Future<void> removeRefusedStep(String id) async {
+    await store.removeRefusedStep(_signedInOwner, id, store.generation);
+    _notify();
+  }
+
+  Future<void> saveDraft(
+    String slug,
+    String alert,
+    String title,
+    Json body,
+    List<ReportFile> files,
+    int generation,
+  ) async {
+    await store.saveDraft(_signedInOwner, slug, alert, title, body, files, generation: generation);
+    _notify();
+  }
+
   Future<void> queueReport(
     String slug,
     String alert,
@@ -181,13 +214,32 @@ class OfflineAlertRepository extends OnlineAlertRepository {
     Json body,
     List<ReportFile> files, {
     StepRequest? step,
+    String? fromStep,
     required int generation,
   }) async {
-    final owner = _owner;
-    if (owner == null) throw const ApiException(401, 'Sign in again before saving this report.');
-    await store.enqueue(owner, slug, alert, title, body, files, step: step?.toJson(), generation: generation);
+    await store.enqueue(
+      _signedInOwner,
+      slug,
+      alert,
+      title,
+      body,
+      files,
+      step: step?.toJson(),
+      fromStep: fromStep,
+      generation: generation,
+    );
     _notify();
-    unawaited(sync());
+    _sendSoon();
+  }
+
+  void _sendSoon() {
+    // A sync that already read the outbox may have missed the new item.
+    unawaited(
+      Future<void>(() async {
+        await _currentSync;
+        if (!offline) await sync();
+      }),
+    );
   }
 
   Future<void> sync({bool retry = false, bool refresh = false}) async {
@@ -242,7 +294,7 @@ class OfflineAlertRepository extends OnlineAlertRepository {
         lastSynced = null;
       }
       offline = error.offline;
-      syncProblem = error.message;
+      syncProblem = error.offline ? 'No connection. Saved work stays on this phone.' : error.message;
     } on Exception {
       if (current() && slug == _workspace) syncProblem = 'Could not save updates on this phone.';
     }
@@ -264,14 +316,19 @@ class OfflineAlertRepository extends OnlineAlertRepository {
         items.addAll(objects(page['items']));
         cursor = page['nextCursor'] as String?;
       } while (cursor != null && cursor.isNotEmpty);
+      // Keep alerts with unsent work available even after they age out of the list.
+      final work = await store.reports(owner, workspace: slug);
+      final ids = {
+        ...items.map((item) => '${item['id']}'),
+        ...work.where((item) => item['received_at'] == null).map((item) => item['alert'] as String),
+      }.toList();
       final versions = <String, Future<Json>>{};
       final available = <String>{};
       final receipts = <String>[];
-      for (var start = 0; start < items.length; start += 4) {
+      for (var start = 0; start < ids.length; start += 4) {
         if (!current()) return;
         await Future.wait(
-          items.skip(start).take(4).map((item) async {
-            final id = '${item['id']}';
+          ids.skip(start).take(4).map((id) async {
             try {
               final detail = await Future.wait([
                 api.alertData(slug, id),

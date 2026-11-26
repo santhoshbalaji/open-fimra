@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../data/field_store.dart';
@@ -5,10 +7,11 @@ import '../data/offline_repository.dart';
 import 'widgets.dart';
 
 class FieldSyncStatus extends StatelessWidget {
-  const FieldSyncStatus({super.key, required this.repo, this.workspace, this.alert});
+  const FieldSyncStatus({super.key, required this.repo, this.workspace, this.alert, this.onOpenAlert});
   final OfflineAlertRepository repo;
   final String? workspace;
   final String? alert;
+  final OpenOutboxAlert? onOpenAlert;
 
   @override
   Widget build(BuildContext context) => _ReportStatusBuilder(
@@ -16,11 +19,11 @@ class FieldSyncStatus extends StatelessWidget {
     workspace: workspace,
     alert: alert,
     builder: (context, snapshot) {
-      final unsent = (snapshot.data ?? []).where((item) => item['received_at'] == null);
-      final waiting = unsent.where((item) => item['error'] == null).length;
-      final failed = unsent.where((item) => item['error'] != null).toList();
+      final unsent = (snapshot.data ?? []).where((item) => item['kind'] != 'draft' && item['received_at'] == null);
+      final failed = unsent.where((item) => item['error'] != null && item['retry_at'] == null).toList();
+      final waiting = unsent.length - failed.length;
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        padding: alert == null ? const EdgeInsets.fromLTRB(16, 0, 16, 12) : EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -54,8 +57,11 @@ class FieldSyncStatus extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: OutlinedButton.icon(
-                  onPressed: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: repo))),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => OutboxScreen(repo: repo, onOpenAlert: onOpenAlert),
+                    ),
+                  ),
                   icon: const Icon(Icons.outbox_outlined),
                   label: const Text('Report outbox'),
                 ),
@@ -135,27 +141,52 @@ class ReportDelivery extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final item = this.item;
+    if (item?['kind'] == 'draft') {
+      return const StatusBadge(icon: Icons.edit_note, label: 'Draft saved on this phone');
+    }
     final received = item?['received_at'] as String?;
     final error = item?['error'] as String?;
     if (received != null) return _ReportStatus.sent('Sent ${formatTime(DateTime.parse(received))}');
     if (sent) return const _ReportStatus.sent();
     if (item == null) return const SizedBox.shrink();
+    final step = item['kind'] == 'step' ? jsonDecode(item['body'] as String) as Json : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const StatusBadge(icon: Icons.phone_android, label: 'Saved on this phone'),
         const SizedBox(height: 6),
-        if (error == null) const _ReportStatus.waiting() else ...[const _ReportStatus.failed(), Text(error)],
+        if (error == null || item['retry_at'] != null) const _ReportStatus.waiting() else const _ReportStatus.failed(),
+        if (error != null) Text(error),
         if ((item['file_count'] as int? ?? 0) > 0) Text("${item['files_sent']} of ${item['file_count']} files sent"),
+        if (step?['note'] case final String note) Text(note),
+        if (step?['reason'] case final String reason) Text('Location exception · $reason'),
         if (item['retry_at'] != null) const Text('Will retry automatically'),
       ],
     );
   }
 }
 
+typedef OpenOutboxAlert = Future<void> Function(String workspace, String alert);
+
 class OutboxScreen extends StatelessWidget {
-  const OutboxScreen({super.key, required this.repo});
+  const OutboxScreen({super.key, required this.repo, this.onOpenAlert});
   final OfflineAlertRepository repo;
+  final OpenOutboxAlert? onOpenAlert;
+
+  Future<void> _remove(BuildContext context, Json item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this step from the outbox?'),
+        content: const Text('This deletes the saved note and location from this phone. You can record the step again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (confirmed == true) await repo.removeRefusedStep(item['id'] as String);
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -181,11 +212,11 @@ class OutboxScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               if (snapshot.hasError)
-                const StatusBadge(icon: Icons.error_outline, label: 'Could not read saved reports.')
+                const StatusBadge(icon: Icons.error_outline, label: 'Could not read saved work.')
               else if (!snapshot.hasData)
-                const Center(child: CircularProgressIndicator(semanticsLabel: 'Reading saved reports'))
+                const Center(child: CircularProgressIndicator(semanticsLabel: 'Reading saved work'))
               else if (reports.isEmpty)
-                const Text('No reports in the outbox.'),
+                const Text('No reports, drafts or steps in the outbox.'),
               for (final item in reports)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -203,6 +234,16 @@ class OutboxScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             ReportDelivery(item: item),
+                            if (item['kind'] == 'draft' && onOpenAlert != null)
+                              OutlinedButton(
+                                onPressed: () => onOpenAlert!(item['workspace'] as String, item['alert'] as String),
+                                child: const Text('Open alert'),
+                              ),
+                            if (item['kind'] == 'step' &&
+                                item['received_at'] == null &&
+                                item['error'] != null &&
+                                item['retry_at'] == null)
+                              TextButton(onPressed: () => _remove(context, item), child: const Text('Remove step')),
                           ],
                         ),
                       ),

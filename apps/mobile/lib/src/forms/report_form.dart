@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
@@ -15,6 +16,7 @@ import 'geometry_field.dart';
 import 'report_media_cache.dart';
 
 typedef SaveReport = Future<void> Function(Json values, List<ReportFile> files, StepRequest? step);
+typedef SaveDraft = Future<void> Function(Json values, List<ReportFile> files, String? language);
 typedef PickReportFile = Future<ReportFile?> Function(String source);
 
 class ReportForm extends StatefulWidget {
@@ -25,6 +27,12 @@ class ReportForm extends StatefulWidget {
     required this.alert,
     required this.save,
     this.initial = const {},
+    this.draftValues = const {},
+    this.draftFiles = const [],
+    this.draftLanguage,
+    this.saveDraft,
+    this.canSend = true,
+    this.reachedAt,
     this.attachments = const {},
     this.move,
     this.reference,
@@ -36,6 +44,12 @@ class ReportForm extends StatefulWidget {
   final String step;
   final Json alert;
   final Json initial;
+  final Json draftValues;
+  final List<ReportFile> draftFiles;
+  final String? draftLanguage;
+  final SaveDraft? saveDraft;
+  final bool canSend;
+  final DateTime? reachedAt;
   final Json attachments;
   final WorkflowMove? move;
   final Json? reference;
@@ -49,9 +63,16 @@ class ReportForm extends StatefulWidget {
 
 class _ReportFormState extends State<ReportForm> {
   late final FormTree _tree = FormTree(widget.definition);
-  late final Json _values = _earlier(widget.initial, _tree.members);
-  final _files = <String, ReportFile>{};
-  String? _language;
+  late final Json _values = {
+    ..._earlier(widget.initial, _tree.members),
+    if (widget.reachedAt case final time?)
+      if (_tree.byKey['reached_at']?.kind == 'date-time') 'reached_at': time.toUtc().toIso8601String(),
+    ...widget.draftValues,
+  };
+  late final _files = {for (final file in widget.draftFiles) file.id: file};
+  late String? _language = widget.draftLanguage;
+  Future<void>? _draftWrite;
+  bool _draftDirty = false;
   String? _error;
   bool _busy = false;
   bool _tried = false;
@@ -107,6 +128,51 @@ class _ReportFormState extends State<ReportForm> {
       visit(_values);
       _files.removeWhere((id, _) => !referenced.contains(id));
     });
+    _draftDirty = true;
+    unawaited(_persistDraft());
+  }
+
+  Future<void> _persistDraft() {
+    final save = widget.saveDraft;
+    if (save == null) return Future.value();
+    final prior = _draftWrite;
+    final values = jsonDecode(jsonEncode(_values)) as Json;
+    final files = _files.values.toList();
+    final language = _lang;
+    final write = _writeDraft(prior, save, values, files, language);
+    _draftWrite = write;
+    return write;
+  }
+
+  Future<void> _writeDraft(
+    Future<void>? prior,
+    SaveDraft save,
+    Json values,
+    List<ReportFile> files,
+    String language,
+  ) async {
+    await prior;
+    try {
+      await save(values, files, language);
+      if (mounted && !_busy) setState(() => _error = null);
+    } on Exception {
+      _draftDirty = true;
+      if (mounted) setState(() => _error = 'Could not save your draft on this phone. Try again.');
+    } on StateError {
+      _draftDirty = true;
+      if (mounted) setState(() => _error = 'Could not save your draft on this phone.');
+    }
+  }
+
+  Future<void> _leave({bool save = false}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final shouldSave = save || _draftDirty;
+    _draftDirty = false;
+    if (shouldSave) await _persistDraft();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (!_draftDirty) Navigator.of(context).pop();
   }
 
   void _discardUnavailableChoices(AnswerSession session, List<FormNode> members, Json values, EntryPath path) {
@@ -155,6 +221,8 @@ class _ReportFormState extends State<ReportForm> {
     }
     setState(() => _busy = true);
     try {
+      await _draftWrite;
+      if (!mounted) return;
       final move = widget.move;
       StepRequest? step;
       if (move != null) {
@@ -198,75 +266,110 @@ class _ReportFormState extends State<ReportForm> {
     final settings = {for (final item in objects(layout['items'])) item['item'] as String: item};
     final pages = objects(layout['pages']);
     final description = _text(widget.definition['description']);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Field report')),
-      body: SafeArea(
-        child: ListView(
-          controller: _scroll,
-          padding: const EdgeInsets.all(16),
-          children: [
-            Semantics(
-              headingLevel: 1,
-              child: Text(_text(widget.definition['title']), style: Theme.of(context).textTheme.titleLarge),
-            ),
-            if (description.isNotEmpty) Text(description),
-            const SizedBox(height: 12),
-            if (languages.length > 1)
-              DropdownButtonFormField<String>(
-                key: ValueKey(_lang),
-                initialValue: languages.contains(_lang)
-                    ? _lang
-                    : languages.contains(_lang.split('-').first)
-                    ? _lang.split('-').first
-                    : 'en',
-                decoration: const InputDecoration(labelText: 'Form language'),
-                items: [for (final lang in languages) DropdownMenuItem(value: lang, child: Text(lang))],
-                onChanged: _busy ? null : (value) => setState(() => _language = value),
-              ),
-            if (problems.isNotEmpty)
+    return PopScope<Object?>(
+      canPop: widget.saveDraft == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_leave());
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Field report')),
+        body: SafeArea(
+          child: ListView(
+            controller: _scroll,
+            padding: const EdgeInsets.all(16),
+            children: [
               Semantics(
-                liveRegion: true,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Check these answers', style: Theme.of(context).textTheme.titleMedium),
-                        for (final problem in problems) Text(_explain(problem)),
-                      ],
+                headingLevel: 1,
+                child: Text(_text(widget.definition['title']), style: Theme.of(context).textTheme.titleLarge),
+              ),
+              if (description.isNotEmpty) Text(description),
+              const SizedBox(height: 12),
+              if (languages.length > 1)
+                DropdownButtonFormField<String>(
+                  key: ValueKey(_lang),
+                  initialValue: languages.contains(_lang)
+                      ? _lang
+                      : languages.contains(_lang.split('-').first)
+                      ? _lang.split('-').first
+                      : languages.first,
+                  decoration: const InputDecoration(labelText: 'Form language'),
+                  items: [
+                    for (final lang in languages) DropdownMenuItem(value: lang, child: Text(_languageName(lang))),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) {
+                          setState(() => _language = value);
+                          _draftDirty = true;
+                          unawaited(_persistDraft());
+                        },
+                ),
+              if (problems.isNotEmpty)
+                Semantics(
+                  liveRegion: true,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Check these answers', style: Theme.of(context).textTheme.titleMedium),
+                          for (final problem in problems) Text(_explain(problem)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            if (pages.isEmpty)
-              for (final section in _tree.sections) _node(session, section, [], settings)
-            else
-              for (final page in pages)
-                if ((page['sections'] as List).map((key) => _tree.byKey[key]!).any(session.visible)) ...[
-                  if (_text(page['title']).isNotEmpty)
-                    Text(_text(page['title']), style: Theme.of(context).textTheme.titleLarge),
-                  for (final key in page['sections'] as List) _node(session, _tree.byKey[key]!, [], settings),
-                ],
-            if (widget.move case final move?)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text('The server will check the ${move.label} step when it receives the report.'),
-              ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              if (pages.isEmpty)
+                for (final section in _tree.sections) _node(session, section, [], settings)
+              else
+                for (final page in pages)
+                  if ((page['sections'] as List).map((key) => _tree.byKey[key]!).any(session.visible)) ...[
+                    if (_text(page['title']).isNotEmpty)
+                      Text(_text(page['title']), style: Theme.of(context).textTheme.titleLarge),
+                    for (final key in page['sections'] as List) _node(session, _tree.byKey[key]!, [], settings),
+                  ],
+              if (widget.move case final move?)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('The server will check the ${move.label} step when it receives the report.'),
                 ),
-              ),
-            FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving report' : 'Save to outbox')),
-          ],
+              if (!widget.canSend)
+                const Text('Save a draft now. Finish the earlier alert steps before sending this report.'),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ),
+                ),
+              if (widget.saveDraft != null)
+                OutlinedButton(onPressed: _busy ? null : () => _leave(save: true), child: const Text('Save draft')),
+              if (widget.canSend)
+                FilledButton(
+                  onPressed: _busy ? null : _save,
+                  child: Text(
+                    _busy
+                        ? 'Saving report'
+                        : widget.saveDraft == null
+                        ? 'Save to outbox'
+                        : 'Send when connected',
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  String _languageName(String tag) => switch (tag.split('-').first) {
+    'en' => 'English',
+    'hi' => 'हिन्दी',
+    'bn' => 'বাংলা',
+    _ => tag,
+  };
 
   Iterable<String> _translations(Object? node) sync* {
     if (node is List) {
@@ -289,6 +392,18 @@ class _ReportFormState extends State<ReportForm> {
     final label = _text(item?.data['label'] ?? item?.data['title']);
     return label.isEmpty ? match[0]! : '“$label”';
   });
+
+  bool _hasRequired(AnswerSession session, FormNode node, EntryPath path) {
+    if (!session.visible(node, path) || session.readOnly(node)) return false;
+    if (session.required(node, path)) return true;
+    if (node.kind == 'repeat') {
+      if ((node.data['minRepeats'] as int? ?? 0) > 0) return true;
+      return objects(_scope(path)[node.key]).indexed.any(
+        (entry) => node.children.any((child) => _hasRequired(session, child, [...path, (node.key, entry.$1)])),
+      );
+    }
+    return node.children.any((child) => _hasRequired(session, child, path));
+  }
 
   Widget _node(AnswerSession session, FormNode node, EntryPath path, Map<String, Json> layout) {
     if (!session.visible(node, path)) return const SizedBox.shrink();
@@ -344,7 +459,7 @@ class _ReportFormState extends State<ReportForm> {
       return Padding(
         key: ValueKey(node.key),
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: setting?['collapsed'] == true
+        child: setting?['collapsed'] == true && !_hasRequired(session, node, path)
             ? ExpansionTile(title: Text(label), children: children)
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -58,8 +58,9 @@ class _OfflineView extends OfflineAlertRepository {
   Future<AlertHistory> history(String slug, String id) => fake.history(slug, id);
 
   @override
-  Future<StepReceipt> recordStep(String slug, String alertId, StepRequest request) =>
-      fake.recordStep(slug, alertId, request);
+  Future<void> queueStep(String slug, String alert, WorkflowMove move, String fromStep, StepRequest request) async {
+    await fake.recordStep(slug, alert, request);
+  }
 
   @override
   Future<Json> reportsForAlert(String slug, String id) async => {
@@ -86,6 +87,55 @@ class _OfflineView extends OfflineAlertRepository {
   @override
   Future<void> sync({bool retry = false, bool refresh = false}) async {
     if (retry && refresh) syncs++;
+  }
+}
+
+class _OfflineSteps extends _OfflineView {
+  _OfflineSteps(super.client);
+
+  static const acknowledge = WorkflowMove(
+    step: 'acknowledged',
+    label: 'Acknowledged',
+    locationRequired: false,
+    canOverride: false,
+    terminal: false,
+  );
+  static const teamSent = WorkflowMove(
+    step: 'team_sent',
+    label: 'Team sent',
+    locationRequired: false,
+    canOverride: false,
+    terminal: false,
+  );
+  static const reached = WorkflowMove(
+    step: 'reached_site',
+    label: 'Reached site',
+    locationRequired: true,
+    canOverride: false,
+    terminal: false,
+  );
+  final queued = <Json>[];
+
+  @override
+  Future<AlertHistory> history(String slug, String id) async => const AlertHistory(
+    entries: [],
+    moves: [acknowledge],
+    offlineMoves: {
+      'acknowledged': [teamSent],
+      'team_sent': [reached],
+    },
+  );
+
+  @override
+  Future<Json> reportsForAlert(String slug, String id) async => {};
+
+  @override
+  Future<List<Json>> reportStatus({String? workspace, String? alert}) async => List.of(queued);
+
+  @override
+  Future<void> queueStep(String slug, String alert, WorkflowMove move, String fromStep, StepRequest request) async {
+    queued.add({'title': move.label, 'kind': 'step', 'from_step': fromStep, 'body': jsonEncode(request.toJson())});
+    changes.value++;
   }
 }
 
@@ -136,6 +186,54 @@ void _wrapped(WidgetTester tester, String label) {
 }
 
 void main() {
+  testWidgets('offline steps make the next action available and keep the confirmed status', (tester) async {
+    final server = FakeIdentityServer();
+    final repo = _OfflineSteps(server.client);
+    addTearDown(repo.dispose);
+    final view = WorkspaceView(
+      services: AppServices(
+        config: testConfig,
+        session: Session(
+          oidc: OidcClient(config: testConfig, httpClient: server.client),
+          store: MemoryTokenStore(),
+          browser: FakeBrowser(server),
+        ),
+        repository: repo,
+      ),
+      profile: guardProfile,
+      workspace: guardProfile.workspaces.single,
+      map: sampleMap,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: fimraTheme(Brightness.light),
+        home: AlertDetailScreen(
+          view: view,
+          alert: sampleAlert(),
+          locate: () async => (latitude: 16.347, longitude: 86.2264),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final action in ['Acknowledge', 'Mark team sent', 'Mark reached']) {
+      final button = find.widgetWithText(FilledButton, action);
+      expect(button.hitTestable(), findsOneWidget);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('New').hitTestable(), findsOneWidget);
+    expect(find.text('3 waiting to send').hitTestable(), findsOneWidget);
+    expect(repo.queued.map((row) => row['from_step']), ['new', 'acknowledged', 'team_sent']);
+    final arrival = StepRequest.fromJson(jsonDecode(repo.queued.last['body'] as String) as Json);
+    expect(arrival.step, 'reached_site');
+    expect(arrival.clientTime, isNotNull);
+    expect(arrival.latitude, 16.347);
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets('${brightness.name} at 200%: alert list, details, step and outbox', (tester) async {
       _phone(tester);
@@ -213,7 +311,7 @@ void main() {
       _order(tester, ['Inspection report', 'Saved on this phone', 'Could not send', failureReason]);
       await _guidelines(tester);
 
-      final acknowledge = find.widgetWithText(FilledButton, 'Acknowledged');
+      final acknowledge = find.widgetWithText(FilledButton, 'Acknowledge');
       await tester.scrollUntilVisible(acknowledge, 200);
       await tester.pumpAndSettle();
       expect(acknowledge.hitTestable(), findsOneWidget);
