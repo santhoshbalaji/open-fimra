@@ -1,12 +1,20 @@
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
-import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, input, model, signal } from '@angular/core';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { Component, Injector, afterNextRender, computed, inject, input, model, signal, viewChild } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { validateForm } from '@open-fimra/form-schema';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmTextarea } from '@spartan-ng/helm/textarea';
+import { map } from 'rxjs';
+import { FieldErrorSummary } from '../ui/field-error-summary';
 import { Icon } from '../ui/icon';
+import { LiveStatus } from '../ui/live-status';
+import { SidePanel } from '../ui/side-panel';
+import { StatusBadge } from '../ui/status-badge';
+import { workspacePhone } from '../ui/workspace-breakpoint';
 import { FormPreview } from './form-preview';
 import { TemplateRules, checkExtension, checkTemplateRules } from './form-locks';
 import {
@@ -31,8 +39,10 @@ const simpleTests = new Set(['answered', 'equals', 'not-equals', 'more-than', 'a
  */
 @Component({
   selector: 'fimra-form-designer',
-  imports: [CdkDrag, CdkDragHandle, CdkDropList, NgTemplateOutlet, FormPreview, HlmBadge, HlmButton, HlmInput, HlmTextarea, Icon],
+  imports: [CdkDrag, CdkDragHandle, CdkDropList, NgTemplateOutlet, FormPreview, HlmBadge, HlmButton, HlmInput, HlmTextarea,
+    FieldErrorSummary, Icon, LiveStatus, SidePanel, StatusBadge],
   templateUrl: './form-designer.html',
+  styleUrl: './form-designer.css',
   host: { class: 'block' }
 })
 export class FormDesigner {
@@ -44,6 +54,12 @@ export class FormDesigner {
   readonly readonly = input(false);
   /** Problems the server reported on the last save. */
   readonly serverProblems = input<string[]>([]);
+
+  private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
+  private readonly errorSummary = viewChild(FieldErrorSummary);
+  protected readonly phone = toSignal(inject(BreakpointObserver).observe(workspacePhone).pipe(map(match => match.matches)),
+    { requireSync: true });
 
   readonly fieldTypes = fieldTypes;
   readonly alertSources = alertSources;
@@ -73,6 +89,13 @@ export class FormDesigner {
       ...(parent ? checkExtension(parent.definition, parent.rules, form) : [])
     ];
   });
+  protected readonly errors = computed(() => [...new Set([...this.problems(), ...this.serverProblems()])].map(message => {
+    const key = /^(?:Field|Section|Group|Repeating group|The key|The template locks) "([a-z][a-z0-9_]*)"/.exec(message)?.[1];
+    // Schema errors give a position such as sections[0].items[1].label.
+    const position = /^sections\[\d+\](?:\.items\[\d+\])*/.exec(message)?.[0];
+    const path = key ? findPath(this.form(), key) : position?.match(/\d+/g)?.map(Number);
+    return { message, fieldId: path && nodeAt(this.form(), path) ? this.rowId(path) : undefined };
+  }));
   readonly listIds = computed(() => {
     const ids: string[] = [];
     const walk = (items: FormItem[], path: number[]) => items.forEach((item, i) => {
@@ -97,6 +120,7 @@ export class FormDesigner {
 
   /** The id of the drop list for a section or group. */
   listId(path: NodePath): string { return 'form-list-' + path.join('-'); }
+  rowId(path: NodePath): string { return 'form-row-' + path.join('-'); }
   pathOf(container: NodePath, index: number): number[] { return [...container, index]; }
   isSelected(path: NodePath): boolean { const s = this.selected(); return !!s && s.join() === path.join(); }
   asItems(items: unknown): FormItem[] { return items as FormItem[]; }
@@ -168,17 +192,18 @@ export class FormDesigner {
     return { container: [], index: 0 };
   }
 
-  add(type: string, container?: number[], index?: number): void {
-    if (this.readonly()) return;
+  add(type: string, container?: number[], index?: number): boolean {
+    if (this.readonly()) return false;
     const place = container ? { container, index: index ?? 0 } : this.target();
     if (!place.container.length) {
       this.announcement.set('Every section is locked. Add a section first.');
-      return;
+      return false;
     }
     const item = newItem(this.form(), type);
     const next = insertItem(this.form(), place.container, place.index, item);
     this.apply(next, `Added ${typeName(type).toLowerCase()} "${nodeName(item)}" to ${this.containerName(place.container)}.`);
     this.select(findPath(next, item.key));
+    return true;
   }
 
   addSection(): void {
@@ -255,8 +280,8 @@ export class FormDesigner {
     if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
     event.preventDefault();
     this.moveKey(key, event.key === 'ArrowUp' ? -1 : 1);
-    const moved = this.selected();
-    if (moved) setTimeout(() => (document.getElementById('form-row-' + moved.join('-')) as HTMLElement | null)?.focus());
+    const moved = findPath(this.form(), key);
+    if (moved) this.focusAfterRender(this.rowId(moved));
   }
 
   first(path: NodePath): boolean { return path[path.length - 1] === 0; }
@@ -527,18 +552,19 @@ export class FormDesigner {
     }
   }
 
-  /** Selects the item a problem names, such as Field "cause". */
-  showProblem(message: string): void {
-    const key = /"([a-z][a-z0-9_]*)"/.exec(message)?.[1];
-    const path = key ? findPath(this.form(), key) : null;
-    if (!path) return;
-    this.setTab('design');
-    this.select(path);
-    setTimeout(() => document.getElementById('form-row-' + path.join('-'))?.focus());
+  focusProblems(): void {
+    afterNextRender(() => this.errorSummary()?.focus(), { injector: this.injector });
   }
 
-  problemNamesItem(message: string): boolean {
-    const key = /"([a-z][a-z0-9_]*)"/.exec(message)?.[1];
-    return !!key && !!findPath(this.form(), key);
+  /** The summary can be used from Preview and Form file, where outline rows are not yet mounted. */
+  protected showProblem(id: string): void {
+    const needsRender = this.tab() !== 'design';
+    this.setTab('design');
+    this.select(id.slice('form-row-'.length).split('-').map(Number));
+    if (needsRender) this.focusAfterRender(id);
+  }
+
+  private focusAfterRender(id: string): void {
+    afterNextRender(() => this.document.getElementById(id)?.focus(), { injector: this.injector });
   }
 }

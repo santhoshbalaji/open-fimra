@@ -1,6 +1,10 @@
+import { InteractivityChecker } from '@angular/cdk/a11y';
+import { BreakpointObserver, BreakpointState } from '@angular/cdk/layout';
 import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
+import { BehaviorSubject } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import firstReport from '../../../../packages/form-schema/examples/first-report.json';
 import { stubLayoutApis } from '../overlay-testing';
 import { FormDesigner, ParentTemplate } from './form-designer';
@@ -22,6 +26,7 @@ class Host {
 describe('FormDesigner', () => {
   let fixture: ComponentFixture<Host>;
   let host: Host;
+  let phone: BehaviorSubject<BreakpointState>;
   const root = () => fixture.nativeElement as HTMLElement;
   const designer = () => fixture.debugElement.children[0].componentInstance as FormDesigner;
   const button = (label: string) => [...root().querySelectorAll('button')].find(b => b.textContent?.trim() === label || b.getAttribute('aria-label') === label);
@@ -32,18 +37,67 @@ describe('FormDesigner', () => {
 
   beforeEach(() => {
     stubLayoutApis();
-    TestBed.configureTestingModule({ imports: [Host] });
+    phone = new BehaviorSubject<BreakpointState>({ matches: false, breakpoints: {} });
+    TestBed.configureTestingModule({ imports: [Host], providers: [
+      provideSpartanHlm(),
+      { provide: BreakpointObserver, useValue: { observe: () => phone } }
+    ] });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     fixture = TestBed.createComponent(Host);
     host = fixture.componentInstance;
     fixture.detectChanges();
   });
 
-  afterEach(() => fixture.destroy());
+  afterEach(() => {
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 
   it('shows the sections and items, and finds no problems in a valid form', () => {
     expect(root().querySelectorAll('.designer-section')).toHaveLength(4);
     expect(row('cause').textContent).toContain('Likely cause');
     expect(root().querySelector('.designer-problems')!.textContent).toContain('No problems found');
+    expect(root().querySelector('.designer-problems fimra-status-badge svg[data-icon=check]')).toBeTruthy();
+  });
+
+  it('puts the outline and selection before field choices and opens separate sheets on a phone', async () => {
+    phone.next({ matches: true, breakpoints: {} });
+    fixture.detectChanges();
+    expect(button('Number')).toBeUndefined();
+    expect(root().querySelector('#prop-text-en')).toBeNull();
+    row('cause').click();
+    fixture.detectChanges();
+    const outline = root().querySelector('.designer-outline')!;
+    expect(outline.textContent).toContain('Selected Likely cause');
+    const add = button('Add')!;
+    expect(outline.querySelector('p')!.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    add.focus();
+    click('Add');
+    TestBed.tick();
+    const addSheet = document.querySelector('[role=dialog]')!;
+    expect(addSheet.textContent).toContain('Add to form');
+    expect(addSheet.querySelector('#prop-text-en')).toBeNull();
+    [...addSheet.querySelectorAll('button')].find(b => b.textContent?.trim() === 'Number')!.click();
+    TestBed.tick();
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(document.querySelector('[role=dialog]')).toBeNull();
+      expect(document.activeElement === add).toBe(true);
+    });
+    expect(outline.textContent).toContain('Selected New question');
+
+    click('Properties');
+    TestBed.tick();
+    const propertiesSheet = document.querySelector('[role=dialog]')!;
+    expect(propertiesSheet.textContent).toContain('Number: New question');
+    expect(propertiesSheet.querySelector('#form-palette')).toBeNull();
+    expect(propertiesSheet.querySelector<HTMLInputElement>('#prop-text-en')?.value).toBe('New question');
+    propertiesSheet.querySelector('button')!.click();
+    TestBed.tick();
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(document.activeElement === button('Properties')).toBe(true);
+    });
   });
 
   it('adds a field after the selected item from the palette', () => {
@@ -108,7 +162,12 @@ describe('FormDesigner', () => {
     file.dispatchEvent(new Event('input'));
     click('Apply the file');
     expect(root().querySelector('.designer-problems')!.textContent).toContain('Field "cause_group": uses the list "cause_kinds", which does not exist.');
-    click('Field "cause_group": uses the list "cause_kinds", which does not exist.');
+    const link = root().querySelector<HTMLAnchorElement>('fimra-field-error-summary a')!;
+    const rowId = 'form-row-' + findPath(host.form(), 'cause_group')!.join('-');
+    expect(link.getAttribute('href')).toBe('#' + rowId);
+    link.click();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(row('cause_group'));
     expect(root().querySelector('#properties-heading')!.textContent).toContain('Single choice: Kind of cause');
   });
 
@@ -148,6 +207,7 @@ describe('FormDesigner', () => {
     host.rules.set({ allowExtension: false, locked: ['summary', 'cause'] });
     fixture.detectChanges();
     expect(row('reached_at').textContent).toContain('Locked by template');
+    expect(row('reached_at').querySelector('fimra-status-badge svg[data-icon=lock]')).toBeTruthy();
     expect(button('Move Likely cause up')!.disabled).toBe(false);
     expect(button('Move Team reached the site at down')!.disabled).toBe(true);
     row('reached_at').click();

@@ -5,7 +5,7 @@ import { Icon, IconName } from './icon';
 const icons = {
   overdue: 'triangle-alert', complete: 'check', healthy: 'circle-check', delayed: 'clock',
   quiet: 'bell-off', failing: 'circle-x', step: 'clock', draft: 'file-pen-line', published: 'circle-check',
-  'validation-success': 'check', pending: 'clock', failed: 'circle-x', queued: 'list-ordered'
+  'validation-success': 'check', locked: 'lock', pending: 'clock', failed: 'circle-x', queued: 'list-ordered'
 } satisfies Record<string, IconName>;
 
 function visibleLabel(value: string) {

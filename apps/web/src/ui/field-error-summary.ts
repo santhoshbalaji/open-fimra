@@ -1,8 +1,8 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, input, output } from '@angular/core';
 
 export interface FieldError {
-  fieldId: string;
+  fieldId?: string;
   message: string;
 }
 
@@ -23,8 +23,14 @@ let nextSummary = 0;
     <p [id]="headingId" class="font-semibold">{{ heading() }}</p>
     <ul class="mt-2 list-disc space-y-1 ps-5">
       @for (error of errors(); track $index) {
-        <li><a class="rounded-sm text-danger underline underline-offset-2"
-          [attr.href]="'#' + error.fieldId" (click)="focusField($event, error.fieldId)">{{ error.message }}</a></li>
+        <li>
+          @if (error.fieldId; as id) {
+            <a class="rounded-sm text-danger underline underline-offset-2"
+              [attr.href]="'#' + id" (click)="focusField($event, id)">{{ error.message }}</a>
+          } @else {
+            {{ error.message }}
+          }
+        </li>
       }
     </ul>
   `
@@ -32,6 +38,7 @@ let nextSummary = 0;
 export class FieldErrorSummary {
   readonly errors = input.required<readonly FieldError[]>();
   readonly heading = input('Check the following fields');
+  readonly fieldSelected = output<string>();
 
   protected readonly headingId = `fimra-error-summary-${++nextSummary}`;
 
@@ -45,6 +52,7 @@ export class FieldErrorSummary {
 
   protected focusField(event: MouseEvent, id: string) {
     event.preventDefault();
+    this.fieldSelected.emit(id);
     this.document.getElementById(id)?.focus();
   }
 }

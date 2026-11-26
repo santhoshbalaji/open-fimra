@@ -1,4 +1,4 @@
-<p class="sr-only" aria-live="polite" role="status">{{ announcement() }}</p>
+<fimra-live-status class="sr-only" [message]="announcement()" />
 
 <div class="flex flex-wrap items-center gap-2">
   <nav class="view-switch" aria-label="Designer views">
@@ -13,27 +13,13 @@
   }
 </div>
 
-<section class="designer-problems mt-3 rounded-card border border-border bg-card p-3" aria-labelledby="designer-problems-heading">
-  <h3 id="designer-problems-heading" class="font-semibold">
-    @if (problems().length + serverProblems().length) {
-      {{ problems().length + serverProblems().length }} {{ problems().length + serverProblems().length === 1 ? 'problem' : 'problems' }} to fix before publishing
-    } @else {
-      <span class="text-success-text">No problems found</span>
-    }
-  </h3>
-  @if (problems().length + serverProblems().length) {
-    <ul class="mt-2 grid list-disc gap-1 pl-5">
-      @for (message of problems(); track $index) {
-        <li>
-          @if (problemNamesItem(message)) {
-            <button type="button" class="text-start underline underline-offset-2" (click)="showProblem(message)">{{ message }}</button>
-          } @else { {{ message }} }
-        </li>
-      }
-      @for (message of serverProblems(); track $index) { <li>{{ message }}</li> }
-    </ul>
+<div class="designer-problems mt-3">
+  @if (errors().length) {
+    <fimra-field-error-summary heading="Fix these problems before publishing" [errors]="errors()" (fieldSelected)="showProblem($event)" />
+  } @else {
+    <fimra-status-badge icon="validation-success" label="No problems found" />
   }
-</section>
+</div>
 
 @switch (tab()) {
   @case ('preview') {
@@ -50,44 +36,63 @@
     </div>
   }
   @default {
-    <div class="designer-grid mt-4 grid grid-cols-[minmax(0,1fr)] items-start gap-4"
-         [class]="readonly() ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : 'lg:grid-cols-[200px_minmax(0,1fr)_340px]'">
-      @if (!readonly()) {
-        <aside class="grid gap-2" aria-labelledby="palette-heading">
+    <div class="designer-grid mt-4 grid min-w-0 items-start gap-4" [class.readonly]="readonly()">
+      @if (!phone() && !readonly()) {
+        <aside class="designer-palette grid gap-2 rounded-card border border-border bg-card p-3" aria-labelledby="palette-heading">
           <h3 id="palette-heading" class="font-semibold">Add</h3>
-          <p class="text-label text-muted-foreground">Choose a type to add it after the selected item, or drag it into place.</p>
-          <ul id="form-palette" cdkDropList [cdkDropListData]="null" [cdkDropListConnectedTo]="listIds()" cdkDropListSortingDisabled
-              [cdkDropListEnterPredicate]="noDrop" class="palette grid gap-1">
-            @for (type of fieldTypes; track type.type) {
-              <li cdkDrag [cdkDragData]="type.type">
-                <button hlmBtn variant="outline" size="sm" class="w-full justify-start" [title]="type.description" (click)="add(type.type)">
-                  <svg fimraIcon="plus" aria-hidden="true"></svg> {{ type.name }}
-                </button>
-              </li>
-            }
-          </ul>
-          <button hlmBtn variant="outline" size="sm" class="justify-start" (click)="addSection()">
-            <svg fimraIcon="plus" aria-hidden="true"></svg> Section
-          </button>
+          <ng-container [ngTemplateOutlet]="palette" />
         </aside>
       }
 
-      <div class="grid min-w-0 gap-3">
+      <section class="designer-outline grid min-w-0 gap-3" aria-labelledby="outline-heading">
+        <div class="outline-heading grid gap-2">
+          <h3 id="outline-heading" class="font-semibold">Form outline</h3>
+          @if (phone()) {
+            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <p class="min-w-0 grow wrap-anywhere text-label text-text-secondary">
+                Selected <span class="font-semibold text-text">{{ node() ? nodeName(node()!) : 'Form settings' }}</span>
+              </p>
+              <div class="flex flex-wrap gap-2">
+                @if (!readonly()) {
+                  <button #addTrigger type="button" hlmBtn variant="outline" aria-haspopup="dialog"
+                    [attr.aria-expanded]="addPanel.open()" (click)="addPanel.show(addTrigger)">
+                    <svg fimraIcon="plus" aria-hidden="true"></svg> Add
+                  </button>
+                }
+                <button #propertiesTrigger type="button" hlmBtn variant="outline" aria-haspopup="dialog"
+                  [attr.aria-expanded]="propertiesPanel.open()" (click)="propertiesPanel.show(propertiesTrigger)">
+                  <svg fimraIcon="settings" aria-hidden="true"></svg> Properties
+                </button>
+              </div>
+            </div>
+            <fimra-side-panel #addPanel="fimraSidePanel" class="contents" heading="Add to form">
+              @if (addPanel.open()) {
+                <ng-container [ngTemplateOutlet]="palette" [ngTemplateOutletContext]="{ panel: addPanel }" />
+              }
+            </fimra-side-panel>
+            <fimra-side-panel #propertiesPanel="fimraSidePanel" class="contents" heading="Properties">
+              @if (propertiesPanel.open()) {
+                <div class="designer-properties grid min-w-0 gap-3">
+                  <ng-container [ngTemplateOutlet]="properties" />
+                </div>
+              }
+            </fimra-side-panel>
+          }
+        </div>
         <button type="button" class="form-settings rounded-card border border-border bg-card p-3 text-start" [class.selected]="!selected()"
                 [attr.aria-pressed]="!selected()" (click)="select(null)">
-          <span class="block text-subhead">{{ text(form().title) || 'Untitled form' }}</span>
-          <span class="text-label text-muted-foreground">{{ form().id }}, version {{ form().version }}. Choose to {{ readonly() ? 'see' : 'change' }} the form's settings.</span>
+          <span class="block text-subhead">Form settings</span>
         </button>
-        @if (!readonly()) {
+        @if (!phone() && !readonly()) {
           <p class="text-label text-muted-foreground">
             Drag the handles to move items, or select an item and press Alt with the up or down arrow. The move buttons do the same.
           </p>
         }
-        <ol cdkDropList id="form-sections" (cdkDropListDropped)="sectionDropped($event)" [cdkDropListDisabled]="readonly()" class="grid gap-3"
+        <ol cdkDropList id="form-sections" (cdkDropListDropped)="sectionDropped($event)" [cdkDropListDisabled]="phone() || readonly()" class="grid gap-3"
             aria-label="Sections">
           @for (section of form().sections; track section.key; let s = $index) {
             @let sectionPath = [s];
-            <li cdkDrag class="designer-section rounded-card border border-border bg-card p-3" [class.locked]="frozen(sectionPath)">
+            <li cdkDrag [cdkDragDisabled]="phone()" class="designer-section rounded-card border border-border bg-card p-3" [class.locked]="frozen(sectionPath)">
               <ng-container [ngTemplateOutlet]="row" [ngTemplateOutletContext]="{ $implicit: section, path: sectionPath, kind: 'section' }" />
               <div class="mt-2 pl-2">
                 <ng-container [ngTemplateOutlet]="itemList" [ngTemplateOutletContext]="{ $implicit: section.items, container: sectionPath }" />
@@ -95,109 +100,138 @@
             </li>
           }
         </ol>
-      </div>
+      </section>
 
-      <aside class="designer-properties grid gap-3 rounded-card border border-border bg-card p-3 lg:sticky lg:top-4" aria-labelledby="properties-heading">
-        @if (node(); as node) {
-          @let path = selected()!;
-          @let locked = frozen(path);
-          <h3 id="properties-heading" class="font-semibold">{{ path.length === 1 ? 'Section' : typeName(item()!.type) }}: {{ nodeName(node) }}</h3>
-          @if (locked) {
-            <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4"></svg>
-              Locked by {{ parent()?.form }} version {{ parent()?.version }}. It cannot be changed in this form.</p>
-          }
-          <fieldset class="grid gap-3" [disabled]="locked || readonly()">
-            <div class="grid gap-1">
-              <label for="prop-key" class="font-medium">Key</label>
-              <input hlmInput id="prop-key" [value]="node.key" (change)="setKey($event)" spellcheck="false" aria-describedby="prop-key-help">
-              <p id="prop-key-help" class="text-label text-muted-foreground">The column name in reports and exports. Keep it the same from one version to the next.</p>
-              @if (keyError()) { <p class="text-danger" role="alert">{{ keyError() }}</p> }
-            </div>
-            @for (language of languages(); track language) {
-              <div class="grid gap-1">
-                <label [for]="'prop-text-' + language" class="font-medium">{{ textName() === 'title' ? 'Title' : 'Question' }}@if (language !== 'en') { ({{ language }})}</label>
-                <input hlmInput [id]="'prop-text-' + language" [value]="text(prop(node, textName()), language)" (change)="setText(textName(), language, $event)">
-              </div>
-            }
-            @if (path.length > 1 && !isContainer(item()!)) {
-              <div class="grid gap-1">
-                <label for="prop-hint" class="font-medium">Hint</label>
-                <input hlmInput id="prop-hint" [value]="text(item()!.hint)" (change)="setText('hint', 'en', $event)">
-              </div>
-              @if (item()!.type !== 'calculated' && item()!.type !== 'alert-value') {
-                <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item()!.required" (change)="setFlag('required', $event)"> Must be answered</label>
-              }
-            } @else {
-              <div class="grid gap-1">
-                <label for="prop-description" class="font-medium">Description</label>
-                <input hlmInput id="prop-description" [value]="text(node.description)" (change)="setText('description', 'en', $event)">
-              </div>
-            }
-            @if (path.length > 1) {
-              <ng-container [ngTemplateOutlet]="typeProperties" [ngTemplateOutletContext]="{ $implicit: item()! }" />
-              <div class="grid gap-1">
-                <label for="prop-move" class="font-medium">Move to</label>
-                <select hlmInput id="prop-move" (change)="moveToPlace($event)">
-                  @for (place of places(); track place.path.join('-')) {
-                    <option [value]="placeValue(place.path)" [selected]="placeValue(place.path) === currentPlace()"
-                            [disabled]="frozen(place.path)">{{ '  '.repeat(place.depth) }}{{ place.name }}</option>
-                  }
-                </select>
-              </div>
-            }
-            <ng-container [ngTemplateOutlet]="conditionEditor" [ngTemplateOutletContext]="{ $implicit: node }" />
-          </fieldset>
-          @if (rules().allowExtension && canLock()) {
-            <label class="flex items-start gap-2 border-t border-border pt-3">
-              <input type="checkbox" class="mt-1" [checked]="ownLocks().has(node.key) || frozen(path)" [disabled]="inherited().has(node.key) || readonly()"
-                     (change)="toggleLock($event)">
-              <span>Lock for the forms that extend this one
-                <span class="block text-label text-muted-foreground">They keep it exactly as it is here, with everything inside it.</span></span>
-            </label>
-          }
-          @if (!locked && !readonly()) {
-            <button hlmBtn variant="outline" size="sm" class="justify-self-start" (click)="removeSelected()">
-              <svg fimraIcon="trash-2" aria-hidden="true"></svg> Remove {{ path.length === 1 ? 'section' : typeName(item()!.type).toLowerCase() }}
-            </button>
-          }
-        } @else {
-          <h3 id="properties-heading" class="font-semibold">Form settings</h3>
-          <fieldset class="grid gap-3" [disabled]="readonly()">
-            <div class="grid gap-1">
-              <label for="form-title" class="font-medium">Title</label>
-              <input hlmInput id="form-title" [value]="text(form().title)" (change)="setFormText('title', $event)">
-            </div>
-            <div class="grid gap-1">
-              <label for="form-description" class="font-medium">Description</label>
-              <input hlmInput id="form-description" [value]="text(form().description)" (change)="setFormText('description', $event)">
-            </div>
-            <p class="text-label text-muted-foreground">Id {{ form().id }}, version {{ form().version }}. Languages: {{ languages().join(', ') }}.
-              @if (form().stages?.length) { Stages: {{ form().stages!.length }}. } Change these in the form file.</p>
-            @if (canLock()) {
-              <label class="flex items-start gap-2 border-t border-border pt-3">
-                <input type="checkbox" class="mt-1" [checked]="rules().allowExtension" (change)="setAllowExtension($event)">
-                <span>Let {{ level() === 'national' ? 'states' : 'divisions' }} extend this form
-                  <span class="block text-label text-muted-foreground">Then lock the sections and questions they must keep as they are.</span></span>
-              </label>
-            }
-          </fieldset>
-          @if (parent(); as parent) {
-            <p class="text-muted-foreground">Extends {{ parent.form }} version {{ parent.version }}. {{ parent.rules.locked.length }} locked
-              {{ parent.rules.locked.length === 1 ? 'part' : 'parts' }} come from it.</p>
-          }
-        }
-      </aside>
+      @if (!phone()) {
+        <aside class="designer-properties grid min-w-0 gap-3 rounded-card border border-border bg-card p-3" aria-labelledby="properties-heading">
+          <ng-container [ngTemplateOutlet]="properties" />
+        </aside>
+      }
     </div>
   }
 }
 
+<ng-template #palette let-panel="panel">
+  <div class="grid gap-2">
+    <p class="text-label text-text-secondary">
+      @if (phone()) { Choose a type to add it to the outline. }
+      @else { Choose a type to add it to the outline, or drag it into place. }
+    </p>
+    <button type="button" hlmBtn variant="outline" size="sm" class="justify-start" (click)="addSection(); panel?.close()">
+      <svg fimraIcon="plus" aria-hidden="true"></svg> Section
+    </button>
+    <ul id="form-palette" cdkDropList [cdkDropListData]="null" [cdkDropListConnectedTo]="listIds()" cdkDropListSortingDisabled
+        [cdkDropListDisabled]="phone()" [cdkDropListEnterPredicate]="noDrop" class="palette grid gap-1">
+      @for (type of fieldTypes; track type.type) {
+        <li cdkDrag [cdkDragDisabled]="phone()" [cdkDragData]="type.type">
+          <button type="button" hlmBtn variant="outline" size="sm" class="w-full justify-start" [title]="type.description"
+                  (click)="add(type.type) && panel?.close()">
+            <svg fimraIcon="plus" aria-hidden="true"></svg> {{ type.name }}
+          </button>
+        </li>
+      }
+    </ul>
+  </div>
+</ng-template>
+
+<ng-template #properties>
+  @if (node(); as node) {
+    @let path = selected()!;
+    @let locked = frozen(path);
+    <h3 id="properties-heading" class="font-semibold">{{ path.length === 1 ? 'Section' : typeName(item()!.type) }}: {{ nodeName(node) }}</h3>
+    @if (locked) {
+      <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4"></svg>
+        Locked by {{ parent()?.form }} version {{ parent()?.version }}. It cannot be changed in this form.</p>
+    }
+    <fieldset class="grid gap-3" [disabled]="locked || readonly()">
+      <div class="grid gap-1">
+        <label for="prop-key" class="font-medium">Key</label>
+        <input hlmInput id="prop-key" [value]="node.key" (change)="setKey($event)" spellcheck="false" aria-describedby="prop-key-help">
+        <p id="prop-key-help" class="text-label text-muted-foreground">The column name in reports and exports. Keep it the same from one version to the next.</p>
+        @if (keyError()) { <p class="text-danger" role="alert">{{ keyError() }}</p> }
+      </div>
+      @for (language of languages(); track language) {
+        <div class="grid gap-1">
+          <label [for]="'prop-text-' + language" class="font-medium">{{ textName() === 'title' ? 'Title' : 'Question' }}@if (language !== 'en') { ({{ language }})}</label>
+          <input hlmInput [id]="'prop-text-' + language" [value]="text(prop(node, textName()), language)" (change)="setText(textName(), language, $event)">
+        </div>
+      }
+      @if (path.length > 1 && !isContainer(item()!)) {
+        <div class="grid gap-1">
+          <label for="prop-hint" class="font-medium">Hint</label>
+          <input hlmInput id="prop-hint" [value]="text(item()!.hint)" (change)="setText('hint', 'en', $event)">
+        </div>
+        @if (item()!.type !== 'calculated' && item()!.type !== 'alert-value') {
+          <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item()!.required" (change)="setFlag('required', $event)"> Must be answered</label>
+        }
+      } @else {
+        <div class="grid gap-1">
+          <label for="prop-description" class="font-medium">Description</label>
+          <input hlmInput id="prop-description" [value]="text(node.description)" (change)="setText('description', 'en', $event)">
+        </div>
+      }
+      @if (path.length > 1) {
+        <ng-container [ngTemplateOutlet]="typeProperties" [ngTemplateOutletContext]="{ $implicit: item()! }" />
+        <div class="grid gap-1">
+          <label for="prop-move" class="font-medium">Move to</label>
+          <select hlmInput id="prop-move" (change)="moveToPlace($event)">
+            @for (place of places(); track place.path.join('-')) {
+              <option [value]="placeValue(place.path)" [selected]="placeValue(place.path) === currentPlace()"
+                      [disabled]="frozen(place.path)">{{ '  '.repeat(place.depth) }}{{ place.name }}</option>
+            }
+          </select>
+        </div>
+      }
+      <ng-container [ngTemplateOutlet]="conditionEditor" [ngTemplateOutletContext]="{ $implicit: node }" />
+    </fieldset>
+    @if (rules().allowExtension && canLock()) {
+      <label class="flex items-start gap-2 border-t border-border pt-3">
+        <input type="checkbox" class="mt-1" [checked]="ownLocks().has(node.key) || frozen(path)" [disabled]="inherited().has(node.key) || readonly()"
+               (change)="toggleLock($event)">
+        <span>Lock for the forms that extend this one
+          <span class="block text-label text-muted-foreground">They keep it exactly as it is here, with everything inside it.</span></span>
+      </label>
+    }
+    @if (!locked && !readonly()) {
+      <button hlmBtn variant="outline" size="sm" class="justify-self-start" (click)="removeSelected()">
+        <svg fimraIcon="trash-2" aria-hidden="true"></svg> Remove {{ path.length === 1 ? 'section' : typeName(item()!.type).toLowerCase() }}
+      </button>
+    }
+  } @else {
+    <h3 id="properties-heading" class="font-semibold">Form settings</h3>
+    <fieldset class="grid gap-3" [disabled]="readonly()">
+      <div class="grid gap-1">
+        <label for="form-title" class="font-medium">Title</label>
+        <input hlmInput id="form-title" [value]="text(form().title)" (change)="setFormText('title', $event)">
+      </div>
+      <div class="grid gap-1">
+        <label for="form-description" class="font-medium">Description</label>
+        <input hlmInput id="form-description" [value]="text(form().description)" (change)="setFormText('description', $event)">
+      </div>
+      <p class="text-label text-muted-foreground">Id {{ form().id }}, version {{ form().version }}. Languages: {{ languages().join(', ') }}.
+        @if (form().stages?.length) { Stages: {{ form().stages!.length }}. } Change these in the form file.</p>
+      @if (canLock()) {
+        <label class="flex items-start gap-2 border-t border-border pt-3">
+          <input type="checkbox" class="mt-1" [checked]="rules().allowExtension" (change)="setAllowExtension($event)">
+          <span>Let {{ level() === 'national' ? 'states' : 'divisions' }} extend this form
+            <span class="block text-label text-muted-foreground">Then lock the sections and questions they must keep as they are.</span></span>
+        </label>
+      }
+    </fieldset>
+    @if (parent(); as parent) {
+      <p class="text-muted-foreground">Extends {{ parent.form }} version {{ parent.version }}. {{ parent.rules.locked.length }} locked
+        {{ parent.rules.locked.length === 1 ? 'part' : 'parts' }} come from it.</p>
+    }
+  }
+</ng-template>
+
 <ng-template #itemList let-items let-container="container">
   <ul cdkDropList [id]="listId(container)" [cdkDropListData]="container" [cdkDropListConnectedTo]="listIds()"
-      [cdkDropListDisabled]="readonly() || frozen(container)" [cdkDropListEnterPredicate]="canDrop"
+      [cdkDropListDisabled]="phone() || readonly() || frozen(container)" [cdkDropListEnterPredicate]="canDrop"
       (cdkDropListDropped)="dropped($event)" class="item-list grid min-h-10 gap-1" [attr.aria-label]="'Items in ' + containerName(container)">
     @for (item of asItems(items); track item.key; let i = $index) {
       @let path = pathOf(asPath(container), i);
-      <li cdkDrag [cdkDragData]="path" [cdkDragDisabled]="readonly() || frozen(path)">
+      <li cdkDrag [cdkDragData]="path" [cdkDragDisabled]="phone() || readonly() || frozen(path)">
         <ng-container [ngTemplateOutlet]="row" [ngTemplateOutletContext]="{ $implicit: item, path: path, kind: item.type }" />
         @if (isContainer(item)) {
           <div class="mt-1 border-l-2 border-border pl-3">
@@ -211,19 +245,19 @@
 
 <ng-template #row let-node let-path="path" let-kind="kind">
   <div class="designer-row flex items-center gap-1 rounded-control" [class.selected]="isSelected(path)">
-    @if (!readonly() && !frozen(path)) {
+    @if (!phone() && !readonly() && !frozen(path)) {
       <span cdkDragHandle class="drag-handle grid size-8 shrink-0 cursor-grab place-items-center text-muted-foreground" aria-hidden="true">
         <svg fimraIcon="grip-vertical" class="size-4"></svg>
       </span>
     }
-    <button type="button" class="row-select min-w-0 flex-1 rounded-control px-2 py-1 text-start" [id]="'form-row-' + path.join('-')"
+    <button type="button" class="row-select min-w-0 flex-1 rounded-control px-2 py-1 text-start" [id]="rowId(path)"
             [attr.aria-pressed]="isSelected(path)" (click)="selectKey(node.key)" (keydown)="rowKey($event, node.key)">
       <span class="block truncate font-medium">{{ nodeName(node) }}@if (node.required) {<span class="text-danger" aria-label="required"> *</span>}</span>
       <span class="flex flex-wrap items-center gap-1 text-label text-muted-foreground">
-        {{ typeName(kind) }} · {{ node.key }}
+        <span class="wrap-anywhere">{{ typeName(kind) }} · {{ node.key }}</span>
         @if (node.showWhen) { <span hlmBadge variant="outline">Conditional</span> }
-        @if (frozen(path)) { <span hlmBadge variant="secondary"><svg fimraIcon="lock" aria-hidden="true" class="size-3"></svg> Locked by template</span> }
-        @else if (lockedHere(path)) { <span hlmBadge variant="outline"><svg fimraIcon="lock" aria-hidden="true" class="size-3"></svg> Locked for extensions</span> }
+        @if (frozen(path)) { <fimra-status-badge icon="locked" label="Locked by template" /> }
+        @else if (lockedHere(path)) { <fimra-status-badge icon="locked" label="Locked for extensions" /> }
       </span>
     </button>
     @if (!readonly()) {
