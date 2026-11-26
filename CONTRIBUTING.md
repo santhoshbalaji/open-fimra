@@ -30,8 +30,8 @@ On first start Keycloak imports the development realm `open-fimra` from [deploy/
 
 | Client | Use |
 |---|---|
-| `open-fimra-web` | The web app: public client, authorisation code with PKCE, accepts sign-in and sign-out on ports 4200 through 4203 on both loopback names |
-| `open-fimra-mobile` | The field app: public client, authorisation code with a required S256 proof key and no password sign-in. It returns to `org.openfimra.field:/callback`, and to `/auth.html` on ports 4300 through 4303 on both loopback names for the browser test build only. |
+| `open-fimra-web` | The web app: public client, authorisation code with PKCE, accepts sign-in and sign-out on ports 4200 through 4209 on both loopback names |
+| `open-fimra-mobile` | The field app: public client, authorisation code with a required S256 proof key and no password sign-in. It returns to `org.openfimra.field:/callback`, and to `/auth.html` on ports 4300 through 4309 on both loopback names for the browser test build only. |
 | `open-fimra-api` | The core API, as the token audience |
 | `open-fimra-dev-cli` | Password sign-in for local tests only. A real installation never has this client. |
 
@@ -86,7 +86,7 @@ Chromium in the Playwright container: the state extends the template by
 keyboard and by drag and drop, publishes it, and checks that the earlier report
 still shows with the version it used. Screenshots go to
 `~/open-fimra-screenshots/form-designer`. Set `WEB_PORT` to serve the app on
-another port from 4200 through 4203.
+another port from 4200 through 4209.
 
 ## Converting forms to and from XLSForm
 
@@ -103,15 +103,14 @@ the [worker guide](services/geo-worker/README.md#how-xlsform-conversion-works).
 
 The Flutter field app builds and tests in a container, so you need only Docker. Run `make mobile-lint mobile-test mobile-build` for the checks and an Android test build. With the development stack running, `make mobile-test-integration` signs the demo users in with PKCE and checks what each one sees, and `make mobile-walkthrough` drives the browser build in headless Chromium and saves screenshots outside the repository. Both use their own database beside the development one. See the [field app guide](apps/mobile/README.md), which also covers running the app on a phone.
 
-A Keycloak stack that was imported before the field app client existed does not have it. Run `make dev-reset dev` to import the realm again, or add the client in the admin console.
+If a disposable standalone stack predates the field app client, `make dev-reset dev` deletes its data and imports the current realm.
 
 ## Trying push notifications
 
 The field app gets alert notifications through UnifiedPush and a push server
 the agency runs. Run `make push-up` to start the local push server (ntfy) on
 <http://127.0.0.1:18110>, and set `FIMRA_PUSH_SERVERS=http://127.0.0.1:18110`
-in `.env` before `make api-run`. For more than one stack, set a different
-`FIMRA_NTFY_PORT`. `make api-test-integration` starts ntfy and checks
+in `.env` before `make api-run`. For parallel worktrees, use the shared push server on port 18108. `make api-test-integration` starts ntfy and checks
 registration, delivery, a replayed feed and remote wipe with synthetic phones.
 Google's Firebase Cloud Messaging is optional and never needed to build or
 test. See [field phones and push](services/api/README.md#field-phones-and-push).
@@ -155,20 +154,53 @@ and reads it back with pypdf. `make geo-test` draws synthetic reports. PDF
 files are written by the worker and tests only, so `.gitignore` keeps them out
 of the repository. See the [report endpoints](services/api/README.md#situation-reports).
 
-## Running more than one stack
+## Parallel worktrees
 
-Two checkouts that use the same development stack share one database, and their migrations can clash. Give each checkout its own stack with a project name and free ports, for example in its `.env`:
+Use one backend stack for all worktrees on the same Linux machine. In each worktree,
+create a short `.env`. For example, use slot 1:
 
 ```bash
-COMPOSE_PROJECT_NAME=open-fimra-second
-FIMRA_DB_PORT=15433
-FIMRA_KEYCLOAK_PORT=18181
+FIMRA_SHARED=1
 FIMRA_HTTP_ADDR=127.0.0.1:18091
+WEB_PORT=4201
+MOBILE_WEB_PORT=4301
 ```
 
-For parallel web work, use a free port from 4201 through 4203. Run `corepack pnpm run dev --port 4201` in `apps/web`. Set your API’s `FIMRA_CORS_ORIGINS` to the matching web origin. A fresh Keycloak stack imports these return addresses.
+Give each worktree a free slot from 0 through 9. Use API port 18090 plus the
+slot, web port 4200 plus the slot, and field app browser port 4300 plus the slot.
+The imported development realm accepts the web and field app ports on
+`localhost` and `127.0.0.1`. Keep the realm and its demo users as imported.
 
-Each stack has about 2.5 GB of memory available. The optional geo worker has a separate 1 GB limit.
+Run `make shared-up` to start the shared stack and `make shared-ps` to see it.
+The project is `open-fimra-shared`. All shared ports bind to `127.0.0.1`:
+
+| Service | Port |
+|---|---:|
+| PostgreSQL | 15431 |
+| Keycloak | 18179 |
+| Mailpit SMTP | 11008 |
+| Mailpit web UI | 18008 |
+| ntfy | 18108 |
+
+Run `make worktree-db` to create, migrate and seed your database. The name comes
+from the worktree directory. You can set a unique `FIMRA_DB_NAME` in `.env`
+using up to 50 lowercase letters, digits and underscores. Start with a letter
+and avoid double or trailing underscores. Tests that need a fresh database add a suffix to the worktree name. Mail and
+push tests filter by recipient, sender or topic.
+
+Run `make api-run` and `make web-dev` in the worktree. If you need a geo worker,
+`make geo-worker-up` starts one for your database and the worktree's upload and
+export directories. Use the default folders or give each worktree its own.
+To try email or push from the API, point `FIMRA_SMTP_ADDR` or
+`FIMRA_PUSH_SERVERS` at the shared ports above. For email links, set
+`FIMRA_WEB_URL` to the worktree's web address.
+
+Stop your API and tests and run `make geo-worker-down` before database cleanup.
+`make worktree-db-reset` drops your databases and recreates the seeded one.
+Run `make worktree-db-drop` before deleting or moving the worktree. Shared mode
+refuses `make dev-down` and `make dev-reset`. Use `make shared-down` only when
+everyone can stop, because it takes the backend offline for every worktree.
+The standalone project `open-fimra-dev` remains separate on port 15432.
 
 ## Making a change
 
@@ -206,8 +238,7 @@ FIMRA_SMTP_SECURITY=local
 FIMRA_WEB_URL=http://127.0.0.1:4200
 ```
 
-Open the mail catcher at <http://127.0.0.1:18025>. For more than one stack,
-set different `FIMRA_MAILPIT_SMTP_PORT` and `FIMRA_MAILPIT_HTTP_PORT` values
-and use the matching port in `FIMRA_SMTP_ADDR`. The test target
+Open the mail catcher at <http://127.0.0.1:18025>. In shared mode, use SMTP port
+11008 and open the mail catcher on port 18008. The test target
 `make api-test-integration` starts the mail catcher and checks delivery,
 retry and replay using synthetic addresses.

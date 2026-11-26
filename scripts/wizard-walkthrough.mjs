@@ -12,7 +12,7 @@ import { chromium, expect } from 'playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { WEB, MAIL, SEED, SHOTS, SETUP_CODE, FIRMS_KEY } = process.env;
+const { WEB, MAIL, MAIL_FROM, SEED, SHOTS, SETUP_CODE, FIRMS_KEY } = process.env;
 const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
 mkdirSync(SHOTS, { recursive: true });
@@ -206,7 +206,8 @@ try {
   await save(guard, 'alert-map-beat-guard');
 
   const mail = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  await mail.goto(MAIL);
+  const query = new URLSearchParams({ q: `from:"${MAIL_FROM}" subject:"You are invited to Open FIMRA"` });
+  await mail.goto(MAIL + '/search?' + query);
   await mail.getByText('You are invited to Open FIMRA').first().click();
   await mail.getByText('Sign in at').first().waitFor();
   await save(mail, 'invitation-email');

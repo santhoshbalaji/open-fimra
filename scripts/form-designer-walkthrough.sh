@@ -2,7 +2,7 @@
 # Browser walkthrough of the form designer. Run it with
 # `make form-designer-walkthrough`, which sets the variables below.
 #
-# It creates the database WALK_DB beside the development database, serves the
+# It migrates a fresh database, serves the
 # built web app on 127.0.0.1:$WEB_PORT (4200 by default) with a runtime config
 # for this stack, runs the API test harness, which adds a synthetic national
 # template and one report filled in on it, and drives a headless Chromium in
@@ -10,8 +10,7 @@
 # outside the repository.
 
 set -euo pipefail
-: "${WALK_DB:?}" "${WALK_DATABASE_URL:?}" "${SHOTS:?}" "${ISSUER:?}" "${API_ADDR:?}" "${GOOSE_VERSION:?}" "${PLAYWRIGHT_IMAGE:?}"
-read -ra compose <<< "${COMPOSE_CMD:?}"
+: "${WALK_DATABASE_URL:?}" "${SHOTS:?}" "${ISSUER:?}" "${API_ADDR:?}" "${GOOSE_VERSION:?}" "${PLAYWRIGHT_IMAGE:?}"
 web_port=${WEB_PORT:-4200}
 cd "$(git rev-parse --show-toplevel)"
 
@@ -28,7 +27,6 @@ if ss -ltn | grep -q "127.0.0.1:$web_port "; then
   exit 1
 fi
 
-"${compose[@]}" exec -T db sh -c "dropdb -U \"\$POSTGRES_USER\" --if-exists --force $WALK_DB && createdb -U \"\$POSTGRES_USER\" $WALK_DB"
 go run "github.com/pressly/goose/v3/cmd/goose@$GOOSE_VERSION" -dir db/migrations postgres "$WALK_DATABASE_URL" up > /dev/null
 
 # The built app with a runtime config for this stack. Nothing in the

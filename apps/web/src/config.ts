@@ -6,6 +6,9 @@ export interface WebConfig {
   apiBaseUrl: string;
 }
 
+// Defined only by make web-dev in shared worktree mode.
+declare const FIMRA_DEV_CONFIG: WebConfig | undefined;
+
 export const WEB_CONFIG = new InjectionToken<WebConfig>('Web configuration');
 
 export function isApiRequest(request: string, base: string, page: string): boolean {
@@ -17,9 +20,12 @@ export function isApiRequest(request: string, base: string, page: string): boole
 }
 
 export async function loadConfig(): Promise<WebConfig> {
-  const response = await fetch('config.json', { cache: 'no-store' });
-  if (!response.ok) throw new Error('Cannot load web configuration');
-  const config = await response.json();
+  let config = typeof FIMRA_DEV_CONFIG !== 'undefined' ? FIMRA_DEV_CONFIG : undefined;
+  if (!config) {
+    const response = await fetch('config.json', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Cannot load web configuration');
+    config = await response.json();
+  }
   if (!config?.clientId || typeof config.clientId !== 'string') {
     throw new Error('Missing sign-in client');
   }
