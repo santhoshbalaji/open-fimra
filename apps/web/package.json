@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "ng serve",
-    "build": "ng build",
+    "build": "ng build --stats-json && node scripts/check-initial-size.mjs",
     "test": "ng test --watch=false",
     "lint": "node scripts/theme.mjs --check && node scripts/lint-colors.mjs && eslint src"
   },

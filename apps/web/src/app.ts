@@ -1,7 +1,7 @@
-import { NgTemplateOutlet } from '@angular/common';
-import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
-import { HlmButton } from '@spartan-ng/helm/button';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { Component, Injector, OnInit, afterNextRender, computed, effect, inject, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { HlmToaster } from '@spartan-ng/helm/sonner';
 import { AuthService } from './auth';
 import { Bootstrap } from './bootstrap';
@@ -16,12 +16,13 @@ import { ShellPalette } from './shell-palette';
 import { ThemeService } from './theme';
 import { LiveStatus } from './ui/live-status';
 import { Icon } from './ui/icon';
+import { PageHeader, type PageHeaderSlots } from './ui/page-header';
 import { WorkspaceService } from './workspace';
 import { classes, type ForestClass } from './detections';
 
 @Component({
   selector: 'fimra-root',
-  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmButton, HlmToaster, Bootstrap, FilterFields, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, ExportTray],
+  imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, FilterFields, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray],
   providers: [ShellNavigation],
   templateUrl: './app.html',
   host: { '(window:keydown)': 'shortcut($event)' }
@@ -32,17 +33,21 @@ export class App implements OnInit {
   readonly appearance = inject(ThemeService);
   readonly navigation = inject(ShellNavigation);
   private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
   private readonly filters = inject(DashboardFilters);
   private readonly authOpened = signal(false);
   private routed = false;
   readonly filtersOpen = signal(false);
   readonly drawerRequest = signal<{ trigger: HTMLElement } | null>(null);
   readonly paletteOpen = signal(false);
+  readonly routeAnnouncement = signal('');
+  readonly headerSlots = signal<PageHeaderSlots | null>(null);
   readonly groups = ['Monitor', 'Reports', 'Dashboard', 'Settings'] as const;
   readonly showBootstrap = computed(() => this.workspace.bootstrapAvailable() && !this.workspace.current());
   readonly showFilters = computed(() => {
     const view = this.navigation.destination();
-    return view && 'filters' in view && view.path !== '/reports/field';
+    return view?.group === 'Monitor';
   });
   readonly scope = computed(() => {
     const unit = this.navigation.query().get('unitPath');
@@ -56,6 +61,15 @@ export class App implements OnInit {
   });
 
   constructor() {
+    this.router.events.pipe(takeUntilDestroyed()).subscribe(event => {
+      if (!(event instanceof NavigationEnd)) return;
+      const previous = this.router.lastSuccessfulNavigation()?.previousNavigation?.finalUrl;
+      const current = this.router.parseUrl(event.urlAfterRedirects);
+      // Keep focus on a filter or paging control during an in-place update.
+      if (previous && previous.toString().split(/[?#]/, 1)[0] === current.toString().split(/[?#]/, 1)[0] &&
+          previous.queryParamMap.get('workspace') === current.queryParamMap.get('workspace')) return;
+      this.focusPage();
+    });
     effect(() => {
       if (!this.authOpened() || !this.auth.user() || !this.workspace.loaded()) return;
       if (!this.routed) {
@@ -86,6 +100,25 @@ export class App implements OnInit {
     void this.auth.open().finally(() => this.authOpened.set(true));
   }
 
+  focusPage(): void {
+    afterNextRender(() => {
+      const main = this.document.getElementById('task');
+      if (!main) return;
+      const heading = main.querySelector<HTMLElement>('h1');
+      if (!heading) return;
+      const active = this.document.activeElement;
+      const detail = active && active !== main && active !== heading &&
+        (active.closest('[role="dialog"]') || (main.contains(active) && active.matches('[tabindex="-1"]')));
+      if (!detail) heading.focus({ preventScroll: true });
+      this.routeAnnouncement.set(`${heading.textContent?.trim()} page opened.`);
+    }, { injector: this.injector });
+  }
+
+  skipToContent(event: MouseEvent): void {
+    event.preventDefault();
+    this.document.getElementById('task')?.focus();
+  }
+
   shortcut(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.repeat || event.altKey || !(event.ctrlKey || event.metaKey) ||
         event.key.toLowerCase() !== 'k' || !this.workspace.current()) return;
@@ -110,6 +143,7 @@ export class App implements OnInit {
   }
 
   screenOpened(screen: unknown): void {
+    this.headerSlots.set(screen as PageHeaderSlots);
     if (screen && typeof screen === 'object' && 'closed' in screen) {
       (screen.closed as { subscribe: (callback: () => void) => void }).subscribe(() => this.navigation.monitor());
     }

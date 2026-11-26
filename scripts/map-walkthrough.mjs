@@ -82,7 +82,7 @@ try {
     await expect(picker).toBeEnabled();
     const layersButton = page.getByRole('button', { name: 'Layers and legend', exact: true });
     const canvas = page.locator('.maplibregl-canvas');
-    const alertRows = page.locator('.alert-panel tbody tr');
+    const alertRows = page.locator('.alert-panel .row-open');
     const detail = page.locator('.detail-card');
     const key = page.getByRole('region', { name: 'Map legend', exact: true });
     for (const theme of ['light', 'dark']) {
@@ -135,7 +135,7 @@ try {
       assert.equal(new URL(page.url()).searchParams.get('detection'), detection);
       await expect(detail.getByRole('heading', { name: /^Alert #/ })).toBeVisible();
       await expect(detail.getByRole('link', { name: /^Open incident #/ })).toBeVisible();
-      if (size === 'desktop') await expect(alertRows.locator('button[aria-current=true]')).toBeVisible();
+      if (size === 'desktop') await expect(alertRows.and(page.locator('[aria-current=true]'))).toBeVisible();
       await check(page, `selected-${size}-${theme}`);
 
       tiles = 'empty';
@@ -147,13 +147,13 @@ try {
       tiles = 'error';
       await page.reload();
       await expect(page.getByText('Some map data is missing', { exact: true })).toBeVisible();
-      const status = page.locator('fimra-state-region');
+      const status = page.getByRole('region', { name: 'Detection map' }).locator('fimra-state-region');
       await expect(status).toContainText('Reference tiles');
       await expect(status).toContainText('Fire detection tiles');
       await expect(page.getByText('No detections in view', { exact: true })).toHaveCount(0);
       if (size === 'desktop') {
         await expect(alertRows.first()).toBeVisible();
-        await alertRows.first().getByRole('button').click();
+        await alertRows.first().click();
         await expect(detail.getByRole('heading', { name: /^Alert #/ })).toBeVisible();
         await detail.getByRole('button', { name: 'Close map details' }).click();
       } else {

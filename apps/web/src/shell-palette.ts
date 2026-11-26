@@ -9,7 +9,7 @@ import { ThemeService } from './theme';
   selector: 'fimra-shell-palette',
   imports: [HlmButton, HlmDialogImports, HlmInput],
   template: `
-    <hlm-dialog [state]="open() ? 'open' : 'closed'" (closed)="dismiss()" aria-modal="true">
+    <hlm-dialog [state]="open() ? 'open' : 'closed'" (closed)="dialogClosed()" aria-modal="true">
       <hlm-dialog-content *hlmDialogPortal class="shell-palette">
         <h2 hlmDialogTitle>Search destinations</h2>
         <p hlmDialogDescription>Use the arrow keys to move, Enter to open and Escape to close.</p>
@@ -31,10 +31,12 @@ import { ThemeService } from './theme';
 export class ShellPalette {
   readonly open = input.required<boolean>();
   readonly closed = output<void>();
+  readonly reselected = output<void>();
   readonly search = signal('');
   readonly index = signal(0);
   private readonly navigation = inject(ShellNavigation);
   private readonly appearance = inject(ThemeService);
+  private pending?: () => void;
   private readonly actions = [
     { name: 'Toggle theme', group: 'Action', run: () => this.appearance.toggle() },
     { name: 'Reset filters', group: 'Action', run: () => this.navigation.update({
@@ -50,14 +52,15 @@ export class ShellPalette {
   readonly active = computed(() => Math.min(this.index(), this.results().length - 1));
 
   private go(path: DestinationPath): void {
-    this.navigation.go(path);
+    if (path === this.navigation.path()) this.reselected.emit();
+    else this.navigation.go(path);
   }
 
   choose(index: number): void {
     const command = this.results()[index];
     if (command) {
-      this.dismiss();
-      command.run();
+      this.pending = command.run;
+      this.closed.emit();
     }
   }
 
@@ -76,9 +79,12 @@ export class ShellPalette {
     }
   }
 
-  dismiss(): void {
+  dialogClosed(): void {
     this.search.set('');
     this.index.set(0);
     this.closed.emit();
+    const run = this.pending;
+    this.pending = undefined;
+    run?.();
   }
 }

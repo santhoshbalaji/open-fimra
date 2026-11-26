@@ -191,17 +191,17 @@ try {
   await finish.click();
   await expect(page).toHaveURL(/\/monitor\/map/);
   await page.setViewportSize(desktop);
-  await page.locator('.alert-table tbody tr').first().waitFor({ timeout: 60_000 });
+  await page.locator('.compact-alerts .row-open').first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(2000);
   await save(page, 'alert-map-admin');
 
   const officer = await signIn(browser, 'division.officer');
-  await officer.locator('.alert-table tbody tr').first().waitFor({ timeout: 60_000 });
+  await officer.locator('.compact-alerts .row-open').first().waitFor({ timeout: 60_000 });
   await officer.waitForTimeout(2000);
   await save(officer, 'alert-map-division-officer');
 
   const guard = await signIn(browser, 'beat.guard');
-  await guard.locator('.alert-table tbody tr').first().waitFor({ timeout: 60_000 });
+  await guard.locator('.compact-alerts .row-open').first().waitFor({ timeout: 60_000 });
   await guard.waitForTimeout(2000);
   await save(guard, 'alert-map-beat-guard');
 

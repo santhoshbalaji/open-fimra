@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, type TemplateRef } from '@angular/core';
+
+/** Routed screens can contribute view-child templates to the shell's header. */
+export interface PageHeaderSlots {
+  readonly pageFreshness?: () => TemplateRef<unknown> | undefined;
+  readonly pagePrimary?: () => TemplateRef<unknown> | undefined;
+  readonly pageSecondary?: () => TemplateRef<unknown> | undefined;
+}
 
 @Component({
   selector: 'fimra-page-header',
@@ -8,11 +15,15 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   template: `
     <header class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
       <div class="min-w-0 flex-1 basis-64 wrap-anywhere">
-        <div role="heading" [attr.aria-level]="headingLevel()" class="text-display">{{ title() }}</div>
+        @if (headingLevel() === 1) {
+          <h1 tabindex="-1" class="w-fit max-w-full text-display">{{ title() }}</h1>
+        } @else {
+          <div role="heading" [attr.aria-level]="headingLevel()" class="text-display">{{ title() }}</div>
+        }
         @if (scope()) { <p class="mt-1 text-body font-medium">{{ scope() }}</p> }
         <ng-content select="[pageFreshness]" />
       </div>
-      <div class="flex flex-wrap items-center gap-2 empty:hidden">
+      <div class="flex min-w-0 flex-wrap items-center gap-2 empty:hidden">
         <ng-content select="[pageSecondary]" />
         <ng-content select="[pagePrimary]" />
       </div>
