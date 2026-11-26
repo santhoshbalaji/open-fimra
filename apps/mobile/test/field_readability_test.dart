@@ -9,6 +9,7 @@ import 'package:fimra_field/src/auth/tokens.dart';
 import 'package:fimra_field/src/data/field_store.dart';
 import 'package:fimra_field/src/data/offline_repository.dart';
 import 'package:fimra_field/src/forms/report_form.dart';
+import 'package:fimra_field/src/l10n/app_localizations.dart';
 import 'package:fimra_field/src/theme/app_theme.dart';
 import 'package:fimra_field/src/ui/alert_detail.dart';
 import 'package:fimra_field/src/ui/alert_list.dart';
@@ -140,6 +141,8 @@ class _OfflineSteps extends _OfflineView {
 }
 
 Widget _app(Brightness brightness, Widget home) => MaterialApp(
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
   theme: fimraTheme(brightness),
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(2)),
@@ -206,6 +209,8 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: fimraTheme(Brightness.light),
         home: AlertDetailScreen(
           view: view,
@@ -216,7 +221,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    for (final action in ['Acknowledge', 'Mark team sent', 'Mark reached']) {
+    for (final action in ['Acknowledge alert', 'Mark team sent', 'Mark reached']) {
       final button = find.widgetWithText(FilledButton, action);
       expect(button.hitTestable(), findsOneWidget);
       await tester.tap(button);
@@ -299,7 +304,7 @@ void main() {
       await tester.scrollUntilVisible(row, 220);
       await tester.pumpAndSettle();
       expect(row.hitTestable(), findsOneWidget);
-      _order(tester, ['Report outbox', 'Beat 01 · Alert #41, New, Inside forest']);
+      _order(tester, ['Reports waiting to send', 'Beat 01 · Alert #41, New, Inside forest']);
       await _guidelines(tester);
       await tester.tap(row);
       await tester.pumpAndSettle();
@@ -311,7 +316,7 @@ void main() {
       _order(tester, ['Inspection report', 'Saved on this phone', 'Could not send', failureReason]);
       await _guidelines(tester);
 
-      final acknowledge = find.widgetWithText(FilledButton, 'Acknowledge');
+      final acknowledge = find.widgetWithText(FilledButton, 'Acknowledge alert');
       await tester.scrollUntilVisible(acknowledge, 200);
       await tester.pumpAndSettle();
       expect(acknowledge.hitTestable(), findsOneWidget);
@@ -335,7 +340,7 @@ void main() {
       await tester.pumpWidget(_app(brightness, OutboxScreen(repo: repo)));
       await tester.pumpAndSettle();
       _order(tester, [
-        'Report outbox',
+        'Reports waiting to send',
         'Offline',
         'Last synced',
         'Sync now',
@@ -353,7 +358,7 @@ void main() {
       await _guidelines(tester);
     });
 
-    testWidgets('${brightness.name} at 200%: report labels wrap and Save to outbox works', (tester) async {
+    testWidgets('${brightness.name} at 200%: report labels wrap and Save to send later works', (tester) async {
       _phone(tester);
       Json? saved;
       await tester.pumpWidget(
@@ -403,7 +408,7 @@ void main() {
       await tester.ensureVisible(find.byType(DropdownButtonFormField<String>));
       await tester.pumpAndSettle();
       _order(tester, [bengali]);
-      final save = find.widgetWithText(FilledButton, 'Save to outbox');
+      final save = find.widgetWithText(FilledButton, 'Save to send later');
       await tester.scrollUntilVisible(save, 120, scrollable: find.byType(Scrollable).first);
       await tester.pumpAndSettle();
       await _guidelines(tester);

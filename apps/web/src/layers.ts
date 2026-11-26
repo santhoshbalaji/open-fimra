@@ -1,4 +1,5 @@
 import { overlayKindLabels, type OverlayKind } from './boundary-overlays';
+import { translate } from './language';
 import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, Injector, OnInit, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
@@ -23,7 +24,7 @@ import { LiveStatus } from './ui/live-status';
 import { SidePanel } from './ui/side-panel';
 import { DataState, StateRegion } from './ui/state-region';
 import { WorkspaceService } from './workspace';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 type Role = 'hierarchy' | 'forest' | 'exclusion' | 'analysis';
 interface VersionName { layerName: string; version: number }
@@ -69,6 +70,7 @@ interface Preview {
   host: { class: 'block h-full overflow-auto scroll-pb-16' }
 })
 export class Layers implements OnInit {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly destroy = inject(DestroyRef);
@@ -88,7 +90,7 @@ export class Layers implements OnInit {
   private destroyed = false;
 
   readonly workspaceName = this.workspace?.name ?? '';
-  readonly format = defaultWorkspaceFormat;
+  readonly format = workspaceFormat;
   readonly dateTime = (value: string) => this.format.dateTime(new Date(value));
   readonly categories = categories;
   readonly roleLabels: Record<Role, string> = {
@@ -103,12 +105,12 @@ export class Layers implements OnInit {
     rows: this.catalog()?.layers ?? [], nextCursor: null, position: { cursor: null, previousCursors: [] }
   }));
   readonly columns = computed<readonly TableColumn<Layer>[]>(() => [
-    { id: 'name', label: 'Layer', rowHeading: true, value: this.rowLabel },
-    { id: 'kind', label: 'Kind', value: row => this.roleLabels[row.role] },
-    { id: 'published', label: 'Published', value: row => this.versionLabel(row.published) },
-    { id: 'draft', label: 'Draft', value: row => this.versionLabel(row.draft) },
-    { id: 'checks', label: 'Version status', value: () => '', cell: this.checksCell() },
-    { id: 'change', label: 'Last change', value: () => '', cell: this.timeCell() }
+    { id: 'name', label: translate('Layer'), rowHeading: true, value: this.rowLabel },
+    { id: 'kind', label: translate('Kind'), value: row => this.roleLabels[row.role] },
+    { id: 'published', label: translate('Published'), value: row => this.versionLabel(row.published) },
+    { id: 'draft', label: translate('Draft'), value: row => this.versionLabel(row.draft) },
+    { id: 'checks', label: translate('Version status'), value: () => '', cell: this.checksCell() },
+    { id: 'change', label: translate('Last change'), value: () => '', cell: this.timeCell() }
   ]);
 
   readonly chosenLayer = signal('');
@@ -124,8 +126,8 @@ export class Layers implements OnInit {
   readonly missing = computed(() => {
     if (!this.checked() || this.role() !== 'hierarchy') return [];
     return [
-      ...(!this.hierarchy() ? [{ fieldId: 'layer-hierarchy', message: 'Choose a hierarchy.' }] : []),
-      ...(this.depth() === null ? [{ fieldId: 'layer-depth', message: 'Choose a level.' }] : [])
+      ...(!this.hierarchy() ? [{ fieldId: 'layer-hierarchy', message: translate('Choose a hierarchy.') }] : []),
+      ...(this.depth() === null ? [{ fieldId: 'layer-depth', message: translate('Choose a level.') }] : [])
     ];
   });
 
@@ -158,23 +160,23 @@ export class Layers implements OnInit {
     !!this.draft()?.problems.some(problem => problem.blocksPublish));
   readonly announce = computed(() => {
     switch (this.operation()) {
-      case 'upload': return 'Saving layer upload.';
-      case 'preview': return 'Checking past detections.';
-      case 'publish': return 'Publishing layer.';
-      case 'overlay': return 'Saving overlay kind.';
+      case 'upload': return translate('Saving layer upload.');
+      case 'preview': return translate('Checking past detections.');
+      case 'publish': return translate('Publishing layer.');
+      case 'overlay': return translate('Saving overlay kind.');
     }
     const draft = this.draft();
-    if (draft?.status === 'pending') return 'Upload saved. The file is being checked.';
+    if (draft?.status === 'pending') return translate('Upload saved. The file is being checked.');
     if (draft?.status === 'published') return this.versionLabel(this.reviewing()) + ' published.';
-    if (this.needsReplacement()) return 'The layer needs a corrected file.';
-    if (this.preview()) return 'Preview results are ready.';
-    return draft?.status === 'ready' ? 'Layer checks passed. Preview is available.' : '';
+    if (this.needsReplacement()) return translate('The layer needs a corrected file.');
+    if (this.preview()) return translate('Preview results are ready.');
+    return draft?.status === 'ready' ? translate('Layer checks passed. Preview is available.') : '';
   });
 
   readonly roleLabel = (role: Role) => this.roleLabels[role];
   readonly hierarchyLabel = (slug: string) => this.catalog()?.hierarchies.find(item => item.slug === slug)?.name ?? slug;
   readonly levelLabel = (depth: number) => this.hierarchy()?.levels?.find(level => level.depth === depth)?.name ?? String(depth);
-  readonly versionLabel = (item: VersionName | null | undefined) => item ? 'Version ' + item.version : '—';
+  readonly versionLabel = (item: VersionName | null | undefined) => item ? translate('Version ') + item.version : '—';
   readonly previousLabel = (items: VersionName[]) => items.map(item => item.layerName + ' ' + this.versionLabel(item).toLowerCase()).join(', ');
 
   constructor() {
@@ -192,22 +194,22 @@ export class Layers implements OnInit {
       next: catalog => {
         this.catalog.set(catalog);
         this.catalogState.set(catalog.layers.length ? { kind: 'ready' } : {
-          kind: 'empty', heading: 'No layers yet', detail: 'Add a layer to upload its first version.'
+          kind: 'empty', heading: translate('No layers yet'), detail: translate('Add a layer to upload its first version.')
         });
         if (catalog.layers.some(row => row.draft?.status === 'pending')) {
           this.catalogWatch = timer(3000).pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.loadCatalog());
         }
       },
-      error: error => this.catalogState.set(this.failureState(error, 'Could not load the layer catalog', !!this.catalog()?.layers.length))
+      error: error => this.catalogState.set(this.failureState(error, translate('Could not load the layer catalog'), !!this.catalog()?.layers.length))
     });
   }
 
   nextAction(layer: Layer): string {
     const draft = layer.draft;
-    if (draft?.status === 'pending') return 'View progress';
+    if (draft?.status === 'pending') return translate('View progress');
     if (draft?.status === 'failed' || draft?.blocksPublish) return 'Fix problems';
-    if (draft) return 'Review draft';
-    return layer.published ? 'View layer' : 'Upload file';
+    if (draft) return translate('Review draft');
+    return layer.published ? translate('View layer') : translate('Upload file');
   }
 
   openLayer(trigger: HTMLElement, layer?: Layer): void {
@@ -247,7 +249,7 @@ export class Layers implements OnInit {
 
   scope(depth: number | null | undefined): string {
     if (this.role() !== 'hierarchy') return [this.workspaceName, this.roleLabels[this.role()]].filter(Boolean).join(' · ');
-    return [this.workspaceName, this.hierarchy()?.name, depth == null ? 'All levels in the source' : this.levelLabel(depth)]
+    return [this.workspaceName, this.hierarchy()?.name, depth == null ? translate('All levels in the source') : this.levelLabel(depth)]
       .filter(Boolean).join(' · ');
   }
 
@@ -310,7 +312,7 @@ export class Layers implements OnInit {
     const id = this.version();
     if (!id) return;
     this.draft.set(initial ?? null);
-    this.draftState.set(initial ? { kind: 'ready' } : { kind: 'loading', heading: 'Loading layer version' });
+    this.draftState.set(initial ? { kind: 'ready' } : { kind: 'loading', heading: translate('Loading layer version') });
     const processing = (draft: Draft) => draft.status === 'pending' ||
       draft.rematch?.status === 'pending' || draft.rematch?.status === 'running';
     this.watch = timer(initial ? 1000 : 0, 1000).pipe(
@@ -323,7 +325,7 @@ export class Layers implements OnInit {
         this.draft.set(draft);
         if (this.reviewing()?.status !== draft.status) this.loadCatalog();
       },
-      error: error => this.draftState.set(this.failureState(error, 'Could not check the layer version', !!this.draft()))
+      error: error => this.draftState.set(this.failureState(error, translate('Could not check the layer version'), !!this.draft()))
     });
   }
 
@@ -362,15 +364,15 @@ export class Layers implements OnInit {
 
     const scope = this.scope(item.depth);
     const previous = this.previousLabel(preview.previous);
-    const replacement = previous ? 'It will replace ' + previous + ' in this scope.' : 'This is the first publication in this scope.';
+    const replacement = previous ? 'It will replace ' + previous + ' in this scope.' : translate('This is the first publication in this scope.');
     const grants = remove && preview.brokenGrants.length ?
       ' The ' + (preview.brokenGrants.length === 1 ? 'grant' : preview.brokenGrants.length + ' grants') + ' you reviewed will be removed.' : '';
     this.confirming.set(true);
     const confirmed = await this.confirmation.open({
-      heading: 'Publish ' + this.versionLabel(item).toLowerCase() + '?',
+      heading: translate('Publish ') + this.versionLabel(item).toLowerCase() + '?',
       detail: item.layerName + ' will go live for ' + scope + '. ' + replacement +
         ' The past ' + preview.days + ' days of detections will be checked again.' + grants,
-      confirmLabel: 'Confirm and publish', trigger
+      confirmLabel: translate('Confirm and publish'), trigger
     });
     if (this.destroyed) return;
     this.confirming.set(false);
@@ -394,20 +396,20 @@ export class Layers implements OnInit {
 
   changeNote(change: Change): string {
     const labels: Record<string, string> = {
-      inside: 'Inside forest', near_edge: 'Near the edge', outside: 'Outside forest',
-      fixed_heat_source: 'Known heat source', shared_boundary: 'Shared boundary',
-      overlapping_units: 'Overlapping units', no_unit: 'No mapped beat'
+      inside: translate('Inside forest'), near_edge: translate('Near the edge'), outside: translate('Outside forest'),
+      fixed_heat_source: translate('Known heat source'), shared_boundary: translate('Shared boundary'),
+      overlapping_units: translate('Overlapping units'), no_unit: translate('No mapped beat')
     };
     const changes = [];
     if (change.oldClass !== change.newClass) {
       changes.push(labels[change.oldClass] + ' → ' + labels[change.newClass]);
     }
     if (change.oldBeats.join(',') !== change.newBeats.join(',')) {
-      changes.push((change.oldBeats.join(', ') || 'No beat') + ' → ' + (change.newBeats.join(', ') || 'No beat'));
+      changes.push((change.oldBeats.join(', ') || translate('No beat')) + ' → ' + (change.newBeats.join(', ') || translate('No beat')));
     }
     if (change.oldTriage !== change.newTriage) {
-      changes.push((change.oldTriage ? labels[change.oldTriage] : 'No triage') + ' → ' +
-        (change.newTriage ? labels[change.newTriage] : 'No triage'));
+      changes.push((change.oldTriage ? labels[change.oldTriage] : translate('No triage')) + ' → ' +
+        (change.newTriage ? labels[change.newTriage] : translate('No triage')));
     }
     return changes.join(' · ');
   }
@@ -449,6 +451,6 @@ export class Layers implements OnInit {
 
   private errorMessage(error: HttpErrorResponse): string {
     if (error.status === 401) this.auth.sessionEnded();
-    return typeof error.error?.error === 'string' ? error.error.error : 'The layer request failed. Try again.';
+    return typeof error.error?.error === 'string' ? error.error.error : translate('The layer request failed. Try again.');
   }
 }

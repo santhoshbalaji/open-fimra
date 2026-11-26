@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { Component, computed, input } from '@angular/core';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { Icon, IconName } from './icon';
@@ -53,11 +54,12 @@ function visibleLabel(value: string) {
     <span hlmBadge variant="outline" class="h-auto min-h-5 max-w-full gap-1.5 whitespace-normal wrap-anywhere text-text"
       [attr.data-tone]="appearance()[1]">
       <svg [fimraIcon]="appearance()[0]" aria-hidden="true" class="size-4 shrink-0"></svg>
-      {{ label() }}
+      {{ msg(label()) }}
     </span>
   `
 })
 export class StatusBadge {
+  protected readonly msg = translate;
   readonly icon = input.required<keyof typeof icons>();
   readonly label = input.required<string, string>({ transform: visibleLabel });
   protected readonly appearance = computed<[IconName, Tone | null]>(() => {

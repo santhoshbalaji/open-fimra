@@ -3,35 +3,34 @@
   "formatVersion": 1,
   "id": "patrol-log",
   "version": 1,
-  "title": { "en": "Patrol log", "hi": "गश्त रजिस्टर" },
-  "description": {
-    "en": "A record of one fire-season patrol, whether or not it found a fire. Record a fire the patrol finds with the manual fire report."
-  },
+  "title": { "en": "Patrol log", "hi": "गश्त का रिकॉर्ड" },
+  "description": { "en": "A record of one fire-season patrol, whether or not it found a fire. Record a fire the patrol finds with the manual fire report.", "hi": "आग के मौसम में की गई हर गश्त का रिकॉर्ड रखें, चाहे आग मिले या नहीं। गश्त में आग मिले तो उसकी सूचना अलग से दर्ज करें।" },
+  "languages": ["en", "hi"],
   "sections": [
     {
       "key": "patrol",
-      "title": { "en": "Patrol" },
+      "title": { "en": "Patrol", "hi": "गश्त" },
       "items": [
-        { "key": "patrol_date", "type": "date", "label": { "en": "Date" }, "required": true, "notInFuture": true },
-        { "key": "start_time", "type": "time", "label": { "en": "Started at" }, "required": true },
-        { "key": "end_time", "type": "time", "label": { "en": "Finished at" }, "required": true },
+        { "key": "patrol_date", "type": "date", "label": { "en": "Date", "hi": "तारीख" }, "required": true, "notInFuture": true },
+        { "key": "start_time", "type": "time", "label": { "en": "Started at", "hi": "शुरू करने का समय" }, "required": true },
+        { "key": "end_time", "type": "time", "label": { "en": "Finished at", "hi": "समाप्ति का समय" }, "required": true },
         {
           "key": "patrol_type",
           "type": "single-choice",
-          "label": { "en": "Kind of patrol" },
+          "label": { "en": "Kind of patrol", "hi": "गश्त का प्रकार" },
           "required": true,
           "choices": [
-            { "key": "routine", "label": { "en": "Routine" } },
-            { "key": "fire-watch", "label": { "en": "Fire watch" } },
-            { "key": "night", "label": { "en": "Night patrol" } }
+            { "key": "routine", "label": { "en": "Routine", "hi": "नियमित गश्त" } },
+            { "key": "fire-watch", "label": { "en": "Fire watch", "hi": "आग की निगरानी" } },
+            { "key": "night", "label": { "en": "Night patrol", "hi": "रात की गश्त" } }
           ]
         },
-        { "key": "staff_count", "type": "number", "label": { "en": "People on patrol" }, "unit": "people", "decimals": 0, "min": 1, "max": 50 },
+        { "key": "staff_count", "type": "number", "label": { "en": "People on patrol", "hi": "गश्त में लोगों की संख्या" }, "unit": "people", "decimals": 0, "min": 1, "max": 50 },
         {
           "key": "route",
           "type": "track",
-          "label": { "en": "Route walked" },
-          "hint": { "en": "Start recording when the patrol sets off." },
+          "label": { "en": "Route walked", "hi": "पैदल तय किया गया रास्ता" },
+          "hint": { "en": "Start recording when the patrol sets off.", "hi": "गश्त पर निकलते ही रास्ता दर्ज करना शुरू करें।" },
           "required": true,
           "maxAccuracyMetres": 30
         }
@@ -39,66 +38,66 @@
     },
     {
       "key": "observations_section",
-      "title": { "en": "What the patrol saw" },
+      "title": { "en": "What the patrol saw", "hi": "गश्त में क्या देखा" },
       "items": [
         {
           "key": "observations",
           "type": "repeat",
-          "title": { "en": "Observations" },
-          "itemLabel": { "en": "Observation" },
+          "title": { "en": "Observations", "hi": "देखी गई बातें" },
+          "itemLabel": { "en": "Observation", "hi": "देखी गई बात" },
           "maxRepeats": 50,
           "items": [
             {
               "key": "observation_type",
               "type": "single-choice",
-              "label": { "en": "What was seen" },
+              "label": { "en": "What was seen", "hi": "क्या देखा" },
               "required": true,
               "choices": [
-                { "key": "smoke", "label": { "en": "Smoke" } },
-                { "key": "fire", "label": { "en": "Fire" } },
-                { "key": "burnt-patch", "label": { "en": "Recently burnt patch" } },
-                { "key": "fire-line-damage", "label": { "en": "Damaged fire line" } },
-                { "key": "other", "label": { "en": "Something else" } }
+                { "key": "smoke", "label": { "en": "Smoke", "hi": "धुआँ" } },
+                { "key": "fire", "label": { "en": "Fire", "hi": "आग" } },
+                { "key": "burnt-patch", "label": { "en": "Recently burnt patch", "hi": "हाल ही में जला इलाका" } },
+                { "key": "fire-line-damage", "label": { "en": "Damaged fire line", "hi": "क्षतिग्रस्त अग्नि रेखा" } },
+                { "key": "other", "label": { "en": "Something else", "hi": "कुछ और" } }
               ]
             },
-            { "key": "observed_location", "type": "point", "label": { "en": "Where" }, "required": true, "maxAccuracyMetres": 50 },
+            { "key": "observed_location", "type": "point", "label": { "en": "Where", "hi": "कहाँ" }, "required": true, "maxAccuracyMetres": 50 },
             {
               "key": "observation_photos",
               "type": "photo",
-              "label": { "en": "Photos" },
+              "label": { "en": "Photos", "hi": "तस्वीरें" },
               "maxCount": 3,
               "requireWhen": { "op": "equals", "field": "observation_type", "value": "fire" }
             },
-            { "key": "observation_notes", "type": "text", "label": { "en": "Notes" }, "maxLength": 500 }
+            { "key": "observation_notes", "type": "text", "label": { "en": "Notes", "hi": "टिप्पणियाँ" }, "maxLength": 500 }
           ]
         },
-        { "key": "observation_count", "type": "calculated", "label": { "en": "Things seen" }, "decimals": 0, "calculate": { "op": "count", "group": "observations" } }
+        { "key": "observation_count", "type": "calculated", "label": { "en": "Things seen", "hi": "देखी गई बातें" }, "decimals": 0, "calculate": { "op": "count", "group": "observations" } }
       ]
     },
     {
       "key": "fire_lines",
-      "title": { "en": "Fire lines" },
+      "title": { "en": "Fire lines", "hi": "अग्नि रेखाएँ" },
       "items": [
         {
           "key": "fire_line_checked",
           "type": "single-choice",
-          "label": { "en": "Did the patrol check a fire line?" },
+          "label": { "en": "Did the patrol check a fire line?", "hi": "क्या गश्त के दौरान अग्नि रेखा की जाँच की गई?" },
           "required": true,
           "choices": [
-            { "key": "yes", "label": { "en": "Yes" } },
-            { "key": "no", "label": { "en": "No" } }
+            { "key": "yes", "label": { "en": "Yes", "hi": "हाँ" } },
+            { "key": "no", "label": { "en": "No", "hi": "नहीं" } }
           ]
         },
         {
           "key": "fire_line_condition",
           "type": "single-choice",
-          "label": { "en": "Condition of the fire line" },
+          "label": { "en": "Condition of the fire line", "hi": "अग्नि रेखा की स्थिति" },
           "required": true,
           "showWhen": { "op": "equals", "field": "fire_line_checked", "value": "yes" },
           "choices": [
-            { "key": "clear", "label": { "en": "Clear" } },
-            { "key": "partly-blocked", "label": { "en": "Partly overgrown" } },
-            { "key": "blocked", "label": { "en": "Overgrown" } }
+            { "key": "clear", "label": { "en": "Clear", "hi": "साफ़" } },
+            { "key": "partly-blocked", "label": { "en": "Partly overgrown", "hi": "कुछ हिस्सों में घास या झाड़ियाँ उगी हैं" } },
+            { "key": "blocked", "label": { "en": "Overgrown", "hi": "घास या झाड़ियों से ढकी है" } }
           ]
         }
       ]

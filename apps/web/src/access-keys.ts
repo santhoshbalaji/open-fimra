@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -14,7 +15,7 @@ import { restoreOverlayFocus } from './ui/overlay-focus';
 import { DataState } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 export interface AccessKey {
   id: string; name: string; hint: string; createdAt: string;
@@ -28,7 +29,7 @@ const expiries = [
   { value: 'never', label: 'Does not expire' }
 ] as const;
 
-const time = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
+const time = (value: string) => workspaceFormat.dateTime(new Date(value));
 
 /** Personal access keys for desktop GIS, and the GIS link address for the current workspace. */
 @Component({
@@ -38,6 +39,7 @@ const time = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value))
   host: { class: 'block h-full overflow-auto' }
 })
 export class AccessKeys implements OnInit {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
@@ -70,24 +72,24 @@ export class AccessKeys implements OnInit {
   });
   readonly full = computed(() => (this.keys()?.filter(key => !key.expired).length ?? 0) >= this.limit());
   readonly expiryLabel = (value: string) => expiries.find(option => option.value === value)?.label ?? '';
-  readonly expiresLabel = (key: AccessKey) => key.expired ? 'Expired' : key.expiresAt ? time(key.expiresAt) : 'Never';
+  readonly expiresLabel = (key: AccessKey) => key.expired ? translate('Expired') : key.expiresAt ? time(key.expiresAt) : translate('Never');
   readonly page = computed<TablePage<AccessKey>>(() => ({
     rows: this.keys() ?? [], nextCursor: null, position: { cursor: null, previousCursors: [] }
   }));
   readonly listState = computed<DataState>(() => {
-    if (this.listProblem()) return { kind: 'error', heading: 'Could not load keys', detail: this.listProblem() };
-    if (!this.keys()) return { kind: 'loading', heading: 'Loading keys' };
+    if (this.listProblem()) return { kind: 'error', heading: translate('Could not load keys'), detail: this.listProblem() };
+    if (!this.keys()) return { kind: 'loading', heading: translate('Loading keys') };
     return this.keys()?.length ? { kind: 'ready' } :
-      { kind: 'empty', heading: 'No keys yet', detail: 'Create a key to open this workspace in desktop GIS.' };
+      { kind: 'empty', heading: translate('No keys yet'), detail: translate('Create a key to open this workspace in desktop GIS.') };
   });
   readonly rowKey = (key: AccessKey) => key.id;
   readonly rowLabel = (key: AccessKey) => key.name;
   readonly columns = computed<TableColumn<AccessKey>[]>(() => [
-    { id: 'name', label: 'Name', value: this.rowLabel, rowHeading: true },
+    { id: 'name', label: translate('Name'), value: this.rowLabel, rowHeading: true },
     { id: 'hint', label: 'Starts with', value: key => 'fimra_' + key.hint + '…' },
-    { id: 'created', label: 'Created', value: key => time(key.createdAt) },
-    { id: 'expires', label: 'Expires', value: this.expiresLabel, cell: this.expiryCell() },
-    { id: 'used', label: 'Last used', value: key => key.lastUsedAt ? time(key.lastUsedAt) : 'Not yet' }
+    { id: 'created', label: translate('Created'), value: key => time(key.createdAt) },
+    { id: 'expires', label: translate('Expires'), value: this.expiresLabel, cell: this.expiryCell() },
+    { id: 'used', label: translate('Last used'), value: key => key.lastUsedAt ? time(key.lastUsedAt) : translate('Not yet') }
   ]);
   private readonly expiryCell = viewChild<NonNullable<TableColumn<AccessKey>['cell']>>('expiryCell');
 
@@ -109,7 +111,7 @@ export class AccessKeys implements OnInit {
     if (!this.keys() || this.creating() || this.full() || this.made()) return;
     const name = (new FormData(form).get('name')?.toString() ?? '').trim();
     if (!name) {
-      this.createError.set('Give the key a name, such as the computer it is for.');
+      this.createError.set(translate('Give the key a name, such as the computer it is for.'));
       return;
     }
     const days = this.expiry() === 'never' ? null : Number(this.expiry());
@@ -136,9 +138,9 @@ export class AccessKeys implements OnInit {
     this.revokeError.set('');
     this.keyFeedback.set('');
     const confirmed = await this.confirm.open({
-      heading: 'Revoke ' + key.name + '?',
-      detail: 'Desktop GIS using this key stops working at once. This cannot be undone.',
-      confirmLabel: 'Revoke key',
+      heading: translate('Revoke ') + key.name + '?',
+      detail: translate('Desktop GIS using this key stops working at once. This cannot be undone.'),
+      confirmLabel: translate('Revoke key'),
       destructive: true,
       trigger
     });
@@ -174,12 +176,12 @@ export class AccessKeys implements OnInit {
       await navigator.clipboard.writeText(text);
       feedback.set(what + ' copied.');
     } catch {
-      feedback.set('Could not copy. Select the text and copy it yourself.');
+      feedback.set(translate('Could not copy. Select the text and copy it yourself.'));
     }
   }
 
   private problem(error: HttpErrorResponse): string {
     if (error.status === 401) this.auth.sessionEnded();
-    return typeof error.error?.error === 'string' ? error.error.error : 'The key request failed. Try again.';
+    return typeof error.error?.error === 'string' ? error.error.error : translate('The key request failed. Try again.');
   }
 }

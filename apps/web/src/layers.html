@@ -1,7 +1,7 @@
 <ng-template #primary>
   <button #addButton hlmBtn id="add-layer" type="button" [disabled]="busy() || !catalog()" (click)="openLayer(addButton)">
     <svg fimraIcon="plus" aria-hidden="true" class="size-4"></svg>
-    Add layer
+    {{ msg('Add layer') }}
   </button>
 </ng-template>
 
@@ -14,14 +14,14 @@
   </ng-template>
   <ng-template #actions let-row>
     <button #action hlmBtn variant="outline" type="button" [id]="'layer-action-' + row.slug" [disabled]="busy()"
-      [attr.aria-label]="nextAction(row) + ' for ' + row.name" (click)="openLayer(action, row)">
+      [attr.aria-label]="nextAction(row) + msg(' for ') + row.name" (click)="openLayer(action, row)">
       {{ nextAction(row) }}
     </button>
   </ng-template>
-  <fimra-data-table caption="Layer catalog" [columns]="columns()" [page]="page()" [state]="catalogState()"
+  <fimra-data-table [caption]=" msg('Layer catalog') " [columns]="columns()" [page]="page()" [state]="catalogState()"
     [rowKey]="rowKey" [rowLabel]="rowLabel" [rowActions]="actions" [phoneCards]="true" (retry)="loadCatalog()" />
 
-  <fimra-side-panel #panel [heading]="layer()?.name ?? (chosenLayer() ? 'Layer review' : 'Add layer')"
+  <fimra-side-panel #panel [heading]="layer()?.name ?? (chosenLayer() ? msg('Layer review') : msg('Add layer'))"
     [fullHeight]="true" (closed)="closeLayer()">
     @if (panel.open()) {
       <div class="grid min-w-0 gap-4">
@@ -38,47 +38,47 @@
         }
         @if (layer(); as layer) {
           <dl class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-control border border-border bg-background p-3 sm:grid-cols-3">
-            <div><dt class="text-muted-foreground">Published</dt><dd class="font-semibold">{{ versionLabel(layer.published) }}</dd></div>
-            <div><dt class="text-muted-foreground">Latest draft</dt><dd class="font-semibold">{{ versionLabel(layer.draft) }}</dd></div>
+            <div><dt class="text-muted-foreground">{{ msg('Published') }}</dt><dd class="font-semibold">{{ versionLabel(layer.published) }}</dd></div>
+            <div><dt class="text-muted-foreground">{{ msg('Latest draft') }}</dt><dd class="font-semibold">{{ versionLabel(layer.draft) }}</dd></div>
             @if (layer.published) {
-              <div class="wrap-anywhere"><dt class="text-muted-foreground">Published scope</dt><dd>{{ scope(layer.published.depth) }}</dd></div>
+              <div class="wrap-anywhere"><dt class="text-muted-foreground">{{ msg('Published scope') }}</dt><dd>{{ scope(layer.published.depth) }}</dd></div>
               @if (layer.previous.length) {
-                <div class="col-span-full wrap-anywhere"><dt class="text-muted-foreground">Previous in this scope</dt>
+                <div class="col-span-full wrap-anywhere"><dt class="text-muted-foreground">{{ msg('Previous in this scope') }}</dt>
                   <dd>{{ previousLabel(layer.previous) }}</dd></div>
               }
             }
           </dl>
           @if (layer.published; as published) {
             @if (published.overlayKind; as kind) {
-              <p>Overlay: {{ overlayKindLabels[kind] }}</p>
+              <p>{{ msg('Overlay: {0}', [msg(overlayKindLabels[kind])]) }}</p>
             } @else if (layer.role !== 'hierarchy') {
               <form class="max-w-md" (submit)="$event.preventDefault(); markOverlay(published, overlayKind.value)">
                 <hlm-field>
-                  <label hlmFieldLabel for="overlay-kind">Overlay kind</label>
+                  <label hlmFieldLabel for="overlay-kind">{{ msg('Overlay kind') }}</label>
                   <select hlmInput id="overlay-kind" #overlayKind class="w-full" required [disabled]="busy()">
-                    <option value="">Choose an overlay kind</option>
+                    <option value="">{{ msg('Choose an overlay kind') }}</option>
                     @for (kind of overlayKinds; track kind) {
-                      <option [value]="kind">{{ overlayKindLabels[kind] }}</option>
+                      <option [value]="kind">{{ msg(overlayKindLabels[kind]) }}</option>
                     }
                   </select>
-                  <p class="text-muted-foreground">Applies to observations from now on.</p>
-                  <button hlmBtn type="submit" variant="outline" class="self-start" [disabled]="busy()">Mark as overlay</button>
+                  <p class="text-muted-foreground">{{ msg('Applies to observations from now on.') }}</p>
+                  <button hlmBtn type="submit" variant="outline" class="self-start" [disabled]="busy()">{{ msg('Mark as overlay') }}</button>
                 </hlm-field>
               </form>
             }
           }
           @if (versions().length > 1 && !uploading()) {
             <hlm-field class="max-w-md">
-              <label hlmFieldLabel for="layer-version">Version under review</label>
+              <label hlmFieldLabel for="layer-version">{{ msg('Version under review') }}</label>
               <select hlmInput id="layer-version" class="w-full" [value]="version()" [disabled]="busy()"
                 (change)="chooseVersion($any($event.target).value)">
                 @for (item of versions(); track item.versionId) {
                   <option [value]="item.versionId" [selected]="version() === item.versionId">
                     {{ versionLabel(item) }}@switch (item.status) {
-                      @case ('published') { · Published }
-                      @case ('retired') { · Retired }
-                      @case ('failed') { · Import failed }
-                      @case ('pending') { · Importing }
+                      @case ('published') { {{ msg('· Published') }} }
+                      @case ('retired') { {{ msg('· Retired') }} }
+                      @case ('failed') { {{ msg('· Import failed') }} }
+                      @case ('pending') { {{ msg('· Importing') }} }
                       @default { {{ item.blocksPublish ? ' · Needs a corrected file' : ' · Draft' }} }
                     }
                   </option>
@@ -92,13 +92,13 @@
           <fimra-state-region [state]="draftState()" (retry)="watchDraft()">
             <section aria-labelledby="layer-review" class="grid gap-3">
               <h3 id="layer-review" tabindex="-1" class="w-fit rounded-sm text-subhead focus-visible:outline-2 focus-visible:outline-ring">
-                {{ reviewing() ? versionLabel(reviewing()) : 'Layer version' }}
+                {{ reviewing() ? versionLabel(reviewing()) : msg('Layer version') }}
               </h3>
               @if (reviewing()?.sourceFile; as source) {
-                <p class="wrap-anywhere text-muted-foreground">Source file: {{ source }}</p>
+                <p class="wrap-anywhere text-muted-foreground">{{ msg('Source file: {0}', [source]) }}</p>
               }
               @if (reviewing() && reviewing()?.versionId !== layer()?.published?.versionId) {
-                <p class="wrap-anywhere">Scope: {{ scope(reviewing()?.depth) }}</p>
+                <p class="wrap-anywhere">{{ msg('Scope: {0}', [scope(reviewing()?.depth)]) }}</p>
               }
               @if (draft(); as draft) {
                 <p class="flex flex-wrap items-center gap-2">
@@ -110,32 +110,31 @@
                       } @else {
                         {{ format.number(draft.featureCount) }} {{ draft.featureCount === 1 ? 'feature' : 'features' }}
                       }
-                      @if (draft.sourceCrs) { · Source coordinates {{ draft.sourceCrs }} }
+                      @if (draft.sourceCrs) { {{ msg('· Source coordinates {0}', [draft.sourceCrs]) }} }
                     </span>
                   }
                 </p>
                 @if (draft.status === 'pending') {
-                  <p class="text-muted-foreground">The file is being checked. You can close this review and return later.</p>
+                  <p class="text-muted-foreground">{{ msg('The file is being checked. You can close this review and return later.') }}</p>
                 }
                 @if (draft.rematch; as replay) {
                   <p class="flex items-start gap-2 rounded-control border border-border px-3 py-2">
                     @switch (replay.status) {
                       @case ('pending') {
                         <svg fimraIcon="loader-circle" aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
-                        <span>Checking past detections is queued.</span>
+                        <span>{{ msg('Checking past detections is queued.') }}</span>
                       }
                       @case ('running') {
                         <svg fimraIcon="loader-circle" aria-hidden="true" class="mt-0.5 size-4 shrink-0 motion-safe:animate-spin"></svg>
-                        <span>Checking past detections. {{ format.number(replay.processed) }} checked so far.</span>
+                        <span>{{ msg('Checking past detections. {0} checked so far.', [format.number(replay.processed)]) }}</span>
                       }
                       @case ('completed') {
                         <svg fimraIcon="circle-check" aria-hidden="true" class="mt-0.5 size-4 shrink-0"></svg>
-                        <span>{{ format.number(replay.processed) }} {{ replay.processed === 1 ? 'detection' : 'detections' }} checked.
-                          {{ format.number(replay.alertsCreated) }} new {{ replay.alertsCreated === 1 ? 'alert' : 'alerts' }}.</span>
+                        <span>{{ msg('{0} {1} checked. {2} new {3}.', [format.number(replay.processed), replay.processed === 1 ? 'detection' : 'detections', format.number(replay.alertsCreated), replay.alertsCreated === 1 ? 'alert' : 'alerts']) }}</span>
                       }
                       @case ('failed') {
                         <svg fimraIcon="circle-alert" aria-hidden="true" class="mt-0.5 size-4 shrink-0 text-danger"></svg>
-                        <span>Checking past detections stopped after {{ format.number(replay.processed) }}. Contact the system operator.</span>
+                        <span>{{ msg('Checking past detections stopped after {0}. Contact the system operator.', [format.number(replay.processed)]) }}</span>
                       }
                     }
                   </p>
@@ -145,7 +144,7 @@
                     <ng-container layerRepairAction>
                       @if (needsReplacement() && !uploading()) {
                         <button hlmBtn id="replace-layer" type="button" variant="outline" class="justify-self-start"
-                          [disabled]="busy()" (click)="beginUpload()">Replace file</button>
+                          [disabled]="busy()" (click)="beginUpload()">{{ msg('Replace file') }}</button>
                       }
                     </ng-container>
                   </fimra-layer-checks>
@@ -158,19 +157,19 @@
                 @if (draft()?.status === 'ready' && !needsReplacement()) {
                   <form class="window-form flex flex-wrap items-end gap-3" (submit)="$event.preventDefault(); previewDraft()">
                     <hlm-field class="w-40">
-                      <label hlmFieldLabel for="preview-days">Days to check</label>
+                      <label hlmFieldLabel for="preview-days">{{ msg('Days to check') }}</label>
                       <input hlmInput #windowInput id="preview-days" type="number" min="1" max="90" [value]="days()" required
                         [disabled]="busy()" (input)="changeDays(windowInput.valueAsNumber)">
                     </hlm-field>
                     <button hlmBtn type="submit" [busy]="operation() === 'preview'" [disabled]="busy() && operation() !== 'preview'">
-                      {{ operation() === 'preview' ? 'Checking detections' : 'Run preview' }}
+                      {{ operation() === 'preview' ? msg('Checking detections') : msg('Run preview') }}
                     </button>
                   </form>
                 }
                 @if (draft()?.status !== 'pending' && !needsReplacement()) {
                   <button hlmBtn id="replace-layer" type="button" variant="outline" class="justify-self-start"
                     [disabled]="busy()" (click)="beginUpload()">
-                    Upload new version
+                    {{ msg('Upload new version') }}
                   </button>
                 }
               }
@@ -180,29 +179,29 @@
 
         @if (uploading()) {
           <section class="grid min-w-0 gap-3 rounded-card border border-border p-3 sm:p-4" aria-labelledby="upload-heading">
-            <h3 id="upload-heading" class="text-subhead">{{ needsReplacement() ? 'Upload a replacement' : 'Upload a layer file' }}</h3>
-            <p class="text-muted-foreground">The file is checked in the background before you publish it.</p>
+            <h3 id="upload-heading" class="text-subhead">{{ needsReplacement() ? msg('Upload a replacement') : msg('Upload a layer file') }}</h3>
+            <p class="text-muted-foreground">{{ msg('The file is checked in the background before you publish it.') }}</p>
             <form #uploadForm class="upload-form max-w-[48rem]" (submit)="$event.preventDefault(); upload(uploadForm)">
               <fieldset class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5" [disabled]="busy() && operation() !== 'upload'">
-                <fimra-field-error-summary id="layer-upload-errors" heading="Check the upload settings" [errors]="missing()" />
+                <fimra-field-error-summary id="layer-upload-errors" [heading]=" msg('Check the upload settings') " [errors]="missing()" />
                 @if (!layer()) {
                   <div class="grid gap-5 sm:grid-cols-2">
                     <hlm-field>
-                      <label hlmFieldLabel for="layer-name">Layer name</label>
+                      <label hlmFieldLabel for="layer-name">{{ msg('Layer name') }}</label>
                       <input hlmInput id="layer-name" name="layerName" required maxlength="200">
                     </hlm-field>
                     <hlm-field>
-                      <label hlmFieldLabel for="layer-slug">Layer identifier</label>
+                      <label hlmFieldLabel for="layer-slug">{{ msg('Layer identifier') }}</label>
                       <input hlmInput id="layer-slug" name="layerSlug" required maxlength="80" pattern="[a-z0-9][a-z0-9\-]*">
-                      <p hlmFieldDescription>Lowercase letters, numbers and hyphens.</p>
+                      <p hlmFieldDescription>{{ msg('Lowercase letters, numbers and hyphens.') }}</p>
                     </hlm-field>
                   </div>
                   <hlm-field>
-                    <label hlmFieldLabel for="layer-role">Layer role</label>
+                    <label hlmFieldLabel for="layer-role">{{ msg('Layer role') }}</label>
                     <hlm-select [value]="chosenRole()" (valueChange)="selectRole($event ?? '')" [itemToString]="roleLabel">
                       <hlm-select-trigger buttonId="layer-role" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
                       <hlm-select-content *hlmSelectPortal>
-                        @for (role of roles; track role) { <hlm-select-item [value]="role">{{ roleLabels[role] }}</hlm-select-item> }
+                        @for (role of roles; track role) { <hlm-select-item [value]="role">{{ msg(roleLabels[role]) }}</hlm-select-item> }
                       </hlm-select-content>
                     </hlm-select>
                   </hlm-field>
@@ -211,65 +210,65 @@
                   <div class="grid gap-5 sm:grid-cols-2">
                     @if (!layer()) {
                       <hlm-field>
-                        <label hlmFieldLabel for="layer-hierarchy">Hierarchy</label>
+                        <label hlmFieldLabel for="layer-hierarchy">{{ msg('Hierarchy') }}</label>
                         <hlm-select [value]="chosenHierarchy() || null" (valueChange)="chooseHierarchy($event ?? '')" [itemToString]="hierarchyLabel">
                           <hlm-select-trigger buttonId="layer-hierarchy" class="w-full min-w-0 justify-start text-start" [forceInvalid]="missingHierarchy()"
-                            [aria-invalid]="missingHierarchy()"><hlm-select-value placeholder="Choose a hierarchy" /></hlm-select-trigger>
+                            [aria-invalid]="missingHierarchy()"><hlm-select-value [placeholder]=" msg('Choose a hierarchy') " /></hlm-select-trigger>
                           <hlm-select-content *hlmSelectPortal>
                             @for (item of catalog()?.hierarchies ?? []; track item.slug) {
                               <hlm-select-item [value]="item.slug">{{ item.name }}</hlm-select-item>
                             }
                           </hlm-select-content>
                         </hlm-select>
-                        @if (missingHierarchy()) { <hlm-field-error forceShow>Choose a hierarchy.</hlm-field-error> }
+                        @if (missingHierarchy()) { <hlm-field-error forceShow>{{ msg('Choose a hierarchy.') }}</hlm-field-error> }
                       </hlm-field>
                     }
                     <hlm-field>
-                      <label hlmFieldLabel for="layer-depth">Hierarchy level</label>
+                      <label hlmFieldLabel for="layer-depth">{{ msg('Hierarchy level') }}</label>
                       <hlm-select [value]="depth()" (valueChange)="chosenDepth.set($event ?? null)" [itemToString]="levelLabel"
                         [disabled]="(layer()?.depth ?? null) !== null">
                         <hlm-select-trigger buttonId="layer-depth" class="w-full min-w-0 justify-start text-start" [forceInvalid]="missingDepth()"
-                          [aria-invalid]="missingDepth()"><hlm-select-value placeholder="Choose a level" /></hlm-select-trigger>
+                          [aria-invalid]="missingDepth()"><hlm-select-value [placeholder]=" msg('Choose a level') " /></hlm-select-trigger>
                         <hlm-select-content *hlmSelectPortal>
                           @for (level of hierarchy()?.levels ?? []; track level.depth) {
                             <hlm-select-item [value]="level.depth">{{ level.name }}</hlm-select-item>
                           } @empty {
-                            <hlm-select-item [value]="null" disabled>Choose a hierarchy first</hlm-select-item>
+                            <hlm-select-item [value]="null" disabled>{{ msg('Choose a hierarchy first') }}</hlm-select-item>
                           }
                         </hlm-select-content>
                       </hlm-select>
-                      @if (missingDepth()) { <hlm-field-error forceShow>Choose a level.</hlm-field-error> }
+                      @if (missingDepth()) { <hlm-field-error forceShow>{{ msg('Choose a level.') }}</hlm-field-error> }
                     </hlm-field>
                   </div>
                 }
                 <hlm-field>
-                  <label hlmFieldLabel for="layer-file">Layer file</label>
+                  <label hlmFieldLabel for="layer-file">{{ msg('Layer file') }}</label>
                   <input hlmInput id="layer-file" type="file" name="file" accept=".gpkg,.zip,.geojson,.kml,.kmz" required
                     [attr.aria-describedby]="needsReplacement() ? 'layer-review-repair' : null" class="h-auto min-w-0 py-1.5 file:me-3 file:rounded-control file:bg-secondary file:px-3 file:text-secondary-foreground">
-                  <p hlmFieldDescription>GeoPackage, zipped Shapefile, GeoJSON, KML or KMZ. Up to 32 MiB.</p>
+                  <p hlmFieldDescription>{{ msg('GeoPackage, zipped Shapefile, GeoJSON, KML or KMZ. Up to 32 MiB.') }}</p>
                 </hlm-field>
                 <fieldset hlmFieldSet class="min-w-0 gap-4 border-t border-border pt-4">
-                  <legend hlmFieldLegend variant="label" class="mb-0">Field names in the file</legend>
+                  <legend hlmFieldLegend variant="label" class="mb-0">{{ msg('Field names in the file') }}</legend>
                   <div class="grid gap-4 sm:grid-cols-2">
-                    <hlm-field><label hlmFieldLabel for="name-field">Name field</label>
+                    <hlm-field><label hlmFieldLabel for="name-field">{{ msg('Name field') }}</label>
                       <input hlmInput id="name-field" name="nameField" [value]="reviewing()?.fields?.nameField ?? ''" [required]="role() === 'hierarchy'" maxlength="255"></hlm-field>
-                    <hlm-field><label hlmFieldLabel for="code-field">Code field</label>
+                    <hlm-field><label hlmFieldLabel for="code-field">{{ msg('Code field') }}</label>
                       <input hlmInput id="code-field" name="codeField" [value]="reviewing()?.fields?.codeField ?? ''" maxlength="255"></hlm-field>
                     @if (role() === 'hierarchy') {
-                      <hlm-field><label hlmFieldLabel for="parent-code-field">Parent code field</label>
+                      <hlm-field><label hlmFieldLabel for="parent-code-field">{{ msg('Parent code field') }}</label>
                         <input hlmInput id="parent-code-field" name="parentCodeField" [value]="reviewing()?.fields?.parentCodeField ?? ''" maxlength="255"></hlm-field>
                     }
-                    <hlm-field><label hlmFieldLabel for="source-layer">Source layer (optional)</label>
+                    <hlm-field><label hlmFieldLabel for="source-layer">{{ msg('Source layer (optional)') }}</label>
                       <input hlmInput id="source-layer" name="sourceLayer" [value]="reviewing()?.fields?.sourceLayer ?? ''" maxlength="255"></hlm-field>
                   </div>
                 </fieldset>
 
                 <div class="flex flex-wrap gap-2">
                   <button hlmBtn type="submit" [busy]="operation() === 'upload'">
-                    {{ operation() === 'upload' ? 'Saving upload' : needsReplacement() ? 'Upload replacement' : 'Upload for review' }}
+                    {{ operation() === 'upload' ? msg('Saving upload') : needsReplacement() ? msg('Upload replacement') : msg('Upload for review') }}
                   </button>
                   @if (version()) {
-                    <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelUpload()">Cancel upload</button>
+                    <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelUpload()">{{ msg('Cancel upload') }}</button>
                   }
                 </div>
               </fieldset>
@@ -279,15 +278,14 @@
 
         @if (preview(); as preview) {
           <section class="grid min-w-0 gap-4 rounded-card border border-border p-3 sm:p-4" aria-labelledby="preview-heading">
-            <h3 id="preview-heading" tabindex="-1" class="w-fit rounded-sm text-subhead focus-visible:outline-2 focus-visible:outline-ring">Preview results</h3>
+            <h3 id="preview-heading" tabindex="-1" class="w-fit rounded-sm text-subhead focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Preview results') }}</h3>
             @defer (on immediate) {
               <fimra-layer-preview-map [url]="mapURL()" />
             } @placeholder {
-              <p class="min-h-72 text-muted-foreground sm:min-h-88">Preparing the map preview…</p>
+              <p class="min-h-72 text-muted-foreground sm:min-h-88">{{ msg('Preparing the map preview…') }}</p>
             }
             <p class="text-muted-foreground">
-              {{ format.number(preview.scanned) }} {{ preview.scanned === 1 ? 'detection' : 'detections' }} checked over {{ preview.days }} days.
-              A detection can appear in several groups.
+              {{ msg('{0} {1} checked over {2} days. A detection can appear in several groups.', [format.number(preview.scanned), preview.scanned === 1 ? 'detection' : 'detections', preview.days]) }}
             </p>
             <dl class="preview-counts grid grid-cols-2 gap-2 sm:grid-cols-4">
               @for (category of categories; track category.key) {
@@ -302,7 +300,7 @@
                 <details class="group rounded-control border border-border">
                   <summary class="flex min-h-(--target-web) cursor-pointer items-center gap-2 px-3 font-medium text-primary">
                     <svg fimraIcon="chevron-right" aria-hidden="true" class="size-4 transition-transform group-open:rotate-90"></svg>
-                    {{ category.label }} (showing {{ format.number(group.items.length) }} of {{ format.number(group.count) }})
+                    {{ msg('{0} (showing {1} of {2})', [category.label, format.number(group.items.length), format.number(group.count)]) }}
                   </summary>
                   <ul class="border-t border-border px-3">
                     @for (item of group.items; track item.detectionId) {
@@ -318,7 +316,7 @@
             @if (preview.brokenGrants.length) {
               <section class="grid gap-2 rounded-control border border-border border-s-4 border-s-warning px-3 py-2" aria-labelledby="grants-heading">
                 <h4 id="grants-heading" class="flex items-center gap-2 font-semibold">
-                  <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4"></svg>Access that would be removed
+                  <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4"></svg>{{ msg('Access that would be removed') }}
                 </h4>
                 <ul class="list-disc ps-5 wrap-anywhere">
                   @for (grant of preview.brokenGrants; track $index) {
@@ -328,7 +326,7 @@
                 @if (!preview.blocked) {
                   <label hlmLabel class="items-start font-normal leading-normal">
                     <hlm-checkbox [checked]="removeGrants()" [disabled]="busy()" (checkedChange)="removeGrants.set($event)" />
-                    Remove the {{ preview.brokenGrants.length }} listed {{ preview.brokenGrants.length === 1 ? 'grant' : 'grants' }}
+                    {{ msg('Remove the {0} listed {1}', [preview.brokenGrants.length, preview.brokenGrants.length === 1 ? 'grant' : 'grants']) }}
                   </label>
                 }
               </section>
@@ -336,14 +334,14 @@
             @if (preview.blocked) {
               <div hlmAlert variant="destructive">
                 <svg fimraIcon="circle-x" aria-hidden="true" class="size-4"></svg>
-                <h4 hlmAlertTitle>Cannot publish yet</h4>
+                <h4 hlmAlertTitle>{{ msg('Cannot publish yet') }}</h4>
                 <p hlmAlertDescription>{{ preview.blocked }}</p>
               </div>
             } @else if (!uploading()) {
               <button #publish hlmBtn type="button" class="justify-self-start"
                 [busy]="operation() === 'publish'" [attr.aria-disabled]="(!reviewing() || (preview.brokenGrants.length && !removeGrants())) || null"
                 (click)="confirmPublish(publish)">
-                {{ operation() === 'publish' ? 'Publishing layer' : 'Publish layer' }}
+                {{ operation() === 'publish' ? msg('Publishing layer') : msg('Publish layer') }}
               </button>
             }
           </section>

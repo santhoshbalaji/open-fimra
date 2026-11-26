@@ -1,8 +1,10 @@
+import { translate } from './language';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { Component, Injector, OnInit, afterNextRender, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { HlmToaster } from '@spartan-ng/helm/sonner';
+import { LanguagePreference } from './language-preference';
 import { AuthService } from './auth';
 import { Bootstrap } from './bootstrap';
 import { DashboardFilters, defaultDashboardHours } from './dashboard-filters';
@@ -26,9 +28,10 @@ import { classes, type ForestClass } from './detections';
   imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray],
   providers: [ShellNavigation],
   templateUrl: './app.html',
-  host: { '(window:keydown)': 'shortcut($event)', '(window:pointerdown)': 'keyboardInput = false' }
+  host: { '(window:keydown)': 'shortcut($event)', '(window:pointerdown)': 'pointerInput()' }
 })
 export class App implements OnInit {
+  protected readonly msg = translate;
   readonly workspace = inject(WorkspaceService);
   readonly auth = inject(AuthService);
   readonly appearance = inject(ThemeService);
@@ -58,12 +61,13 @@ export class App implements OnInit {
     if (selected) return selected[1];
     const [first] = jurisdictions;
     if (jurisdictions.length === 1 && first && !first[0].includes('.') && first[1] === this.workspace.current()?.name) {
-      return 'All units';
+      return translate('All units');
     }
     return jurisdictions.map(([, label]) => label).join(', ');
   });
 
   constructor() {
+    inject(LanguagePreference);
     this.router.events.pipe(takeUntilDestroyed()).subscribe(event => {
       if (!(event instanceof NavigationEnd)) return;
       const previous = this.router.lastSuccessfulNavigation()?.previousNavigation?.finalUrl;
@@ -112,13 +116,18 @@ export class App implements OnInit {
         heading.toggleAttribute('data-keyboard-focus', keyboard);
         heading.focus({ preventScroll: true });
       }
-      this.routeAnnouncement.set(`${heading.textContent?.trim()} page opened.`);
+      this.routeAnnouncement.set(translate('{0} page opened.', [heading.textContent?.trim()]));
     }, { injector: this.injector });
   }
 
   skipToContent(event: MouseEvent): void {
     event.preventDefault();
     this.document.getElementById('task')?.focus();
+  }
+
+  protected pointerInput(): void {
+    // Returning false from a host listener cancels the mouse event CDK dragging needs.
+    this.keyboardInput = false;
   }
 
   shortcut(event: KeyboardEvent): void {

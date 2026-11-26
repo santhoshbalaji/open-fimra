@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { HlmInput } from '@spartan-ng/helm/input';
 import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
@@ -9,7 +10,7 @@ import { AuthService } from './auth';
 import { ForestClass } from './detections';
 import { ExportJob } from './export-dialog-job';
 import { ExportFormat, ExportJobs, ExportKind, ExportRequest, allClasses, decisions, exportFormats, exportReview, exportStates } from './export-dialog-jobs';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 import { StatusBadge } from './ui/status-badge';
 
 @Component({
@@ -18,6 +19,7 @@ import { StatusBadge } from './ui/status-badge';
   templateUrl: './export-dialog.html'
 })
 export class ExportDialog {
+  protected readonly msg = translate;
   /** The workspace's API address, ending in /api/v1/workspaces/{slug}. */
   readonly endpoint = input.required<string>();
   readonly hours = input.required<number>();
@@ -97,8 +99,8 @@ export class ExportDialog {
   });
   protected readonly countLabel = computed(() => {
     const count = this.count();
-    if (count !== null) return defaultWorkspaceFormat.number(count);
-    return this.countFailed() ? 'Could not count matching rows.' : 'Counting…';
+    if (count !== null) return workspaceFormat.number(count);
+    return this.countFailed() ? translate('Could not count matching rows.') : translate('Counting…');
   });
   protected readonly countFailed = computed(() => {
     const result = this.countResult();

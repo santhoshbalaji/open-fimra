@@ -1,26 +1,25 @@
 <div class="mx-auto max-w-[560px] px-4 py-4 sm:py-10">
   <section hlmCard class="overflow-visible!" aria-labelledby="bootstrap-heading">
     <p class="px-6 text-sm font-semibold text-muted-foreground max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:border-b max-sm:border-border max-sm:bg-card max-sm:py-2">
-      Step 1 of 7: Workspace
+      {{ msg('Step 1 of 7: Workspace') }}
     </p>
     <hlm-card-header>
-      <h1 hlmCardTitle id="bootstrap-heading" class="text-display!">Set up Open FIMRA</h1>
-      <p hlmCardDescription class="leading-normal">Create your workspace and become its first administrator. Find the setup code
-        in the server log or ask the system operator for it.</p>
+      <h1 hlmCardTitle id="bootstrap-heading" class="text-display!">{{ msg('Set up Open FIMRA') }}</h1>
+      <p hlmCardDescription class="leading-normal">{{ msg('Create your workspace and become its first administrator. Find the setup code in the server log or ask the system operator for it.') }}</p>
     </hlm-card-header>
     <form hlmCardContent #form class="grid gap-4" novalidate (submit)="$event.preventDefault(); submit(form)">
       @if (error()) {
         <div role="alert">
           @if (codeError()) {
-            <fimra-field-error-summary heading="Check the setup code" [errors]="[{ fieldId: 'setup-code', message: codeError() }]" />
+            <fimra-field-error-summary [heading]=" msg('Check the setup code') " [errors]="[{ fieldId: 'setup-code', message: codeError() }]" />
           } @else {
-            <div hlmAlert variant="destructive"><p hlmAlertDescription>{{ error() }}</p></div>
+            <div hlmAlert variant="destructive"><p hlmAlertDescription>{{ msg(error()) }}</p></div>
           }
         </div>
       }
       <fieldset class="grid min-w-0 gap-4" [disabled]="busy() || saved()">
         <hlm-field>
-          <label hlmFieldLabel for="setup-code">Setup code</label>
+          <label hlmFieldLabel for="setup-code">{{ msg('Setup code') }}</label>
           <div class="flex gap-2">
             <input hlmInput id="setup-code" name="setupCode" required autocomplete="one-time-code" spellcheck="false" maxlength="64"
               autocapitalize="characters" [type]="showCode() ? 'text' : 'password'" class="min-w-0 font-mono tracking-wide"
@@ -28,51 +27,50 @@
             <button hlmBtn type="button" variant="outline" class="shrink-0" aria-controls="setup-code"
               [attr.aria-pressed]="showCode()" (click)="showCode.set(!showCode())">
               @if (showCode()) { <svg fimraIcon="eye-off" aria-hidden="true"></svg> } @else { <svg fimraIcon="eye" aria-hidden="true"></svg> }
-              Show<span class="sr-only"> setup code</span>
+              {{ msg('Show') }}<span class="sr-only"> {{ msg('setup code') }}</span>
             </button>
           </div>
-          <p hlmFieldDescription id="setup-code-help">Four groups of letters and digits, such as ABCD-EFGH-JKMN-PQRS.</p>
+          <p hlmFieldDescription id="setup-code-help">{{ msg('Four groups of letters and digits, such as ABCD-EFGH-JKMN-PQRS.') }}</p>
         </hlm-field>
 
         <fieldset hlmFieldSet class="min-w-0 gap-3">
-          <legend hlmFieldLegend variant="label">Mode</legend>
+          <legend hlmFieldLegend variant="label">{{ msg('Mode') }}</legend>
           <hlm-radio-group name="mode" value="state" class="gap-2">
             <label hlmLabel class="items-start rounded-control border border-border p-3 font-normal leading-normal has-data-[checked=true]:border-primary">
               <hlm-radio value="state"><hlm-radio-indicator indicator /></hlm-radio>
-              <span class="grid gap-0.5"><span class="font-medium">State</span>
-                <span class="text-muted-foreground">One state forest department on this installation.</span></span>
+              <span class="grid gap-0.5"><span class="font-medium">{{ msg('State') }}</span>
+                <span class="text-muted-foreground">{{ msg('One state forest department on this installation.') }}</span></span>
             </label>
             <label hlmLabel class="national-mode items-start rounded-control border border-dashed border-border p-3 font-normal leading-normal">
               <hlm-radio value="national" disabled aria-describedby="national-help"><hlm-radio-indicator indicator /></hlm-radio>
-              <span class="grid gap-1"><span class="flex flex-wrap items-center gap-2 font-medium">National
-                <span hlmBadge variant="outline"><svg fimraIcon="lock" aria-hidden="true" class="size-3"></svg>Not available yet</span></span>
-                <span id="national-help" class="text-muted-foreground">Not available yet. Phase 1 supports one state per installation.</span></span>
+              <span class="grid gap-1"><span class="flex flex-wrap items-center gap-2 font-medium">{{ msg('National') }}
+                <span hlmBadge variant="outline"><svg fimraIcon="lock" aria-hidden="true" class="size-3"></svg>{{ msg('Not available yet') }}</span></span>
+                <span id="national-help" class="text-muted-foreground">{{ msg('Not available yet. Phase 1 supports one state per installation.') }}</span></span>
             </label>
           </hlm-radio-group>
         </fieldset>
 
         <hlm-field>
-          <label hlmFieldLabel for="workspace-name">Workspace name</label>
+          <label hlmFieldLabel for="workspace-name">{{ msg('Workspace name') }}</label>
           <input hlmInput #name id="workspace-name" name="workspaceName" required maxlength="120" (input)="nameChanged(name.value)"
-            placeholder="Demo State">
+            [placeholder]=" msg('Demo State') ">
         </hlm-field>
         <hlm-field>
-          <label hlmFieldLabel for="workspace-slug">Workspace address</label>
+          <label hlmFieldLabel for="workspace-slug">{{ msg('Workspace address') }}</label>
           <input hlmInput id="workspace-slug" name="workspaceSlug" required maxlength="40" pattern="[a-z0-9][a-z0-9\-]*" [value]="slug()"
             (input)="slugEdited.set(true); slug.set($any($event.target).value)">
-          <p hlmFieldDescription>Lowercase letters, numbers and hyphens. It appears in links and cannot be changed later.</p>
+          <p hlmFieldDescription>{{ msg('Lowercase letters, numbers and hyphens. It appears in links and cannot be changed later.') }}</p>
         </hlm-field>
         <hlm-field>
-          <label hlmFieldLabel for="state-code">State code</label>
+          <label hlmFieldLabel for="state-code">{{ msg('State code') }}</label>
           <input hlmInput id="state-code" name="stateCode" required maxlength="40" pattern="[A-Za-z0-9]([A-Za-z0-9_\-]*[A-Za-z0-9])?"
             placeholder="DS" class="sm:max-w-48">
-          <p hlmFieldDescription>The code of the state in your boundary file, in its code column. The state boundary you
-            upload later must use the same code.</p>
+          <p hlmFieldDescription>{{ msg('The code of the state in your boundary file, in its code column. The state boundary you upload later must use the same code.') }}</p>
         </hlm-field>
       </fieldset>
       <div class="flex flex-wrap items-center gap-3 max-sm:sticky max-sm:bottom-0 max-sm:-mx-6 max-sm:border-t max-sm:border-border max-sm:bg-card max-sm:px-6 max-sm:py-2">
-        <button hlmBtn type="submit" [disabled]="busy() || saved()">Start setup</button>
-        <fimra-live-status [message]="busy() ? 'Saving…' : saved() ? 'Workspace saved.' : ''" />
+        <button hlmBtn type="submit" [disabled]="busy() || saved()">{{ msg('Start setup') }}</button>
+        <fimra-live-status [message]="busy() ? msg('Saving…') : saved() ? msg('Workspace saved.') : ''" />
       </div>
     </form>
   </section>

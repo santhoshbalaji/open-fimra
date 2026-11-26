@@ -1,6 +1,7 @@
+import { translate } from './language';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { detectionSeriesColors, type DetectionSeries } from './dashboard.series';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 @Component({
   selector: 'fimra-class-chart',
@@ -21,14 +22,15 @@ import { defaultWorkspaceFormat } from './workspace-format';
       }
     </ul>
     <p class="mt-3 flex justify-between gap-2 border-t border-divider pt-2 text-body font-semibold">
-      <span>Total detections</span><span class="tabular-nums">{{ number(total()) }}</span>
+      <span>{{ msg('Total detections') }}</span><span class="tabular-nums">{{ number(total()) }}</span>
     </p>
   `
 })
 export class ClassChart {
+  protected readonly msg = translate;
   readonly rows = input.required<readonly DetectionSeries[]>();
   protected readonly colors = detectionSeriesColors;
   protected readonly total = computed(() => this.rows().reduce((total, row) => total + row.count, 0));
   protected readonly maximum = computed(() => Math.max(1, ...this.rows().map(row => row.count)));
-  protected readonly number = defaultWorkspaceFormat.number;
+  protected readonly number = workspaceFormat.number;
 }

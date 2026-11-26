@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -15,13 +16,14 @@ import { LiveStatus } from '../ui/live-status';
       <img class="max-h-64 max-w-full rounded-control object-contain" [src]="source" [alt]="field() + ', ' + label()">
     }
     <button hlmBtn type="button" variant="link" size="sm" class="h-auto px-0 py-1"
-      [disabled]="busy()" (click)="download()" [attr.aria-label]="'Download ' + label() + ' for ' + field()">
-      Download {{ label() }}
+      [disabled]="busy()" (click)="download()" [attr.aria-label]="msg('Download ') + label() + msg(' for ') + field()">
+      {{ msg('Download {0}', [label()]) }}
     </button>
     <fimra-live-status class="block text-label text-text-secondary" [message]="message()" />
   `
 })
 export class StoredFormAttachment {
+  protected readonly msg = translate;
   readonly workspaceUrl = input.required<string>();
   readonly fileId = input.required<string>();
   readonly kind = input.required<'photo' | 'file' | 'signature'>();

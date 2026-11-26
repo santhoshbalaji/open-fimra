@@ -240,7 +240,7 @@ describe('Detection map', () => {
     const button = html.querySelector('.row-open')!;
     expect(button.textContent?.trim()).toBe('Beat 05 · Alert #14');
     expect(button.getAttribute('aria-label')).toBeNull();
-    expect(button.nextElementSibling?.textContent).toMatch(/Overdue.*ago.*Next step: Acknowledged/);
+    expect(button.nextElementSibling?.textContent).toMatch(/Overdue.*ago.*Next step: Acknowledge alert/);
     expect(html.querySelector('.compact-alerts li .step-meta')?.textContent).toContain('New');
     http.verify();
   });

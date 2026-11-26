@@ -4,21 +4,20 @@
   "id": "final-report",
   "version": 1,
   "title": { "en": "Final report", "hi": "अंतिम रिपोर्ट" },
-  "description": {
-    "en": "The full record of the fire once it is out: the burnt area, the damage and the documents. A supervising officer checks it before verifying the alert."
-  },
+  "description": { "en": "The full record of the fire once it is out: the burnt area, the damage and the documents. A supervising officer checks it before verifying the alert.", "hi": "आग बुझने के बाद का पूरा विवरण, जिसमें जला क्षेत्र, नुकसान और दस्तावेज़ शामिल हैं। अलर्ट की पुष्टि करने से पहले प्रभारी अधिकारी इसे जाँचते हैं।" },
+  "languages": ["en", "hi"],
   "sections": [
     {
       "key": "incident",
-      "title": { "en": "The fire" },
+      "title": { "en": "The fire", "hi": "आग का विवरण" },
       "items": [
-        { "key": "alert_id", "type": "alert-value", "label": { "en": "Alert number" }, "source": "alert-id" },
-        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at" }, "source": "observed-at" },
-        { "key": "extinguished_at", "type": "date-time", "label": { "en": "Fire put out at" }, "required": true, "notInFuture": true },
+        { "key": "alert_id", "type": "alert-value", "label": { "en": "Alert number", "hi": "अलर्ट संख्या" }, "source": "alert-id" },
+        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at", "hi": "उपग्रह ने कब देखा" }, "source": "observed-at" },
+        { "key": "extinguished_at", "type": "date-time", "label": { "en": "Fire put out at", "hi": "आग बुझाने का समय" }, "required": true, "notInFuture": true },
         {
           "key": "duration_hours",
           "type": "calculated",
-          "label": { "en": "Hours from the alert to putting the fire out" },
+          "label": { "en": "Hours from the alert to putting the fire out", "hi": "अलर्ट से आग बुझने तक लगे घंटे" },
           "unit": "h",
           "decimals": 1,
           "calculate": { "op": "hours-between", "start": "observed_at", "end": "extinguished_at" }
@@ -27,31 +26,31 @@
     },
     {
       "key": "burnt",
-      "title": { "en": "Burnt area" },
+      "title": { "en": "Burnt area", "hi": "जला हुआ क्षेत्र" },
       "items": [
         {
           "key": "burnt_extent",
           "type": "polygon",
-          "label": { "en": "Edge of the burnt area" },
-          "hint": { "en": "Draw the edge on the map, or walk it with the phone." },
+          "label": { "en": "Edge of the burnt area", "hi": "जले हुए क्षेत्र की सीमा" },
+          "hint": { "en": "Draw the edge on the map, or walk it with the phone.", "hi": "नक्शे पर सीमा बनाएँ या फ़ोन लेकर सीमा के साथ पैदल चलें।" },
           "required": true,
           "maxAccuracyMetres": 20
         },
-        { "key": "perimeter_walk", "type": "track", "label": { "en": "Route walked around the fire" }, "maxAccuracyMetres": 20 },
+        { "key": "perimeter_walk", "type": "track", "label": { "en": "Route walked around the fire", "hi": "जले क्षेत्र के चारों ओर पैदल तय किया गया रास्ता" }, "maxAccuracyMetres": 20 },
         {
           "key": "compartments",
           "type": "repeat",
-          "title": { "en": "Compartments affected" },
-          "itemLabel": { "en": "Compartment" },
+          "title": { "en": "Compartments affected", "hi": "प्रभावित वन कक्ष" },
+          "itemLabel": { "en": "Compartment", "hi": "वन कक्ष" },
           "items": [
-            { "key": "compartment_name", "type": "text", "label": { "en": "Compartment" }, "required": true, "maxLength": 40 },
-            { "key": "compartment_area", "type": "number", "label": { "en": "Area burnt in it" }, "unit": "ha", "decimals": 2, "min": 0 }
+            { "key": "compartment_name", "type": "text", "label": { "en": "Compartment", "hi": "वन कक्ष" }, "required": true, "maxLength": 40 },
+            { "key": "compartment_area", "type": "number", "label": { "en": "Area burnt in it", "hi": "इसमें जला क्षेत्र" }, "unit": "ha", "decimals": 2, "min": 0 }
           ]
         },
         {
           "key": "compartment_total",
           "type": "calculated",
-          "label": { "en": "Total of the compartment areas" },
+          "label": { "en": "Total of the compartment areas", "hi": "वन कक्षों में कुल जला क्षेत्र" },
           "unit": "ha",
           "decimals": 2,
           "calculate": { "op": "sum", "group": "compartments", "field": "compartment_area" }
@@ -60,26 +59,26 @@
     },
     {
       "key": "damage",
-      "title": { "en": "Damage" },
+      "title": { "en": "Damage", "hi": "नुकसान" },
       "items": [
         {
           "key": "damage_types",
           "type": "multiple-choice",
-          "label": { "en": "What was damaged" },
+          "label": { "en": "What was damaged", "hi": "किसे नुकसान हुआ" },
           "required": true,
           "choices": [
-            { "key": "trees", "label": { "en": "Standing trees" } },
-            { "key": "regeneration", "label": { "en": "Young plants" } },
-            { "key": "wildlife", "label": { "en": "Wildlife" } },
-            { "key": "grassland", "label": { "en": "Grassland" } },
-            { "key": "property", "label": { "en": "Buildings or other property" } },
-            { "key": "none", "label": { "en": "Nothing" } }
+            { "key": "trees", "label": { "en": "Standing trees", "hi": "खड़े पेड़" } },
+            { "key": "regeneration", "label": { "en": "Young plants", "hi": "छोटे पौधे" } },
+            { "key": "wildlife", "label": { "en": "Wildlife", "hi": "वन्यजीव" } },
+            { "key": "grassland", "label": { "en": "Grassland", "hi": "घास का मैदान" } },
+            { "key": "property", "label": { "en": "Buildings or other property", "hi": "इमारतें या अन्य संपत्ति" } },
+            { "key": "none", "label": { "en": "Nothing", "hi": "कुछ नहीं" } }
           ]
         },
         {
           "key": "wildlife_notes",
           "type": "text",
-          "label": { "en": "What happened to wildlife" },
+          "label": { "en": "What happened to wildlife", "hi": "वन्यजीवों को क्या नुकसान हुआ" },
           "required": true,
           "maxLength": 1000,
           "showWhen": { "op": "includes", "field": "damage_types", "value": "wildlife" }
@@ -87,17 +86,17 @@
         {
           "key": "property_loss",
           "type": "number",
-          "label": { "en": "Estimated loss of property" },
+          "label": { "en": "Estimated loss of property", "hi": "संपत्ति का अनुमानित नुकसान" },
           "unit": "rupees",
           "decimals": 0,
           "min": 0,
           "requireWhen": { "op": "includes", "field": "damage_types", "value": "property" }
         },
-        { "key": "injuries", "type": "number", "label": { "en": "People hurt" }, "unit": "people", "decimals": 0, "min": 0 },
+        { "key": "injuries", "type": "number", "label": { "en": "People hurt", "hi": "घायल लोगों की संख्या" }, "unit": "people", "decimals": 0, "min": 0 },
         {
           "key": "injury_details",
           "type": "text",
-          "label": { "en": "How they were hurt" },
+          "label": { "en": "How they were hurt", "hi": "उन्हें चोट कैसे लगी" },
           "required": true,
           "showWhen": { "op": "more-than", "field": "injuries", "value": 0 }
         }
@@ -105,18 +104,18 @@
     },
     {
       "key": "documents",
-      "title": { "en": "Documents and sign off" },
+      "title": { "en": "Documents and sign off", "hi": "दस्तावेज़ और हस्ताक्षर" },
       "items": [
         {
           "key": "report_files",
           "type": "file",
-          "label": { "en": "Scanned papers" },
+          "label": { "en": "Scanned papers", "hi": "स्कैन किए गए दस्तावेज़" },
           "maxCount": 3,
           "maxSizeMegabytes": 10,
           "accept": [".pdf", ".jpg", ".png"]
         },
-        { "key": "officer_signature", "type": "signature", "label": { "en": "Signature of the range officer" }, "required": true },
-        { "key": "signed_on", "type": "date", "label": { "en": "Signed on" }, "required": true, "notInFuture": true }
+        { "key": "officer_signature", "type": "signature", "label": { "en": "Signature of the range officer", "hi": "वन क्षेत्र अधिकारी के हस्ताक्षर" }, "required": true },
+        { "key": "signed_on", "type": "date", "label": { "en": "Signed on", "hi": "हस्ताक्षर की तारीख" }, "required": true, "notInFuture": true }
       ]
     }
   ]

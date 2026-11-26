@@ -1,3 +1,4 @@
+import { translate } from '../language';
 // The form designer's model: the form format from packages/form-schema, and
 // pure functions that change a form. Every change returns a new form, so
 // the designer can validate and undo by comparing values.
@@ -87,7 +88,7 @@ export const alertSources: readonly { value: string; label: string }[] = [
 ];
 
 export const typeName = (type: string): string =>
-  type === 'section' ? 'Section' : fieldTypes.find(t => t.type === type)?.name ?? type;
+  translate(type === 'section' ? 'Section' : fieldTypes.find(t => t.type === type)?.name ?? type);
 
 export const isContainer = (item: { type?: string }): boolean => item.type === 'group' || item.type === 'repeat';
 

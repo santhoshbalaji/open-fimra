@@ -1,0 +1,624 @@
+{
+  "@@locale": "en",
+  "@addEntry": {
+    "placeholders": {
+      "entry": {
+        "type": "String"
+      }
+    }
+  },
+  "@alertAtPlace": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      },
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "@alertsInArea": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "@answerFormat": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@answerFuture": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@answerInvalid": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@answerMax": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "@answerMin": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "@answerRequired": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@appVersionAndLastContact": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "seen": {
+        "type": "String"
+      }
+    }
+  },
+  "@chooseAnswer": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@confirmRemoveDevice": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "@daysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "@decreaseValue": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@filesSent": {
+    "placeholders": {
+      "sent": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "@forestAndAge": {
+    "placeholders": {
+      "forest": {
+        "type": "String"
+      },
+      "age": {
+        "type": "String"
+      }
+    }
+  },
+  "@hoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "@increaseValue": {
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "@lastSynced": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "@locationAccuracy": {
+    "placeholders": {
+      "accuracy": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "@locationExceptionNote": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "@locationExceptionReason": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "@megawatts": {
+    "placeholders": {
+      "power": {
+        "type": "String"
+      }
+    }
+  },
+  "@minutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "@nearRealTimeProduct": {
+    "placeholders": {
+      "satellite": {
+        "type": "String"
+      }
+    }
+  },
+  "@removeDevice": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "@removeEntry": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "@reportVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "@resumeDraft": {
+    "placeholders": {
+      "report": {
+        "type": "String"
+      }
+    }
+  },
+  "@seenAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "@sentAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverChecksStep": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverName": {
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "@signedInAs": {
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "@standardProduct": {
+    "placeholders": {
+      "satellite": {
+        "type": "String"
+      }
+    }
+  },
+  "@startDraft": {
+    "placeholders": {
+      "report": {
+        "type": "String"
+      }
+    }
+  },
+  "@startReport": {
+    "placeholders": {
+      "report": {
+        "type": "String"
+      }
+    }
+  },
+  "@stepRecorded": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "@stepSavedToSendLater": {
+    "placeholders": {
+      "step": {
+        "type": "String"
+      }
+    }
+  },
+  "@thisPhone": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "@workCouldNotSend": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "@workWaitingToSend": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "account": "Account",
+  "acknowledgeAlert": "Acknowledge alert",
+  "acknowledged": "Acknowledged",
+  "addEntry": "Add {entry}",
+  "addGPSPoint": "Add GPS point",
+  "alertAtPlace": "{place} · Alert #{id}",
+  "alertDetails": "Alert details",
+  "alertMap": "Alert map",
+  "alerts": "Alerts",
+  "alertsInArea": "{count, plural, one{{count} alert} other{{count} alerts}} in the past 7 days · {area}",
+  "all": "All",
+  "androidPhone": "Android phone",
+  "answerFormat": "{field} does not match the expected pattern.",
+  "answerFuture": "{field} cannot be in the future.",
+  "answerInvalid": "Check the answer for {field}.",
+  "answerMax": "{field} can have at most {limit}.",
+  "answerMin": "{field} needs at least {limit}.",
+  "answerRequired": "{field} is required.",
+  "appClientID": "App client ID",
+  "appVersionAndLastContact": "App {version} · last contact {seen}",
+  "approved": "Approved",
+  "areaSaved": "Area saved",
+  "askYourAdministratorToGive": "Ask your administrator to give you a role, then try again.",
+  "attachedFile": "Attached file",
+  "awaitingReview": "Awaiting review",
+  "browserTestBuild": "Browser test build",
+  "cancel": "Cancel",
+  "cannotReachTheServerCheck": "Cannot reach the server. Check the address or try again.",
+  "cannotReadResponse": "The server sent an answer the app cannot read.",
+  "changeAddressFull": "Enter a full address that starts with http:// or https://",
+  "changeAddressQuery": "Leave out anything after ? or #",
+  "changeAddressStart": "The address must start with http:// or https://",
+  "changeWorkspace": "Change workspace",
+  "checkAgain": "Check again",
+  "checkTheseAnswers": "Check these answers",
+  "checkYourConnectionAndTry": "Check your connection and try again.",
+  "checkYourConnectionThenChoose": "Check your connection, then choose Check again.",
+  "chooseAFileSmallerThan": "Choose a file smaller than 25 MB.",
+  "chooseAJPEGPNGWebP": "Choose a JPEG, PNG, WebP, PDF, ZIP, text or CSV file with a short name.",
+  "chooseAnswer": "Choose {field}",
+  "chooseFile": "Choose file",
+  "choosePhoto": "Choose photo",
+  "clear": "Clear",
+  "close": "Close",
+  "closed": "Closed",
+  "colourShowsTimeSinceDetection": "Colour shows time since detection",
+  "confidence": "Confidence",
+  "confirmRemoveDevice": "Remove this {phone}?",
+  "connectToTheInternetAnd": "Connect to the internet and try again.",
+  "connectToTheInternetTo": "Connect to the internet to open this alert.",
+  "connected": "Connected",
+  "connecting": "Connecting",
+  "controlled": "Controlled",
+  "controlledBurn": "Controlled burn",
+  "coreAPIAddress": "Core API address",
+  "couldNotConnect": "Could not connect",
+  "couldNotFindYourLocation": "Could not find your location. Try again outside.",
+  "couldNotLoadAlerts": "Could not load alerts",
+  "couldNotLoadTheForms": "Could not load the forms",
+  "couldNotLoadTheTimeline": "Could not load the timeline",
+  "couldNotLoadYourPhones": "Could not load your phones",
+  "couldNotLoadYourWorkspaces": "Could not load your workspaces",
+  "couldNotOpenTheFile": "Could not open the file. Try again.",
+  "couldNotOpenTheReport": "Could not open the report.",
+  "couldNotReadSavedWork": "Could not read saved work.",
+  "couldNotReadYourLocation": "Could not read your location. Try again.",
+  "couldNotRecordYourLocation": "Could not record your location. Try again.",
+  "couldNotSaveThisReport": "Could not save this report on the phone. Try again.",
+  "couldNotSaveThisStep": "Could not save this step on the phone.",
+  "couldNotSaveThisStep2": "Could not save this step. Check your location and try again.",
+  "couldNotSaveUpdates": "Could not save updates on this phone.",
+  "couldNotSaveYourDraft": "Could not save your draft on this phone. Try again.",
+  "couldNotSaveYourDraft2": "Could not save your draft on this phone.",
+  "couldNotSend": "Could not send",
+  "dataDeleted": "Data deleted",
+  "daysAgo": "{count, plural, one{{count} day ago} other{{count} days ago}}",
+  "decreaseValue": "Decrease {field}",
+  "demoData": "Demo data",
+  "details": "Details",
+  "dismiss": "Dismiss",
+  "divisionOfficer": "Division officer",
+  "draftSavedOnThisPhone": "Draft saved on this phone",
+  "drawArea": "Draw area",
+  "drawSignature": "Draw signature",
+  "drawYourSignature": "Draw your signature",
+  "duplicate": "Duplicate",
+  "eachSignInOnA": "Each sign-in on a phone is listed. Remove a phone you no longer use.",
+  "enterTheClientID": "Enter the client ID",
+  "extinguished": "Extinguished",
+  "falseAlarm": "False alarm",
+  "fieldApp": "Field app",
+  "fieldReport": "Field report",
+  "fieldStaff": "Field staff",
+  "filesSent": "{sent} of {total} files sent",
+  "finalReport": "Final report",
+  "fireAlertsChannel": "Fire alerts",
+  "fireAlertsChannelDescription": "New fire alerts for your area",
+  "fireStrength": "Fire strength",
+  "firstReport": "First report",
+  "firstReportActionName": "first report",
+  "fixedHeatSource": "Fixed heat source",
+  "forSupervisingOfficersAReason": "For supervising officers. A reason is required.",
+  "forestAndAge": "{forest}, seen {age}",
+  "forestClass": "Forest class",
+  "formLanguage": "Form language",
+  "giveAReasonForRecording": "Give a reason for recording this step without your location.",
+  "high": "High",
+  "hoursAgo": "{count, plural, one{{count} hour ago} other{{count} hours ago}}",
+  "increaseValue": "Increase {field}",
+  "insideForest": "Inside forest",
+  "installAUnifiedPushAppSuch": "Install a UnifiedPush app such as ntfy and connect it to your department's push server. Then choose Check again.",
+  "iphone": "iPhone",
+  "itStopsGettingNotificationsAt": "It stops getting notifications at once and is signed out the next time it connects. To delete its data as well, ask your administrator to wipe it.",
+  "justNow": "just now",
+  "language": "Language",
+  "languageSelfName": "English",
+  "lastSynced": "Last synced {time}",
+  "loading": "Loading",
+  "location": "Location",
+  "locationAccessIsOffAllow": "Location access is off. Allow location access and try again.",
+  "locationAccuracy": "Location is only accurate to {accuracy} m. Wait for a fix within {target} m.",
+  "locationExceptionNote": "Location exception · {reason}",
+  "locationExceptionReason": "Location exception: {reason}",
+  "locationIsSwitchedOffSwitch": "Location is switched off. Switch it on and try again.",
+  "low": "Low",
+  "manualFireReport": "Manual fire report",
+  "map": "Map",
+  "mapKey": "Map key",
+  "mapOfYourAreaWith": "Map of your area with fire detections",
+  "markControlled": "Mark controlled",
+  "markExtinguished": "Mark extinguished",
+  "markReached": "Mark reached",
+  "markTeamSent": "Mark team sent",
+  "megawatts": "{power} megawatts",
+  "minutesAgo": "{count, plural, one{{count} minute ago} other{{count} minutes ago}}",
+  "myArea": "My area",
+  "nearAForestBoundary": "Near a forest boundary",
+  "nearRealTimeProduct": "{satellite}, near real time",
+  "nearTheForestEdge": "Near the forest edge",
+  "needsAUnit": "Needs a unit",
+  "newAlert": "New",
+  "newFireAlert": "New fire alert",
+  "newFireAlertsForYour": "New fire alerts for your area appear on this phone. A notification shows no details until you open it in the app.",
+  "newFireAlertsForYour2": "New fire alerts for your area will appear here. Pull down to check again.",
+  "nextAction": "Next action",
+  "noAccess": "You do not have access to this.",
+  "noAlertsInThePast": "No alerts in the past 7 days",
+  "noAnswer": "No answer",
+  "noConnectionSavedWork": "No connection. Saved work stays on this phone.",
+  "noConnectionTryAgainWhen": "No connection. Try again when you have a signal.",
+  "noLocationSaved": "No location saved",
+  "noNotifications": "No notifications",
+  "noPhonesAreRegisteredYet": "No phones are registered yet.",
+  "noReportsDraftsOrSteps": "No reports, drafts or steps in the outbox.",
+  "noUnit": "No unit",
+  "nominal": "Nominal",
+  "notReachable": "Not reachable",
+  "noteOptional": "Note (optional)",
+  "notificationsAndPhones": "Notifications and phones",
+  "notificationsOn": "Notifications on",
+  "offline": "Offline",
+  "offlineSavedAlertsOnThis": "Offline · Saved alerts on this phone",
+  "oneToThreeDays": "1 to 3 days",
+  "openAlert": "Open alert",
+  "otherOutcomes": "Other outcomes",
+  "outsideForest": "Outside forest",
+  "overdue": "Overdue",
+  "overdueFireAlert": "Fire alert overdue",
+  "phone": "Phone",
+  "phoneLanguage": "Phone language",
+  "product": "Product",
+  "pushConnecting": "Connecting to your push app",
+  "pushInstall": "Install a push app to get notifications",
+  "pushOffline": "Could not reach the server",
+  "pushOn": "Notifications are on",
+  "pushRefused": "The server cannot send to this phone",
+  "pushUnavailable": "Notifications are not available here",
+  "queue": "Queue",
+  "reachedSite": "Reached site",
+  "readingSavedWork": "Reading saved work",
+  "ready": "Ready",
+  "reason": "Reason",
+  "recordTrack": "Record track",
+  "recordWhileWalkingOrAdd": "Record while walking or add points from your location.",
+  "recordWithoutMyLocation": "Record without my location",
+  "remove": "Remove",
+  "removeAttachment": "Remove attachment",
+  "removeDevice": "Remove {phone}",
+  "removeEntry": "Remove entry {number}",
+  "removeStep": "Remove step",
+  "removeThisStepFromThe": "Remove this step from the outbox?",
+  "removed": "Removed",
+  "reportFiles": "Report files",
+  "reportMap": "Report map",
+  "reportNotFound": "This was not found. It may be outside your area.",
+  "reportSavedToSendLater": "Report saved to send later.",
+  "reportVersion": "Report version {version} · {status}",
+  "reportsWaitingToSend": "Reports waiting to send",
+  "resumeDraft": "Resume {report} draft",
+  "retry": "Retry",
+  "returned": "Returned",
+  "save": "Save",
+  "saveADraftNowFinish": "Save a draft now. Finish the earlier alert steps before sending this report.",
+  "saveDraft": "Save draft",
+  "saveToSendLater": "Save to send later",
+  "savedOnThisPhone": "Saved on this phone",
+  "saving": "Saving",
+  "savingReport": "Saving report",
+  "seenAt": "Seen {time}",
+  "sendWhenConnected": "Send when connected",
+  "sent": "Sent",
+  "sentAt": "Sent {time}",
+  "serverChecksStep": "The server will check the {step} step when it receives the report.",
+  "serverName": "Server: {server}",
+  "serverSettings": "Server settings",
+  "serverTookTooLong": "The server took too long to answer. Try again.",
+  "sessionEnded": "Your session has ended. Sign in again.",
+  "setLocation": "Set location",
+  "shapeShowsTheForestClass": "Shape shows the forest class",
+  "showMoreAlerts": "Show more alerts",
+  "showMyArea": "Show my area",
+  "showMyLocation": "Show my location",
+  "showOnMap": "Show on map",
+  "signIn": "Sign in",
+  "signInAddress": "Sign-in address",
+  "signInAgain": "Sign in again.",
+  "signInAgainBeforeSaving": "Sign in again before saving.",
+  "signInWithYourDepartment": "Sign in with your department account to see the fire alerts in your area.",
+  "signOut": "Sign out",
+  "signOutAndClearThe": "Sign out and clear the outbox?",
+  "signedIn": "Signed in",
+  "signedInAs": "Signed in as {user}",
+  "signedOut": "Signed out",
+  "signingOutDeletesDraftsAnd": "Signing out deletes drafts and work waiting to send.",
+  "sixToTwentyFourHours": "6 to 24 hours",
+  "someoneChangedFirst": "Someone else changed this first. Check the timeline and try again.",
+  "source": "Source",
+  "standardProduct": "{satellite}, standard processing",
+  "startDraft": "Start {report} draft",
+  "startRecording": "Start recording",
+  "startReport": "Start {report}",
+  "stateAdministrator": "State administrator",
+  "stepRecorded": "{step} recorded.",
+  "stepSavedToSendLater": "{step} saved to send later.",
+  "stopRecording": "Stop recording",
+  "syncNow": "Sync now",
+  "syncing": "Syncing",
+  "system": "System",
+  "takePhoto": "Take photo",
+  "tapTheMapOrUse": "Tap the map or use your location.",
+  "tapTheMapToAdd": "Tap the map to add corners, or use your location at each corner.",
+  "teamSent": "Team sent",
+  "technicalDetails": "Technical details",
+  "theAddressTheCoreAPI": "The address the core API trusts as its token issuer",
+  "thePhoneWasRemoved": "The phone was removed.",
+  "theServerDoesNotAccept": "The server does not accept this phone's push app.",
+  "theServerWillConfirmThis": "The server will confirm this step when it receives it.",
+  "thereAreNoStepsYou": "There are no steps you can take on this alert.",
+  "thisBuildOfTheApp": "This build of the app cannot receive notifications. Use the Android app.",
+  "thisDeletesTheSavedNote": "This deletes the saved note and location from this phone. You can record the step again.",
+  "thisDetectionHasNoAlert": "This detection has no alert for you. It may be outside forest.",
+  "thisEndsTheWorkflowFor": "This ends the workflow for this alert.",
+  "thisIsSavedWithYour": "This is saved with your name and the time.",
+  "thisPhone": "{phone} (this phone)",
+  "threeToSevenDays": "3 to 7 days",
+  "timeline": "Timeline",
+  "trackSaved": "Track saved",
+  "tryAgain": "Try again",
+  "underSixHours": "Under 6 hours",
+  "undo": "Undo",
+  "unknown": "Unknown",
+  "useGPS": "Use GPS",
+  "useShape": "Use shape",
+  "useSignature": "Use signature",
+  "useTheBuiltInSettings": "Use the built-in settings",
+  "useTheseToReachA": "Use these to reach a development machine or a test server. Saving signs you out.",
+  "verified": "Verified",
+  "viewFireAlert": "Open the field app to see it.",
+  "waitingForAReport": "Waiting for a report",
+  "waitingForConnection": "Waiting for a connection.",
+  "waitingForSignIn": "Waiting for sign-in",
+  "waitingForYourPushApp": "Waiting for your push app to give this phone an address.",
+  "waitingToDeleteItsData": "Waiting to delete its data",
+  "waitingToSend": "Waiting to send",
+  "walkTheRouteThenStop": "Walk the route, then stop recording.",
+  "willRetryAutomatically": "Will retry automatically",
+  "withLocation": "with location",
+  "workCouldNotSend": "{count} could not send",
+  "workWaitingToSend": "{count} waiting to send",
+  "workspaceSyncPending": "Workspace sync pending",
+  "youHaveNoAccessTo": "You have no access to a workspace yet",
+  "yourCurrentLocationIsSaved": "Your current location is saved with this step. You need to be near the fire.",
+  "yourOwnAreaHasA": "Your own area has a thick outline.",
+  "yourPhones": "Your phones",
+  "zoomIn": "Zoom in",
+  "zoomOut": "Zoom out"
+}

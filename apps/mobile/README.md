@@ -144,3 +144,15 @@ The development realm has a public client, `open-fimra-mobile`, with the authori
 | `tool/generate_tokens.dart` | Writes the theme from `docs/design-system/tokens.json` |
 
 The app icon is drawn from the logo mark in `docs/design-system/logo`. Inter is included under the SIL Open Font License (`assets/fonts/OFL.txt`).
+
+## Interface languages
+
+The field app uses the phone's language when it is supported and otherwise uses
+English. Choose **Language** from the sign-in screen or account menu to save
+another choice on the phone. Forms open in the app's language if their version
+offers it. They can also be read in any other language included in the form.
+
+Interface messages are in `lib/src/l10n/app_en.arb` and
+`lib/src/l10n/app_hi.arb`. Add an ARB file named for the language code to add
+another translation. Flutter generates the message classes when it loads the
+packages. Run `make check` to check the English and Hindi catalogs.

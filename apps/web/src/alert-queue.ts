@@ -1,4 +1,5 @@
 import type { OverlayMatch } from './boundary-overlays';
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AuthService } from './auth';
@@ -10,11 +11,11 @@ import { ShellNavigation } from './shell-navigation';
 import { DashboardFilters } from './dashboard-filters';
 import type { TablePage, TablePosition } from './ui/data-table';
 import type { DataState } from './ui/state-region';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
-export const queueLabels = { unit: 'My area', edge_review: 'Near forest edge', triage: 'Needs a unit' };
+export const queueLabels = { unit: 'My area', edge_review: 'Near a forest boundary', triage: 'Needs a unit' };
 export const alertGroupLabels = { active: 'Active alerts', overdue: 'Overdue alerts', pending_reports: 'Waiting for a report' };
-export const stepLabel = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replaceAll('_', ' ');
+export const stepLabel = (key: string) => translate(key.charAt(0).toUpperCase() + key.slice(1).replaceAll('_', ' '));
 export const alertSortLabels = { newest: 'Newest observation', oldest: 'Oldest observation', overdue: 'Most overdue first' };
 type AlertSort = keyof typeof alertSortLabels;
 type Queue = keyof typeof queueLabels;
@@ -40,7 +41,7 @@ interface Page { items: AlertRow[]; counts: Partial<Record<Queue, number>>; canR
 
 /** Name the place first and distinguish alerts from different observations there. */
 export function alertRowLabel(row: AlertRow, place: string): string {
-  return `${place} · Alert #${row.id}`;
+  return translate('{0} · Alert #{1}', [place, row.id]);
 }
 
 const firstPage: TablePosition = {
@@ -75,7 +76,7 @@ export class AlertQueue {
   readonly status = computed(() => this.navigation?.query().get('status') || '');
   readonly listScope = computed(() => {
     const group = this.group();
-    return [Object.hasOwn(alertGroupLabels, group) ? alertGroupLabels[group as keyof typeof alertGroupLabels] : '',
+    return [Object.hasOwn(alertGroupLabels, group) ? translate(alertGroupLabels[group as keyof typeof alertGroupLabels]) : '',
       stepLabel(this.status())].filter(Boolean).join(' · ');
   });
   private readonly cursor = computed(() => this.navigation ? this.navigation.query().get('cursor') : this.localPosition().cursor);
@@ -114,14 +115,14 @@ export class AlertQueue {
   });
   readonly state = computed<DataState>(() => {
     const saved = this.saved();
-    if (this.failed()) return { kind: 'error', heading: 'Could not load alerts', keepContent: !!saved,
-      detail: saved ? 'Showing the last loaded page.' : undefined };
+    if (this.failed()) return { kind: 'error', heading: translate('Could not load alerts'), keepContent: !!saved,
+      detail: saved ? translate('Showing the last loaded page.') : undefined };
     if (this.loading()) return saved ? {
-      kind: 'stale', heading: 'Refreshing alerts',
-      observedAt: { dateTime: saved.at.toISOString(), label: defaultWorkspaceFormat.dateTime(saved.at) }
-    } : { kind: 'loading', heading: 'Loading alerts' };
+      kind: 'stale', heading: translate('Refreshing alerts'),
+      observedAt: { dateTime: saved.at.toISOString(), label: workspaceFormat.dateTime(saved.at) }
+    } : { kind: 'loading', heading: translate('Loading alerts') };
     return this.table().rows.length || this.table().position.cursor ? { kind: 'ready' } : {
-      kind: 'empty', heading: 'No alerts in this queue', detail: 'Check another queue or change the filters.'
+      kind: 'empty', heading: translate('No alerts in this queue'), detail: translate('Check another queue or change the filters.')
     };
   });
   readonly endpoint = computed(() => {

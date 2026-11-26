@@ -8,18 +8,18 @@
     }
   </button>
   <fimra-live-status class="sr-only" [message]="panel.open() ? '' : unreadMessage()" />
-  <fimra-side-panel #panel="fimraSidePanel" class="inbox" heading="Notifications" [fullHeight]="true">
+  <fimra-side-panel #panel="fimraSidePanel" class="inbox" [heading]=" msg('Notifications') " [fullHeight]="true">
     <div class="notification-body" id="notification-inbox">
       <fimra-live-status class="sr-only" [message]="unreadMessage()" />
       <div class="inbox-actions">
-        <div role="group" aria-label="Filter notifications" class="inbox-filters">
+        <div role="group" [attr.aria-label]=" msg('Filter notifications') " class="inbox-filters">
           <button type="button" hlmBtn [variant]="filter() === 'all' ? 'secondary' : 'ghost'"
-                  [attr.aria-pressed]="filter() === 'all'" [attr.aria-disabled]="busy()" (click)="selectFilter('all')">All</button>
+                  [attr.aria-pressed]="filter() === 'all'" [attr.aria-disabled]="busy()" (click)="selectFilter('all')">{{ msg('All') }}</button>
           <button #unreadFilter type="button" hlmBtn [variant]="filter() === 'unread' ? 'secondary' : 'ghost'"
-                  [attr.aria-pressed]="filter() === 'unread'" [attr.aria-disabled]="busy()" (click)="selectFilter('unread')">Unread</button>
+                  [attr.aria-pressed]="filter() === 'unread'" [attr.aria-disabled]="busy()" (click)="selectFilter('unread')">{{ msg('Unread') }}</button>
         </div>
         <button type="button" hlmBtn variant="outline" [ariaDisabled]="busy() || !count() || state().kind === 'error'"
-                (click)="markAllRead()">Mark all as read</button>
+                (click)="markAllRead()">{{ msg('Mark all as read') }}</button>
       </div>
       <div #list class="notification-list">
         @if (inbox()?.items?.length) {
@@ -29,18 +29,18 @@
                 <div class="notice-title">
                   <a [href]="link(item)" (click)="follow($event, item)">{{ title(item) }}</a>
                   @if (!item.readAt) {
-                    <fimra-status-badge icon="unread" label="Unread" />
+                    <fimra-status-badge icon="unread" [label]=" msg('Unread') " />
                   }
                 </div>
                 <div class="notice-meta">
                   <small>
-                    @if (item.alertId) { <span>{{ labels[item.event] }}</span> }
+                    @if (item.alertId) { <span>{{ msg(labels[item.event]) }}</span> }
                     <time [title]="dateTime(item.createdAt)" [attr.datetime]="item.createdAt">{{ age(item.createdAt) }}</time>
                   </small>
                   @if (!item.readAt) {
                     <button type="button" hlmBtn variant="ghost" size="sm" data-mark-read
-                            [attr.aria-label]="'Mark as read: ' + title(item)"
-                            [attr.aria-disabled]="busy()" (click)="markRead(item)">Mark as read</button>
+                            [attr.aria-label]="msg('Mark as read: ') + title(item)"
+                            [attr.aria-disabled]="busy()" (click)="markRead(item)">{{ msg('Mark as read') }}</button>
                   }
                 </div>
               </li>
@@ -49,7 +49,7 @@
         }
         @if (inbox()?.hasMore) {
           <button #showMore type="button" hlmBtn variant="outline" [attr.aria-disabled]="busy()"
-                  (click)="loadMore()">Show more</button>
+                  (click)="loadMore()">{{ msg('Show more') }}</button>
         }
       </div>
       <fimra-state-region [state]="state()" (retry)="retry()" />

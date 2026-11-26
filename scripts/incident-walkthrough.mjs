@@ -122,7 +122,7 @@ async function checkKeyboardAction(page, context, incident, listResponse) {
   const row = page.locator('[data-incident-id="' + incident.id + '"]');
   await open(page, row);
   const workflow = page.locator('fimra-workflow');
-  const action = workflow.getByRole('button', { name: 'Acknowledged', exact: true });
+  const action = workflow.getByRole('button', { name: 'Acknowledge alert', exact: true });
   await tabTo(page, action);
   await page.keyboard.press('Enter');
   await expect(workflow.getByRole('heading', { name: /Record step.*Acknowledged/ })).toBeFocused();

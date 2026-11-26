@@ -7,15 +7,15 @@
           <p class="text-text-secondary" [attr.lang]="language()">{{ description }}</p>
         }
         @if (preview()) {
-          <p class="text-label text-text-secondary">Version {{ definition()['version'] }}. Preview only.</p>
+          <p class="text-label text-text-secondary">{{ msg('Version {0}. Preview only.', [definition()['version']]) }}</p>
         }
       }
       @if (languages().length > 1) {
         <label class="grid w-fit gap-1 text-label font-medium" [class.presentation-language-inline]="!showHeader()">
-          Language
-          <select hlmInput class="w-auto" [value]="language()" (change)="language.set($any($event.target).value)">
+          {{ msg('Language') }}
+          <select hlmInput class="w-auto" (change)="language.set($any($event.target).value)">
             @for (code of languages(); track code) {
-              <option [value]="code" [attr.lang]="code">{{ languageName(code) }}</option>
+              <option [value]="code" [selected]="language() === code" [attr.lang]="code">{{ languageName(code) }}</option>
             }
           </select>
         </label>
@@ -36,7 +36,7 @@
         </summary>
         <div class="mt-3 grid gap-3">
           @if (preview() && stageName(section); as stage) {
-            <p class="text-label text-text-secondary">Filled in at “<span [attr.lang]="language()">{{ stage }}</span>”.</p>
+            <p class="text-label text-text-secondary">{{ msg('Filled in at “') }}<span [attr.lang]="language()">{{ stage }}</span>”.</p>
           }
           <ng-container *ngTemplateOutlet="containerNotes; context: { $implicit: section }" />
           <ng-container *ngTemplateOutlet="items; context: { $implicit: section.children, path: [], answers: values() }" />
@@ -54,7 +54,7 @@
   }
   @if (preview()) {
     @if (node.node['showWhen']; as rule) {
-      <p class="text-label text-text-secondary">Shown when {{ condition(rule) }}.</p>
+      <p class="text-label text-text-secondary">{{ msg('Shown when {0}.', [condition(rule)]) }}</p>
     }
     @for (message of constraints(node); track message) {
       <p class="text-label text-text-secondary">{{ message }}</p>
@@ -78,11 +78,11 @@
                     <ng-container *ngTemplateOutlet="items; context: { $implicit: node.children, path: entryPath(path, node, $index), answers: entry }" />
                   </fieldset>
                 } @empty {
-                  <p class="text-text-secondary">No entries.</p>
+                  <p class="text-text-secondary">{{ msg('No entries.') }}</p>
                 }
                 @if (preview()) {
                   <button hlmBtn class="justify-self-start" type="button" variant="outline" size="sm" disabled>
-                    Add {{ text(node.node['itemLabel']) || name(node) }}
+                    {{ msg('Add {0}', [text(node.node['itemLabel']) || name(node)]) }}
                   </button>
                 }
               } @else {
@@ -93,20 +93,20 @@
         } @else if (preview()) {
           <fieldset class="grid min-w-0 gap-1" [class.col-span-full]="!half(node)">
             <legend class="font-medium"><span [attr.lang]="language()">{{ name(node) }}</span>
-              @if (node.node['required']) { <span class="text-danger"> (required)</span> }
+              @if (node.node['required']) { <span class="text-danger"> {{ msg('(required)') }}</span> }
             </legend>
             @if (text(node.node['hint']); as hint) {
               <p class="text-label text-text-secondary" [attr.lang]="language()">{{ hint }}</p>
             }
             <ng-container *ngTemplateOutlet="control; context: { $implicit: node }" />
             @if (node.node['showWhen']; as rule) {
-              <p class="text-label text-text-secondary">Shown when {{ condition(rule) }}.</p>
+              <p class="text-label text-text-secondary">{{ msg('Shown when {0}.', [condition(rule)]) }}</p>
             }
             @if (node.node['requireWhen']; as rule) {
-              <p class="text-label text-text-secondary">Required when {{ condition(rule) }}.</p>
+              <p class="text-label text-text-secondary">{{ msg('Required when {0}.', [condition(rule)]) }}</p>
             }
             @if (parent(node); as parentNode) {
-              <p class="text-label text-text-secondary">Choices depend on “<span [attr.lang]="language()">{{ name(parentNode) }}</span>”.</p>
+              <p class="text-label text-text-secondary">{{ msg('Choices depend on “') }}<span [attr.lang]="language()">{{ name(parentNode) }}</span>”.</p>
             }
             @for (message of constraints(node); track message) {
               <p class="text-label text-text-secondary">{{ message }}</p>
@@ -139,13 +139,13 @@
 <ng-template #answerValue let-node let-stored="stored">
   @let coordinates = geometry(stored);
   @if (coordinates.length === 1 && coordinates[0].length === 1) {
-    <p>{{ coordinates[0][0] }} <span class="text-label text-text-secondary">(latitude, longitude)</span></p>
+    <p>{{ coordinates[0][0] }} <span class="text-label text-text-secondary">{{ msg('(latitude, longitude)') }}</span></p>
   } @else if (coordinates.length) {
     <details>
-      <summary class="cursor-pointer rounded-control focus-visible:outline-2 focus-visible:outline-ring">Coordinates (latitude, longitude)</summary>
+      <summary class="cursor-pointer rounded-control focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Coordinates (latitude, longitude)') }}</summary>
       @for (ring of coordinates; track $index) {
         @if (coordinates.length > 1) {
-          <p class="font-medium">{{ $first ? 'Outer boundary' : 'Inner boundary ' + $index }}</p>
+          <p class="font-medium">{{ $first ? msg('Outer boundary') : msg('Inner boundary ') + $index }}</p>
         }
         <ol class="list-decimal pl-6">
           @for (position of ring; track $index) { <li>{{ position }}</li> }
@@ -169,9 +169,9 @@
     }
     @case ('number') {
       <div class="flex flex-wrap items-center gap-2">
-        @if (style === 'stepper') { <button hlmBtn type="button" variant="outline" size="sm" disabled aria-label="Decrease">−</button> }
+        @if (style === 'stepper') { <button hlmBtn type="button" variant="outline" size="sm" disabled [attr.aria-label]="msg('Decrease')">−</button> }
         <input hlmInput class="w-24" type="number" disabled [attr.aria-label]="name(node)">
-        @if (style === 'stepper') { <button hlmBtn type="button" variant="outline" size="sm" disabled aria-label="Increase">+</button> }
+        @if (style === 'stepper') { <button hlmBtn type="button" variant="outline" size="sm" disabled [attr.aria-label]="msg('Increase')">+</button> }
         @if (unit(node); as unit) { <span>{{ unit }}</span> }
       </div>
     }
@@ -183,14 +183,14 @@
     @case ('point') { <ng-container *ngTemplateOutlet="shapeControl; context: { label: 'Pick a position' }" /> }
     @case ('track') { <ng-container *ngTemplateOutlet="shapeControl; context: { label: 'Record a walked track' }" /> }
     @case ('polygon') { <ng-container *ngTemplateOutlet="shapeControl; context: { label: 'Draw an area' }" /> }
-    @case ('photo') { <button hlmBtn class="justify-self-start" type="button" variant="outline" disabled>Add photos</button> }
-    @case ('file') { <button hlmBtn class="justify-self-start" type="button" variant="outline" disabled>Add files</button> }
-    @case ('signature') { <div class="min-h-20 rounded-control border border-border p-2 text-text-secondary">Sign here</div> }
+    @case ('photo') { <button hlmBtn class="justify-self-start" type="button" variant="outline" disabled>{{ msg('Add photos') }}</button> }
+    @case ('file') { <button hlmBtn class="justify-self-start" type="button" variant="outline" disabled>{{ msg('Add files') }}</button> }
+    @case ('signature') { <div class="min-h-20 rounded-control border border-border p-2 text-text-secondary">{{ msg('Sign here') }}</div> }
     @case ('calculated') {
-      <p class="rounded-control bg-muted px-3 py-2 text-text-secondary">Worked out from other answers@if (unit(node); as unit) { ({{ unit }})}</p>
+      <p class="rounded-control bg-muted px-3 py-2 text-text-secondary">{{ msg('Worked out from other answers') }}@if (unit(node); as unit) { ({{ unit }})}</p>
     }
     @case ('alert-value') {
-      <p class="rounded-control bg-muted px-3 py-2 text-text-secondary">From the alert: {{ alertSource(node) }}</p>
+      <p class="rounded-control bg-muted px-3 py-2 text-text-secondary">{{ msg('From the alert: {0}', [msg(alertSource(node))]) }}</p>
     }
   }
 </ng-template>
@@ -201,11 +201,11 @@
 
 <ng-template #choiceControl let-node let-style="style">
   @if (style === 'dropdown') {
-    <select hlmInput disabled [attr.aria-label]="name(node)"><option>Choose one</option></select>
+    <select hlmInput disabled [attr.aria-label]="name(node)"><option>{{ msg('Choose one') }}</option></select>
   }
   @for (group of choiceGroups(node); track $index) {
     @if (group.label) {
-      <p class="text-label text-text-secondary">When the answer is “<span [attr.lang]="language()">{{ group.label }}</span>”</p>
+      <p class="text-label text-text-secondary">{{ msg('When the answer is “') }}<span [attr.lang]="language()">{{ group.label }}</span>”</p>
     }
     @if (style === 'dropdown') {
       <ul class="list-disc pl-6" [attr.lang]="language()">

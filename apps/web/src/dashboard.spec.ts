@@ -97,7 +97,7 @@ describe('Control-room dashboard', () => {
       ['Active alerts', { queue: 'all', group: 'active' }],
       ['Overdue alerts', { queue: 'all', group: 'overdue', alertSort: 'overdue' }],
       ['Waiting for a report', { queue: 'all', group: 'pending_reports' }],
-      ['Near forest edge', { queue: 'edge_review' }],
+      ['Near a forest boundary', { queue: 'edge_review' }],
       ['Controlled', { queue: 'all', status: 'controlled' }],
       ['Acknowledged', { queue: 'all', status: 'acknowledged' }]
     ] as const) {

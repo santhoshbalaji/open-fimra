@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { EMPTY, Subject, catchError, exhaustMap, firstValueFrom, merge, of, tap, timer } from 'rxjs';
@@ -6,7 +7,7 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { classes, ForestClass } from './detections';
 import { WorkspaceService } from './workspace';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 export const exportFormats = {
   xlsx: 'Excel workbook',
@@ -57,28 +58,28 @@ export function exportRequestFromJob(job: ExportStatus): ExportRequest {
     queue: queue ?? undefined, step: step ?? undefined, form: form ?? undefined, decision: decision ?? undefined };
 }
 
-const format = defaultWorkspaceFormat;
+const format = workspaceFormat;
 export const exportDate = (iso: string) => format.dateTime(new Date(iso));
-export const exportPeriod = (hours?: number | null) => hours ? 'Past ' + format.duration(hours * 3600) : 'Any observation date';
-export const decisions: Record<string, string> = { pending: 'Waiting for a decision', approved: 'Approved', returned: 'Returned' };
+export const exportPeriod = (hours?: number | null) => hours ? translate('Past {0}', [format.duration(hours * 3600)]) : translate('Any observation date');
+export const decisions: Record<string, string> = { pending: 'Awaiting review', approved: 'Approved', returned: 'Returned' };
 const queues: Record<string, string> = queueLabels;
 const groups: Record<string, string> = alertGroupLabels;
 
 export function exportReview(request: ExportRequest, queueLabel?: string, formLabel?: string, unitLabel?: string): [string, string][] {
   const rows: [string, string][] = [
-    ['Dataset', datasets[request.kind]],
-    [request.kind === 'submissions' ? 'Received' : 'Observed', exportPeriod(request.hours)],
-    ['Forest class', request.forestClasses.length === allClasses.length ? 'All forest classes' :
-      request.forestClasses.map(value => classes[value]).join(', ')],
-    ['Unit filter', request.unitPath ? unitLabel || 'Units under ' + request.unitPath : 'All units you can see']
+    [translate('Dataset'), translate(datasets[request.kind])],
+    [request.kind === 'submissions' ? translate('Received') : translate('Observed'), exportPeriod(request.hours)],
+    [translate('Forest class'), request.forestClasses.length === allClasses.length ? translate('All forest classes') :
+      request.forestClasses.map(value => translate(classes[value])).join(', ')],
+    [translate('Unit filter'), request.unitPath ? unitLabel || translate('Units under ') + request.unitPath : translate('All units you can see')]
   ];
-  if (request.kind === 'alerts' || request.queue) rows.push(['Queue', request.queue ?
-    queueLabel || queues[request.queue] || request.queue : 'All queues you can see']);
-  if (request.group) rows.push(['Alert filter', groups[request.group] || request.group]);
-  if (request.step) rows.push(['Workflow step', stepLabel(request.step)]);
+  if (request.kind === 'alerts' || request.queue) rows.push([translate('Queue'), request.queue ?
+    translate(queueLabel || queues[request.queue] || request.queue) : translate('All queues you can see')]);
+  if (request.group) rows.push([translate('Alert filter'), translate(groups[request.group] || request.group)]);
+  if (request.step) rows.push([translate('Workflow step'), stepLabel(request.step)]);
   if (request.kind === 'submissions') {
-    rows.push(['Form', request.form ? (formLabel || request.form) + ' (one column per answer)' : 'All forms']);
-    rows.push(['Decision', request.decision ? decisions[request.decision] ?? request.decision : 'All decisions']);
+    rows.push([translate('Form'), request.form ? translate('{0} (one column per answer)', [translate(formLabel || request.form)]) : translate('All forms')]);
+    rows.push([translate('Decision'), request.decision ? translate(decisions[request.decision] ?? request.decision) : translate('All decisions')]);
   }
   return rows;
 }
@@ -92,11 +93,11 @@ export const exportStates = {
 
 export function jobMessage(job: ExportStatus): string {
   const count = job.featureCount ?? job.rowCount;
-  const rows = format.number(count) + (count === 1 ? ' row' : ' rows');
-  if (job.status === 'pending') return 'Preparing ' + rows + '…';
-  if (job.status === 'ready') return rows + '. Available until ' + exportDate(job.expiresAt) + '.';
-  if (job.status === 'expired') return 'This file has expired.';
-  return 'The file could not be prepared.';
+  const rows = translate(count === 1 ? '{0} row' : '{0} rows', [format.number(count)]);
+  if (job.status === 'pending') return translate('Preparing {0}…', [rows]);
+  if (job.status === 'ready') return translate('{0}. Available until {1}.', [rows, exportDate(job.expiresAt)]);
+  if (job.status === 'expired') return translate('This file has expired.');
+  return translate('The file could not be prepared.');
 }
 
 interface ExportContext { subject: string; endpoint: string }
@@ -134,7 +135,7 @@ export class ExportJobs {
   readonly announcement = signal('');
   readonly jurisdiction = computed(() => {
     const names = this.workspace.jurisdictions().map(([, label]) => label);
-    return names.length ? 'Your assigned areas: ' + names.join(', ') : 'Only records your role can see';
+    return names.length ? 'Your assigned areas: ' + names.join(', ') : translate('Only records your role can see');
   });
 
   constructor() {
@@ -214,8 +215,8 @@ export class ExportJobs {
       if (context !== this.context()) return null;
       const response = error as HttpErrorResponse;
       if (response.status === 401) { this.auth.sessionEnded(); return null; }
-      let message = 'The export could not be prepared. Try again.';
-      if (response.status === 403) message = 'Your role cannot export from this workspace.';
+      let message = translate('The export could not be prepared. Try again.');
+      if (response.status === 403) message = translate('Your role cannot export from this workspace.');
       if (response.status === 422 && typeof response.error?.error === 'string') message = response.error.error;
       this.announcement.set(message);
       throw new Error(message);
@@ -244,7 +245,7 @@ export class ExportJobs {
         this.history.set({ context, items: this.items().map(item => item.id === job.id ? toExpired(item) : item) });
         return;
       }
-      throw new Error(response.status === 403 ? 'Your role cannot download this export.' : 'Could not download the file. Try again.');
+      throw new Error(response.status === 403 ? translate('Your role cannot download this export.') : translate('Could not download the file. Try again.'));
     }
   }
 

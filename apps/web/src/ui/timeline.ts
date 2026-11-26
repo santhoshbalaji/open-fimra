@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { translate } from '../language';
 import { HlmButton } from '@spartan-ng/helm/button';
-import { defaultWorkspaceFormat, WorkspaceFormat } from '../workspace-format';
+import { workspaceFormat, WorkspaceFormat } from '../workspace-format';
 
 export interface TimelineEvent {
   id: string;
@@ -23,17 +24,17 @@ let timelineId = 0;
       @if (hasOtherActivity()) {
         <button type="button" hlmBtn variant="outline" class="justify-self-start"
           [attr.aria-controls]="activityId" [attr.aria-expanded]="showAll()" (click)="showAll.set(!showAll())">
-          {{ showAll() ? milestonesLabel() : allActivityLabel() }}
+          {{ msg(showAll() ? milestonesLabel() : allActivityLabel()) }}
         </button>
       }
       @if (visibleEvents().length === 0) {
-        <p class="text-body text-text-secondary">{{ emptyLabel() }}</p>
+        <p class="text-body text-text-secondary">{{ msg(emptyLabel()) }}</p>
       }
       <ol [id]="activityId" role="list" class="grid gap-2">
         @for (event of visibleEvents(); track event.id) {
           <li class="grid gap-1 border-s-2 py-1 ps-3 wrap-anywhere"
             [class.border-action]="event.milestone" [class.border-divider]="!event.milestone">
-            <p class="font-semibold">{{ event.title }}</p>
+            <p class="font-semibold">{{ msg(event.title) }}</p>
             <p class="text-label text-text-secondary">
               <time [attr.datetime]="event.at.toISOString()">{{ format().dateTime(event.at) }}</time>
               <span aria-hidden="true"> · </span>{{ format().age(event.at, now()) }}
@@ -46,9 +47,10 @@ let timelineId = 0;
   `
 })
 export class Timeline {
+  protected readonly msg = translate;
   readonly events = input.required<readonly TimelineEvent[]>();
   readonly now = input.required<Date>();
-  readonly format = input<WorkspaceFormat>(defaultWorkspaceFormat);
+  readonly format = input<Pick<WorkspaceFormat, keyof WorkspaceFormat>>(workspaceFormat);
   readonly milestonesLabel = input('Show milestones');
   readonly allActivityLabel = input('Show all activity');
   readonly emptyLabel = input('No milestones yet.');

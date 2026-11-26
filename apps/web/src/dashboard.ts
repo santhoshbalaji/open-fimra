@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
@@ -14,7 +15,7 @@ import { classes, sourceLabel } from './detections';
 import { FilterFields } from './filter-fields';
 import { decisionLabels } from './forms/form-api';
 import { ShellNavigation } from './shell-navigation';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 import { WorkspaceService } from './workspace';
 import { FilterBar, FilterControls } from './ui/filter-bar';
 import { PageHeader } from './ui/page-header';
@@ -65,6 +66,7 @@ const milestones = [
   templateUrl: './dashboard.html'
 })
 export class Dashboard {
+  protected readonly msg = translate;
   readonly focusFeedHealth = input(false);
   private readonly navigation = inject(ShellNavigation, { optional: true });
   private readonly router = inject(Router);
@@ -93,20 +95,20 @@ export class Dashboard {
   readonly outcomeSteps = outcomeSteps;
   readonly milestones = milestones;
   readonly stepLabel = stepLabel;
-  readonly format = defaultWorkspaceFormat;
+  readonly format = workspaceFormat;
 
   private readonly scopeFilters = inject(ScopeFilters);
   readonly period = computed(() => filterPeriodLabel(this.filters.hours()));
   readonly jurisdiction = computed(() => {
     const name = this.workspace.current()?.name;
     const grants = this.workspace.jurisdictions().map(([, label]) => label);
-    const scope = [name, ...grants.filter(label => label !== name)].filter(Boolean).join(' · ') || 'Your assigned area';
+    const scope = [name, ...grants.filter(label => label !== name)].filter(Boolean).join(' · ') || translate('Your assigned area');
     if (!this.filters.unitPath()) return scope;
     return [name, this.scopeFilters.unitLabel()].filter(Boolean).join(' · ');
   });
   readonly forestScope = computed(() => {
     const forest = this.filters.forestClass();
-    return forest ? classes[forest] : 'All forest classes';
+    return forest ? classes[forest] : translate('All forest classes');
   });
   readonly scope = computed(() => [this.jurisdiction(), this.forestScope(), this.period()].join(' · '));
 
@@ -127,10 +129,10 @@ export class Dashboard {
   readonly feedState = computed<DataState>(() => {
     const data = this.summary();
     if (data?.feedHealthUnavailable) {
-      return { kind: 'error', heading: 'Feed health could not load', detail: 'Detection counts are still available.' };
+      return { kind: 'error', heading: translate('Feed health could not load'), detail: translate('Detection counts are still available.') };
     }
     if (!data?.feedHealth?.length) {
-      return { kind: 'empty', heading: 'No feed data', detail: 'No live feeds have polled yet.' };
+      return { kind: 'empty', heading: translate('No feed data'), detail: translate('No live feeds have polled yet.') };
     }
     return { kind: 'ready' };
   });
@@ -138,14 +140,14 @@ export class Dashboard {
     const data = this.summary();
     if (!data) return '';
     if (!this.canManageFeeds()) return '';
-    if (data.feedHealthUnavailable) return 'Feed health could not load. This window may have missing observations.';
+    if (data.feedHealthUnavailable) return translate('Feed health could not load. This window may have missing observations.');
     const feeds = data.feedHealth;
     if (!feeds) return '';
-    if (!feeds.length) return 'No live feeds have polled yet. This window may have missing observations.';
+    if (!feeds.length) return translate('No live feeds have polled yet. This window may have missing observations.');
     if (feeds.some(feed => feed.status !== 'healthy' || !feed.latestObservationAt || !feed.lastSuccessAt)) {
-      return 'Some feeds are late, quiet, or missing data. This window may have missing observations.';
+      return translate('Some feeds are late, quiet, or missing data. This window may have missing observations.');
     }
-    return this.detectionTotal() === 0 ? 'All monitored feeds are currently reporting.' : '';
+    return this.detectionTotal() === 0 ? translate('All monitored feeds are currently reporting.') : '';
   });
 
   constructor() {
@@ -176,11 +178,11 @@ export class Dashboard {
           if (error.status === 401) this.auth.sessionEnded();
           if (error.status === 403) {
             this.snapshot.set(null);
-            this.state.set({ kind: 'forbidden', heading: 'You do not have access to this dashboard' });
+            this.state.set({ kind: 'forbidden', heading: translate('You do not have access to this dashboard') });
             this.workspace.deny();
           } else {
-            this.state.set({ kind: 'error', heading: 'Dashboard could not refresh',
-              keepContent: !!this.snapshot(), detail: this.snapshot() ? 'Showing the last successful update.' : undefined });
+            this.state.set({ kind: 'error', heading: translate('Dashboard could not refresh'),
+              keepContent: !!this.snapshot(), detail: this.snapshot() ? translate('Showing the last successful update.') : undefined });
           }
           return EMPTY;
         }))
@@ -218,6 +220,6 @@ export class Dashboard {
   }
 
   duration(seconds: number | null | undefined): string {
-    return seconds == null ? 'No data' : this.format.duration(seconds);
+    return seconds == null ? translate('No data') : this.format.duration(seconds);
   }
 }

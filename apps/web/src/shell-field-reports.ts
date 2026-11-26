@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { Component, TemplateRef, ViewEncapsulation, inject, signal, viewChild } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
@@ -15,9 +16,9 @@ import type { PageHeaderSlots } from './ui/page-header';
   template: `
     <ng-template #primary>
       <hlm-dialog #dialog aria-modal="true" aria-describedby="export-summary">
-        <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download" aria-hidden="true"></svg> Export</button>
+        <button hlmBtn variant="outline" hlmDialogTrigger><svg fimraIcon="download" aria-hidden="true"></svg> {{ msg('Export') }}</button>
         <hlm-dialog-content *hlmDialogPortal class="export-dialog" [showCloseButton]="false">
-          <h2 hlmDialogTitle>Export</h2>
+          <h2 hlmDialogTitle>{{ msg('Export') }}</h2>
           @defer (on immediate) {
             <fimra-export-dialog [endpoint]="endpoint()" [hours]="filters.hours()" [forestClass]="filters.forestClass()"
               [unitPath]="filters.unitPath()" [unitLabel]="scopeFilters.unitLabel()" queue="unit" queueLabel="Unit"
@@ -28,7 +29,7 @@ import type { PageHeaderSlots } from './ui/page-header';
       </hlm-dialog>
     </ng-template>
     <div class="shell-list field-report-list" fimraListScroll>
-      <section class="shell-list-body field-report-screen" aria-label="Field reports">
+      <section class="shell-list-body field-report-screen" [attr.aria-label]=" msg('Field reports') ">
         <fimra-submissions [endpoint]="endpoint()" [now]="now()" (filtersChanged)="reportFilters.set($event)" />
       </section>
     </div>
@@ -59,6 +60,7 @@ import type { PageHeaderSlots } from './ui/page-header';
   host: { class: 'block h-full' }
 })
 export class FieldReportScreen extends WorkspaceList implements PageHeaderSlots {
+  protected readonly msg = translate;
   readonly pagePrimary = viewChild<TemplateRef<unknown>>('primary');
   readonly scopeFilters = inject(ScopeFilters);
   readonly filters = inject(DashboardFilters);

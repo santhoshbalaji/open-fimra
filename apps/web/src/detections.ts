@@ -1,3 +1,5 @@
+import { workspaceFormat } from './workspace-format';
+import { language, translate } from './language';
 import type { ExpressionSpecification, MapGeoJSONFeature, RequestParameters, SymbolLayerSpecification } from 'maplibre-gl';
 import symbols from '../../../services/geo-worker/situation-report-symbols.json';
 import { ageColours, mapColours } from './token-values';
@@ -39,7 +41,7 @@ export interface Detection {
 }
 
 export type Places = Record<string, { code?: string; name?: string } | undefined>;
-export interface PlaceLevel { hierarchy: string; depth: number; slug: string; optional?: boolean; labels: { en: string } }
+export interface PlaceLevel { hierarchy: string; depth: number; slug: string; optional?: boolean; labels: Record<string, string> }
 export interface Place { label: string; name: string; code: string }
 
 const fallbackLevels = {
@@ -56,9 +58,11 @@ export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'
     try { places = detection.places ? JSON.parse(detection.places) as Places : {}; } catch { places = {}; }
   } else if (detection.places) places = detection.places;
   const own = levels.filter(level => level.hierarchy === detection.place_hierarchy && level.depth > 0 && (!level.optional || places[level.slug]));
+  const code = language();
+  const base = code.split('-')[0];
   const rows = own.length
-    ? [...own].sort((a, b) => b.depth - a.depth).map(level => ({ slug: level.slug, label: level.labels.en || level.slug }))
-    : Object.entries(fallbackLevels).filter(([slug]) => places[slug]).map(([slug, label]) => ({ slug, label }));
+    ? [...own].sort((a, b) => b.depth - a.depth).map(level => ({ slug: level.slug, label: (level.labels[code] || level.labels[base] || level.labels.en) || translate(level.slug) }))
+    : Object.entries(fallbackLevels).filter(([slug]) => places[slug]).map(([slug, label]) => ({ slug, label: translate(label) }));
   return rows.map(({ slug, label }) => ({ label, name: places[slug]?.name ?? '', code: places[slug]?.code ?? '' }));
 }
 
@@ -66,17 +70,17 @@ const sourceNames: Record<string, string> = { firms: 'NASA FIRMS', manual: 'Manu
 
 /** A readable name for a detection source code. */
 export function sourceLabel(value: string | null | undefined): string {
-  return value ? sourceNames[value] ?? value : 'Unknown';
+  return value ? translate(sourceNames[value] ?? value) : translate('Unknown');
 }
 
 const confidenceWords: Record<string, string> = { l: 'Low', low: 'Low', n: 'Nominal', nominal: 'Nominal', h: 'High', high: 'High' };
 
 /** VIIRS sends l, n or h; MODIS sends a percentage. */
 export function confidenceLabel(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === '') return 'Unknown';
+  if (value === null || value === undefined || value === '') return translate('Unknown');
   const text = String(value).trim();
   const word = confidenceWords[text.toLowerCase()];
-  if (word) return word;
+  if (word) return translate(word);
   return /^\d+(\.\d+)?$/.test(text) ? text + '%' : text;
 }
 
@@ -163,7 +167,8 @@ export function detectionLayer(theme: Theme): SymbolLayerSpecification {
 /** Observation age to the minute, short enough to fit in the map picker. */
 export function detectionAge(seconds: number, now: number): string {
   const minutes = Math.max(0, Math.floor((now / 1000 - seconds) / 60));
-  if (!minutes) return 'Just now';
+  if (!minutes) return translate('Just now');
+  if (language() !== 'en') return translate('{0} ago', [workspaceFormat.duration(minutes * 60)]);
   const parts = [
     [Math.floor(minutes / 1440), 'd'],
     [Math.floor(minutes / 60) % 24, 'h'],
@@ -174,8 +179,5 @@ export function detectionAge(seconds: number, now: number): string {
 
 export function relativeAge(seconds: number, now: number): string {
   const minutes = Math.max(0, Math.floor((now / 1000 - seconds) / 60));
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const [value, unit] = days ? [days, 'day'] : hours ? [hours, 'hour'] : [minutes, 'minute'];
-  return minutes ? value + ' ' + unit + (value === 1 ? '' : 's') + ' ago' : 'Just now';
+  return minutes ? workspaceFormat.age(new Date(seconds * 1000), new Date(now)) : translate('Just now');
 }

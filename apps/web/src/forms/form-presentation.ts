@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -21,6 +22,7 @@ type Answers = Record<string, unknown>;
   host: { class: 'block min-w-0' }
 })
 export class FormPresentation {
+  protected readonly msg = translate;
   readonly definition = input.required<Answers>();
   readonly mode = input.required<'preview' | 'historical'>();
   readonly showHeader = input(true);

@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
@@ -14,6 +15,7 @@ import { StatusBadge } from './ui/status-badge';
   templateUrl: './export-dialog-tray.html'
 })
 export class ExportTray {
+  protected readonly msg = translate;
   protected readonly jobs = inject(ExportJobs);
   protected readonly datasets = datasets;
   protected readonly formats = exportFormats;
@@ -21,11 +23,11 @@ export class ExportTray {
   protected readonly date = exportDate;
   protected readonly selected = signal<string | null>(null);
   protected readonly state = computed<DataState>(() => {
-    if (this.jobs.error()) return { kind: 'error', heading: 'Could not check your exports',
-      detail: 'Retry to get the latest status.', keepContent: true };
-    if (this.jobs.loading()) return { kind: 'loading', heading: 'Loading exports' };
+    if (this.jobs.error()) return { kind: 'error', heading: translate('Could not check your exports'),
+      detail: translate('Retry to get the latest status.'), keepContent: true };
+    if (this.jobs.loading()) return { kind: 'loading', heading: translate('Loading exports') };
     return this.jobs.items().length ? { kind: 'ready' } :
-      { kind: 'empty', heading: 'No exports yet', detail: 'Prepare a file from the alert queue or field reports.' };
+      { kind: 'empty', heading: translate('No exports yet'), detail: translate('Prepare a file from the alert queue or field reports.') };
   });
 
   protected review(job: ExportStatus): [string, string][] {

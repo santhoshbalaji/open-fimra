@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import '../api/models.dart';
+import '../l10n/field_language.dart';
 import '../theme/app_theme.dart';
 import '../theme/status_icons.dart';
 
@@ -12,8 +13,8 @@ class StatusBadge extends StatelessWidget {
 
   factory StatusBadge.step(String label) => StatusBadge(icon: FimraStatusIcon.step, label: label);
 
-  factory StatusBadge.overdue() =>
-      const StatusBadge(icon: FimraStatusIcon.overdue, label: 'Overdue', iconColour: FimraStatus.warning);
+  factory StatusBadge.overdue(BuildContext context) =>
+      StatusBadge(icon: FimraStatusIcon.overdue, label: fieldText(context).overdue, iconColour: FimraStatus.warning);
 
   final IconData icon;
   final String label;
@@ -145,33 +146,35 @@ class MessageView extends StatelessWidget {
   }
 }
 
-final _reportingTime = DateFormat('d MMM y, h:mm', 'en_US');
-
 /// Times use the same reporting zone as the web app, Asia/Kolkata.
-String formatTime(DateTime time) {
+String formatTime(DateTime time, [BuildContext? context]) {
   final ist = time.toUtc().add(const Duration(hours: 5, minutes: 30));
   final period = ist.hour < 12 ? 'am' : 'pm';
-  return '${_reportingTime.format(ist)} $period IST';
+  if (context == null || Localizations.localeOf(context).languageCode == 'en') {
+    return '${DateFormat('d MMM y, h:mm', 'en_IN').format(ist)} $period IST';
+  }
+  return '${DateFormat.yMMMd(Localizations.localeOf(context).toLanguageTag()).add_jm().format(ist)} IST';
 }
 
 final _confidencePercentage = RegExp(r'^\d+(\.\d+)?$');
 
 /// VIIRS sends a confidence category and MODIS sends a percentage.
-String confidenceLabel(String value) {
+String confidenceLabel(String value, [BuildContext? context]) {
+  final messages = context == null ? null : fieldText(context);
   final text = value.trim();
   return switch (text.toLowerCase()) {
-    'l' || 'low' => 'Low',
-    'n' || 'nominal' => 'Nominal',
-    'h' || 'high' => 'High',
-    '' => 'Unknown',
+    'l' || 'low' => messages?.low ?? 'Low',
+    'n' || 'nominal' => messages?.nominal ?? 'Nominal',
+    'h' || 'high' => messages?.high ?? 'High',
+    '' => messages?.unknown ?? 'Unknown',
     _ => _confidencePercentage.hasMatch(text) ? '$text%' : text,
   };
 }
 
-String sourceLabel(String source) => switch (source) {
+String sourceLabel(BuildContext context, String source) => switch (source) {
   'firms' => 'NASA FIRMS',
-  'manual' => 'Manual fire report',
-  'demo' => 'Demo data',
+  'manual' => fieldText(context).manualFireReport,
+  'demo' => fieldText(context).demoData,
   _ => source,
 };
 
@@ -182,27 +185,35 @@ const _satelliteProducts = {
   'MODIS': 'MODIS',
 };
 
-String productLabel(String product) {
+String productLabel(BuildContext context, String product) {
   final separator = product.lastIndexOf('_');
   if (separator == -1) return product;
   final instrument = _satelliteProducts[product.substring(0, separator)];
   return switch (product.substring(separator + 1)) {
-    'NRT' when instrument != null => '$instrument, near real time',
-    'SP' when instrument != null => '$instrument, standard processing',
+    'NRT' when instrument != null => fieldText(context).nearRealTimeProduct(instrument),
+    'SP' when instrument != null => fieldText(context).standardProduct(instrument),
     _ => product,
   };
 }
 
 /// A short age such as "2 hours ago".
-String formatAge(DateTime time, DateTime now) {
+String formatAge(BuildContext context, DateTime time, DateTime now) {
   final age = now.difference(time);
-  if (age.inMinutes < 1) return 'just now';
-  if (age.inMinutes < 60) return _plural(age.inMinutes, 'minute');
-  if (age.inHours < 48) return _plural(age.inHours, 'hour');
-  return _plural(age.inDays, 'day');
+  final messages = fieldText(context);
+  if (age.inMinutes < 1) return messages.justNow;
+  if (age.inMinutes < 60) return messages.minutesAgo(age.inMinutes);
+  if (age.inHours < 48) return messages.hoursAgo(age.inHours);
+  return messages.daysAgo(age.inDays);
 }
 
-String _plural(int n, String unit) => '$n $unit${n == 1 ? '' : 's'} ago';
+String formatNumber(BuildContext context, num number, {int? fractionDigits}) {
+  final format = NumberFormat.decimalPattern(Localizations.localeOf(context).toLanguageTag());
+  if (fractionDigits != null) {
+    format.minimumFractionDigits = fractionDigits;
+    format.maximumFractionDigits = fractionDigits;
+  }
+  return format.format(number);
+}
 
 /// The fire-age step for a detection, as the map tiles count it.
 int fireAgeIndex(DateTime observed, DateTime now) {

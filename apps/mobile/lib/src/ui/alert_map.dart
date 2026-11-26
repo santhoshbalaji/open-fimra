@@ -12,6 +12,7 @@ import '../api/api_client.dart';
 import '../api/models.dart';
 import '../auth/oidc.dart';
 import '../data/field_store.dart';
+import '../l10n/field_language.dart';
 import '../map/map_auth.dart';
 import '../map/map_style.dart';
 import '../theme/app_theme.dart';
@@ -52,9 +53,9 @@ class _AlertMapViewState extends State<AlertMapView> {
       setState(() => _showLocation = true);
       await _controller?.animateCamera(CameraUpdate.newLatLng(LatLng(point.latitude, point.longitude)));
     } on LocationProblem catch (error) {
-      if (mounted) setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = error.message(context));
     } on Exception {
-      if (mounted) setState(() => _problem = 'Could not find your location. Try again outside.');
+      if (mounted) setState(() => _problem = fieldText(context).couldNotFindYourLocation);
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -139,15 +140,17 @@ class _AlertMapViewState extends State<AlertMapView> {
       final alert = await widget.view.services.repository.alertForDetection(_slug, '$id');
       if (!mounted) return;
       if (alert == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('This detection has no alert for you. It may be outside forest.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fieldText(context).thisDetectionHasNoAlert)));
       } else {
         widget.onOpen(alert);
       }
     } on ApiException catch (error) {
       if (mounted) {
-        setState(() => _problem = error.offline ? 'No connection. Try again when you have a signal.' : error.message);
+        setState(
+          () => _problem = error.offline
+              ? fieldText(context).noConnectionTryAgainWhen
+              : fieldProblem(context, error.message),
+        );
       }
     }
   }
@@ -200,7 +203,7 @@ class _AlertMapViewState extends State<AlertMapView> {
             Semantics(
               container: true,
               sortKey: const OrdinalSortKey(1),
-              label: 'Map of your area with fire detections',
+              label: fieldText(context).mapOfYourAreaWith,
               child: MapLibreMap(
                 styleString: jsonEncode(style),
                 initialCameraPosition: CameraPosition(
@@ -245,7 +248,7 @@ class _AlertMapViewState extends State<AlertMapView> {
                     leading: Icon(Icons.error_outline, color: p.danger),
                     title: Text(_problem!),
                     trailing: IconButton(
-                      tooltip: 'Dismiss',
+                      tooltip: fieldText(context).dismiss,
                       icon: const Icon(Icons.close),
                       onPressed: () => setState(() => _problem = null),
                     ),
@@ -280,14 +283,16 @@ class AlertMapControls extends StatelessWidget {
     child: Column(
       spacing: 8,
       children: [
-        if (onZoomIn case final zoomIn?) _MapButton(icon: Icons.add, tooltip: 'Zoom in', onPressed: zoomIn),
-        if (onZoomOut case final zoomOut?) _MapButton(icon: Icons.remove, tooltip: 'Zoom out', onPressed: zoomOut),
+        if (onZoomIn case final zoomIn?)
+          _MapButton(icon: Icons.add, tooltip: fieldText(context).zoomIn, onPressed: zoomIn),
+        if (onZoomOut case final zoomOut?)
+          _MapButton(icon: Icons.remove, tooltip: fieldText(context).zoomOut, onPressed: zoomOut),
         if (onLocate case final locate?)
-          _MapButton(icon: Icons.my_location, tooltip: 'Show my location', onPressed: locate),
-        _MapButton(icon: Icons.center_focus_strong, tooltip: 'Show my area', onPressed: onFit),
+          _MapButton(icon: Icons.my_location, tooltip: fieldText(context).showMyLocation, onPressed: locate),
+        _MapButton(icon: Icons.center_focus_strong, tooltip: fieldText(context).showMyArea, onPressed: onFit),
         _MapButton(
           icon: Icons.info_outline,
-          tooltip: 'Map key',
+          tooltip: fieldText(context).mapKey,
           onPressed: () => showModalBottomSheet<void>(
             context: context,
             useSafeArea: true,
@@ -332,18 +337,24 @@ class MapKey extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final shapes = _KeyGroup(
-      title: 'Shape shows the forest class',
+      title: fieldText(context).shapeShowsTheForestClass,
       entries: [
-        for (final forest in ForestClass.values) (DetectionSymbol(forestClass: forest, size: 20), forest.label),
+        for (final forest in ForestClass.values)
+          (DetectionSymbol(forestClass: forest, size: 20), forestName(context, forest)),
       ],
     );
     final ages = _KeyGroup(
-      title: 'Colour shows time since detection',
+      title: fieldText(context).colourShowsTimeSinceDetection,
       entries: [
         for (var age = 0; age < fireAgeSteps.length; age++)
           (
             DetectionSymbol(forestClass: ForestClass.inside, age: age, size: 20),
-            fireAgeSteps[age][0].toUpperCase() + fireAgeSteps[age].substring(1),
+            [
+              fieldText(context).underSixHours,
+              fieldText(context).sixToTwentyFourHours,
+              fieldText(context).oneToThreeDays,
+              fieldText(context).threeToSevenDays,
+            ][age],
           ),
       ],
     );
@@ -356,9 +367,9 @@ class MapKey extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Semantics(headingLevel: 1, child: Text('Map key', style: text.titleLarge)),
+                child: Semantics(headingLevel: 1, child: Text(fieldText(context).mapKey, style: text.titleLarge)),
               ),
-              OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+              OutlinedButton(onPressed: () => Navigator.of(context).pop(), child: Text(fieldText(context).close)),
             ],
           ),
           Flexible(
@@ -385,7 +396,7 @@ class MapKey extends StatelessWidget {
                         ages,
                       ],
                       const SizedBox(height: 8),
-                      const Text('Your own area has a thick outline.'),
+                      Text(fieldText(context).yourOwnAreaHasA),
                     ],
                   );
                 },

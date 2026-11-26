@@ -5,6 +5,7 @@ import 'package:unifiedpush_android/unifiedpush_android.dart';
 import 'package:unifiedpush_platform_interface/unifiedpush_platform_interface.dart';
 
 import '../api/models.dart';
+import '../l10n/field_language.dart';
 import 'push.dart';
 
 PushService platformPush() =>
@@ -78,16 +79,6 @@ class UnifiedPushService implements PushService {
 /// Shows alert notifications through Android's notification system.
 class SystemNotifier implements AlertNotifier {
   final _plugin = FlutterLocalNotificationsPlugin();
-  static const _channel = AndroidNotificationDetails(
-    'fire-alerts',
-    'Fire alerts',
-    channelDescription: 'New fire alerts for your area',
-    importance: Importance.high,
-    priority: Priority.high,
-    // The lock screen shows that an alert arrived, not which one.
-    visibility: NotificationVisibility.private,
-  );
-
   @override
   Future<void> init(void Function(PushNotice notice) onOpen, {bool askPermission = true}) async {
     await _plugin.initialize(
@@ -105,13 +96,31 @@ class SystemNotifier implements AlertNotifier {
   }
 
   @override
-  Future<void> show(PushNotice notice) => _plugin.show(
-    id: notice.id,
-    title: notice.title,
-    body: notice.body,
-    notificationDetails: const NotificationDetails(android: _channel),
-    payload: notice.toPayload(),
-  );
+  Future<void> show(PushNotice notice) async {
+    final language = await notificationLanguage();
+    final title = switch (notice.title) {
+      'New fire alert' => language.newFireAlert,
+      'Fire alert overdue' => language.overdueFireAlert,
+      _ => notice.title,
+    };
+    await _plugin.show(
+      id: notice.id,
+      title: title,
+      body: notice.body == 'Open the field app to see it.' ? language.viewFireAlert : notice.body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          'fire-alerts',
+          language.fireAlertsChannel,
+          channelDescription: language.fireAlertsChannelDescription,
+          importance: Importance.high,
+          priority: Priority.high,
+          // The lock screen shows that an alert arrived, not which one.
+          visibility: NotificationVisibility.private,
+        ),
+      ),
+      payload: notice.toPayload(),
+    );
+  }
 
   @override
   Future<void> clear() => _plugin.cancelAll();

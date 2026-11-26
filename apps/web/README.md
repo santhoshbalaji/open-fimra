@@ -175,3 +175,19 @@ container with Playwright 1.63.0 installed beside the script. Set `WEB` to
 your seeded development app and `SHOTS` to a mounted folder outside the
 checkout. The check opens the guide, uses the overlays and signs in as the
 demo division officer to capture the map.
+
+## Interface languages
+
+The account menu remembers the interface language for each signed-in user in the
+browser. With no saved choice, the app uses the workspace's configured language,
+then the browser's preferred supported language, then English. Set
+`workspaceLanguages` in `config.json` to a map from workspace addresses to
+language codes, such as `{"demo":"hi"}`.
+
+Angular uses a small runtime catalog so one build supports language switching.
+English messages travel with their screens and the app downloads a translated
+catalog only when it needs it. This keeps the extra language files outside the
+initial 150 kB gzip budget. To add a language, copy `public/locales/en.json` to a
+file named for its language code, translate the values and add the code to
+`languages` in `config.json`. Keep placeholders such as `{0}` in the translation.
+Run `make check` to check that English and Hindi have the same messages.

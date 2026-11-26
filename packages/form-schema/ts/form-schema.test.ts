@@ -52,3 +52,11 @@ test('the exported schema is the published file', () => {
   const published = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'form.schema.json'), 'utf8'));
   assert.deepEqual(formSchema, published);
 });
+
+const starterForms = join(import.meta.dirname, '..', '..', 'starter-pack', 'forms');
+for (const file of jsonFiles(starterForms)) {
+  test(`starter form ${file} passes the TypeScript validator`, () => {
+    const input = readFileSync(join(starterForms, file), 'utf8');
+    assert.deepEqual(validateFormText(input), []);
+  });
+}

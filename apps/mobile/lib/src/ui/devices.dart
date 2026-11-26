@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../device/device_manager.dart';
+import '../l10n/field_language.dart';
 import 'widgets.dart';
 
 /// Whether this phone gets alert notifications, and the user's phones.
@@ -50,14 +51,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove this ${device.platformLabel.toLowerCase()}?'),
-        content: const Text(
-          'It stops getting notifications at once and is signed out the next time it connects. '
-          'To delete its data as well, ask your administrator to wipe it.',
-        ),
+        title: Text(fieldText(context).confirmRemoveDevice((phoneName(context, device)).toString())),
+        content: Text(fieldText(context).itStopsGettingNotificationsAt),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(fieldText(context).cancel)),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(fieldText(context).remove)),
         ],
       ),
     );
@@ -65,12 +63,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await widget.devices.remove(device);
-      messenger.showSnackBar(const SnackBar(content: Text('The phone was removed.')));
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(fieldText(context).thePhoneWasRemoved)));
       await _load();
     } on DeviceActionException {
       return;
     } on ApiException catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(fieldProblem(context, error.message))));
     }
   }
 
@@ -78,7 +78,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications and phones')),
+      appBar: AppBar(title: Text(fieldText(context).notificationsAndPhones)),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -89,9 +89,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
               builder: (context, _) => _ThisPhone(devices: widget.devices, checking: _checking, onCheck: _check),
             ),
             const SizedBox(height: 24),
-            Text('Your phones', style: text.titleMedium),
+            Text(fieldText(context).yourPhones, style: text.titleMedium),
             const SizedBox(height: 4),
-            Text('Each sign-in on a phone is listed. Remove a phone you no longer use.', style: text.bodyMedium),
+            Text(fieldText(context).eachSignInOnA, style: text.bodyMedium),
             const SizedBox(height: 12),
             ..._list(),
           ],
@@ -106,15 +106,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
       return [
         MessageView(
           icon: Icons.cloud_off_outlined,
-          title: 'Could not load your phones',
+          title: fieldText(context).couldNotLoadYourPhones,
           body: problem,
-          action: OutlinedButton(onPressed: _load, child: const Text('Try again')),
+          action: OutlinedButton(onPressed: _load, child: Text(fieldText(context).tryAgain)),
         ),
       ];
     }
     final items = _items;
     if (items == null) return const [Center(child: CircularProgressIndicator())];
-    if (items.isEmpty) return const [Text('No phones are registered yet.')];
+    if (items.isEmpty) return [Text(fieldText(context).noPhonesAreRegisteredYet)];
     return [for (final device in items) _DeviceCard(device: device, onRemove: () => _remove(device))];
   }
 }
@@ -129,16 +129,12 @@ class _ThisPhone extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = devices.pushStatus;
     final body = switch (status) {
-      PushStatus.unsupported => 'This build of the app cannot receive notifications. Use the Android app.',
-      PushStatus.noPushApp =>
-        "Install a UnifiedPush app such as ntfy and connect it to your department's push server. "
-            'Then choose Check again.',
-      PushStatus.waiting => 'Waiting for your push app to give this phone an address.',
-      PushStatus.on =>
-        'New fire alerts for your area appear on this phone. A notification shows no details '
-            'until you open it in the app.',
-      PushStatus.refused => devices.pushProblem ?? "The server does not accept this phone's push app.",
-      PushStatus.offline => devices.pushProblem ?? 'Check your connection, then choose Check again.',
+      PushStatus.unsupported => fieldText(context).thisBuildOfTheApp,
+      PushStatus.noPushApp => fieldText(context).installAUnifiedPushAppSuch,
+      PushStatus.waiting => fieldText(context).waitingForYourPushApp,
+      PushStatus.on => fieldText(context).newFireAlertsForYour,
+      PushStatus.refused => devices.pushProblem ?? fieldText(context).theServerDoesNotAccept,
+      PushStatus.offline => devices.pushProblem ?? fieldText(context).checkYourConnectionThenChoose,
     };
     final on = status == PushStatus.on;
     return Card(
@@ -158,7 +154,7 @@ class _ThisPhone extends StatelessWidget {
             Text(body),
             if (!on && status != PushStatus.unsupported) ...[
               const SizedBox(height: 12),
-              OutlinedButton(onPressed: checking ? null : onCheck, child: const Text('Check again')),
+              OutlinedButton(onPressed: checking ? null : onCheck, child: Text(fieldText(context).checkAgain)),
             ],
           ],
         ),
@@ -182,8 +178,13 @@ class _DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final seen = DateFormat('d MMM y, HH:mm').format(device.lastSeenAt.toLocal());
-    final title = device.current ? '${device.platformLabel} (this phone)' : device.platformLabel;
+    final seen = DateFormat(
+      'd MMM y, HH:mm',
+      Localizations.localeOf(context).toLanguageTag(),
+    ).format(device.lastSeenAt.toLocal());
+    final title = device.current
+        ? fieldText(context).thisPhone((phoneName(context, device)).toString())
+        : phoneName(context, device);
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
@@ -197,17 +198,17 @@ class _DeviceCard extends StatelessWidget {
                 children: [
                   Text(title, style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(height: 2),
-                  Text('App ${device.appVersion} · last contact $seen'),
+                  Text(fieldText(context).appVersionAndLastContact(device.appVersion, seen)),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
                     children: [
-                      StatusBadge(icon: _icon(device.status), label: device.status.label),
+                      StatusBadge(icon: _icon(device.status), label: phoneStatus(context, device.status)),
                       if (device.status == DeviceStatus.active)
                         StatusBadge(
                           icon: device.push ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
-                          label: device.push ? 'Notifications on' : 'No notifications',
+                          label: device.push ? fieldText(context).notificationsOn : fieldText(context).noNotifications,
                         ),
                     ],
                   ),
@@ -217,7 +218,10 @@ class _DeviceCard extends StatelessWidget {
             if (device.status == DeviceStatus.active && !device.current)
               TextButton(
                 onPressed: onRemove,
-                child: Text('Remove', semanticsLabel: 'Remove ${device.platformLabel}'),
+                child: Text(
+                  fieldText(context).remove,
+                  semanticsLabel: fieldText(context).removeDevice((phoneName(context, device)).toString()),
+                ),
               ),
           ],
         ),

@@ -1,26 +1,26 @@
 <ng-template #sortButton let-column>
   <button type="button" hlmBtn variant="ghost" class="sort"
     [attr.aria-disabled]="refreshing() || null" (click)="sortBy(column)">
-    {{ column.label }}
+    {{ msg(column.label) }}
     <svg [fimraIcon]="direction(column) === 'ascending' ? 'arrow-up' : direction(column) === 'descending' ? 'arrow-down' : 'chevron-down'"
       aria-hidden="true" class="size-4 shrink-0"></svg>
     <span class="sr-only">
-      @if (direction(column) === 'ascending') { (sort descending) }
-      @else { (sort ascending) }
+      @if (direction(column) === 'ascending') { {{ msg('(sort descending)') }} }
+      @else { {{ msg('(sort ascending)') }} }
     </span>
   </button>
 </ng-template>
 <ng-template #pickRow let-row>
   <label class="pick">
     <input type="checkbox" [checked]="isSelected(row)" (change)="toggleSelection([row], $any($event.target).checked)">
-    <span class="sr-only">Select <span [attr.lang]="rowLanguage()?.(row) ?? null">{{ rowLabel()(row) }}</span></span>
+    <span class="sr-only">{{ msg('Select') }} <span [attr.lang]="rowLanguage()?.(row) ?? null">{{ rowLabel()(row) }}</span></span>
   </label>
 </ng-template>
 <ng-template #pickPage>
   <label class="pick">
     <input type="checkbox" [checked]="allSelected()" [indeterminate]="pageSelectionCount() > 0 && !allSelected()"
       [disabled]="!page().rows.length" (change)="toggleSelection(page().rows, $any($event.target).checked)">
-    <span [class.sr-only]="!cards()">Select all rows on this page</span>
+    <span [class.sr-only]="!cards()">{{ msg('Select all rows on this page') }}</span>
   </label>
 </ng-template>
 <ng-template #cellValue let-column="column" let-row="row">
@@ -45,14 +45,14 @@
   <div class="grid gap-2">
     <div class="toolbar">
       <details>
-        <summary>Columns<span class="sr-only"> in {{ caption() }}</span></summary>
+        <summary>{{ msg('Columns') }}<span class="sr-only"> {{ msg('in {0}', [caption()]) }}</span></summary>
         <fieldset class="choices">
-          <legend class="sr-only">Visible columns</legend>
+          <legend class="sr-only">{{ msg('Visible columns') }}</legend>
           @for (column of columns(); track column.id) {
             <label>
               <input type="checkbox" [checked]="isVisible(column)" [disabled]="!canHide(column)"
                 (change)="toggleColumn(column)">
-              {{ column.label }}
+              {{ msg(column.label) }}
             </label>
           }
         </fieldset>
@@ -91,7 +91,7 @@
               @for (column of visibleColumns(); track column.id) {
                 @if (!column.rowHeading) {
                   <div>
-                    <dt>{{ column.label }}</dt>
+                    <dt>{{ msg(column.label) }}</dt>
                     <dd><ng-container [ngTemplateOutlet]="cellValue" [ngTemplateOutletContext]="{ column, row }" /></dd>
                   </div>
                 }
@@ -102,7 +102,7 @@
         }
       </ul>
     } @else {
-      <div class="table-scroll" [fimraListScroll]="scrollKey()" role="region" [attr.aria-label]="caption() + ', scrollable table'" tabindex="0">
+      <div class="table-scroll" [fimraListScroll]="scrollKey()" role="region" [attr.aria-label]="caption() + msg(', scrollable table')" tabindex="0">
         <table>
           <caption class="sr-only">{{ caption() }}</caption>
           <thead>
@@ -116,10 +116,10 @@
                 <th scope="col" [attr.aria-sort]="direction(column)">
                   @if (column.sortable) {
                     <ng-container [ngTemplateOutlet]="sortButton" [ngTemplateOutletContext]="{ $implicit: column }" />
-                  } @else { {{ column.label }} }
+                  } @else { {{ msg(column.label) }} }
                 </th>
               }
-              @if (rowActions()) { <th scope="col">Actions</th> }
+              @if (rowActions()) { <th scope="col">{{ msg('Actions') }}</th> }
             </tr>
           </thead>
           <tbody>
@@ -144,12 +144,12 @@
         </table>
       </div>
     }
-    <div role="group" [attr.aria-label]="caption() + ' pages'" class="toolbar">
+    <div role="group" [attr.aria-label]="caption() + msg(' pages')" class="toolbar">
       <button type="button" hlmBtn variant="outline" [ariaDisabled]="!canGoBack()"
-        (click)="previousPage()">Previous</button>
+        (click)="previousPage()">{{ msg('Previous') }}</button>
       <fimra-live-status [message]="pageLabel()" class="text-body text-text-secondary" />
       <button type="button" hlmBtn variant="outline" [ariaDisabled]="!canGoNext()"
-        (click)="nextPage()">Next</button>
+        (click)="nextPage()">{{ msg('Next') }}</button>
     </div>
   </div>
 </fimra-state-region>

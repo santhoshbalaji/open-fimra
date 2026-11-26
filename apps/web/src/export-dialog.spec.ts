@@ -193,7 +193,7 @@ describe('Export dialog and jobs', () => {
     }
     expect(summary.querySelector('[role=status]')?.textContent).toBe('10');
     expect(prepare.disabled).toBe(false);
-    expect(el.textContent).toContain('List filter: Waiting for a decision');
+    expect(el.textContent).toContain('List filter: Awaiting review');
     const decision = el.querySelector<HTMLSelectElement>('#export-decision')!;
     decision.value = 'approved';
     decision.dispatchEvent(new Event('change'));

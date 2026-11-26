@@ -156,7 +156,7 @@ try {
   await page.getByRole('tab', { name: 'Alerts' }).or(page.getByRole('button', { name: 'Alerts' })).first().click();
   await page.setViewportSize({ width: 360, height: 800 });
   await cards.first().click();
-  const acknowledge = page.getByRole('button', { name: 'Acknowledge', exact: true });
+  const acknowledge = page.getByRole('button', { name: 'Acknowledge alert', exact: true });
   const connected = shown(page, 'Connected', true);
   for (const target of [acknowledge, connected]) {
     await target.waitFor();

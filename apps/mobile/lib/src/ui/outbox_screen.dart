@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/field_store.dart';
 import '../data/offline_repository.dart';
+import '../l10n/field_language.dart';
 import 'widgets.dart';
 
 class FieldSyncStatus extends StatelessWidget {
@@ -34,8 +35,10 @@ class FieldSyncStatus extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (waiting > 0) _ReportStatus.waiting('$waiting waiting to send'),
-                  if (alert != null && failed.isNotEmpty) _ReportStatus.failed('${failed.length} could not send'),
+                  if (waiting > 0)
+                    _ReportStatus.waiting(fieldText(context).workWaitingToSend(formatNumber(context, waiting))),
+                  if (alert != null && failed.isNotEmpty)
+                    _ReportStatus.failed(fieldText(context).workCouldNotSend(formatNumber(context, failed.length))),
                 ],
               ),
             ],
@@ -44,7 +47,7 @@ class FieldSyncStatus extends StatelessWidget {
                 tilePadding: EdgeInsets.zero,
                 expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                 leading: const Icon(Icons.error_outline),
-                title: Text('${failed.length} could not send'),
+                title: Text(fieldText(context).workCouldNotSend(formatNumber(context, failed.length))),
                 children: [
                   for (final item in failed)
                     Padding(
@@ -63,7 +66,7 @@ class FieldSyncStatus extends StatelessWidget {
                     ),
                   ),
                   icon: const Icon(Icons.outbox_outlined),
-                  label: const Text('Report outbox'),
+                  label: Text(fieldText(context).reportsWaitingToSend),
                 ),
               ),
           ],
@@ -90,18 +93,21 @@ class _SyncDetails extends StatelessWidget {
           if (repo.offline)
             StatusBadge(
               icon: Icons.cloud_off_outlined,
-              label: showSavedAlerts ? 'Offline · Saved alerts on this phone' : 'Offline',
+              label: showSavedAlerts ? fieldText(context).offlineSavedAlertsOnThis : fieldText(context).offline,
             ),
           StatusBadge(
             icon: Icons.sync,
             label: repo.syncing
-                ? 'Syncing'
+                ? fieldText(context).syncing
                 : synced == null
-                ? 'Workspace sync pending'
-                : 'Last synced ${formatTime(synced)}',
+                ? fieldText(context).workspaceSyncPending
+                : fieldText(context).lastSynced((formatTime(synced, context)).toString()),
           ),
           if (repo.syncing && synced != null)
-            StatusBadge(icon: Icons.schedule, label: 'Last synced ${formatTime(synced)}'),
+            StatusBadge(
+              icon: Icons.schedule,
+              label: fieldText(context).lastSynced((formatTime(synced, context)).toString()),
+            ),
         ],
       ),
     );
@@ -126,10 +132,9 @@ class _ReportStatusBuilder extends StatelessWidget {
 }
 
 class _ReportStatus extends StatusBadge {
-  const _ReportStatus.waiting([String label = 'Waiting to send'])
-    : super(icon: Icons.cloud_upload_outlined, label: label);
-  const _ReportStatus.failed([String label = 'Could not send']) : super(icon: Icons.error_outline, label: label);
-  const _ReportStatus.sent([String label = 'Sent']) : super(icon: Icons.cloud_done_outlined, label: label);
+  const _ReportStatus.waiting(String label) : super(icon: Icons.cloud_upload_outlined, label: label);
+  const _ReportStatus.failed(String label) : super(icon: Icons.error_outline, label: label);
+  const _ReportStatus.sent(String label) : super(icon: Icons.cloud_done_outlined, label: label);
 }
 
 /// The same report state and failure reason on the alert and in the outbox.
@@ -142,25 +147,31 @@ class ReportDelivery extends StatelessWidget {
   Widget build(BuildContext context) {
     final item = this.item;
     if (item?['kind'] == 'draft') {
-      return const StatusBadge(icon: Icons.edit_note, label: 'Draft saved on this phone');
+      return StatusBadge(icon: Icons.edit_note, label: fieldText(context).draftSavedOnThisPhone);
     }
     final received = item?['received_at'] as String?;
     final error = item?['error'] as String?;
-    if (received != null) return _ReportStatus.sent('Sent ${formatTime(DateTime.parse(received))}');
-    if (sent) return const _ReportStatus.sent();
+    if (received != null) {
+      return _ReportStatus.sent(fieldText(context).sentAt(formatTime(DateTime.parse(received), context)));
+    }
+    if (sent) return _ReportStatus.sent(fieldText(context).sent);
     if (item == null) return const SizedBox.shrink();
     final step = item['kind'] == 'step' ? jsonDecode(item['body'] as String) as Json : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const StatusBadge(icon: Icons.phone_android, label: 'Saved on this phone'),
+        StatusBadge(icon: Icons.phone_android, label: fieldText(context).savedOnThisPhone),
         const SizedBox(height: 6),
-        if (error == null || item['retry_at'] != null) const _ReportStatus.waiting() else const _ReportStatus.failed(),
-        if (error != null) Text(error),
-        if ((item['file_count'] as int? ?? 0) > 0) Text("${item['files_sent']} of ${item['file_count']} files sent"),
+        if (error == null || item['retry_at'] != null)
+          _ReportStatus.waiting(fieldText(context).waitingToSend)
+        else
+          _ReportStatus.failed(fieldText(context).couldNotSend),
+        if (error != null) Text(fieldProblem(context, error)),
+        if ((item['file_count'] as int? ?? 0) > 0)
+          Text(fieldText(context).filesSent((item['files_sent']).toString(), (item['file_count']).toString())),
         if (step?['note'] case final String note) Text(note),
-        if (step?['reason'] case final String reason) Text('Location exception · $reason'),
-        if (item['retry_at'] != null) const Text('Will retry automatically'),
+        if (step?['reason'] case final String reason) Text(fieldText(context).locationExceptionNote(reason)),
+        if (item['retry_at'] != null) Text(fieldText(context).willRetryAutomatically),
       ],
     );
   }
@@ -177,11 +188,11 @@ class OutboxScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove this step from the outbox?'),
-        content: const Text('This deletes the saved note and location from this phone. You can record the step again.'),
+        title: Text(fieldText(context).removeThisStepFromThe),
+        content: Text(fieldText(context).thisDeletesTheSavedNote),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(fieldText(context).cancel)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(fieldText(context).remove)),
         ],
       ),
     );
@@ -190,7 +201,7 @@ class OutboxScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Report outbox')),
+    appBar: AppBar(title: Text(fieldText(context).reportsWaitingToSend)),
     body: SafeArea(
       child: _ReportStatusBuilder(
         repo: repo,
@@ -200,23 +211,24 @@ class OutboxScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               _SyncDetails(repo: repo),
-              if (repo.syncProblem case final problem?) StatusBadge(icon: Icons.error_outline, label: problem),
+              if (repo.syncProblem case final problem?)
+                StatusBadge(icon: Icons.error_outline, label: fieldProblem(context, problem)),
               const SizedBox(height: 8),
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: FilledButton.icon(
                   onPressed: repo.syncing ? null : () => repo.sync(retry: true, refresh: true),
                   icon: const Icon(Icons.sync),
-                  label: Text(repo.syncing ? 'Syncing' : 'Sync now'),
+                  label: Text(repo.syncing ? fieldText(context).syncing : fieldText(context).syncNow),
                 ),
               ),
               const SizedBox(height: 12),
               if (snapshot.hasError)
-                const StatusBadge(icon: Icons.error_outline, label: 'Could not read saved work.')
+                StatusBadge(icon: Icons.error_outline, label: fieldText(context).couldNotReadSavedWork)
               else if (!snapshot.hasData)
-                const Center(child: CircularProgressIndicator(semanticsLabel: 'Reading saved work'))
+                Center(child: CircularProgressIndicator(semanticsLabel: fieldText(context).readingSavedWork))
               else if (reports.isEmpty)
-                const Text('No reports, drafts or steps in the outbox.'),
+                Text(fieldText(context).noReportsDraftsOrSteps),
               for (final item in reports)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -237,13 +249,16 @@ class OutboxScreen extends StatelessWidget {
                             if (item['kind'] == 'draft' && onOpenAlert != null)
                               OutlinedButton(
                                 onPressed: () => onOpenAlert!(item['workspace'] as String, item['alert'] as String),
-                                child: const Text('Open alert'),
+                                child: Text(fieldText(context).openAlert),
                               ),
                             if (item['kind'] == 'step' &&
                                 item['received_at'] == null &&
                                 item['error'] != null &&
                                 item['retry_at'] == null)
-                              TextButton(onPressed: () => _remove(context, item), child: const Text('Remove step')),
+                              TextButton(
+                                onPressed: () => _remove(context, item),
+                                child: Text(fieldText(context).removeStep),
+                              ),
                           ],
                         ),
                       ),

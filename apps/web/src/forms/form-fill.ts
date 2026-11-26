@@ -1,3 +1,5 @@
+import { workspaceFormat } from '../workspace-format';
+import { translate } from '../language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -9,7 +11,7 @@ import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, ViewEncapsulation, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import { Component, ViewEncapsulation, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, linkedSignal, untracked, viewChild } from '@angular/core';
 import { AnswerSession, FormTree, readForm, type EntryPath, type Node, type StoredAttachment } from '@open-fimra/form-schema/answers';
 import { FieldErrorSummary } from '../ui/field-error-summary';
 import { LiveStatus } from '../ui/live-status';
@@ -88,6 +90,7 @@ export function toLocalInput(value: unknown): string {
   host: { class: 'form-fill' }
 })
 export class FormFill {
+  protected readonly msg = translate;
   /** The workspace's API address, ending in /api/v1/workspaces/{slug}. */
   readonly workspaceUrl = input.required<string>();
   readonly form = input.required<string>();
@@ -110,7 +113,6 @@ export class FormFill {
   readonly values = signal<Obj>({});
   readonly uploads = signal<Record<string, Upload | null>>({});
   readonly uploading = signal<string | null>(null);
-  readonly language = signal('en');
   readonly page = signal(0);
   readonly tried = signal(false);
   readonly busy = signal(false);
@@ -136,6 +138,7 @@ export class FormFill {
   readonly file = computed(() => this.definition() ?? this.loaded());
   readonly tree = computed<FormTree | null>(() => { const f = this.file(); return f ? readForm(f) : null; });
   readonly languages = computed(() => { const f = this.file(); return f ? formLanguages(f) : ['en']; });
+  readonly language = linkedSignal(() => startLanguage(this.languages()));
   readonly title = computed(() => textIn(this.file()?.['title'], this.language()));
   readonly description = computed(() => textIn(this.file()?.['description'], this.language()));
   readonly stage = computed(() => this.tree()?.stageAt(this.step()) ?? -1);
@@ -207,7 +210,6 @@ export class FormFill {
       const initial = this.initial();
       if (!tree) return;
       untracked(() => {
-        this.language.set(startLanguage(this.languages()));
         this.values.set(this.startValues(tree, initial));
         // Attachments in the starting answers were uploaded earlier for this alert.
         const known: Record<string, Upload | null> = {};
@@ -393,7 +395,7 @@ export class FormFill {
       case 'multiple-choice':
         return (v as string[]).map(k => this.choiceLabel(node, k)).join(', ');
       case 'date-time':
-        return new Date(String(v)).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        return workspaceFormat.dateTime(new Date(String(v)));
       case 'point':
       case 'track':
       case 'polygon': {
@@ -403,11 +405,11 @@ export class FormFill {
       case 'alert-value': {
         const source = node.node['source'];
         if (source === 'location') return positionsOf(v)[0]?.join(', ') ?? '';
-        if (source === 'observed-at' || source === 'raised-at') return new Date(String(v)).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        if (source === 'observed-at' || source === 'raised-at') return workspaceFormat.dateTime(new Date(String(v)));
         return String(v) + (source === 'fire-power' ? ' MW' : '');
       }
     }
-    if (typeof v === 'number') return v.toLocaleString() + (unit ? ' ' + unit : '');
+    if (typeof v === 'number') return workspaceFormat.number(v) + (unit ? ' ' + unit : '');
     return String(v);
   }
 

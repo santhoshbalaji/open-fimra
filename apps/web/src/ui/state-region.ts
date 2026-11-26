@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, input, output } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -40,13 +41,13 @@ const messages = {
             <div>
               <p class="font-medium">{{ message.heading }}</p>
               @if (observedAt(); as time) {
-                <p class="text-text-secondary">Showing data from <time [attr.datetime]="time.dateTime">{{ time.label }}</time>, refreshing.</p>
+                <p class="text-text-secondary">{{ msg('Showing data from') }} <time [attr.datetime]="time.dateTime">{{ time.label }}</time>{{ msg(', refreshing.') }}</p>
               }
               @if (message.detail) { <p class="text-text-secondary">{{ message.detail }}</p> }
             </div>
           </div>
           @if (state().kind === 'error') {
-            <button type="button" hlmBtn variant="outline" (click)="region.focus(); retry.emit()">Retry</button>
+            <button type="button" hlmBtn variant="outline" (click)="region.focus(); retry.emit()">{{ msg('Retry') }}</button>
           }
         </div>
       }
@@ -55,6 +56,7 @@ const messages = {
   `
 })
 export class StateRegion {
+  protected readonly msg = translate;
   readonly state = input.required<DataState>();
   /** An optional decorative skeleton for the initial load. Supply no interactive content. */
   readonly loadingPlaceholder = input<TemplateRef<unknown>>();
@@ -68,7 +70,7 @@ export class StateRegion {
     const fallback = messages[state.kind];
     const detail = state.detail?.trim() ||
       (state.kind === 'error' && state.keepContent ? 'Showing the last available data.' : undefined);
-    return { heading: state.heading?.trim() || fallback.heading, detail, icon: fallback.icon };
+    return { heading: translate(state.heading?.trim() || fallback.heading), detail: detail && translate(detail), icon: fallback.icon };
   });
 
   protected readonly showContent = computed(() => {
@@ -85,8 +87,8 @@ export class StateRegion {
     const message = this.message();
     // The timestamp stays available in the visible message without announcing every change to it.
     const state = this.state();
-    return state.kind === 'ready' ? state.announcement ?? '' :
-      [message?.heading, state.kind === 'stale' ? 'Showing the last available data' : '', message?.detail]
+    return state.kind === 'ready' ? translate(state.announcement ?? '') :
+      [message?.heading, state.kind === 'stale' ? translate('Showing the last available data') : '', message?.detail]
         .filter(Boolean).join('. ');
   });
 }

@@ -1,3 +1,5 @@
+import { textIn } from './form-text';
+import { language, translate } from '../language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, Injector, OnInit, type TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -15,7 +17,7 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Icon } from '../ui/icon';
 import { StatusBadge } from '../ui/status-badge';
 import { WorkspaceService } from '../workspace';
-import { defaultWorkspaceFormat } from '../workspace-format';
+import { workspaceFormat } from '../workspace-format';
 import { FormDesigner, ParentTemplate } from './form-designer';
 import { TemplateRules, sameJSON } from './form-locks';
 import { FormDefinition, blankForm, textOf } from './form-model';
@@ -66,6 +68,8 @@ const formIdPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
   host: { class: 'block h-full overflow-auto' }
 })
 export class FormsScreen implements OnInit {
+  protected readonly localizedTitle = (title: unknown) => textIn(title, language());
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
@@ -83,7 +87,7 @@ export class FormsScreen implements OnInit {
   readonly levels: Level[] = ['national', 'state', 'division'];
   readonly levelWords = levelWords;
   readonly text = textOf;
-  readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
+  readonly dateTime = (value: string) => workspaceFormat.dateTime(new Date(value));
 
   readonly forms = signal<FormSummary[] | null>(null);
   readonly error = signal('');
@@ -140,7 +144,7 @@ export class FormsScreen implements OnInit {
 
   title(form: FormSummary): string {
     const latest = form.versions[form.versions.length - 1];
-    return textOf(latest?.title) || form.form;
+    return textIn(latest?.title, language()) || form.form;
   }
 
   latest(form: FormSummary): VersionSummary | undefined { return form.versions[form.versions.length - 1]; }

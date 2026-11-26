@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { Component, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmDialog, HlmDialogImports } from '@spartan-ng/helm/dialog';
@@ -11,9 +12,9 @@ import { ThemeService } from './theme';
   template: `
     <hlm-dialog [state]="open() ? 'open' : 'closed'" [restoreFocus]="false" (closed)="dialogClosed()" aria-modal="true">
       <hlm-dialog-content *hlmDialogPortal class="shell-palette">
-        <h2 hlmDialogTitle>Search destinations</h2>
-        <p hlmDialogDescription>Use the arrow keys to move, Enter to open and Escape to close.</p>
-        <input hlmInput cdkFocusInitial aria-label="Search destinations" placeholder="Search"
+        <h2 hlmDialogTitle>{{ msg('Search destinations') }}</h2>
+        <p hlmDialogDescription>{{ msg('Use the arrow keys to move, Enter to open and Escape to close.') }}</p>
+        <input hlmInput cdkFocusInitial [attr.aria-label]=" msg('Search destinations') " [placeholder]=" msg('Search') "
                [value]="search()" (input)="search.set($any($event.target).value); index.set(0)"
                (keydown)="key($event)">
         <div class="palette-results">
@@ -22,13 +23,14 @@ import { ThemeService } from './theme';
                     (click)="choose(i)" (focus)="index.set(i)" (keydown)="key($event)">
               {{ result.name }} <span>{{ result.group }}</span>
             </button>
-          } @empty { <p role="status">No matching commands.</p> }
+          } @empty { <p role="status">{{ msg('No matching commands.') }}</p> }
         </div>
       </hlm-dialog-content>
     </hlm-dialog>
   `
 })
 export class ShellPalette {
+  protected readonly msg = translate;
   readonly open = input.required<boolean>();
   readonly closed = output<void>();
   readonly reselected = output<void>();
@@ -48,7 +50,7 @@ export class ShellPalette {
   readonly results = computed(() => {
     const destinations = this.navigation.authorized().map(item => ({ name: item.name, group: item.group, run: () => this.go(item.path) }));
     const search = this.search().trim().toLowerCase();
-    return [...destinations, ...this.actions].filter(item => (item.name + ' ' + item.group).toLowerCase().includes(search));
+    return [...destinations, ...this.actions].map(item => ({ ...item, name: translate(item.name), group: translate(item.group) })).filter(item => (item.name + ' ' + item.group).toLowerCase().includes(search));
   });
   readonly active = computed(() => Math.min(this.index(), this.results().length - 1));
 

@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { Component, computed, effect, input, output, signal } from '@angular/core';
@@ -56,11 +57,11 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
     @if (!disabled()) {
       <div class="shape-actions">
         <button hlmBtn type="button" variant="outline" size="sm" [disabled]="locating()" (click)="addMine()">
-          {{ kind() === 'point' ? 'Use my position' : 'Add my position' }}</button>
+          {{ kind() === 'point' ? msg('Use my position') : msg('Add my position') }}</button>
         @if (kind() === 'point' && alertPoint(); as point) {
-          <button hlmBtn type="button" variant="outline" size="sm" (click)="emit([point])">Use the alert's position</button>
+          <button hlmBtn type="button" variant="outline" size="sm" (click)="emit([point])">{{ msg('Use the alert position') }}</button>
         }
-        @if (positions().length) { <button hlmBtn type="button" variant="ghost" size="sm" (click)="emit([])">Clear</button> }
+        @if (positions().length) { <button hlmBtn type="button" variant="ghost" size="sm" (click)="emit([])">{{ msg('Clear') }}</button> }
       </div>
     }
     @if (drawing(); as d) {
@@ -73,6 +74,7 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
   `
 })
 export class ShapeInput {
+  protected readonly msg = translate;
   readonly kind = input.required<Kind>();
   readonly value = input<unknown>(undefined);
   readonly disabled = input(false);

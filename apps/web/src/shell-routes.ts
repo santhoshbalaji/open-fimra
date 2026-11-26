@@ -1,4 +1,5 @@
-import { Component, Injectable, inject } from '@angular/core';
+import { translate } from './language';
+import { Component, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Title } from '@angular/platform-browser';
 import { RedirectCommand, Router, TitleStrategy, type CanActivateFn, type Route, type RouterStateSnapshot, type Routes } from '@angular/router';
@@ -15,7 +16,23 @@ export class ShellTitleStrategy extends TitleStrategy {
   private readonly title = inject(Title);
   private readonly workspace = inject(WorkspaceService);
 
+  private readonly current = signal<RouterStateSnapshot | null>(null);
+  private readonly translatedTitle = computed(() => {
+    const state = this.current();
+    return state ? this.pageTitle(state) : translate('Sign in') + ' · Open FIMRA';
+  });
+
+  constructor() {
+    super();
+    effect(() => this.title.setTitle(this.translatedTitle()));
+  }
+
   override updateTitle(state: RouterStateSnapshot): void {
+    this.current.set(state);
+    this.title.setTitle(this.translatedTitle());
+  }
+
+  private pageTitle(state: RouterStateSnapshot): string {
     const page = this.buildTitle(state);
     const params = state.root.queryParamMap;
     const alert = recordId(params.get('alert'));
@@ -23,12 +40,12 @@ export class ShellTitleStrategy extends TitleStrategy {
     const incident = recordId(params.get('incident'));
     const report = submissionId(params.get('report'));
     const member = recordId(params.get('member'));
-    const selection = alert || member ? `Alert #${alert || member}` :
-      detection ? `Detection #${detection}` : incident ? `Incident #${incident}` : report ? `Report ${report}` : '';
-    const landing = this.workspace.failed() ? 'Workspace unavailable' :
-      this.workspace.bootstrapAvailable() ? 'First-run setup' : 'Restricted access';
+    const selection = alert || member ? translate('Alert #{0}', [alert || member]) :
+      detection ? translate('Detection #{0}', [detection]) : incident ? translate('Incident #{0}', [incident]) : report ? translate('Report {0}', [report]) : '';
+    const landing = this.workspace.failed() ? translate('Workspace unavailable') :
+      this.workspace.bootstrapAvailable() ? translate('First-run setup') : translate('Restricted access');
     const record = page && page !== 'Restricted access' ? selection : '';
-    this.title.setTitle([page ?? landing, record, 'Open FIMRA'].filter(Boolean).join(' · '));
+    return [translate(page ?? landing), record, 'Open FIMRA'].filter(Boolean).join(' · ');
   }
 }
 

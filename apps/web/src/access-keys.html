@@ -1,16 +1,16 @@
 <div class="grid gap-5 px-(--page-gutter) pb-10">
   <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
     <section aria-labelledby="make-heading" class="min-w-0 rounded-card border border-border bg-card p-4 sm:p-5">
-      <h2 #makeHeading id="make-heading" tabindex="-1" class="text-title focus-visible:outline-2 focus-visible:outline-ring">Create key</h2>
-      <p class="mt-1 mb-3 text-text-secondary">Use a separate key for each computer.</p>
+      <h2 #makeHeading id="make-heading" tabindex="-1" class="text-title focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Create key') }}</h2>
+      <p class="mt-1 mb-3 text-text-secondary">{{ msg('Use a separate key for each computer.') }}</p>
       @if (made(); as made) {
         <div class="grid gap-2 rounded-control border border-border bg-muted p-3">
-          <h3 #reveal tabindex="-1" class="font-semibold wrap-anywhere focus-visible:outline-2 focus-visible:outline-ring">Copy the key {{ made.name }} now</h3>
-          <p>This is the only time the key is shown. Keep it as safely as a password.</p>
+          <h3 #reveal tabindex="-1" class="font-semibold wrap-anywhere focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Copy the key {0} now', [made.name]) }}</h3>
+          <p>{{ msg('This is the only time the key is shown. Keep it as safely as a password.') }}</p>
           <code class="new-key select-all rounded-control border border-border bg-card px-2 py-1 font-mono text-sm wrap-anywhere">{{ made.key }}</code>
           <div class="flex flex-wrap gap-2">
-            <button hlmBtn size="sm" type="button" (click)="copy(made.key ?? '', 'Key')">Copy key</button>
-            <button hlmBtn size="sm" type="button" variant="outline" (click)="dismissKey(nameInput, makeHeading)">I have saved it</button>
+            <button hlmBtn size="sm" type="button" (click)="copy(made.key ?? '', 'Key')">{{ msg('Copy key') }}</button>
+            <button hlmBtn size="sm" type="button" variant="outline" (click)="dismissKey(nameInput, makeHeading)">{{ msg('I have saved it') }}</button>
           </div>
         </div>
       }
@@ -18,11 +18,11 @@
       <form #keyForm class="key-form" [hidden]="!!made()" (submit)="$event.preventDefault(); create(keyForm)">
         <fieldset class="grid min-w-0 gap-3" [disabled]="!keys() || full()">
           <hlm-field>
-            <label hlmFieldLabel for="key-name">Name</label>
-            <input #nameInput hlmInput id="key-name" name="name" required maxlength="100" placeholder="Office laptop">
+            <label hlmFieldLabel for="key-name">{{ msg('Name') }}</label>
+            <input #nameInput hlmInput id="key-name" name="name" required maxlength="100" [placeholder]=" msg('Office laptop') ">
           </hlm-field>
           <hlm-field>
-            <label hlmFieldLabel for="key-expiry">Expires after</label>
+            <label hlmFieldLabel for="key-expiry">{{ msg('Expires after') }}</label>
             <hlm-select [value]="expiry()" (valueChange)="expiry.set($event ?? '90')" [itemToString]="expiryLabel">
               <hlm-select-trigger buttonId="key-expiry" class="w-full min-w-0 justify-start text-start"><hlm-select-value /></hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
@@ -30,25 +30,25 @@
               </hlm-select-content>
             </hlm-select>
           </hlm-field>
-          <button hlmBtn type="submit" class="justify-self-start" [busy]="creating()">Create key</button>
+          <button hlmBtn type="submit" class="justify-self-start" [busy]="creating()">{{ msg('Create key') }}</button>
         </fieldset>
       </form>
-      @if (full()) { <p class="mt-2 text-text-secondary">You have reached the limit of {{ limit() }} keys. Revoke one you no longer use.</p> }
+      @if (full()) { <p class="mt-2 text-text-secondary">{{ msg('You have reached the limit of {0} keys. Revoke one you no longer use.', [limit()]) }}</p> }
       @if (createError()) { <p role="alert" class="mt-2 text-danger">{{ createError() }}</p> }
     </section>
     <section aria-labelledby="keys-heading" class="min-w-0 rounded-card border border-border bg-card p-4 sm:p-5">
-      <h2 #keysHeading id="keys-heading" tabindex="-1" class="text-title focus-visible:outline-2 focus-visible:outline-ring">Your keys</h2>
-      <p class="mt-1 mb-3 text-text-secondary">Each key works with your current roles.</p>
+      <h2 #keysHeading id="keys-heading" tabindex="-1" class="text-title focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Your keys') }}</h2>
+      <p class="mt-1 mb-3 text-text-secondary">{{ msg('Each key works with your current roles.') }}</p>
       <ng-template #expiryCell let-key>
-        @if (key.expired) { <fimra-status-badge icon="delayed" label="Expired" /> }
+        @if (key.expired) { <fimra-status-badge icon="delayed" [label]=" msg('Expired') " /> }
         @else { {{ expiresLabel(key) }} }
       </ng-template>
       <ng-template #keyActions let-key>
         <button #revokeButton hlmBtn size="sm" variant="outline" type="button"
-          [attr.aria-label]="'Revoke ' + key.name" [attr.aria-disabled]="revoking() || null"
-          (click)="revoke(key, revokeButton)">Revoke</button>
+          [attr.aria-label]="msg('Revoke ') + key.name" [attr.aria-disabled]="revoking() || null"
+          (click)="revoke(key, revokeButton)">{{ msg('Revoke') }}</button>
       </ng-template>
-      <fimra-data-table caption="Personal access keys" [columns]="columns()" [page]="page()"
+      <fimra-data-table [caption]=" msg('Personal access keys') " [columns]="columns()" [page]="page()"
         [rowKey]="rowKey" [rowLabel]="rowLabel" [state]="listState()" [rowActions]="keyActions"
         [phoneCards]="true" (retry)="load()" />
       @if (revokeError()) { <p role="alert" class="mt-2 text-danger">{{ revokeError() }}</p> }
@@ -57,23 +57,23 @@
   </div>
 
   <details class="min-w-0 rounded-card border border-border bg-card px-4 sm:px-5">
-    <summary class="min-h-8 cursor-pointer rounded-control py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">Connect QGIS</summary>
+    <summary class="min-h-8 cursor-pointer rounded-control py-3 font-semibold focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Connect QGIS') }}</summary>
     <div class="grid gap-3 pb-4">
-      <p class="max-w-prose text-text-secondary">This read-only link gives QGIS access to the detections, alerts and published layers your role can see.</p>
+      <p class="max-w-prose text-text-secondary">{{ msg('This read-only link gives QGIS access to the detections, alerts and published layers your role can see.') }}</p>
       @if (address()) {
         <div class="flex flex-wrap items-center gap-2">
           <code class="service-address select-all rounded-control border border-border bg-muted px-2 py-1 font-mono text-sm wrap-anywhere">{{ address() }}</code>
-          <button hlmBtn size="sm" type="button" variant="outline" (click)="copy(address(), 'Address')">Copy address</button>
+          <button hlmBtn size="sm" type="button" variant="outline" (click)="copy(address(), 'Address')">{{ msg('Copy address') }}</button>
         </div>
         <fimra-live-status class="block text-text-secondary empty:sr-only" [message]="addressCopy()" />
         <ol class="grid max-w-prose list-decimal gap-1 pl-5">
-          <li>In QGIS, open <strong>Layer › Add Layer › Add WFS / OGC API – Features Layer</strong> and choose <strong>New</strong>.</li>
-          <li>Paste the address above as the URL.</li>
-          <li>Under <strong>Authentication</strong>, add a <strong>Basic</strong> configuration. Enter any user name and paste your key as the password.</li>
-          <li>Choose <strong>Connect</strong>, then the collections you want.</li>
+          <li>{{ msg('In QGIS, open') }} <strong>{{ msg('Layer › Add Layer › Add WFS / OGC API – Features Layer') }}</strong> {{ msg('and choose') }} <strong>{{ msg('New') }}</strong>.</li>
+          <li>{{ msg('Paste the address above as the URL.') }}</li>
+          <li>{{ msg('Under') }} <strong>{{ msg('Authentication') }}</strong>{{ msg(', add a') }} <strong>{{ msg('Basic') }}</strong> {{ msg('configuration. Enter any user name and paste your key as the password.') }}</li>
+          <li>{{ msg('Choose') }} <strong>{{ msg('Connect') }}</strong>{{ msg(', then the collections you want.') }}</li>
         </ol>
       } @else {
-        <p>You need a role in a workspace before the GIS link shows anything.</p>
+        <p>{{ msg('You need a role in a workspace before the GIS link shows anything.') }}</p>
       }
     </div>
   </details>

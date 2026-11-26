@@ -1,16 +1,16 @@
 <div class="report-page mx-auto grid max-w-[1100px] grid-cols-[minmax(0,1fr)] gap-4 p-4 sm:p-6 lg:p-8">
 @if (!loading() && !report()) {
 <div class="report-controls grid gap-4 rounded-card border border-border bg-card p-4 shadow-panel">
-  @if (!navigation) { <h1 id="report-title" class="text-display">Situation report</h1> }
+  @if (!navigation) { <h1 id="report-title" class="text-display">{{ msg('Situation report') }}</h1> }
   <p id="report-scope" class="text-muted-foreground">
-    @if (workspaceName(); as name) { {{ name }} · The selected unit sets the report area. }
-    Dates and times use India Standard Time.
+    @if (workspaceName(); as name) { {{ msg('{0} · The selected unit sets the report area.', [name]) }} }
+    {{ msg('Dates and times use India Standard Time.') }}
   </p>
   <form class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end" aria-describedby="report-scope"
     (submit)="$event.preventDefault(); show()">
     <div class="grid gap-4 sm:grid-cols-2">
       <fimra-state-region [state]="unitState()" (retry)="retryUnits()">
-        <hlm-field><label hlmFieldLabel for="report-unit">Unit</label>
+        <hlm-field><label hlmFieldLabel for="report-unit">{{ msg('Unit') }}</label>
           <hlm-select #unitControl [value]="unitKey()" (valueChange)="pickUnit($event)">
             <hlm-select-trigger buttonId="report-unit" class="w-full"><span class="truncate">{{ unitLabel() }}</span></hlm-select-trigger>
             <hlm-select-content *hlmSelectPortal>
@@ -22,30 +22,30 @@
           </hlm-select>
         </hlm-field>
       </fimra-state-region>
-      <fieldset class="grid gap-2"><legend class="mb-2 text-label font-medium">Period</legend>
-        <hlm-radio-group name="report-period" aria-label="Period" class="flex flex-wrap gap-4" [value]="kind()" (valueChange)="pickKind($event)">
-          <label hlmLabel><hlm-radio value="day" aria-label="One day"><hlm-radio-indicator /></hlm-radio> One day</label>
-          <label hlmLabel><hlm-radio value="range" aria-label="Date range"><hlm-radio-indicator /></hlm-radio> Date range</label>
-          <label hlmLabel><hlm-radio value="hours" aria-label="Past hours"><hlm-radio-indicator /></hlm-radio> Past hours</label>
+      <fieldset class="grid gap-2"><legend class="mb-2 text-label font-medium">{{ msg('Period') }}</legend>
+        <hlm-radio-group name="report-period" [attr.aria-label]=" msg('Period') " class="flex flex-wrap gap-4" [value]="kind()" (valueChange)="pickKind($event)">
+          <label hlmLabel><hlm-radio value="day" [attr.aria-label]=" msg('One day') "><hlm-radio-indicator /></hlm-radio> {{ msg('One day') }}</label>
+          <label hlmLabel><hlm-radio value="range" [attr.aria-label]=" msg('Date range') "><hlm-radio-indicator /></hlm-radio> {{ msg('Date range') }}</label>
+          <label hlmLabel><hlm-radio value="hours" [attr.aria-label]=" msg('Past hours') "><hlm-radio-indicator /></hlm-radio> {{ msg('Past hours') }}</label>
         </hlm-radio-group>
       </fieldset>
       @if (kind() === 'hours') {
-        <hlm-field><label hlmFieldLabel for="report-hours">Hours before now</label>
+        <hlm-field><label hlmFieldLabel for="report-hours">{{ msg('Hours before now') }}</label>
           <input hlmInput id="report-hours" #hoursInput type="number" min="1" max="720" required [value]="hours()"
             (change)="hoursInput.reportValidity() && setPeriodValue('reportHours', hoursInput.value)">
         </hlm-field>
       } @else {
-        <hlm-field><label hlmFieldLabel for="report-from">{{ kind() === 'day' ? 'Day' : 'From' }}</label>
+        <hlm-field><label hlmFieldLabel for="report-from">{{ kind() === 'day' ? msg('Day') : msg('From') }}</label>
           <input hlmInput id="report-from" #fromInput type="date" required [max]="today" [value]="from()" (change)="setPeriodValue('from', fromInput.value)">
         </hlm-field>
         @if (kind() === 'range') {
-          <hlm-field><label hlmFieldLabel for="report-to">To</label>
+          <hlm-field><label hlmFieldLabel for="report-to">{{ msg('To') }}</label>
             <input hlmInput id="report-to" #toInput type="date" required [min]="from()" [max]="today" [value]="to()" (change)="setPeriodValue('to', toInput.value)">
           </hlm-field>
         }
       }
     </div>
-    <button hlmBtn type="submit" [busy]="loading()" [disabled]="!selectedUnit()">{{ loading() ? 'Making report…' : 'Show report' }}</button>
+    <button hlmBtn type="submit" [busy]="loading()" [disabled]="!selectedUnit()">{{ loading() ? msg('Making report…') : msg('Show report') }}</button>
   </form>
   @if (message()) {
     <p role="alert" class="flex items-start gap-2 rounded-control border border-border border-s-4 border-s-danger bg-card px-4 py-3">
@@ -56,28 +56,28 @@
 }
 
 @if (loading()) {
-  <div role="status" class="grid gap-4"><span class="sr-only">Making the report…</span>
+  <div role="status" class="grid gap-4"><span class="sr-only">{{ msg('Making the report…') }}</span>
     <hlm-skeleton class="h-8 w-64" aria-hidden="true" /><hlm-skeleton class="h-24 w-full" aria-hidden="true" />
     <hlm-skeleton class="h-80 w-full" aria-hidden="true" />
   </div>
 } @else if (report(); as data) {
-  <article class="report grid min-w-0 gap-5 rounded-card border border-border bg-card p-4 sm:p-6" aria-label="Situation report preview">
+  <article class="report grid min-w-0 gap-5 rounded-card border border-border bg-card p-4 sm:p-6" [attr.aria-label]=" msg('Situation report preview') ">
     <header class="grid gap-3">
       @if (navigation) {
-        <p class="print-title text-display">Situation report</p>
+        <p class="print-title text-display">{{ msg('Situation report') }}</p>
       } @else {
-        <h1 id="report-title" #reportTitle tabindex="-1" class="text-display">Situation report</h1>
+        <h1 id="report-title" #reportTitle tabindex="-1" class="text-display">{{ msg('Situation report') }}</h1>
       }
       <div class="flex flex-wrap items-start justify-between gap-3">
         <dl class="grid min-w-0 gap-x-6 gap-y-2 sm:flex sm:flex-wrap">
-          <div class="min-w-0 wrap-anywhere"><dt class="text-label text-muted-foreground">Unit</dt><dd>{{ heading() }}</dd></div>
-          <div><dt class="text-label text-muted-foreground">Period</dt><dd>{{ periodSummary() }}</dd></div>
-          <div><dt class="text-label text-muted-foreground">Time zone</dt><dd>{{ zoneLabel }}</dd></div>
+          <div class="min-w-0 wrap-anywhere"><dt class="text-label text-muted-foreground">{{ msg('Unit') }}</dt><dd>{{ heading() }}</dd></div>
+          <div><dt class="text-label text-muted-foreground">{{ msg('Period') }}</dt><dd>{{ periodSummary() }}</dd></div>
+          <div><dt class="text-label text-muted-foreground">{{ msg('Time zone') }}</dt><dd>{{ msg(zoneLabel) }}</dd></div>
         </dl>
-        <button class="report-actions" hlmBtn variant="outline" type="button" (click)="edit()">Change unit or date</button>
+        <button class="report-actions" hlmBtn variant="outline" type="button" (click)="edit()">{{ msg('Change unit or date') }}</button>
       </div>
-      <p class="text-label text-muted-foreground">Made {{ formatTime(data.generatedAt) }}.
-        @if (preparedFor()) { Shows what is visible to: {{ preparedFor() }}. }</p>
+      <p class="text-label text-muted-foreground">{{ msg('Made {0}.', [formatTime(data.generatedAt)]) }}
+        @if (preparedFor()) { {{ msg('Shows what is visible to: {0}.', [preparedFor()]) }} }</p>
       <div class="report-actions grid gap-2">
         <div class="flex flex-wrap items-center gap-2">
           <button hlmBtn type="button" [busy]="pdfBusy()" (click)="pdfAction()"
@@ -85,7 +85,7 @@
             @if (!pdfBusy()) { <svg fimraIcon="download" aria-hidden="true"></svg> }
             {{ pdfLabel() }}
           </button>
-          <button hlmBtn variant="outline" type="button" (click)="print()">Print</button>
+          <button hlmBtn variant="outline" type="button" (click)="print()">{{ msg('Print') }}</button>
         </div>
         <fimra-live-status class="sr-only" [message]="pdfStatus()" />
         @if (pdfMessage()) { <p id="report-pdf-error" role="alert" class="text-danger">{{ pdfMessage() }}</p> }
@@ -94,13 +94,13 @@
 
     <dl class="report-figures grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
       @for (figure of figures(); track figure.label) {
-        <div class="rounded-control bg-brand-soft p-3"><dt class="text-label text-muted-foreground">{{ figure.label }}</dt>
-          <dd class="text-title font-semibold tabular-nums">{{ figure.value }}</dd></div>
+        <div class="rounded-control bg-brand-soft p-3"><dt class="text-label text-muted-foreground">{{ msg(figure.label) }}</dt>
+          <dd class="text-title font-semibold tabular-nums">{{ number(figure.value) }}</dd></div>
       }
     </dl>
 
     <section class="report-section grid gap-2" aria-labelledby="report-map-title">
-      <h2 id="report-map-title" class="report-heading">Map</h2>
+      <h2 id="report-map-title" class="report-heading">{{ msg('Map') }}</h2>
       @if (map(); as shapes) {
         <svg class="report-map" [attr.viewBox]="'0 0 ' + mapSize.width + ' ' + mapSize.height" role="img"
              aria-labelledby="report-map-title report-map-note">
@@ -116,7 +116,7 @@
           @for (incident of shapes.incidents; track incident.id) {
             <g class="map-incident" [attr.transform]="'translate(' + incident.x + ' ' + incident.y + ')'"
               [fimraReportSymbol]="incidentSymbol" [closed]="!incident.active" />
-            @if (incident.labelled) { <text class="map-incident-label" [attr.x]="incident.labelX" [attr.y]="incident.labelY">Incident {{ incident.id }}</text> }
+            @if (incident.labelled) { <text class="map-incident-label" [attr.x]="incident.labelX" [attr.y]="incident.labelY">{{ msg('Incident {0}', [incident.id]) }}</text> }
           }
           @for (unit of shapes.units; track unit.name) {
             @if (unit.labelled) { <text class="map-unit-label" [attr.x]="unit.label[0]" [attr.y]="unit.label[1]" text-anchor="middle">{{ unit.name }}</text> }
@@ -126,153 +126,144 @@
           @for (key of classKeys; track key) {
             <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol(key, 0)" /></svg>{{ label('forestClasses', key) }}</li>
           }
-          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', 0)" /></svg>Active alert or incident (no slash)</li>
-          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', 0)" [closed]="true" /></svg>Closed alert or incident (slash)</li>
-          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="incidentSymbol" /></svg>Incident</li>
-          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><rect class="map-forest" x="-7" y="-4" width="14" height="8" /></svg>Forest</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', 0)" /></svg>{{ msg('Active alert or incident (no slash)') }}</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', 0)" [closed]="true" /></svg>{{ msg('Closed alert or incident (slash)') }}</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="incidentSymbol" /></svg>{{ msg('Incident') }}</li>
+          <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><rect class="map-forest" x="-7" y="-4" width="14" height="8" /></svg>{{ msg('Forest') }}</li>
         </ul>
         @if (mapAges().length) {
-          <ul class="report-legend flex flex-wrap gap-x-4 gap-y-1 text-label" aria-label="Observation age at the end of the period">
+          <ul class="report-legend flex flex-wrap gap-x-4 gap-y-1 text-label" [attr.aria-label]=" msg('Observation age at the end of the period') ">
             @for (age of mapAges(); track age) {
               <li><svg viewBox="-9 -9 18 18" aria-hidden="true"><g [fimraReportSymbol]="alertSymbol('inside', $index)" /></svg>{{ age }}</li>
             }
           </ul>
         }
-        <p id="report-map-note" class="text-label text-muted-foreground">The map shows alerts and incidents in the period, unit boundaries and forest.
-          @if (mapAges().length) { Alert age is measured at the end of the period. }
-          @if (data.map.alertsShown < data.alerts.total) { It shows the latest {{ data.map.alertsShown }} of {{ data.alerts.total }} alerts. }</p>
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Markers shown on the map"><table hlmTable>
-          <caption class="caption-top text-start font-medium">Markers shown on the map</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Marker</th><th hlmTh scope="col" class="text-end">Active</th>
-            <th hlmTh scope="col" class="text-end">Closed</th><th hlmTh scope="col" class="text-end">Total</th></tr></thead>
+        <p id="report-map-note" class="text-label text-muted-foreground">{{ msg('The map shows alerts and incidents in the period, unit boundaries and forest.') }}
+          @if (mapAges().length) { {{ msg('Alert age is measured at the end of the period.') }} }
+          @if (data.map.alertsShown < data.alerts.total) { {{ msg('It shows the latest {0} of {1} alerts.', [data.map.alertsShown, data.alerts.total]) }} }</p>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Markers shown on the map') "><table hlmTable>
+          <caption class="caption-top text-start font-medium">{{ msg('Markers shown on the map') }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Marker') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Active') }}</th>
+            <th hlmTh scope="col" class="text-end">{{ msg('Closed') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Total') }}</th></tr></thead>
           <tbody hlmTBody>@for (row of mapCounts(); track row.label) {
-            <tr hlmTr><th hlmTh scope="row" class="whitespace-normal font-normal">{{ row.label }}</th>
-              <td hlmTd class="text-end tabular-nums">{{ row.active }}</td><td hlmTd class="text-end tabular-nums">{{ row.closed }}</td>
-              <td hlmTd class="text-end tabular-nums">{{ row.total }}</td></tr>
+            <tr hlmTr><th hlmTh scope="row" class="whitespace-normal font-normal">{{ msg(row.label) }}</th>
+              <td hlmTd class="text-end tabular-nums">{{ number(row.active) }}</td><td hlmTd class="text-end tabular-nums">{{ number(row.closed) }}</td>
+              <td hlmTd class="text-end tabular-nums">{{ number(row.total) }}</td></tr>
           }</tbody>
         </table></div>
       } @else {
-        <p class="text-muted-foreground">No map shapes for this unit.</p>
+        <p class="text-muted-foreground">{{ msg('No map shapes for this unit.') }}</p>
       }
     </section>
 
     <section class="report-section grid gap-3" aria-labelledby="report-alerts-title">
-      <h2 id="report-alerts-title" class="report-heading">Detections and alerts</h2>
+      <h2 id="report-alerts-title" class="report-heading">{{ msg('Detections and alerts') }}</h2>
       <div class="grid gap-4 sm:grid-cols-2">
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Detections by forest class"><table hlmTable><caption class="sr-only">Detections by forest class</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Forest class</th><th hlmTh scope="col" class="text-end">Detections</th></tr></thead>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Detections by forest class') "><table hlmTable><caption class="sr-only">{{ msg('Detections by forest class') }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Forest class') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Detections') }}</th></tr></thead>
           <tbody hlmTBody>@for (key of classKeys; track key) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ label('forestClasses', key) }}</th>
-              <td hlmTd class="text-end tabular-nums">{{ data.counts.detections[key] || 0 }}</td></tr>
+              <td hlmTd class="text-end tabular-nums">{{ number(data.counts.detections[key] || 0) }}</td></tr>
           }</tbody></table></div>
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Alerts by queue"><table hlmTable><caption class="sr-only">Alerts by queue</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Queue</th><th hlmTh scope="col" class="text-end">Alerts</th></tr></thead>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Alerts by queue') "><table hlmTable><caption class="sr-only">{{ msg('Alerts by queue') }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Queue') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Alerts') }}</th></tr></thead>
           <tbody hlmTBody>@for (key of queueKeys; track key) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ label('queues', key) }}</th>
-              <td hlmTd class="text-end tabular-nums">{{ data.counts.queues[key] || 0 }}</td></tr>
+              <td hlmTd class="text-end tabular-nums">{{ number(data.counts.queues[key] || 0) }}</td></tr>
           }</tbody></table></div>
       </div>
-      <p>{{ data.alerts.total }} {{ data.alerts.total === 1 ? 'alert' : 'alerts' }} in the period: {{ data.alerts.active }} active
-        and {{ data.alerts.closed }} closed. Waiting for a report: {{ data.counts.pendingReports }}.
-        Past their time limit: {{ data.counts.overdue }}.</p>
-      <h3 class="font-semibold" id="report-steps-title">Alerts by current step</h3>
+      <p>{{ msg('{0} {1} in the period: {2} active and {3} closed. Waiting for a report: {4}. Past their time limit: {5}.', [number(data.alerts.total), data.alerts.total === 1 ? msg('alert') : msg('alerts'), number(data.alerts.active), number(data.alerts.closed), number(data.counts.pendingReports), data.counts.overdue]) }}</p>
+      <h3 class="font-semibold" id="report-steps-title">{{ msg('Alerts by current step') }}</h3>
       @if (data.steps.length) {
         <ul class="grid max-w-md gap-1" aria-labelledby="report-steps-title">@for (step of data.steps; track step.step) {
           <li class="flex items-center justify-between gap-2 border-b border-border py-1 last:border-0">
             <fimra-status-badge class="mx-0!" [icon]="step.terminal ? 'complete' : 'step'" [label]="step.label" />
-            <span class="font-semibold tabular-nums">{{ step.count }}</span></li>
+            <span class="font-semibold tabular-nums">{{ number(step.count) }}</span></li>
         }</ul>
-      } @else { <p class="text-muted-foreground">No alerts in this period.</p> }
+      } @else { <p class="text-muted-foreground">{{ msg('No alerts in this period.') }}</p> }
     </section>
 
     <section class="report-section grid gap-2" aria-labelledby="report-times-title">
-      <h2 id="report-times-title" class="report-heading">Response times</h2>
-      <div hlmTableContainer tabindex="0" role="region" aria-label="Response times table"><table hlmTable><caption class="sr-only">Median and 90th percentile time to first reach each step</caption>
-        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Step</th><th hlmTh scope="col" class="text-end">Median</th>
-          <th hlmTh scope="col" class="text-end">90th percentile</th><th hlmTh scope="col" class="text-end">Alerts that reached it</th></tr></thead>
+      <h2 id="report-times-title" class="report-heading">{{ msg('Response times') }}</h2>
+      <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Response times table') "><table hlmTable><caption class="sr-only">{{ msg('Median and 90th percentile time to first reach each step') }}</caption>
+        <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Step') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Median') }}</th>
+          <th hlmTh scope="col" class="text-end">{{ msg('90th percentile') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Alerts that reached it') }}</th></tr></thead>
         <tbody hlmTBody>@for (time of data.responseTimes; track time.step) {
-          <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ time.label }}@if (time.step === 'alerted') { (satellite observation to alert) }</th>
+          <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ msg(time.label) }}@if (time.step === 'alerted') { {{ msg('(satellite observation to alert)') }} }</th>
             <td hlmTd class="text-end">{{ duration(time.median) }}</td><td hlmTd class="text-end">{{ duration(time.p90) }}</td>
-            <td hlmTd class="text-end tabular-nums">{{ time.count }}</td></tr>
+            <td hlmTd class="text-end tabular-nums">{{ number(time.count) }}</td></tr>
         }</tbody></table></div>
     </section>
 
     <section class="report-section grid gap-2" aria-labelledby="report-incidents-title">
-      <h2 id="report-incidents-title" class="report-heading">Incidents</h2>
-      <p>{{ data.incidents.total }} {{ data.incidents.total === 1 ? 'incident' : 'incidents' }} with alerts in the period:
-        {{ data.incidents.opened }} opened in the period, {{ data.incidents.active }} active, {{ data.incidents.closed }} closed
-        and {{ data.incidents.overdue }} overdue.</p>
+      <h2 id="report-incidents-title" class="report-heading">{{ msg('Incidents') }}</h2>
+      <p>{{ msg('{0} {1} with alerts in the period: {2} opened in the period, {3} active, {4} closed and {5} overdue.', [number(data.incidents.total), data.incidents.total === 1 ? msg('incident') : msg('incidents'), number(data.incidents.opened), number(data.incidents.active), number(data.incidents.closed), data.incidents.overdue]) }}</p>
       @if (data.incidents.items.length) {
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Incidents with alerts in the period"><table hlmTable><caption class="sr-only">Incidents with alerts in the period</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Incident</th><th hlmTh scope="col">Place</th><th hlmTh scope="col">Step</th>
-            <th hlmTh scope="col">First seen</th><th hlmTh scope="col">Last seen</th><th hlmTh scope="col" class="text-end">Alerts</th></tr></thead>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Incidents with alerts in the period') "><table hlmTable><caption class="sr-only">{{ msg('Incidents with alerts in the period') }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Incident') }}</th><th hlmTh scope="col">{{ msg('Place') }}</th><th hlmTh scope="col">{{ msg('Step') }}</th>
+            <th hlmTh scope="col">{{ msg('First seen') }}</th><th hlmTh scope="col">{{ msg('Last seen') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Alerts') }}</th></tr></thead>
           <tbody hlmTBody>@for (item of data.incidents.items; track item.id) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ item.id }}</th>
-              <td hlmTd class="whitespace-normal">{{ item.places.join(', ') || 'No unit' }}</td>
+              <td hlmTd class="whitespace-normal">{{ item.places.join(', ') || msg('No unit') }}</td>
               <td hlmTd><fimra-status-badge class="mx-0!" [icon]="item.overdue ? 'overdue' : item.terminal ? 'complete' : 'step'"
-                [label]="item.stepLabel + (item.overdue ? ' (overdue)' : '')" /></td>
+                [label]="msg(item.stepLabel) + (item.overdue ? msg(' (overdue)') : '')" /></td>
               <td hlmTd>{{ formatTime(item.firstObserved) }}</td><td hlmTd>{{ formatTime(item.lastObserved) }}</td>
-              <td hlmTd class="text-end tabular-nums">{{ item.alertCount }}</td></tr>
+              <td hlmTd class="text-end tabular-nums">{{ number(item.alertCount) }}</td></tr>
           }</tbody></table></div>
       }
     </section>
 
     <section class="report-section grid gap-2" aria-labelledby="report-forms-title">
-      <h2 id="report-forms-title" class="report-heading">Field reports</h2>
-      <p>Forms submitted for the period's alerts: {{ data.fieldReports.submitted }}. Approved: {{ data.fieldReports.approved }}.
-        Returned: {{ data.fieldReports.returned }}. Awaiting review: {{ data.fieldReports.awaitingReview }}.
-        Missing: {{ data.fieldReports.missing }}, on {{ data.fieldReports.alertsMissing }}
-        {{ data.fieldReports.alertsMissing === 1 ? 'alert' : 'alerts' }}.</p>
+      <h2 id="report-forms-title" class="report-heading">{{ msg('Field reports') }}</h2>
+      <p>{{ msg('Forms submitted for the period\'s alerts: {0}. Approved: {1}. Returned: {2}. Awaiting review: {3}. Missing: {4}, on {5} {6}.', [number(data.fieldReports.submitted), number(data.fieldReports.approved), number(data.fieldReports.returned), number(data.fieldReports.awaitingReview), number(data.fieldReports.missing), number(data.fieldReports.alertsMissing), data.fieldReports.alertsMissing === 1 ? msg('alert') : msg('alerts')]) }}</p>
       @if (data.fieldReports.forms.length) {
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Field reports by form"><table hlmTable><caption class="sr-only">Field reports by form</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Form</th><th hlmTh scope="col" class="text-end">Submitted</th>
-            <th hlmTh scope="col" class="text-end">Approved</th><th hlmTh scope="col" class="text-end">Returned</th>
-            <th hlmTh scope="col" class="text-end">Awaiting review</th><th hlmTh scope="col" class="text-end">Missing</th></tr></thead>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Field reports by form') "><table hlmTable><caption class="sr-only">{{ msg('Field reports by form') }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Form') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Submitted') }}</th>
+            <th hlmTh scope="col" class="text-end">{{ msg('Approved') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Returned') }}</th>
+            <th hlmTh scope="col" class="text-end">{{ msg('Awaiting review') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Missing') }}</th></tr></thead>
           <tbody hlmTBody>@for (form of data.fieldReports.forms; track form.form) {
-            <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ form.title }}</th>
+            <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ msg(form.title) }}</th>
               <td hlmTd class="text-end tabular-nums">{{ form.submitted }}</td><td hlmTd class="text-end tabular-nums">{{ form.approved }}</td>
               <td hlmTd class="text-end tabular-nums">{{ form.returned }}</td><td hlmTd class="text-end tabular-nums">{{ form.awaitingReview }}</td>
               <td hlmTd class="text-end tabular-nums">{{ form.missing }}</td></tr>
           }</tbody></table></div>
-      } @else { <p class="text-muted-foreground">No forms are assigned to the period's alerts.</p> }
+      } @else { <p class="text-muted-foreground">{{ msg('No forms are assigned to the period\'s alerts.') }}</p> }
     </section>
 
     <section class="report-section grid gap-2" aria-labelledby="report-overdue-title">
-      <h2 id="report-overdue-title" class="report-heading">Alerts past their time limit</h2>
+      <h2 id="report-overdue-title" class="report-heading">{{ msg('Alerts past their time limit') }}</h2>
       @if (data.overdueAlerts.length) {
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Overdue alerts table"><table hlmTable><caption class="sr-only">Alerts past their time limit</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Alert</th><th hlmTh scope="col">{{ data.placeLevels.join(' › ') || 'Place' }}</th>
-            <th hlmTh scope="col">Step</th><th hlmTh scope="col">Entered step</th><th hlmTh scope="col" class="text-end">Overdue by</th></tr></thead>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Overdue alerts table') "><table hlmTable><caption class="sr-only">{{ msg('Alerts past their time limit') }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ msg('Alert') }}</th><th hlmTh scope="col">{{ data.placeLevels.join(' › ') || msg('Place') }}</th>
+            <th hlmTh scope="col">{{ msg('Step') }}</th><th hlmTh scope="col">{{ msg('Entered step') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Overdue by') }}</th></tr></thead>
           <tbody hlmTBody>@for (alert of data.overdueAlerts; track alert.id) {
-            <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ alert.id }}</th><td hlmTd class="whitespace-normal">{{ alert.place || 'No unit' }}</td>
+            <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ alert.id }}</th><td hlmTd class="whitespace-normal">{{ alert.place || msg('No unit') }}</td>
               <td hlmTd>{{ alert.stepLabel }}</td><td hlmTd>{{ formatTime(alert.enteredAt) }}</td>
               <td hlmTd class="text-end">{{ duration(alert.overdueSeconds) }}</td></tr>
           }</tbody></table></div>
-      } @else { <p class="text-muted-foreground">No alerts are past their time limit.</p> }
+      } @else { <p class="text-muted-foreground">{{ msg('No alerts are past their time limit.') }}</p> }
     </section>
 
     @if (data.units.length) {
       <section class="report-section grid gap-2" aria-labelledby="report-units-title">
-        <h2 id="report-units-title" class="report-heading">By {{ (data.unitLevel || 'unit').toLowerCase() }}</h2>
-        <div hlmTableContainer tabindex="0" role="region" aria-label="Alerts by unit"><table hlmTable><caption class="sr-only">Alerts by {{ (data.unitLevel || 'unit').toLowerCase() }}</caption>
-          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ data.unitLevel || 'Unit' }}</th><th hlmTh scope="col" class="text-end">Alerts</th>
-            <th hlmTh scope="col" class="text-end">Active</th><th hlmTh scope="col" class="text-end">Overdue</th>
-            <th hlmTh scope="col" class="text-end">Waiting for a report</th><th hlmTh scope="col" class="text-end">Forms missing</th></tr></thead>
+        <h2 id="report-units-title" class="report-heading">{{ msg('By {0}', [(data.unitLevel || 'unit').toLowerCase()]) }}</h2>
+        <div hlmTableContainer tabindex="0" role="region" [attr.aria-label]=" msg('Alerts by unit') "><table hlmTable><caption class="sr-only">{{ msg('Alerts by {0}', [(data.unitLevel || 'unit').toLowerCase()]) }}</caption>
+          <thead hlmTHead><tr hlmTr><th hlmTh scope="col">{{ data.unitLevel || msg('Unit') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Alerts') }}</th>
+            <th hlmTh scope="col" class="text-end">{{ msg('Active') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Overdue') }}</th>
+            <th hlmTh scope="col" class="text-end">{{ msg('Waiting for a report') }}</th><th hlmTh scope="col" class="text-end">{{ msg('Forms missing') }}</th></tr></thead>
           <tbody hlmTBody>@for (unit of data.units; track unit.path) {
             <tr hlmTr><th hlmTh scope="row" class="font-normal">{{ unit.name }}</th>
-              <td hlmTd class="text-end tabular-nums">{{ unit.alerts }}</td><td hlmTd class="text-end tabular-nums">{{ unit.active }}</td>
-              <td hlmTd class="text-end tabular-nums">{{ unit.overdue }}</td><td hlmTd class="text-end tabular-nums">{{ unit.pendingReports }}</td>
+              <td hlmTd class="text-end tabular-nums">{{ number(unit.alerts) }}</td><td hlmTd class="text-end tabular-nums">{{ unit.active }}</td>
+              <td hlmTd class="text-end tabular-nums">{{ number(unit.overdue) }}</td><td hlmTd class="text-end tabular-nums">{{ unit.pendingReports }}</td>
               <td hlmTd class="text-end tabular-nums">{{ unit.formsMissing }}</td></tr>
           }</tbody></table></div>
       </section>
     }
 
     <section class="report-section grid gap-2" aria-labelledby="report-notes-title">
-      <h2 id="report-notes-title" class="report-heading">How the numbers are worked out</h2>
-      <ul class="grid list-disc gap-1 ps-5 text-label text-muted-foreground">@for (note of data.notes; track $index) { <li>{{ note }}</li> }</ul>
-      <p class="text-label text-muted-foreground">This report contains no names, phone numbers or other personal details of staff.
-        Open FIMRA is independent open-source software. It is not an official Government of India system and is not
-        affiliated with NASA, the Forest Survey of India or the National Remote Sensing Centre.</p>
+      <h2 id="report-notes-title" class="report-heading">{{ msg('How the numbers are worked out') }}</h2>
+      <ul class="grid list-disc gap-1 ps-5 text-label text-muted-foreground">@for (note of data.notes; track $index) { <li>{{ msg(note) }}</li> }</ul>
+      <p class="text-label text-muted-foreground">{{ msg('This report contains no names, phone numbers or other personal details of staff. Open FIMRA is independent open-source software. It is not an official Government of India system and is not affiliated with NASA, the Forest Survey of India or the National Remote Sensing Centre.') }}</p>
     </section>
   </article>
 }

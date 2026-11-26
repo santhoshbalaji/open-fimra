@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../l10n/field_language.dart';
 import '../theme/app_theme.dart';
 import 'home.dart';
 import 'outbox_screen.dart';
@@ -78,7 +79,7 @@ class AlertListViewState extends State<AlertListView> {
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
-        _problem = error.offline ? 'Check your connection and try again.' : error.message;
+        _problem = error.offline ? fieldText(context).checkYourConnectionAndTry : fieldProblem(context, error.message);
         _loading = false;
       });
     }
@@ -100,7 +101,9 @@ class AlertListViewState extends State<AlertListView> {
         _cursor = page.nextCursor;
       });
     } on ApiException catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fieldProblem(context, error.message))));
+      }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
@@ -139,18 +142,18 @@ class AlertListViewState extends State<AlertListView> {
               hasScrollBody: false,
               child: MessageView(
                 icon: Icons.cloud_off_outlined,
-                title: 'Could not load alerts',
+                title: fieldText(context).couldNotLoadAlerts,
                 body: problem,
-                action: FilledButton(onPressed: reload, child: const Text('Retry')),
+                action: FilledButton(onPressed: reload, child: Text(fieldText(context).retry)),
               ),
             )
           else if (_items.isEmpty)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: MessageView(
                 icon: Icons.check_circle_outline,
-                title: 'No alerts in the past 7 days',
-                body: 'New fire alerts for your area will appear here. Pull down to check again.',
+                title: fieldText(context).noAlertsInThePast,
+                body: fieldText(context).newFireAlertsForYour2,
               ),
             )
           else
@@ -173,7 +176,7 @@ class AlertListViewState extends State<AlertListView> {
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
                 child: OutlinedButton(
                   onPressed: _loadingMore ? null : _more,
-                  child: Text(_loadingMore ? 'Loading' : 'Show more alerts'),
+                  child: Text(_loadingMore ? fieldText(context).loading : fieldText(context).showMoreAlerts),
                 ),
               ),
             ),
@@ -191,17 +194,18 @@ class AlertListViewState extends State<AlertListView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Alerts', style: text.titleLarge),
+          Text(fieldText(context).alerts, style: text.titleLarge),
           const SizedBox(height: 4),
-          Text('$total ${total == 1 ? 'alert' : 'alerts'} in the past 7 days · $area', style: text.bodyMedium),
+          Text(fieldText(context).alertsInArea(total, area), style: text.bodyMedium),
           if (_canReview) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 4,
               children: [
-                _chip(null, 'All', total),
-                for (final queue in AlertQueue.values) _chip(queue, queue.label, _counts[queue.slug] ?? 0),
+                _chip(context, null, fieldText(context).all, total),
+                for (final queue in AlertQueue.values)
+                  _chip(context, queue, queueName(context, queue), _counts[queue.slug] ?? 0),
               ],
             ),
           ],
@@ -210,8 +214,11 @@ class AlertListViewState extends State<AlertListView> {
     );
   }
 
-  Widget _chip(AlertQueue? queue, String label, int count) =>
-      ChoiceChip(label: Text('$label ($count)'), selected: _queue == queue, onSelected: (_) => _filter(queue));
+  Widget _chip(BuildContext context, AlertQueue? queue, String label, int count) => ChoiceChip(
+    label: Text('$label (${formatNumber(context, count)})'),
+    selected: _queue == queue,
+    onSelected: (_) => _filter(queue),
+  );
 }
 
 class AlertTile extends StatelessWidget {
@@ -226,13 +233,16 @@ class AlertTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = FimraColours.of(context);
     final forest = alert.forest;
-    final title = '${alert.placeName(map)} · Alert #${alert.id}';
-    final seen = '${forest?.label ?? alert.forestClass}, seen ${formatAge(alert.observedAt, now)}';
+    final place = alert.placeName(map);
+    final title = fieldText(context).alertAtPlace(place == 'No unit' ? fieldText(context).noUnit : place, alert.id);
+    final seen = fieldText(
+      context,
+    ).forestAndAge(forestName(context, forest, alert.forestClass), formatAge(context, alert.observedAt, now));
     final badges = [
-      StatusBadge.step(alert.stepLabel),
-      if (alert.overdue) StatusBadge.overdue(),
+      StatusBadge.step(workflowName(context, alert.stepLabel)),
+      if (alert.overdue) StatusBadge.overdue(context),
       if (alert.alertQueue != AlertQueue.unit)
-        StatusBadge(icon: Icons.rule, label: alert.alertQueue?.label ?? alert.queue),
+        StatusBadge(icon: Icons.rule, label: queueName(context, alert.alertQueue, alert.queue)),
     ];
     return Semantics(
       button: true,

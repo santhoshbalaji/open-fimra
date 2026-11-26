@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { classes } from './detections';
 
 // The first four slots follow the forest classes, away from the map's forest and age colours.
@@ -33,7 +34,7 @@ export function detectionSeries(
     : []);
   const other = keys.slice(separate).filter(visible);
   if (other.length) {
-    rows.push({ id: '__other__', label: 'Other', slot: seriesSlots,
+    rows.push({ id: '__other__', label: translate('Other'), slot: seriesSlots,
       count: other.reduce((sum, key) => sum + (counts[key] ?? 0), 0) });
   }
   return rows;

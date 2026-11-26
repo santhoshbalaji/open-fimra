@@ -10,7 +10,10 @@ import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../data/field_store.dart';
 import '../device/device_store.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/field_language.dart';
 import '../ui/alert_detail.dart';
+import '../ui/widgets.dart' show formatNumber;
 import 'answers.dart';
 import 'geometry_field.dart';
 import 'report_media_cache.dart';
@@ -36,7 +39,7 @@ class ReportForm extends StatefulWidget {
     this.attachments = const {},
     this.move,
     this.reference,
-    this.pick = pickReportFile,
+    this.pick,
     this.locate = deviceLocation,
   });
 
@@ -54,7 +57,7 @@ class ReportForm extends StatefulWidget {
   final WorkflowMove? move;
   final Json? reference;
   final SaveReport save;
-  final PickReportFile pick;
+  final PickReportFile? pick;
   final Locate locate;
 
   @override
@@ -157,10 +160,10 @@ class _ReportFormState extends State<ReportForm> {
       if (mounted && !_busy) setState(() => _error = null);
     } on Exception {
       _draftDirty = true;
-      if (mounted) setState(() => _error = 'Could not save your draft on this phone. Try again.');
+      if (mounted) setState(() => _error = fieldText(context).couldNotSaveYourDraft);
     } on StateError {
       _draftDirty = true;
-      if (mounted) setState(() => _error = 'Could not save your draft on this phone.');
+      if (mounted) setState(() => _error = fieldText(context).couldNotSaveYourDraft2);
     }
   }
 
@@ -239,9 +242,9 @@ class _ReportFormState extends State<ReportForm> {
       await widget.save(answers, [for (final id in checked.attachmentIds) ?_files[id]], step);
       if (mounted) Navigator.of(context).pop(true);
     } on LocationProblem catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.message(context));
     } on Exception {
-      if (mounted) setState(() => _error = 'Could not save this report on the phone. Try again.');
+      if (mounted) setState(() => _error = fieldText(context).couldNotSaveThisReport);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -272,7 +275,7 @@ class _ReportFormState extends State<ReportForm> {
         if (!didPop) unawaited(_leave());
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Field report')),
+        appBar: AppBar(title: Text(fieldText(context).fieldReport)),
         body: SafeArea(
           child: ListView(
             controller: _scroll,
@@ -292,9 +295,9 @@ class _ReportFormState extends State<ReportForm> {
                       : languages.contains(_lang.split('-').first)
                       ? _lang.split('-').first
                       : languages.first,
-                  decoration: const InputDecoration(labelText: 'Form language'),
+                  decoration: InputDecoration(labelText: fieldText(context).formLanguage),
                   items: [
-                    for (final lang in languages) DropdownMenuItem(value: lang, child: Text(_languageName(lang))),
+                    for (final lang in languages) DropdownMenuItem(value: lang, child: Text(fieldLanguageName(lang))),
                   ],
                   onChanged: _busy
                       ? null
@@ -313,7 +316,7 @@ class _ReportFormState extends State<ReportForm> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Check these answers', style: Theme.of(context).textTheme.titleMedium),
+                          Text(fieldText(context).checkTheseAnswers, style: Theme.of(context).textTheme.titleMedium),
                           for (final problem in problems) Text(_explain(problem)),
                         ],
                       ),
@@ -332,10 +335,9 @@ class _ReportFormState extends State<ReportForm> {
               if (widget.move case final move?)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text('The server will check the ${move.label} step when it receives the report.'),
+                  child: Text(fieldText(context).serverChecksStep(workflowName(context, move.label))),
                 ),
-              if (!widget.canSend)
-                const Text('Save a draft now. Finish the earlier alert steps before sending this report.'),
+              if (!widget.canSend) Text(fieldText(context).saveADraftNowFinish),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -345,16 +347,19 @@ class _ReportFormState extends State<ReportForm> {
                   ),
                 ),
               if (widget.saveDraft != null)
-                OutlinedButton(onPressed: _busy ? null : () => _leave(save: true), child: const Text('Save draft')),
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _leave(save: true),
+                  child: Text(fieldText(context).saveDraft),
+                ),
               if (widget.canSend)
                 FilledButton(
                   onPressed: _busy ? null : _save,
                   child: Text(
                     _busy
-                        ? 'Saving report'
+                        ? fieldText(context).savingReport
                         : widget.saveDraft == null
-                        ? 'Save to outbox'
-                        : 'Send when connected',
+                        ? fieldText(context).saveToSendLater
+                        : fieldText(context).sendWhenConnected,
                   ),
                 ),
             ],
@@ -363,13 +368,6 @@ class _ReportFormState extends State<ReportForm> {
       ),
     );
   }
-
-  String _languageName(String tag) => switch (tag.split('-').first) {
-    'en' => 'English',
-    'hi' => 'हिन्दी',
-    'bn' => 'বাংলা',
-    _ => tag,
-  };
 
   Iterable<String> _translations(Object? node) sync* {
     if (node is List) {
@@ -387,11 +385,31 @@ class _ReportFormState extends State<ReportForm> {
     }
   }
 
-  String _explain(String problem) => problem.replaceAllMapped(RegExp(r'"([a-z][a-z0-9_]*)"'), (match) {
-    final item = _tree.byKey[match[1]];
-    final label = _text(item?.data['label'] ?? item?.data['title']);
-    return label.isEmpty ? match[0]! : '“$label”';
-  });
+  String _explain(String problem) {
+    final explained = problem.replaceAllMapped(RegExp(r'"([a-z][a-z0-9_]*)"'), (match) {
+      final item = _tree.byKey[match[1]];
+      final label = _text(item?.data['label'] ?? item?.data['title']);
+      return label.isEmpty ? match[0]! : '“$label”';
+    });
+    if (Localizations.localeOf(context).languageCode == 'en') return explained;
+    final match = RegExp(r'^(.*?)(?:Field|Repeating group) (“[^”]+”|[^ ]+) (.+)$').firstMatch(explained);
+    if (match == null) return fieldProblem(context, explained);
+    final text = fieldText(context);
+    final field = match[2]!;
+    final clause = match[3]!;
+    final limit = RegExp(r'^(needs at least|can have at most) ([0-9.]+)(?: (.+))?\.$').firstMatch(clause);
+    final result = switch (clause) {
+      'is required.' => text.answerRequired(field),
+      'cannot be in the future.' => text.answerFuture(field),
+      _ when clause.startsWith('does not match the expected pattern') => text.answerFormat(field),
+      _ when limit != null =>
+        limit[1] == 'needs at least'
+            ? text.answerMin(field, formatNumber(context, num.parse(limit[2]!)))
+            : text.answerMax(field, formatNumber(context, num.parse(limit[2]!))),
+      _ => text.answerInvalid(field),
+    };
+    return '${match[1]}$result';
+  }
 
   bool _hasRequired(AnswerSession session, FormNode node, EntryPath path) {
     if (!session.visible(node, path) || session.readOnly(node)) return false;
@@ -436,7 +454,7 @@ class _ReportFormState extends State<ReportForm> {
                       trailing: readonly
                           ? null
                           : IconButton(
-                              tooltip: 'Remove entry ${index + 1}',
+                              tooltip: fieldText(context).removeEntry((index + 1).toString()),
                               icon: const Icon(Icons.remove_circle_outline),
                               onPressed: _busy ? null : () => set([...entries]..removeAt(index)),
                             ),
@@ -451,7 +469,7 @@ class _ReportFormState extends State<ReportForm> {
               onPressed: _busy || (max != null && entries.length >= max)
                   ? null
                   : () => set([...entries, <String, dynamic>{}]),
-              child: Text('Add ${entryLabel.isEmpty ? 'entry' : entryLabel}'),
+              child: Text(fieldText(context).addEntry((entryLabel.isEmpty ? 'entry' : entryLabel).toString())),
             ),
         ] else
           for (final child in node.children) _node(session, child, path, layout),
@@ -495,10 +513,10 @@ class _ReportFormState extends State<ReportForm> {
                   children: [
                     OutlinedButton(
                       onPressed: _busy ? null : () => _chooseTime(node.kind, value, set),
-                      child: Text(value == null ? 'Choose $label' : _display(node, value, [])),
+                      child: Text(value == null ? fieldText(context).chooseAnswer(label) : _display(node, value, [])),
                     ),
                     if (value != null)
-                      TextButton(onPressed: _busy ? null : () => set(null), child: const Text('Clear')),
+                      TextButton(onPressed: _busy ? null : () => set(null), child: Text(fieldText(context).clear)),
                   ],
                 ),
               ],
@@ -553,15 +571,18 @@ class _ReportFormState extends State<ReportForm> {
     return Row(
       children: [
         IconButton(
-          tooltip: 'Decrease $title',
+          tooltip: fieldText(context).decreaseValue(title),
           onPressed: _busy ? null : () => adjust(-increment),
           icon: const Icon(Icons.remove),
         ),
         Expanded(
-          child: ListTile(title: Text(title), subtitle: Text(value == null ? 'No answer' : _display(node, value, []))),
+          child: ListTile(
+            title: Text(title),
+            subtitle: Text(value == null ? fieldText(context).noAnswer : _display(node, value, [])),
+          ),
         ),
         IconButton(
-          tooltip: 'Increase $title',
+          tooltip: fieldText(context).increaseValue(title),
           onPressed: _busy ? null : () => adjust(increment),
           icon: const Icon(Icons.add),
         ),
@@ -590,7 +611,7 @@ class _ReportFormState extends State<ReportForm> {
           isExpanded: true,
           itemHeight: null,
           items: [
-            const DropdownMenuItem(value: '', child: Text('No answer')),
+            DropdownMenuItem(value: '', child: Text(fieldText(context).noAnswer)),
             for (final choice in choices)
               DropdownMenuItem(value: choice['key'] as String, child: Text(_text(choice['label']))),
           ],
@@ -685,21 +706,21 @@ class _ReportFormState extends State<ReportForm> {
   String _display(FormNode node, Object? value, List<Json> choices, {bool showUnit = true}) {
     String choice(Object? key) =>
         _text(choices.where((row) => row['key'] == key).firstOrNull?['label'] ?? {'en': '$key'});
-    if (value == null) return 'No answer';
+    if (value == null) return fieldText(context).noAnswer;
     if (node.kind == 'single-choice') return choice(value);
     if (node.kind == 'multiple-choice') return (value as List).map(choice).join(', ');
     if (node.kind == 'photo' || node.kind == 'file' || node.kind == 'signature') {
       final ids = value is List ? value : [value];
-      return ids.map((id) => object(_metadata()[id])['fileName'] ?? 'Attached file').join(', ');
+      return ids.map((id) => object(_metadata()[id])['fileName'] ?? fieldText(context).attachedFile).join(', ');
     }
     if (value is Map && value['type'] == 'Point') {
       final coords = value['coordinates'] as List;
       return '${coords[1]}, ${coords[0]}';
     }
-    if (value is Map) return node.kind == 'track' ? 'Track saved' : 'Area saved';
+    if (value is Map) return node.kind == 'track' ? fieldText(context).trackSaved : fieldText(context).areaSaved;
     if (node.kind == 'date-time' || ['observed-at', 'raised-at'].contains(node.data['source'])) {
       final time = DateTime.tryParse('$value')?.toLocal();
-      if (time != null) return DateFormat.yMMMd().add_jm().format(time);
+      if (time != null) return DateFormat.yMMMd(Localizations.localeOf(context).toLanguageTag()).add_jm().format(time);
     }
     final unit = showUnit ? node.data['unit'] : null;
     final text = value is double && value == value.roundToDouble() ? value.toStringAsFixed(0) : '$value';
@@ -718,14 +739,14 @@ class _ReportFormState extends State<ReportForm> {
       try {
         final file = source == 'signature'
             ? await showDialog<ReportFile>(context: context, builder: (_) => const _SignatureDialog())
-            : await widget.pick(source);
+            : await (widget.pick?.call(source) ?? pickReportFile(source, fieldText(context)));
         if (file == null || !mounted) return;
         _files[file.id] = file;
         set(signature ? file.id : [...ids, file.id]);
       } on FormatException catch (error) {
         if (mounted) _showFileError(error.message);
       } on Exception {
-        if (mounted) _showFileError('Could not open the file. Try again.');
+        if (mounted) _showFileError(fieldText(context).couldNotOpenTheFile);
       } finally {
         if (mounted) setState(() => _busy = false);
       }
@@ -752,7 +773,7 @@ class _ReportFormState extends State<ReportForm> {
             },
             title: Text('${object(_metadata()[id])['fileName'] ?? 'Attached file'}'),
             trailing: IconButton(
-              tooltip: 'Remove attachment',
+              tooltip: fieldText(context).removeAttachment,
               icon: const Icon(Icons.close),
               onPressed: _busy ? null : () => set(signature ? null : ([...ids]..remove(id))),
             ),
@@ -765,18 +786,18 @@ class _ReportFormState extends State<ReportForm> {
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => add('camera'),
                   icon: const Icon(Icons.photo_camera_outlined),
-                  label: const Text('Take photo'),
+                  label: Text(fieldText(context).takePhoto),
                 ),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => add('gallery'),
                   icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('Choose photo'),
+                  label: Text(fieldText(context).choosePhoto),
                 ),
               ] else
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => add(signature ? 'signature' : 'file'),
                   icon: Icon(signature ? Icons.draw_outlined : Icons.attach_file),
-                  label: Text(signature ? 'Draw signature' : 'Choose file'),
+                  label: Text(signature ? fieldText(context).drawSignature : fieldText(context).chooseFile),
                 ),
             ],
           ),
@@ -800,10 +821,10 @@ const _fileTypes = {
   'csv': 'text/csv',
 };
 
-Future<ReportFile?> pickReportFile(String source) async {
+Future<ReportFile?> pickReportFile(String source, AppLocalizations messages) async {
   final file = source == 'file'
       ? await openFile(
-          acceptedTypeGroups: [XTypeGroup(label: 'Report files', extensions: _fileTypes.keys.toList())],
+          acceptedTypeGroups: [XTypeGroup(label: messages.reportFiles, extensions: _fileTypes.keys.toList())],
         )
       : await ImagePicker().pickImage(
           source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
@@ -815,9 +836,9 @@ Future<ReportFile?> pickReportFile(String source) async {
     final name = file.name.replaceAll(RegExp(r'[\x00-\x1f\x7f"]'), '_').trim();
     final type = _fileTypes[name.split('.').last.toLowerCase()];
     if (type == null || name.runes.length > 200) {
-      throw const FormatException('Choose a JPEG, PNG, WebP, PDF, ZIP, text or CSV file with a short name.');
+      throw FormatException(messages.chooseAJPEGPNGWebP);
     }
-    if (await file.length() > (25 << 20)) throw const FormatException('Choose a file smaller than 25 MB.');
+    if (await file.length() > (25 << 20)) throw FormatException(messages.chooseAFileSmallerThan);
     return ReportFile(newDeviceId(), name, type, await file.readAsBytes());
   } finally {
     if (source != 'file') await removePickedCopy(file.path);
@@ -874,7 +895,7 @@ class _SignatureDialogState extends State<_SignatureDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Draw your signature'),
+    title: Text(fieldText(context).drawYourSignature),
     content: SizedBox(
       width: 360,
       height: 180,
@@ -895,11 +916,11 @@ class _SignatureDialogState extends State<_SignatureDialog> {
       ),
     ),
     actions: [
-      TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text('Cancel')),
-      TextButton(onPressed: _saving ? null : () => setState(() => _ink = []), child: const Text('Clear')),
+      TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: Text(fieldText(context).cancel)),
+      TextButton(onPressed: _saving ? null : () => setState(() => _ink = []), child: Text(fieldText(context).clear)),
       FilledButton(
         onPressed: _saving || _ink.whereType<Offset>().length < 2 ? null : _use,
-        child: const Text('Use signature'),
+        child: Text(fieldText(context).useSignature),
       ),
     ],
   );

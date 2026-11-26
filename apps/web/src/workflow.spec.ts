@@ -36,7 +36,7 @@ describe('Workflow panel', () => {
     expect(entries[1].textContent).toContain('New');
     expect(entries[1].textContent).not.toContain('16, 86');
     expect(entries[0].textContent).toContain('Demo Guard');
-    expect(entries[0].textContent).toContain('Report pending');
+    expect(entries[0].textContent).toContain('Waiting for a report');
     expect(entries[0].querySelector('time')?.dateTime).toBe('2026-01-01T12:00:00.000Z');
     expect(el.querySelector('button')).toBeNull();
   });

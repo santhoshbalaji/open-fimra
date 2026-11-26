@@ -10,6 +10,7 @@ import 'package:fimra_field/src/config.dart';
 import 'package:fimra_field/src/device/device_manager.dart';
 import 'package:fimra_field/src/device/device_store.dart';
 import 'package:fimra_field/src/device/local_data.dart';
+import 'package:fimra_field/src/l10n/app_localizations.dart';
 import 'package:fimra_field/src/theme/app_theme.dart';
 import 'package:fimra_field/src/ui/alert_map.dart';
 import 'package:fimra_field/src/ui/widgets.dart';
@@ -78,6 +79,27 @@ Future<void> signIn(WidgetTester tester, Harness harness) async {
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('the field app starts in the phone language and remembers a choice', (tester) async {
+    tester.binding.platformDispatcher.localesTestValue = const [Locale('hi', 'IN')];
+    addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
+    final harness = Harness();
+    await tester.pumpWidget(harness.app());
+    await tester.pumpAndSettle();
+    expect(find.text('फ़ील्ड ऐप'), findsOneWidget);
+
+    await tester.tap(find.text('भाषा'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    expect(find.text('Field app'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(Harness().app());
+    await tester.pumpAndSettle();
+    expect(find.text('Field app'), findsOneWidget);
+  });
 
   testWidgets('a beat guard signs in and sees their alerts with status icons and labels', (tester) async {
     final semantics = tester.ensureSemantics();
@@ -203,7 +225,7 @@ void main() {
     await tester.tap(find.widgetWithText(Card, 'New'));
     await tester.pumpAndSettle();
 
-    final acknowledge = find.widgetWithText(FilledButton, 'Acknowledge');
+    final acknowledge = find.widgetWithText(FilledButton, 'Acknowledge alert');
     expect(acknowledge.hitTestable(), findsOneWidget);
     expect(find.text('Connected').hitTestable(), findsOneWidget);
     expect(find.text('Hill Division (D1)'), findsNothing);
@@ -434,6 +456,8 @@ void main() {
   testWidgets('the map key explains shape and colour in words', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: fimraTheme(Brightness.light),
         home: const Scaffold(body: MapKey()),
       ),

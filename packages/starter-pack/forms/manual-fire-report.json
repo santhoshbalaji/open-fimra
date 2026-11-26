@@ -3,16 +3,13 @@
   "formatVersion": 1,
   "id": "manual-fire-report",
   "version": 1,
-  "title": { "en": "Manual fire report", "hi": "आग की सूचना (हाथ से दर्ज)" },
-  "description": {
-    "en": "Record a fire that was reported by phone, by forest staff or by another agency. Saving the report makes an alert that follows the normal workflow.",
-    "hi": "फ़ोन, वन कर्मचारियों या किसी दूसरी एजेंसी से मिली आग की सूचना दर्ज करें। सूचना सहेजने पर एक अलर्ट बनता है, जो सामान्य कार्यप्रवाह से आगे बढ़ता है।"
-  },
+  "title": { "en": "Manual fire report", "hi": "आग की सूचना दर्ज करें" },
+  "description": { "en": "Record a fire that was reported by phone, by forest staff or by another agency. Saving the report makes an alert that follows the normal workflow.", "hi": "फ़ोन, वन कर्मचारियों या किसी अन्य संस्था से मिली आग की सूचना दर्ज करें। रिपोर्ट सहेजने पर नया अलर्ट बनेगा और उस पर सामान्य प्रक्रिया के अनुसार कार्रवाई होगी।" },
   "languages": ["en", "hi"],
   "sections": [
     {
       "key": "report",
-      "title": { "en": "Report", "hi": "सूचना" },
+      "title": { "en": "Report", "hi": "रिपोर्ट" },
       "items": [
         {
           "key": "report_source",
@@ -20,10 +17,10 @@
           "label": { "en": "How was the fire reported?", "hi": "आग की सूचना कैसे मिली?" },
           "required": true,
           "choices": [
-            { "key": "public-call", "label": { "en": "Phone call from the public", "hi": "जनता से फ़ोन कॉल" } },
-            { "key": "staff-sighting", "label": { "en": "Seen by forest staff", "hi": "वन कर्मचारी ने देखा" } },
-            { "key": "other-agency", "label": { "en": "Another agency", "hi": "दूसरी एजेंसी" } },
-            { "key": "other-satellite-service", "label": { "en": "Another satellite service", "hi": "दूसरी उपग्रह सेवा" } }
+            { "key": "public-call", "label": { "en": "Phone call from the public", "hi": "किसी नागरिक का फ़ोन" } },
+            { "key": "staff-sighting", "label": { "en": "Seen by forest staff", "hi": "वन कर्मचारियों ने देखा" } },
+            { "key": "other-agency", "label": { "en": "Another agency", "hi": "अन्य संस्था" } },
+            { "key": "other-satellite-service", "label": { "en": "Another satellite service", "hi": "अन्य उपग्रह सेवा" } }
           ]
         },
         {
@@ -38,14 +35,14 @@
           "type": "text",
           "label": { "en": "Phone number", "hi": "फ़ोन नंबर" },
           "pattern": "[6-9][0-9]{9}",
-          "patternHint": { "en": "Ten digits, starting with 6, 7, 8 or 9", "hi": "दस अंक, जो 6, 7, 8 या 9 से शुरू हों" },
+          "patternHint": { "en": "Ten digits, starting with 6, 7, 8 or 9", "hi": "दस अंक लिखें। पहला अंक 6, 7, 8 या 9 होना चाहिए।" },
           "requireWhen": { "op": "equals", "field": "report_source", "value": "public-call" },
           "showWhen": { "op": "equals", "field": "report_source", "value": "public-call" }
         },
         {
           "key": "reported_at",
           "type": "date-time",
-          "label": { "en": "When was the fire reported?", "hi": "सूचना कब मिली?" },
+          "label": { "en": "When was the fire reported?", "hi": "आग की सूचना कब मिली?" },
           "required": true,
           "notInFuture": true
         }
@@ -59,13 +56,13 @@
           "key": "fire_location",
           "type": "point",
           "label": { "en": "Fire location", "hi": "आग का स्थान" },
-          "hint": { "en": "Use GPS at the site if you can.", "hi": "हो सके तो मौके पर GPS का उपयोग करें।" },
+          "hint": { "en": "Use GPS at the site if you can.", "hi": "हो सके तो मौके पर जीपीएस का इस्तेमाल करें।" },
           "required": true
         },
         {
           "key": "landmark",
           "type": "text",
-          "label": { "en": "Nearest landmark", "hi": "पास का कोई जाना-पहचाना स्थान" },
+          "label": { "en": "Nearest landmark", "hi": "पास की पहचान वाली जगह" },
           "maxLength": 200
         }
       ]
@@ -97,7 +94,7 @@
   ],
   "layout": {
     "pages": [
-      { "key": "all", "title": { "en": "Fire report", "hi": "आग की सूचना" }, "sections": ["report", "place", "fire"] }
+      { "key": "all", "title": { "en": "Fire report", "hi": "आग की रिपोर्ट" }, "sections": ["report", "place", "fire"] }
     ],
     "items": [
       { "item": "report_source", "widget": "radio" },

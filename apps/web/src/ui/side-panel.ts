@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { DEFAULT_DIALOG_CONFIG, Dialog, DialogConfig } from '@angular/cdk/dialog';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
@@ -41,7 +42,7 @@ let nextPanel = 0;
           [class.max-h-full]="scrollDock()" [class.overflow-auto]="scrollDock()" [class.overscroll-contain]="scrollDock()">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h2 #dockHeading [id]="headingId" tabindex="-1" class="rounded-sm text-base font-semibold wrap-anywhere focus-visible:outline-2 focus-visible:outline-ring">{{ heading() }}</h2>
-            <button type="button" hlmBtn variant="ghost" [attr.aria-label]="closeLabel()" (click)="close()">Close</button>
+            <button type="button" hlmBtn variant="ghost" [attr.aria-label]="closeLabel()" (click)="close()">{{ msg('Close') }}</button>
           </div>
           <ng-container [ngTemplateOutlet]="body" />
         </section>
@@ -50,6 +51,7 @@ let nextPanel = 0;
   `
 })
 export class SidePanel {
+  protected readonly msg = translate;
   readonly heading = input.required<string>();
   readonly sheetOnly = input(false);
   readonly closeLabel = input('Close');

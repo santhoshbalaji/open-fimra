@@ -1,78 +1,78 @@
 @if (job(); as job) {
   <div class="grid gap-3">
     <div class="flex flex-wrap items-center gap-2">
-      <h3 #jobHeading tabindex="-1" class="text-title focus-visible:outline-2 focus-visible:outline-ring">Export status</h3>
+      <h3 #jobHeading tabindex="-1" class="text-title focus-visible:outline-2 focus-visible:outline-ring">{{ msg('Export status') }}</h3>
       <fimra-status-badge [icon]="states[job.status].icon" [label]="states[job.status].label" />
     </div>
-    <p id="export-summary" class="text-text-secondary">Open Export jobs in the top bar to return to this file.</p>
+    <p id="export-summary" class="text-text-secondary">{{ msg('Open Export jobs in the top bar to return to this file.') }}</p>
     <fimra-export-job [job]="job" (prepared)="showJob($event)" />
     @if (jobs.error()) {
-      <p class="text-danger" role="alert">Could not check your exports.</p>
-      <button hlmBtn variant="outline" type="button" class="justify-self-start" (click)="jobs.refresh()">Retry status check</button>
+      <p class="text-danger" role="alert">{{ msg('Could not check your exports.') }}</p>
+      <button hlmBtn variant="outline" type="button" class="justify-self-start" (click)="jobs.refresh()">{{ msg('Retry status check') }}</button>
     }
-    <button hlmBtn variant="outline" type="button" class="justify-self-end" (click)="closed.emit()">Close</button>
+    <button hlmBtn variant="outline" type="button" class="justify-self-end" (click)="closed.emit()">{{ msg('Close') }}</button>
   </div>
 } @else {
   <form (submit)="$event.preventDefault(); prepare()">
-    <fieldset><legend>What to export</legend>
-      <hlm-radio-group name="export-kind" aria-label="What to export" [value]="kind()" (valueChange)="kind.set($event)">
-      <label hlmLabel><hlm-radio value="alerts" aria-label="Alerts"><hlm-radio-indicator /></hlm-radio> Alerts</label>
-      <label hlmLabel><hlm-radio value="detections" aria-label="Detections on the map"><hlm-radio-indicator /></hlm-radio> Detections on the map</label>
-      <label hlmLabel><hlm-radio value="submissions" aria-label="Field reports"><hlm-radio-indicator /></hlm-radio> Field reports</label>
+    <fieldset><legend>{{ msg('What to export') }}</legend>
+      <hlm-radio-group name="export-kind" [attr.aria-label]=" msg('What to export') " [value]="kind()" (valueChange)="kind.set($event)">
+      <label hlmLabel><hlm-radio value="alerts" [attr.aria-label]=" msg('Alerts') "><hlm-radio-indicator /></hlm-radio> {{ msg('Alerts') }}</label>
+      <label hlmLabel><hlm-radio value="detections" [attr.aria-label]=" msg('Detections on the map') "><hlm-radio-indicator /></hlm-radio> {{ msg('Detections on the map') }}</label>
+      <label hlmLabel><hlm-radio value="submissions" [attr.aria-label]=" msg('Field reports') "><hlm-radio-indicator /></hlm-radio> {{ msg('Field reports') }}</label>
     </hlm-radio-group></fieldset>
     @if (kind() === 'alerts' && queue()) {
-      <fieldset><legend>Queues</legend>
-        <hlm-radio-group name="export-queue" aria-label="Queues" [value]="onlyQueue()" (valueChange)="onlyQueue.set($event)">
-        <label hlmLabel><hlm-radio [value]="true" aria-label="{{ queueLabel() }} queue only"><hlm-radio-indicator /></hlm-radio> {{ queueLabel() }} queue only</label>
-        <label hlmLabel><hlm-radio [value]="false" aria-label="All queues you can see"><hlm-radio-indicator /></hlm-radio> All queues you can see</label>
+      <fieldset><legend>{{ msg('Queues') }}</legend>
+        <hlm-radio-group name="export-queue" [attr.aria-label]=" msg('Queues') " [value]="onlyQueue()" (valueChange)="onlyQueue.set($event)">
+        <label hlmLabel><hlm-radio [value]="true" [attr.aria-label]="msg('{0} queue only', [msg(queueLabel())])"><hlm-radio-indicator /></hlm-radio> {{ msg('{0} queue only', [msg(queueLabel())]) }}</label>
+        <label hlmLabel><hlm-radio [value]="false" [attr.aria-label]=" msg('All queues you can see') "><hlm-radio-indicator /></hlm-radio> {{ msg('All queues you can see') }}</label>
       </hlm-radio-group></fieldset>
     }
     <div class="grid gap-3 sm:grid-cols-2">
-      <hlm-field><label hlmFieldLabel for="export-format">File format</label>
+      <hlm-field><label hlmFieldLabel for="export-format">{{ msg('File format') }}</label>
         <select hlmInput id="export-format" #fileFormat class="w-full" [value]="format()"
           (change)="format.set($any(fileFormat.value))">
-          <optgroup label="Spreadsheets">
+          <optgroup [label]=" msg('Spreadsheets') ">
             <option value="xlsx">{{ formatLabels.xlsx }}</option>
             <option value="csv_lonlat">{{ formatLabels.csv_lonlat }}</option>
           </optgroup>
-          <optgroup label="For GIS">
+          <optgroup [label]=" msg('For GIS') ">
             @for (key of gisFormats; track key) { <option [value]="key" [selected]="format() === key">{{ formatLabels[key] }}</option> }
           </optgroup>
         </select>
       </hlm-field>
       @if (kind() === 'submissions') {
-        <hlm-field><label hlmFieldLabel for="export-decision">Report decisions</label>
+        <hlm-field><label hlmFieldLabel for="export-decision">{{ msg('Report decisions') }}</label>
           <select hlmInput id="export-decision" #reportDecision class="w-full" [value]="exportDecision()"
             (change)="exportDecision.set(reportDecision.value)">
-            <option value="">All decisions</option>
+            <option value="">{{ msg('All decisions') }}</option>
             <option value="pending">{{ decisions['pending'] }}</option>
             <option value="approved">{{ decisions['approved'] }}</option>
             <option value="returned">{{ decisions['returned'] }}</option>
           </select>
           @if (decision(); as listDecision) {
-            <p hlmFieldDescription>List filter: {{ decisions[listDecision] }}</p>
+            <p hlmFieldDescription>{{ msg('List filter: {0}', [decisions[listDecision]]) }}</p>
           }
         </hlm-field>
       }
     </div>
     <section id="export-summary" aria-labelledby="export-review-title" class="grid gap-2 rounded-control border border-border bg-muted p-3">
-      <h3 id="export-review-title" class="font-semibold">Review export</h3>
+      <h3 id="export-review-title" class="font-semibold">{{ msg('Review export') }}</h3>
       <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         @for (row of summary(); track row[0]) {
           <dt class="font-medium">{{ row[0] }}</dt><dd class="wrap-anywhere">{{ row[1] }}</dd>
         }
-        <dt class="font-medium">Matching rows</dt><dd><span role="status">{{ countLabel() }}</span></dd>
-        <dt class="font-medium">Access</dt><dd class="wrap-anywhere">{{ jobs.jurisdiction() }}</dd>
+        <dt class="font-medium">{{ msg('Matching rows') }}</dt><dd><span role="status">{{ countLabel() }}</span></dd>
+        <dt class="font-medium">{{ msg('Access') }}</dt><dd class="wrap-anywhere">{{ jobs.jurisdiction() }}</dd>
       </dl>
       @if (countFailed()) {
-        <button hlmBtn type="button" variant="outline" class="justify-self-start" (click)="retryCount()">Retry count</button>
+        <button hlmBtn type="button" variant="outline" class="justify-self-start" (click)="retryCount()">{{ msg('Retry count') }}</button>
       }
     </section>
     @if (error()) { <p class="text-danger" role="alert">{{ error() }}</p> }
     <div class="export-actions">
-      <button hlmBtn variant="outline" type="button" class="secondary" (click)="closed.emit()">Close</button>
-      <button hlmBtn type="submit" [busy]="busy()" [disabled]="count() === null" [attr.aria-label]="'Prepare export as ' + formatLabels[format()]"
-        aria-describedby="export-summary">Prepare export</button>
+      <button hlmBtn variant="outline" type="button" class="secondary" (click)="closed.emit()">{{ msg('Close') }}</button>
+      <button hlmBtn type="submit" [busy]="busy()" [disabled]="count() === null" [attr.aria-label]="msg('Prepare export as ') + formatLabels[format()]"
+        aria-describedby="export-summary">{{ msg('Prepare export') }}</button>
     </div>
   </form>
 }

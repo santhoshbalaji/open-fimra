@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { Location } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, TemplateRef, afterRenderEffect, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
@@ -16,7 +17,7 @@ import { StateRegion, type DataState } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
 import { Timeline } from './ui/timeline';
 import { Workflow } from './workflow';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 export interface IncidentRow {
   id: string;
@@ -46,6 +47,7 @@ export interface IncidentFocus { id: string; points: [number, number][]; bounds:
   host: { class: 'block h-full min-w-0' }
 })
 export class Incidents {
+  protected readonly msg = translate;
   readonly endpoint = input.required<string>();
   readonly now = input.required<number>();
 
@@ -75,25 +77,25 @@ export class Incidents {
     filterPeriodLabel(Number(this.hours())), this.forest() && classes[this.forest()!]
   ].filter(Boolean).join(' · '));
 
-  protected readonly format = defaultWorkspaceFormat;
+  protected readonly format = workspaceFormat;
   protected readonly nowDate = computed(() => new Date(this.now()));
   protected readonly classes = classes;
   protected readonly date = (seconds: number) => new Date(seconds * 1000);
   protected readonly activity = (row: IncidentRow) => new Date(row.activity_at);
-  protected readonly places = (row: IncidentRow) => [...row.beat_names, ...row.division_names].join(' · ') || 'Unknown place';
+  protected readonly places = (row: IncidentRow) => [...row.beat_names, ...row.division_names].join(' · ') || translate('Unknown place');
   protected readonly rowKey = (row: IncidentRow) => row.id;
 
   private readonly placeCell = viewChild<TemplateRef<{ $implicit: IncidentRow }>>('placeCell');
   private readonly statusCell = viewChild<TemplateRef<{ $implicit: IncidentRow }>>('statusCell');
   private readonly activityCell = viewChild<TemplateRef<{ $implicit: IncidentRow }>>('activityCell');
   protected readonly columns = computed<readonly TableColumn<IncidentRow>[]>(() => [
-    { id: 'place', label: 'Place', rowHeading: true, value: this.places, cell: this.placeCell() },
-    { id: 'status', label: 'Status', value: row => row.step_label, cell: this.statusCell() },
-    { id: 'activity', label: 'Latest activity', sortable: true,
+    { id: 'place', label: translate('Place'), rowHeading: true, value: this.places, cell: this.placeCell() },
+    { id: 'status', label: translate('Status'), value: row => row.step_label, cell: this.statusCell() },
+    { id: 'activity', label: translate('Latest activity'), sortable: true,
       value: row => this.format.dateTime(this.activity(row)), cell: this.activityCell() },
-    { id: 'id', label: 'Incident ID', value: row => '#' + row.id },
-    { id: 'members', label: 'Member alerts', value: row => this.format.number(row.alert_count) },
-    { id: 'age', label: 'Age since first seen', value: row => this.format.age(this.date(row.first_observed_at), this.nowDate()) }
+    { id: 'id', label: translate('Incident ID'), value: row => '#' + row.id },
+    { id: 'members', label: translate('Member alerts'), value: row => this.format.number(row.alert_count) },
+    { id: 'age', label: translate('Age since first seen'), value: row => this.format.age(this.date(row.first_observed_at), this.nowDate()) }
   ]);
 
   private readonly result = signal<{ key: string; page: TablePage<IncidentRow>; total: number; observedAt: Date } | null>(null);
@@ -130,7 +132,7 @@ export class Incidents {
       const observed = sameList && prior.page.rows.length ? prior.observedAt : null;
       if (!sameList || observed) this.listState.set(observed ? {
         kind: 'stale', heading: 'Refreshing incidents',
-        observedAt: { dateTime: observed.toISOString(), label: this.format.dateTime(observed) }
+        observedAt: { dateTime: observed.toISOString(), label: untracked(() => this.format.dateTime(observed)) }
       } : { kind: 'loading', heading: 'Loading incidents' });
       if (!sameList) this.result.set(null);
 
@@ -147,11 +149,11 @@ export class Incidents {
           this.result.set({ key, total: data.total, observedAt: this.nowDate(),
             page: { rows: data.items, nextCursor: data.nextCursor ?? null, position } });
           this.listState.set(data.items.length ? { kind: 'ready' } : {
-            kind: 'empty', heading: cursor ? 'No incidents on this page' : 'No incidents',
-            detail: cursor ? 'Return to the first page to see the latest results.' : 'Try a wider time window or change the filters.'
+            kind: 'empty', heading: cursor ? translate('No incidents on this page') : translate('No incidents'),
+            detail: cursor ? translate('Return to the first page to see the latest results.') : translate('Try a wider time window or change the filters.')
           });
         },
-        error: error => this.listState.set(this.failure(error, 'Could not load incidents', !!observed))
+        error: error => this.listState.set(this.failure(error, translate('Could not load incidents'), !!observed))
       });
       cleanup(() => request.unsubscribe());
     });
@@ -168,7 +170,7 @@ export class Incidents {
       if (!untracked(this.incident)) this.detailState.set({ kind: 'loading', heading: 'Loading incident' });
       const request = this.http.get<IncidentRow>(url + '/' + id).subscribe({
         next: row => { this.detail.set({ url, row }); this.detailState.set({ kind: 'ready' }); },
-        error: error => { this.detail.set(null); this.detailState.set(this.failure(error, 'Could not load incident')); }
+        error: error => { this.detail.set(null); this.detailState.set(this.failure(error, translate('Could not load incident'))); }
       });
       cleanup(() => request.unsubscribe());
     });
@@ -191,9 +193,9 @@ export class Incidents {
       ).subscribe({
         next: rows => {
           this.members.set(rows);
-          this.memberState.set(rows.length ? { kind: 'ready' } : { kind: 'empty', heading: 'No member alerts' });
+          this.memberState.set(rows.length ? { kind: 'ready' } : { kind: 'empty', heading: translate('No member alerts') });
         },
-        error: error => { this.members.set([]); this.memberState.set(this.failure(error, 'Could not load member alerts')); }
+        error: error => { this.members.set([]); this.memberState.set(this.failure(error, translate('Could not load member alerts'))); }
       });
       cleanup(() => request.unsubscribe());
     });
@@ -265,7 +267,7 @@ export class Incidents {
 
   private failure(error: HttpErrorResponse, heading: string, keepContent = false): DataState {
     if (error.status === 401) this.auth.sessionEnded();
-    if (error.status === 403 || error.status === 404) return { kind: 'forbidden', heading: 'Access is unavailable' };
+    if (error.status === 403 || error.status === 404) return { kind: 'forbidden', heading: translate('Access is unavailable') };
     return { kind: 'error', heading, keepContent };
   }
 }

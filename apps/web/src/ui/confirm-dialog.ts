@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { ChangeDetectionStrategy, Component, Injectable, inject } from '@angular/core';
 import { BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -20,17 +21,18 @@ export interface ConfirmOptions {
   host: { class: 'grid gap-6' },
   template: `
     <hlm-dialog-header>
-      <h2 hlmDialogTitle class="text-base">{{ options.heading }}</h2>
-      <p hlmDialogDescription>{{ options.detail }}</p>
+      <h2 hlmDialogTitle class="text-base">{{ msg(options.heading) }}</h2>
+      <p hlmDialogDescription>{{ msg(options.detail ?? '') }}</p>
     </hlm-dialog-header>
     <hlm-dialog-footer class="flex-col">
-      <button type="button" hlmBtn variant="outline" (click)="dialog.close(false)">{{ options.cancelLabel ?? 'Cancel' }}</button>
+      <button type="button" hlmBtn variant="outline" (click)="dialog.close(false)">{{ msg(options.cancelLabel ?? 'Cancel') }}</button>
       <button type="button" hlmBtn [variant]="options.destructive ? 'destructive' : 'primary'"
-        (click)="dialog.close(true)">{{ options.confirmLabel }}</button>
+        (click)="dialog.close(true)">{{ msg(options.confirmLabel) }}</button>
     </hlm-dialog-footer>
   `
 })
 class ConfirmContent {
+  protected readonly msg = translate;
   protected readonly options = injectBrnDialogContext<ConfirmOptions>();
   protected readonly dialog = inject<BrnDialogRef<boolean>>(BrnDialogRef);
 }

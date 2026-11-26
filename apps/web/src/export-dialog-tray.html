@@ -1,14 +1,14 @@
 <fimra-live-status class="sr-only" [message]="jobs.announcement()" />
 <hlm-dialog #tray autoFocus="first-heading" (closed)="selected.set(null)">
-  <button hlmBtn variant="ghost" class="max-sm:px-2" hlmDialogTrigger aria-label="Export jobs" title="Export jobs"
+  <button hlmBtn variant="ghost" class="max-sm:px-2" hlmDialogTrigger [attr.aria-label]=" msg('Export jobs') " [title]=" msg('Export jobs') "
     (click)="jobs.refresh()">
     <svg fimraIcon="download" aria-hidden="true"></svg>
-    <span class="max-sm:hidden">Export jobs</span>
+    <span class="max-sm:hidden">{{ msg('Export jobs') }}</span>
   </button>
   <hlm-dialog-content *hlmDialogPortal class="export-dialog sm:max-w-lg" [showCloseButton]="false">
     <hlm-dialog-header>
-      <h2 hlmDialogTitle tabindex="-1">Export jobs</h2>
-      <p hlmDialogDescription>Recent files you prepared in this workspace.</p>
+      <h2 hlmDialogTitle tabindex="-1">{{ msg('Export jobs') }}</h2>
+      <p hlmDialogDescription>{{ msg('Recent files you prepared in this workspace.') }}</p>
     </hlm-dialog-header>
     <fimra-state-region [state]="state()" (retry)="jobs.refresh()">
       <ul role="list" class="grid min-w-0 gap-2">
@@ -16,9 +16,9 @@
           <li class="min-w-0 rounded-control border border-border bg-card">
             <div class="flex flex-wrap items-start justify-between gap-2 p-3">
               <div class="min-w-0">
-                <span class="font-medium">{{ datasets[job.kind] }}</span>
+                <span class="font-medium">{{ msg(datasets[job.kind]) }}</span>
                 <fimra-status-badge [icon]="states[job.status].icon" [label]="states[job.status].label" />
-                <span class="block text-sm text-text-secondary">{{ formats[job.format] }} · {{ date(job.createdAt) }}</span>
+                <span class="block text-sm text-text-secondary">{{ msg(formats[job.format]) }} · {{ date(job.createdAt) }}</span>
               </div>
               @if (job.status === 'ready' && job.fileName) {
                 <fimra-export-job [job]="job" />
@@ -26,7 +26,7 @@
             </div>
             <details [open]="selected() === job.id">
               <summary class="min-h-8 cursor-pointer rounded-control px-3 pb-2 text-sm focus-visible:outline-2 focus-visible:outline-ring">
-                Export details
+                {{ msg('Export details') }}
               </summary>
               <div class="grid min-w-0 gap-3 border-t border-border p-3">
                 <dl class="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
@@ -36,8 +36,8 @@
                     </div>
                   }
                   <div class="sm:contents">
-                    <dt class="font-medium">Covered period</dt>
-                    <dd>@if (job.filters.from; as from) { {{ date(from) }} to {{ date(job.filters.to) }} } @else { All dates up to {{ date(job.filters.to) }} }</dd>
+                    <dt class="font-medium">{{ msg('Covered period') }}</dt>
+                    <dd>@if (job.filters.from; as from) { {{ msg('{0} to {1}', [date(from), date(job.filters.to)]) }} } @else { {{ msg('All dates up to {0}', [date(job.filters.to)]) }} }</dd>
                   </div>
                 </dl>
                 @if (job.status !== 'ready' || !job.fileName) {
@@ -50,7 +50,7 @@
       </ul>
     </fimra-state-region>
     <hlm-dialog-footer>
-      <button hlmBtn variant="outline" type="button" (click)="tray.close()">Close</button>
+      <button hlmBtn variant="outline" type="button" (click)="tray.close()">{{ msg('Close') }}</button>
     </hlm-dialog-footer>
   </hlm-dialog-content>
 </hlm-dialog>
