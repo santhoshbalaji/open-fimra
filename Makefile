@@ -452,3 +452,9 @@ SHELL_SHOTS ?= $(HOME)/open-fimra-screenshots/u4
 shell-walkthrough: web-build ## Check routes, history and shell accessibility against the seeded development stack
 	SHOTS="$(SHELL_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh
+
+INCIDENT_SHOTS ?= $(HOME)/open-fimra-screenshots/u7
+.PHONY: incident-walkthrough
+incident-walkthrough: web-build ## Check incident triage, role visibility and accessibility against the seeded development stack
+	SHOTS="$(INCIDENT_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh incident-walkthrough.mjs

@@ -1,23 +1,28 @@
-import { HlmButtonImports } from '@spartan-ng/helm/button';
-import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
-import { HlmTableImports } from '@spartan-ng/helm/table';
+import { Location } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, ElementRef, TemplateRef, afterRenderEffect, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { HlmButton } from '@spartan-ng/helm/button';
+import { EMPTY, expand, reduce } from 'rxjs';
 import type { AlertRow } from './alert-queue';
 import { AuthService } from './auth';
-import { DashboardFilters } from './dashboard-filters';
-import { classes, relativeAge } from './detections';
-import { EmptyState } from './ui/empty-state';
+import { classes, type ForestClass } from './detections';
+import { ShellListScroll } from './shell-list-scroll';
+import { ShellNavigation, recordId } from './shell-navigation';
+import { DataTable, type TableColumn, type TablePage, type TablePosition } from './ui/data-table';
+import { SidePanel } from './ui/side-panel';
+import { StateRegion, type DataState } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
-import { Workflow } from './workflow';
-import { ShellNavigation } from './shell-navigation';
-import { WorkspaceService } from './workspace';
+import { Timeline, type TimelineEvent } from './ui/timeline';
+import { Workflow, type WorkflowEntry } from './workflow';
+import { defaultWorkspaceFormat } from './workspace-format';
 
 export interface IncidentRow {
   id: string;
   status: string;
   step_label: string;
   step_time: string;
+  activity_at: string;
   overdue: boolean;
   terminal: boolean;
   merged_into: string | null;
@@ -29,134 +34,255 @@ export interface IncidentRow {
   /** West, south, east and north of the member alerts you can see. */
   bounds: [number, number, number, number];
 }
-interface Page { items: IncidentRow[]; total: number; nextCursor?: string }
-/** The member alerts to show on the map, or null to clear them. */
+interface Page<Row> { items: Row[]; total: number; nextCursor?: string }
 export interface IncidentFocus { id: string; points: [number, number][]; bounds: [number, number, number, number] }
 
-/** Incidents beside the alert queue: alerts close in space and time, with their own workflow. */
+const milestones = new Set(['acknowledged', 'reached_site', 'controlled', 'extinguished', 'closed']);
+
 @Component({
   selector: 'fimra-incidents',
-  imports: [HlmButtonImports, HlmSkeletonImports, HlmTableImports, EmptyState, StatusBadge, Workflow],
-  templateUrl: './incidents.html'
+  imports: [DataTable, HlmButton, RouterLink, ShellListScroll, SidePanel, StateRegion, StatusBadge, Timeline, Workflow],
+  templateUrl: './incidents.html',
+  styleUrl: './incidents.css',
+  host: { class: 'block h-full min-w-0' }
 })
 export class Incidents {
-  /** The workspace's API address, such as …/api/v1/workspaces/demo. */
   readonly endpoint = input.required<string>();
   readonly now = input.required<number>();
-  readonly openAlert = output<AlertRow>();
-  readonly showOnMap = output<IncidentFocus | null>();
-  readonly classes = classes;
-  readonly relativeAge = relativeAge;
-  readonly stepDate = Date.parse;
-  readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  readonly page = signal<Page | null>(null);
-  readonly cursor = signal('');
-  readonly message = signal('');
-  readonly selected = signal<IncidentRow | null>(null);
-  readonly members = signal<AlertRow[] | null>(null);
-  readonly detailMessage = signal('');
-  private readonly reload = signal(0);
+
+  protected readonly navigation = inject(ShellNavigation);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
-  private readonly workspace = inject(WorkspaceService);
-  private readonly filters = inject(DashboardFilters);
-  readonly incidentsUrl = computed(() => this.endpoint() + '/incidents');
-  private readonly navigation = inject(ShellNavigation, { optional: true });
-  readonly selectedId = computed(() => this.navigation ? this.navigation.query().get('incident') : this.selected()?.id);
+  private readonly location = inject(Location);
+  protected readonly incidentsUrl = computed(() => this.endpoint() + '/incidents');
+  protected readonly selectedId = computed(() => recordId(this.navigation.query().get('incident')));
+  protected readonly memberId = computed(() => recordId(this.navigation.query().get('member')));
+  private readonly query = this.navigation.query;
+  protected readonly cursor = computed(() => this.query().get('cursor'));
+  private readonly sort = computed(() => this.query().get('sort') === 'activity-asc' ? 'activity-asc' : 'activity-desc');
+  private readonly hours = computed(() => this.query().get('hours') ?? '168');
+  private readonly forest = computed(() => this.query().get('class') as ForestClass | null);
+  private readonly unit = computed(() => this.query().get('unitPath'));
+  private readonly params = computed(() => ({
+    hours: this.hours(), sort: this.sort(), limit: 20,
+    ...(this.forest() && { class: this.forest()! }),
+    ...(this.unit() && { unitPath: this.unit()! }),
+    ...(this.cursor() && { cursor: this.cursor()! })
+  }));
+  protected readonly tableKey = computed(() => this.listKey() + '/table');
+  protected readonly listKey = computed(() => this.incidentsUrl() + '?' + JSON.stringify(this.params()));
+  protected readonly scope = computed(() => [
+    `Past ${this.hours()} ${this.hours() === '1' ? 'hour' : 'hours'}`, this.forest() && classes[this.forest()!], this.unit()
+  ].filter(Boolean).join(' · '));
+
+  protected readonly format = defaultWorkspaceFormat;
+  protected readonly nowDate = computed(() => new Date(this.now()));
+  protected readonly classes = classes;
+  protected readonly date = (seconds: number) => new Date(seconds * 1000);
+  protected readonly activity = (row: IncidentRow) => new Date(row.activity_at);
+  protected readonly places = (row: IncidentRow) => [...row.beat_names, ...row.division_names].join(' · ') || 'Unknown place';
+  protected readonly rowKey = (row: IncidentRow) => row.id;
+
+  private readonly placeCell = viewChild<TemplateRef<{ $implicit: IncidentRow }>>('placeCell');
+  private readonly statusCell = viewChild<TemplateRef<{ $implicit: IncidentRow }>>('statusCell');
+  private readonly activityCell = viewChild<TemplateRef<{ $implicit: IncidentRow }>>('activityCell');
+  protected readonly columns = computed<readonly TableColumn<IncidentRow>[]>(() => [
+    { id: 'place', label: 'Place', rowHeading: true, value: this.places, cell: this.placeCell() },
+    { id: 'status', label: 'Status', value: row => row.step_label, cell: this.statusCell() },
+    { id: 'activity', label: 'Latest activity', sortable: true,
+      value: row => this.format.dateTime(this.activity(row)), cell: this.activityCell() },
+    { id: 'id', label: 'Incident ID', value: row => '#' + row.id },
+    { id: 'members', label: 'Member alerts', value: row => this.format.number(row.alert_count) },
+    { id: 'age', label: 'Age since first seen', value: row => this.format.age(this.date(row.first_observed_at), this.nowDate()) }
+  ]);
+
+  private readonly result = signal<{ key: string; page: TablePage<IncidentRow>; total: number; observedAt: Date } | null>(null);
+  protected readonly page = computed<TablePage<IncidentRow>>(() => this.result()?.page ?? {
+    rows: [], nextCursor: null, position: { cursor: null, previousCursors: [] }
+  });
+  protected readonly total = computed(() => this.result()?.total ?? null);
+  protected readonly listState = signal<DataState>({ kind: 'loading', heading: 'Loading incidents' });
+  protected readonly detailState = signal<DataState>({ kind: 'loading', heading: 'Loading incident' });
+  protected readonly memberState = signal<DataState>({ kind: 'loading', heading: 'Loading member alerts' });
+  private readonly detail = signal<{ url: string; row: IncidentRow } | null>(null);
+  protected readonly incident = computed(() => {
+    const detail = this.detail();
+    return detail?.url === this.incidentsUrl() && detail.row.id === this.selectedId() ? detail.row : null;
+  });
+  protected readonly members = signal<readonly AlertRow[]>([]);
+  protected readonly member = computed(() => this.members().find(row => row.id === this.memberId()));
+  protected readonly listRetry = signal(0);
+  protected readonly detailRetry = signal(0);
+  protected readonly memberRetry = signal(0);
+  private readonly list = viewChild<ElementRef<HTMLElement>>('list');
+  private readonly heading = viewChild<ElementRef<HTMLElement>>('listSummary');
+  private readonly panel = viewChild(SidePanel);
+  private origin: { id: string; endpoint: string } | null = null;
 
   constructor() {
-    effect(() => {
-      this.endpoint();
-      this.filters.params();
-      this.page.set(null);
-      if (!this.navigation) {
-        this.cursor.set('');
-        this.selected.set(null);
-      }
-    });
-    if (this.navigation) {
-      const query = this.navigation.query;
-      effect(() => this.cursor.set(query().get('cursor') ?? ''));
-    }
-    effect(onCleanup => {
-      const params: Record<string, string | number> = { ...this.filters.params() };
+    effect(cleanup => {
+      const params = this.params();
+      const key = this.listKey();
+      this.listRetry();
+      this.now();
+      const prior = untracked(this.result);
+      const sameList = prior?.key === key;
+      const observed = sameList && prior.page.rows.length ? prior.observedAt : null;
+      if (!sameList || observed) this.listState.set(observed ? {
+        kind: 'stale', heading: 'Refreshing incidents',
+        observedAt: { dateTime: observed.toISOString(), label: this.format.dateTime(observed) }
+      } : { kind: 'loading', heading: 'Loading incidents' });
+      if (!sameList) this.result.set(null);
+
       const cursor = this.cursor();
-      if (cursor) params['cursor'] = cursor;
-      this.now();
-      this.reload();
-      const request = this.http.get<Page>(this.incidentsUrl(), { params }).subscribe({
-        next: page => { this.page.set(page); this.message.set(''); },
-        error: (error: HttpErrorResponse) => { this.failed(error); this.message.set('Incidents could not load. Trying again in a minute.'); }
+      const saved = this.routeState();
+      const previousCursors = cursor
+        ? (saved.incidentCursor === cursor ? saved.incidentPrevious ?? [null] : [null])
+        : [];
+      const position: TablePosition = {
+        cursor, previousCursors, sort: { columnId: 'activity', direction: this.sort() === 'activity-asc' ? 'ascending' : 'descending' }
+      };
+      const request = this.http.get<Page<IncidentRow>>(this.incidentsUrl(), { params }).subscribe({
+        next: data => {
+          this.result.set({ key, total: data.total, observedAt: this.nowDate(),
+            page: { rows: data.items, nextCursor: data.nextCursor ?? null, position } });
+          this.listState.set(data.items.length ? { kind: 'ready' } : {
+            kind: 'empty', heading: cursor ? 'No incidents on this page' : 'No incidents',
+            detail: cursor ? 'Return to the first page to see the latest results.' : 'Try a wider time window or change the filters.'
+          });
+        },
+        error: error => this.listState.set(this.failure(error, 'Could not load incidents', !!observed))
       });
-      onCleanup(() => request.unsubscribe());
+      cleanup(() => request.unsubscribe());
     });
-    // Details and members are read again with the list, and after each step.
-    effect(onCleanup => {
+
+    effect(cleanup => {
       const id = this.selectedId();
-      this.now();
-      this.reload();
-      if (!id || untracked(this.selected)?.id !== id) {
-        this.selected.set(null);
-        this.members.set(null);
+      const url = this.incidentsUrl();
+      if (!id) {
+        this.detail.set(null);
+        return;
       }
-      if (!id) return;
-      this.detailMessage.set('');
-      const detail = this.http.get<IncidentRow>(this.incidentsUrl() + '/' + id).subscribe({
-        next: row => this.selected.set(row),
-        error: (error: HttpErrorResponse) => { this.failed(error); this.detailMessage.set('This incident could not load.'); }
+      this.detailRetry();
+      this.now();
+      if (!untracked(this.incident)) this.detailState.set({ kind: 'loading', heading: 'Loading incident' });
+      const request = this.http.get<IncidentRow>(url + '/' + id).subscribe({
+        next: row => { this.detail.set({ url, row }); this.detailState.set({ kind: 'ready' }); },
+        error: error => { this.detail.set(null); this.detailState.set(this.failure(error, 'Could not load incident')); }
       });
-      const members = this.http.get<{ items: AlertRow[] }>(this.endpoint() + '/alerts', { params: { incident: id, limit: 200 } }).subscribe({
-        next: page => this.members.set(page.items),
-        error: (error: HttpErrorResponse) => { this.failed(error); this.detailMessage.set('Member alerts could not load.'); }
+      cleanup(() => request.unsubscribe());
+    });
+
+    effect(cleanup => {
+      const incident = this.incident();
+      const endpoint = this.endpoint();
+      if (!incident) {
+        this.members.set([]);
+        return;
+      }
+      this.memberRetry();
+      if (!untracked(this.members).length) this.memberState.set({ kind: 'loading', heading: 'Loading member alerts' });
+      const page = (cursor: string) => this.http.get<Page<AlertRow>>(endpoint + '/alerts', {
+        params: { incident: incident.id, limit: 200, ...(cursor && { cursor }) }
       });
-      onCleanup(() => { detail.unsubscribe(); members.unsubscribe(); });
+      const request = page('').pipe(
+        expand(data => data.nextCursor ? page(data.nextCursor) : EMPTY),
+        reduce((rows, data) => rows.concat(data.items), [] as AlertRow[])
+      ).subscribe({
+        next: rows => {
+          this.members.set(rows);
+          this.memberState.set(rows.length ? { kind: 'ready' } : { kind: 'empty', heading: 'No member alerts' });
+        },
+        error: error => { this.members.set([]); this.memberState.set(this.failure(error, 'Could not load member alerts')); }
+      });
+      cleanup(() => request.unsubscribe());
     });
-    effect(() => {
-      const row = this.selected();
-      const members = this.members();
-      if (!row || !members?.length) { this.showOnMap.emit(null); return; }
-      this.showOnMap.emit({ id: row.id, bounds: row.bounds, points: members.map(alert => [alert.longitude, alert.latitude]) });
+
+    afterRenderEffect(() => {
+      const panel = this.panel();
+      const id = this.selectedId();
+      const endpoint = this.endpoint();
+      if (!panel) return;
+      if (id) {
+        const start = this.routeState().incidentOrigin ?? id;
+        this.origin = { id: start, endpoint };
+        panel.show(() => this.findRow(), this.heading()?.nativeElement);
+      } else {
+        untracked(() => panel.close());
+      }
     });
   }
 
-  open(row: IncidentRow): void {
-    if (this.navigation) {
-      this.navigation.update({ incident: row.id });
-      return;
+  protected open(id: string): void {
+    this.navigation.update({ incident: id, member: null }, {
+      state: { ...this.routeState(), incidentOrigin: this.selectedId() ? this.origin?.id : id }
+    });
+  }
+
+  protected closed(): void {
+    if (this.selectedId()) {
+      this.navigation.update({ incident: null, member: null }, { state: this.routeState() });
     }
-    this.detailMessage.set('');
-    if (row.id !== this.selected()?.id) this.members.set(null);
-    this.selected.set(row);
   }
 
-  openById(id: string): void {
-    this.open({ ...this.selected()!, id });
+  protected selectMember(id: string): void {
+    this.navigation.update({ member: this.memberId() === id ? null : id }, { state: this.routeState() });
   }
 
-  close(): void {
-    if (this.navigation) this.navigation.update({ incident: null });
-    else this.selected.set(null);
+  protected firstPage(): void {
+    this.changePage({ cursor: null, previousCursors: [], sort: this.page().position.sort });
   }
 
-  changed(): void {
-    this.reload.update(n => n + 1);
+  protected changePage(position: TablePosition): void {
+    this.navigation.update({
+      cursor: position.cursor, sort: position.sort?.direction === 'ascending' ? 'activity-asc' : 'activity-desc',
+      incident: null, member: null
+    }, {
+      state: { incidentCursor: position.cursor, incidentPrevious: position.previousCursors }
+    });
   }
 
-  changePage(cursor: string): void {
-    if (this.navigation) {
-      this.navigation.update({ cursor: cursor || null });
-      return;
-    }
-    this.page.update(page => page && { ...page, items: [], nextCursor: undefined });
-    this.cursor.set(cursor);
+  protected retryList(): void { this.listRetry.update(n => n + 1); }
+  protected retryDetail(): void { this.detailRetry.update(n => n + 1); }
+  protected retryMembers(): void { this.memberRetry.update(n => n + 1); }
+
+  protected changed(): void {
+    this.listRetry.update(n => n + 1);
+    this.detailRetry.update(n => n + 1);
   }
 
-  places(row: IncidentRow): string {
-    return [...row.beat_names, ...row.division_names].join(' · ') || 'Unknown place';
+  protected timeline(entries: WorkflowEntry[] | null): TimelineEvent[] {
+    return (entries ?? []).map((entry, index, all) => ({
+      id: `${entry.at}/${index}`,
+      title: entry.label,
+      at: new Date(entry.at),
+      milestone: index === 0 || index === all.length - 1 || milestones.has(entry.step),
+      detail: [
+        entry.actor || 'Recorded automatically',
+        entry.latitude != null && `${entry.latitude}, ${entry.longitude}`,
+        entry.note,
+        entry.reason && `Location exception: ${entry.reason}`,
+        entry.reportPending && 'Report pending',
+        entry.alertsMoved ? `Moved ${this.format.number(entry.alertsMoved)} ${entry.alertsMoved === 1 ? 'alert' : 'alerts'}` : ''
+      ].filter(Boolean).join(' · ')
+    }));
   }
 
-  private failed(error: HttpErrorResponse): void {
+  private routeState() {
+    return (this.location.getState() ?? {}) as {
+      incidentCursor?: string; incidentPrevious?: readonly (string | null)[]; incidentOrigin?: string
+    };
+  }
+
+  private findRow(): HTMLElement | null {
+    const origin = this.origin;
+    if (!origin || origin.endpoint !== this.endpoint()) return null;
+    return this.list()?.nativeElement.querySelector<HTMLElement>(`[data-incident-id="${origin.id}"]`) ?? null;
+  }
+
+  private failure(error: HttpErrorResponse, heading: string, keepContent = false): DataState {
     if (error.status === 401) this.auth.sessionEnded();
-    else if (error.status === 403) this.workspace.deny();
+    if (error.status === 403 || error.status === 404) return { kind: 'forbidden', heading: 'Access is unavailable' };
+    return { kind: 'error', heading, keepContent };
   }
 }

@@ -18,7 +18,7 @@ th, td {
 th:not(.selection), td:not(.selection) { min-inline-size: 6rem; }
 tbody tr:last-child > * { border-block-end: 0; }
 td, dd { font-variant-numeric: tabular-nums; }
-.sort { white-space: normal; text-align: start; justify-content: start; height: auto; }
+.sort { overflow-wrap: break-word; white-space: normal; text-align: start; justify-content: start; height: auto; }
 .selected { background: var(--table-row-selected); }
 summary, .choices label, .pick {
   box-sizing: border-box;

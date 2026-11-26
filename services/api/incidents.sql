@@ -33,14 +33,23 @@ visible AS (
        AND ($8::ltree IS NULL OR bool_or(m.unit_paths <@ $8))
 ),
 filtered AS (
-    SELECT v.id, v.last_time FROM visible v
+    SELECT v.id, v.last_time,
+           GREATEST(v.last_time, CASE WHEN wi.current_step <> 'new' THEN wi.entered_at END) AS activity_at
+    FROM visible v
     JOIN workflow_instances wi ON wi.incident_id = v.id
     WHERE $6 = '' OR wi.current_step = $6
 ),
+ordered AS (
+    SELECT *, CASE WHEN $12 = '' THEN last_time ELSE activity_at END AS cursor_time FROM filtered
+),
 page AS (
-    SELECT * FROM filtered
-    WHERE $9::timestamptz IS NULL OR (last_time, id) < ($9, $10::bigint)
-    ORDER BY last_time DESC, id DESC LIMIT $11
+    SELECT * FROM ordered
+    WHERE $9::timestamptz IS NULL
+       OR ($12 = 'activity-asc' AND (cursor_time, id) > ($9, $10::bigint))
+       OR ($12 <> 'activity-asc' AND (cursor_time, id) < ($9, $10::bigint))
+    ORDER BY CASE WHEN $12 = 'activity-asc' THEN cursor_time END,
+             CASE WHEN $12 = 'activity-asc' THEN id END,
+             cursor_time DESC, id DESC LIMIT $11
 ),
 member_places AS (
     SELECT m.*, ST_X(d.geom) AS longitude, ST_Y(d.geom) AS latitude,
@@ -59,7 +68,7 @@ details AS (
            EXISTS (SELECT FROM workflow_transitions t WHERE t.template_id=wi.template_id
                    AND t.from_step=wi.current_step AND now() > wi.entered_at+t.time_limit) AS overdue,
            i.created_at, i.merged_into::text AS merged_into, i.merged_at,
-           p.last_time AS last_observed_time,
+           p.last_time AS last_observed_time, p.activity_at, p.cursor_time,
            floor(extract(epoch FROM p.last_time))::bigint AS last_observed_at,
            (SELECT floor(extract(epoch FROM min(observed_at)))::bigint FROM member_places WHERE incident_id = p.id) AS first_observed_at,
            (SELECT count(*) FROM member_places WHERE incident_id = p.id) AS alert_count,
@@ -83,5 +92,8 @@ SELECT EXISTS (SELECT 1 FROM grants),
            WHERE s.slug = $6 AND (t.workspace_id IS NULL OR t.workspace_id IN (SELECT workspace_id FROM grants))
        ),
        (SELECT count(*) FROM filtered),
-       COALESCE((SELECT jsonb_agg(to_jsonb(details) ORDER BY last_observed_time DESC, id::bigint DESC)
+       COALESCE((SELECT jsonb_agg(to_jsonb(details) - 'cursor_time' ORDER BY
+                 CASE WHEN $12 = 'activity-asc' THEN cursor_time END,
+                 CASE WHEN $12 = 'activity-asc' THEN id::bigint END,
+                 cursor_time DESC, id::bigint DESC)
                  FROM details), '[]')

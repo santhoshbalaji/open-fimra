@@ -376,6 +376,41 @@ ON CONFLICT(layer_version_id) DO UPDATE SET cursor_time=NULL,cursor_id=NULL,fini
 		}
 	})
 
+	t.Run("activity sorting walks every visible incident in both directions", func(t *testing.T) {
+		walk := func(direction string) []string {
+			t.Helper()
+			path := base + "?limit=2&sort=activity-" + direction
+			next := path
+			var ids []string
+			seen := map[string]bool{}
+			for next != "" {
+				var p page
+				call("a2", "GET", next, "", 200, &p)
+				for _, row := range p.Items {
+					if seen[row.ID] || row.AlertCount != officerView[row.ID] {
+						t.Fatalf("invalid incident on %s page: %+v", direction, row)
+					}
+					seen[row.ID] = true
+					ids = append(ids, row.ID)
+				}
+				next = ""
+				if p.NextCursor != "" {
+					next = path + "&cursor=" + url.QueryEscape(p.NextCursor)
+				}
+			}
+			if len(ids) != len(officerView) {
+				t.Fatalf("%s pages returned %v", direction, ids)
+			}
+			return ids
+		}
+		ascending, descending := walk("asc"), walk("desc")
+		slices.Reverse(descending)
+		if !slices.Equal(ascending, descending) {
+			t.Fatalf("ascending order %v does not reverse descending order %v", ascending, descending)
+		}
+		call("a2", "GET", base+"?sort=unknown", "", 400, nil)
+	})
+
 	step := func(ref string) (string, string) {
 		var current, entered string
 		if err := tx.QueryRow(ctx, `SELECT wi.current_step,wi.entered_at::text FROM alerts a
@@ -426,6 +461,11 @@ WHERE a.workspace_id=$1 AND d.source=$2 AND d.raw->>'reference_id'=$3`, workspac
 		call("a1", "POST", base+"/"+id("units-b05")+"/steps", `{"step":"false_alarm","note":"Burning stubble"}`, 200, &r)
 		if b08, _ := step("units-b08"); r.AlertsMoved != 2 || b08 != "false_alarm" {
 			t.Fatalf("admin outcome moved %d, B08 at %s", r.AlertsMoved, b08)
+		}
+		var recent page
+		call("a2", "GET", base+"?sort=activity-desc&limit=1", "", 200, &recent)
+		if len(recent.Items) != 1 || recent.Items[0].ID != id("units-b05") {
+			t.Fatalf("the last workflow update should be the newest activity: %+v", recent)
 		}
 		var history struct {
 			Entries []struct {
