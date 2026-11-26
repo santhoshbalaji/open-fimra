@@ -103,6 +103,9 @@ ALERT_FIELDS = [
     _field("queue", "queue", "string", "The original alert queue: unit, edge_review or triage."),
     _field("dispatch_hierarchy_id", "dispatch_h", "string", "The hierarchy of the original alert assignment."),
     _field("dispatch_unit_path", "dispatch", "string", "The unit path first assigned by alert routing."),
+    _field("dispatch_rule", "rule", "string", "The precedence rule selected at observation time."),
+    _field("lead_unit", "lead", "string", "Lead unit when this export was requested."),
+    _field("supporting_units", "support", "string", "Supporting unit names when this export was requested, as a JSON list."),
     _field("alert_created_at", "alert_time", "datetime", "When the alert was created, in UTC (ISO 8601)."),
     _field("step", "step", "string", "The alert's current workflow step, such as new or acknowledged."),
     _field("step_label", "step_label", "string", "The current workflow step as the workflow names it."),
@@ -326,6 +329,16 @@ def _write_table(data, name, columns, records):
         layer.CreateFeature(feature)
 
 
+SHAPEFILE_JSON_LISTS = {
+    "boundary_version_ids": "boundary_versions.json",
+    "supporting_units": "supporting_units.json",
+}
+
+
+def long_shapefile_list(value):
+    return value and len(value.encode("utf-8")) > 254
+
+
 def write_data(fmt, path, layer_name, fields, rows, levels, items):
     """Writes the data file in one format and returns the number of features."""
     driver, _, _, native_time, has_geometry = FORMATS[fmt]
@@ -354,7 +367,7 @@ def write_data(fmt, path, layer_name, fields, rows, levels, items):
             feature = ogr.Feature(definition)
             for index, f in zip(indexes, fields):
                 value = values.get(f.name)
-                if short and f.name == "boundary_version_ids" and value and len(value) > 254:
+                if short and f.name in SHAPEFILE_JSON_LISTS and long_shapefile_list(value):
                     # The archive carries the complete list for these rows.
                     continue
                 _set(feature, index, f.kind, value, native_time)
@@ -398,13 +411,14 @@ def write_export(work_dir, final_path, meta, levels, rows, generated_at, answers
             for part in sorted(work_dir.glob(f"{data_path.stem}.*")):
                 archive.write(part, part.name)
             if fmt == "shapefile":
-                long_lists = [
-                    {**{key: row[key] for key in ("detection_id", "alert_id", "submission_id") if row.get(key)},
-                     "boundary_version_ids": json.loads(row["boundary_version_ids"])}
-                    for row in rows if len(row.get("boundary_version_ids") or "") > 254
-                ]
-                if long_lists:
-                    archive.writestr("boundary_versions.json", json.dumps(long_lists))
+                for field, name in SHAPEFILE_JSON_LISTS.items():
+                    long_lists = [
+                        {**{key: row[key] for key in ("detection_id", "alert_id", "submission_id") if row.get(key)},
+                         field: json.loads(row[field])}
+                        for row in rows if long_shapefile_list(row.get(field))
+                    ]
+                    if long_lists:
+                        archive.writestr(name, json.dumps(long_lists))
             archive.writestr("README.txt", readme_text(items, fields))
         os.replace(packed, final_path)
     else:
@@ -421,10 +435,15 @@ ROWS_SQL = """
            COALESCE(r.dispatch->>'queue', a.queue) AS queue,
            CASE WHEN r.dispatch IS NULL THEN a.hierarchy_id::text ELSE r.dispatch->>'hierarchyId' END AS dispatch_hierarchy_id,
            CASE WHEN r.dispatch IS NULL THEN a.unit_path::text ELSE r.dispatch->>'unitPath' END AS dispatch_unit_path,
+           r.dispatch #>> '{rule,name}' AS dispatch_rule,
+           r.dispatch #>> '{currentLead,name}' AS lead_unit,
+           (SELECT jsonb_agg(value->>'name' ORDER BY ordinal)
+            FROM jsonb_array_elements(r.dispatch->'currentSupporting') WITH ORDINALITY s(value, ordinal))::text AS supporting_units,
            a.created_at AS alert_created_at,
            r.observed_at, d.source, d.product, d.satellite,
            COALESCE(r.boundary_snapshot->>'forestClass', a.forest_class, m.forest_class) AS forest_class,
-           CASE WHEN r.boundary_snapshot IS NOT NULL THEN r.boundary_snapshot->>'triageReason'
+           CASE WHEN r.dispatch ? 'triageReason' THEN r.dispatch->>'triageReason'
+                WHEN r.boundary_snapshot IS NOT NULL THEN r.boundary_snapshot->>'triageReason'
                 WHEN a.id IS NULL THEN m.triage_reason
                 ELSE COALESCE(a.triage_reason, CASE WHEN a.queue = 'triage' THEN 'no_unit' END) END AS triage_reason,
            CASE WHEN r.boundary_snapshot IS NULL THEN COALESCE(a.hierarchy, m.hierarchy)

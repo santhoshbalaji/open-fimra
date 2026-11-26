@@ -233,20 +233,42 @@
           }
         </ul>
       }
+      @if (alert) {
+        <p class="wrap-anywhere">{{ msg('Lead: {0} · Supporting: {1} · Rule: {2}', [
+          alert.dispatch_lead?.name ?? msg('Unassigned'),
+          (alert.dispatch_support ?? []).map(unitName).join(', ') || msg('None'),
+          alert.original_dispatch?.rule?.name ?? ((alert.original_dispatch?.ruleCandidates?.length ?? 0) > 1
+            ? msg('Conflicting rules') : msg('Default routing'))
+        ]) }}</p>
+        @if (alert.queue === 'triage' && alert.original_dispatch?.candidates?.length) {
+          <details>
+            <summary>{{ msg('Candidate units') }}</summary>
+            <ul class="grid gap-1">
+              @for (unit of alert.original_dispatch?.candidates; track unit.id) { <li>{{ unit.name }} ({{ unit.path }})</li> }
+            </ul>
+          </details>
+        }
+        @for (request of alert.support_requests ?? []; track request.id) {
+          <p class="wrap-anywhere">{{ msg('Support requested from {0}', [request.unit.name]) }} · {{ request.reason }}</p>
+        }
+      }
+      @if (dispatchNotice()) { <p #dispatchReceipt tabindex="-1" role="status">{{ dispatchNotice() }}</p> }
       @if (alert?.assignment; as receipt) {
         <div #assignmentReceipt class="assignment-receipt" tabindex="-1">
-          <p class="font-semibold">{{ msg('Assigned to {0}', [receipt.unitName]) }}</p>
+          <p class="font-semibold">{{ receipt.action === 'transfer' ? msg('Handed over to {0}', [receipt.unitName]) : msg('Assigned to {0}', [receipt.unitName]) }}</p>
           <p>{{ receipt.actor }} · <time [attr.datetime]="receipt.at">{{ dateTime(receipt.at) }}</time></p>
           <p>{{ receipt.reason }}</p>
         </div>
       } @else if (alert?.queue === 'edge_review') {
-        <p>{{ edgeReason }}</p>
-      } @else if (point.triage) {
-        <p>{{ reasons[point.triage] }}</p>
+        <p>{{ msg(edgeReason) }}</p>
+      } @else if (alert?.triage; as reason) {
+        <p>{{ msg(reasons[reason]) }}</p>
+      } @else if (!alert && point.triage; as reason) {
+        <p>{{ msg(reasons[reason]) }}</p>
       }
-      @if (alert?.can_assign) {
+      @if (alert?.can_assign || alert?.can_transfer) {
         @if (assignmentOpen()) {
-          <form #assignmentForm tabindex="-1" [attr.aria-label]=" msg('Assign alert to a unit') " class="assignment-form" (submit)="assign($event)" (keydown.escape)="$event.stopPropagation(); cancelAssignment()">
+          <form #assignmentForm tabindex="-1" [attr.aria-label]="assignmentLabel()" class="assignment-form" (submit)="assign($event)" (keydown.escape)="$event.stopPropagation(); cancelAssignment()">
             @if (assignmentChoices(); as choices) {
               @if (choices.length) {
                 <label for="assignment-unit">{{ msg('Receiving unit') }}</label>
@@ -254,29 +276,36 @@
                   (change)="assignmentUnit.set($any($event.target).value)" [disabled]="assignmentSaving()">
                   <option value="">{{ msg('Choose a unit') }}</option>
                   @for (unit of choices; track unit.id) {
-                    <option [value]="unit.id" [selected]="unit.id === assignmentUnit()">{{ unit.name }} ({{ unit.level }})@if (unit.parent) { · {{ unit.parent }} }@if (unit.suggested) { {{ msg('· Suggested') }} }</option>
+                    <option [value]="unit.id" [selected]="unit.id === assignmentUnit()">{{ unit.name }} ({{ msg(unit.level) }})@if (unit.parent) { · {{ unit.parent }} }@if (unit.suggested) { {{ msg('· Suggested') }} }</option>
                   }
                 </select>
-                <label for="assignment-reason">{{ msg('Reason for assignment') }}</label>
+                <label for="assignment-reason">{{ msg('Reason') }}</label>
                 <textarea id="assignment-reason" required rows="2" maxlength="500" [value]="assignmentReason()"
                   (input)="assignmentReason.set($any($event.target).value)" [disabled]="assignmentSaving()"></textarea>
               } @else {
-                <p>{{ msg('No units are available for assignment.') }}</p>
+                <p>{{ msg('No receiving units are available.') }}</p>
               }
             } @else if (!assignmentError()) {
               <p role="status">{{ msg('Loading units') }}</p>
             }
-            @if (assignmentError()) { <p class="text-danger" role="alert">{{ assignmentError() }}</p> }
+            @if (assignmentError()) { <p class="text-danger" role="alert">{{ msg(assignmentError()) }}</p> }
             <div class="flex flex-wrap gap-2">
               @if (assignmentChoices()?.length) {
                 <button type="submit" hlmBtn [disabled]="!assignmentUnit() || !assignmentReason().trim()"
-                  [busy]="assignmentSaving()">{{ msg('Confirm assignment') }}</button>
+                  [busy]="assignmentSaving()">{{ assignmentMode() === 'assign' ? msg('Confirm assignment') : assignmentMode() === 'transfer' ? msg('Confirm handover') : msg('Send request') }}</button>
               }
               <button type="button" hlmBtn variant="outline" [disabled]="assignmentSaving()" (click)="cancelAssignment()">{{ msg('Cancel') }}</button>
             </div>
           </form>
         } @else {
-          <button #assignmentTrigger type="button" hlmBtn class="justify-self-start" (click)="openAssignment()">{{ msg('Assign to unit') }}</button>
+          <div class="flex flex-wrap gap-2">
+            @if (alert?.can_assign) {
+              <button #assignmentTrigger type="button" hlmBtn (click)="openAssignment('assign')">{{ msg('Assign to unit') }}</button>
+            } @else {
+              <button #assignmentTrigger type="button" hlmBtn (click)="openAssignment('transfer')">{{ msg('Hand over') }}</button>
+              <button #supportTrigger type="button" hlmBtn variant="outline" (click)="openAssignment('support')">{{ msg('Request support') }}</button>
+            }
+          </div>
         }
       }
       @if (alertsView()) {

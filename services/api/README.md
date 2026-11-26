@@ -335,6 +335,49 @@ Use the row's `id` with `GET /api/v1/workspaces/{slug}/alerts/{id}`. Details are
 
 A grant covers the same matched paths as it does on the map. Sections 5.3 and 6 of the plan leave review with officers responsible for that area. For the review queues, the **covering grant itself** must be at division level or above in its own hierarchy. A root grant sees every queue in the workspace, including points without a path. In a hierarchy without a division level, only a root grant qualifies for review. A caller without a workspace grant gets 403. A hidden or missing alert detail returns 404.
 
+### Dispatch and duty
+
+An alert includes `dispatch_lead`, `dispatch_support` and `original_dispatch`.
+The original decision records the matched units, the selected rule and its
+boundary versions. It stays with the alert after a handover. The alert has no
+lead until reviewed if two matching rules have the same highest priority, or
+if the winning rule's lead is unavailable at the point. When no rule
+matches, the workspace uses its existing beat and review routing.
+
+A covering review officer can use `GET /alerts/{id}/assignment` under the
+workspace URL to list eligible units. `POST` to the same URL with
+`{"unitId":"42","reason":"Crew already at the site"}` assigns from review or
+hands a routed alert over to a new lead. Once a lead is assigned, its
+covering officers can use `GET` and `POST /alerts/{id}/support` with the same
+fields to request help from another unit. The receiving area gets access to
+the alert and sees the reason in `support_requests`. Changes are recorded
+in the audit log. The same request can be retried by its author while they
+still have permission.
+
+Root administrators can list and add rules at `/settings/dispatch-rules`.
+A rule takes a `name`, integer `priority`, `effectiveFrom`, optional
+`effectiveTo`, a `leadUnitId` and optional `supportingUnitIds`. Supply
+`overlayLayer` with the layer slug to match a dated overlay. Add
+`overlayCode` to select a feature or `overlayZone` to select `core` or
+`buffer`. A rule without an overlay applies where its lead unit covers the
+point. The highest priority wins, based on the observation time. The end
+of the effective window is excluded. Unit IDs identify current units when
+setting up the rule. The system resolves those paths to dated unit versions
+when routing. To end an active rule early, send a future `effectiveTo` to
+`PUT /settings/dispatch-rules/{id}/end`. Earlier observations keep the
+rules in force at their observation time.
+
+Root administrators can schedule and cancel coverage in **Settings →
+Duty roster** or at `/settings/duty`. `GET` lists shifts and eligible
+members and units. `POST` takes `name`, `kind` (`control_room`, `squad`
+or `watcher`), `startsAt`, `endsAt`, `memberIds` and `unitIds`.
+Use timestamps with a time zone. `DELETE /settings/duty/{id}` cancels a
+scheduled or active shift. The selected units define the service area. A
+control room grants officer access at division level or above. Squads and
+watchers get field access. Duty access starts at the start time and ends at
+the end time or cancellation. Home assignments remain in place. Files
+prepared with duty access require the same coverage when downloaded.
+
 ## Alert workflow
 
 An alert has one workflow instance. Its current step and entry time live there so the queue and the detail panel read the same state. The list and detail return the step slug in `status`, its label in `step_label`, its time in `step_time`, and an `overdue` flag. The alert insert trigger opens the instance and records New in the same transaction, including for backfills. Existing alerts start at their original creation time. A workspace template takes precedence over the shared default for new alerts.
@@ -640,8 +683,10 @@ steps are read when the file is written.
 Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or alert, newest first. The fields are the detection ID, observation time in UTC, source, product, satellite, forest class and triage reason. Then come the code and name of every level of the main territorial hierarchy (`state_code`, `division_name` and so on), the forest feature code, fire radiative power, confidence, longitude and latitude. The `boundary_version_ids` field lists the versions in force at observation
 time. If a list exceeds the Shapefile field width, read it in
 `boundary_versions.json` in the archive. Alert exports add the alert ID,
-original dispatch queue and unit path, creation time, current workflow step
-with its label and time, and incident ID.
+original dispatch queue and unit path, rule name, lead and supporting unit
+names at request time, creation time, current workflow step with its label
+and time, and incident ID. Long supporting unit lists are stored in
+`supporting_units.json` in Shapefile archives.
 
 Submission exports have one row per report. The point is the detection of the report's alert. The fields start with the report ID, form, version and title, the step it was filled in at, when the server received it and when the device saved it, the decision and its time, and where the report was sent from. The alert's fields follow. With a `form` filter, every answer outside a repeating group follows as a column from the version's flat view: shapes as well-known text, lists joined by commas, and the area and length the server worked out. A column whose name clashes with another field starts with `answer_`. Repeating groups stay in the flat views. The file never names who sent or decided a report, but free-text answers are as staff typed them, and the note says so.
 

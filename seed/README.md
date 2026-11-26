@@ -43,3 +43,9 @@ make seed-test   # check demo-state/ is up to date, load it and run the referenc
 ```
 
 The reference check in [`tests/reference-check.sql`](tests/reference-check.sql) states the meaning of each result in plain rules. The real matching code must give the same answers.
+
+Run `make demo-dispatch` in a seeded development database to try the
+fictional reserve dispatch rules and duty roster. The reserve core alert
+goes to Demo Wildlife Division. The overlapping territorial alert still
+needs a unit. Sign in as the demo state administrator to see the roster
+under **Settings → Duty roster**.

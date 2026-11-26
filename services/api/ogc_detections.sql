@@ -15,6 +15,7 @@ SELECT d.id, d.observed_at, d.source, d.product, d.satellite, m.forest_class,
        COALESCE(line.levels::text, '') AS places, ST_AsGeoJSON(d.geom, 7) AS geometry
 FROM detection_matches m
 JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
+LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
 LEFT JOIN layer_features f ON f.id = m.forest_feature_id
 LEFT JOIN LATERAL (
     SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy) ORDER BY key LIMIT 1
@@ -28,7 +29,8 @@ WHERE m.workspace_id = $2
   AND ($12::timestamptz IS NULL OR (m.observed_at, m.detection_id) < ($12, $13::bigint))
   AND EXISTS (
       SELECT 1 FROM grants g
-      WHERE match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
+      WHERE (match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
+                  OR dispatch_detection_visible(routed, g.can_review, g.hierarchy_id, g.unit_path, g.depth))
   )
 ORDER BY m.observed_at DESC, m.detection_id DESC
 LIMIT $14

@@ -37,7 +37,7 @@ async function openDrawer(page) {
 
 try {
   for (const [username, extra, start, heading] of [
-    ['state.admin', ['Layers', 'Form templates', 'Setup'], '/', 'Map'],
+    ['state.admin', ['Layers', 'Form templates', 'Setup', 'Duty roster'], '/', 'Map'],
     ['division.officer', ['Form templates'], '/reports/field?decision=approved', 'Field reports'],
     ['beat.guard', [], '/monitor/map?unitPath=ds.c2', 'Map'],
     ['no.role', [], '/settings/layers', 'Restricted access']
@@ -72,6 +72,11 @@ try {
       const visibleName = await account.locator('.user-name').textContent();
       const initials = await account.locator('.account-initials').textContent();
       await expect(account).toHaveAccessibleName(`Account for ${visibleName.trim()}, ${initials.trim()}`);
+      if (username === 'state.admin') {
+        await nav.getByRole('link', { name: 'Duty roster', exact: true }).click();
+        await expect(page.getByRole('heading', { level: 1, name: 'Duty roster' })).toBeFocused();
+        await expect(page.getByRole('heading', { name: 'Schedule a shift' })).toBeVisible();
+      }
       if (username !== 'state.admin') {
         await page.goto(WEB + '/settings/layers');
         await expect(page.getByRole('heading', { name: 'Restricted access' })).toBeVisible();
@@ -81,7 +86,7 @@ try {
         await page.keyboard.press('Control+k');
         const dialog = page.getByRole('dialog', { name: 'Search destinations' });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup/ })).toHaveCount(0);
+        await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup|Duty roster/ })).toHaveCount(0);
         await dialog.getByRole('textbox').fill('reports');
         await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Enter');

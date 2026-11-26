@@ -18,6 +18,8 @@ export { ageLabels } from './token-values';
 export const triageReasons: Record<string, string> = {
   no_unit: 'No mapped unit covers this point.',
   overlapping_units: 'More than one mapped unit covers this point.',
+  dispatch_rule_conflict: 'More than one dispatch rule has the same priority.',
+  dispatch_unit_unavailable: 'The rule’s lead unit does not cover this location.',
   shared_boundary: 'This point lies on a shared unit boundary.'
 };
 export interface Detection {

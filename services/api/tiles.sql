@@ -1,9 +1,5 @@
 WITH grants AS MATERIALIZED (
-    SELECT a.workspace_id, a.hierarchy_id, a.unit_path, u.depth
-    FROM role_assignments a
-    JOIN users caller ON caller.id = a.user_id AND caller.oidc_subject = $1
-    JOIN workspaces w ON w.id = a.workspace_id AND w.slug = $2
-    JOIN units u ON u.hierarchy_id = a.hierarchy_id AND u.current_path = a.unit_path
+    SELECT * FROM alert_grants WHERE oidc_subject = $1 AND slug = $2
 ),
 bounds AS (
     SELECT ST_TileEnvelope($3, $4, $5) AS tile,
@@ -28,16 +24,18 @@ points AS (
     FROM bounds b
     JOIN detections d ON d.geom && b.search
     JOIN detection_matches m ON (m.detection_id, m.observed_at) = (d.id, d.observed_at)
+    LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
     LEFT JOIN LATERAL (
         SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy) ORDER BY key LIMIT 1
     ) line ON true
     WHERE d.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.forest_class = ANY($7::text[])
-      AND ($8::ltree IS NULL OR m.unit_paths <@ $8)
       AND EXISTS (
           SELECT 1 FROM grants g WHERE g.workspace_id = m.workspace_id AND
-              match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
+              ((($8::ltree IS NULL OR m.unit_paths <@ $8) AND match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth))
+              OR (($8::ltree IS NULL OR routed.unit_paths <@ $8)
+                  AND dispatch_detection_visible(routed, g.can_review, g.hierarchy_id, g.unit_path, g.depth)))
       )
 )
 SELECT EXISTS (SELECT 1 FROM grants),

@@ -17,10 +17,12 @@ WITH grants AS MATERIALIZED (
 ), matches AS (
     SELECT m.observed_at,m.forest_class
     FROM detection_matches m CROSS JOIN bounds
+    LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
     WHERE m.observed_at BETWEEN least(start_at,midnight) AND end_at
-      AND ($6='' OR m.forest_class=$6) AND ($7::ltree IS NULL OR m.unit_paths <@ $7)
-      AND EXISTS (SELECT FROM grants g WHERE g.workspace_id=m.workspace_id
-        AND match_under_grant(m.hierarchy_unit_paths,g.hierarchy_id,g.unit_path,g.depth))
+      AND ($6='' OR m.forest_class=$6) AND EXISTS (SELECT FROM grants g WHERE g.workspace_id=m.workspace_id
+        AND ((($7::ltree IS NULL OR m.unit_paths <@ $7) AND match_under_grant(m.hierarchy_unit_paths,g.hierarchy_id,g.unit_path,g.depth))
+              OR (($7::ltree IS NULL OR routed.unit_paths <@ $7)
+                  AND dispatch_detection_visible(routed, g.can_review, g.hierarchy_id, g.unit_path, g.depth))))
 ), visible AS MATERIALIZED (
     -- Steps and overdue checks are as of now, also for a window in the past.
     SELECT a.id,a.queue,i.template_id,i.current_step,i.entered_at,s.terminal,s.report_pending,

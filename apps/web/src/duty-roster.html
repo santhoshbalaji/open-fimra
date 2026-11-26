@@ -1,0 +1,78 @@
+<div class="grid gap-4">
+  @if (readError()) {
+    <p role="alert">{{ msg(readError()) }}</p>
+    <button class="justify-self-start" type="button" hlmBtn variant="outline" (click)="retry()">{{ msg('Try again') }}</button>
+  } @else if (roster(); as data) {
+    <section hlmCard aria-labelledby="schedule-shift">
+      <div hlmCardHeader>
+        <h2 hlmCardTitle id="schedule-shift">{{ msg('Schedule a shift') }}</h2>
+      </div>
+      <form hlmCardContent class="grid gap-3" (submit)="schedule($event)">
+        <p>{{ msg('Shifts add access to the selected service units for the scheduled hours. Home assignments stay in place.') }}</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="grid gap-1">{{ msg('Shift name') }}
+            <input name="name" maxlength="120" required>
+          </label>
+          <label class="grid gap-1">{{ msg('Duty type') }}
+            <select name="kind">
+              <option value="control_room">{{ msg('Control room') }}</option>
+              <option value="squad">{{ msg('Fire squad') }}</option>
+              <option value="watcher">{{ msg('Fire watcher') }}</option>
+            </select>
+          </label>
+          <label class="grid gap-1">{{ msg('Starts ({0})', [zone]) }}
+            <input name="startsAt" type="datetime-local" required>
+          </label>
+          <label class="grid gap-1">{{ msg('Ends ({0})', [zone]) }}
+            <input name="endsAt" type="datetime-local" required>
+          </label>
+          <label class="grid gap-1">{{ msg('Staff on duty') }}
+            <select name="memberIds" multiple required>
+              @for (member of data.members; track member.id) {
+                <option [value]="member.id">{{ member.name }} ({{ member.username }})</option>
+              }
+            </select>
+          </label>
+          <label class="grid gap-1">{{ msg('Service units') }}
+            <select name="unitIds" multiple required>
+              @for (unit of data.units; track unit.id) {
+                <option [value]="unit.id">{{ unit.name }} ({{ unit.hierarchy }} · {{ unit.path }})</option>
+              }
+            </select>
+          </label>
+        </div>
+        <button class="justify-self-start" type="submit" hlmBtn [busy]="saving()">{{ msg('Schedule shift') }}</button>
+      </form>
+    </section>
+    @if (writeError()) { <p role="alert">{{ msg(writeError()) }}</p> }
+    @if (notice()) { <p role="status">{{ msg(notice()) }}</p> }
+    <section hlmCard aria-labelledby="roster-heading">
+      <div hlmCardHeader>
+        <h2 hlmCardTitle id="roster-heading">{{ msg('Shifts') }}</h2>
+      </div>
+      <div hlmCardContent>
+        @if (data.shifts.length) {
+          <ul class="grid gap-4">
+            @for (shift of data.shifts; track shift.id) {
+              @let state = status(shift);
+              <li class="grid gap-1 border-b pb-3">
+                <h3 class="font-semibold">{{ shift.name }} · {{ msg(kinds[shift.kind]) }}</h3>
+                <p>{{ msg('{0} · {1} to {2}', [msg(state), dateTime(shift.startsAt), dateTime(shift.endsAt)]) }}</p>
+                <p>{{ msg('Staff on duty: {0}', [shift.members?.join(', ') || msg('None')]) }}</p>
+                <p>{{ msg('Service units: {0}', [shift.units?.join(', ') || msg('None')]) }}</p>
+                @if (state === 'On duty' || state === 'Scheduled') {
+                  <button class="justify-self-start" type="button" hlmBtn variant="outline" [disabled]="saving()"
+                    [attr.aria-label]="msg('Cancel shift {0}', [shift.name])" (click)="cancel(shift)">{{ msg('Cancel shift') }}</button>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p>{{ msg('No shifts scheduled.') }}</p>
+        }
+      </div>
+    </section>
+  } @else {
+    <p role="status">{{ msg('Loading the duty roster') }}</p>
+  }
+</div>

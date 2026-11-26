@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 import zipfile
@@ -151,6 +152,22 @@ class ExportFormatTests(unittest.TestCase):
                 self.assertEqual(empty["triage" if short else "triage_reason"], "no_unit")
                 if fmt not in ("xlsx", "csv_lonlat"):
                     self.assertEqual(second.GetGeometryRef().GetY(), 16.5)
+
+    def test_shapefile_keeps_long_support_lists_in_the_archive(self):
+        records = rows("alerts")
+        supporting = [f"Synthetic fire crew {number}" for number in range(15)]
+        records[0]["supporting_units"] = json.dumps(supporting)
+        path = self.directory / "support.zip"
+        write_export(self.directory / "support.part", path, meta("alerts", "shapefile"), LEVELS, records, SEEN)
+        with zipfile.ZipFile(path) as archive:
+            self.assertEqual(json.loads(archive.read("supporting_units.json")), [{
+                "detection_id": records[0]["detection_id"],
+                "alert_id": records[0]["alert_id"],
+                "supporting_units": supporting,
+            }])
+        data_path, options, _ = open_path(path)
+        data = gdal.OpenEx(data_path, gdal.OF_VECTOR, open_options=options)
+        self.assertIsNone(data.GetLayer(0).GetNextFeature().GetField("support"))
 
     def test_note_names_filters_and_role_but_no_person(self):
         for fmt in FORMATS:

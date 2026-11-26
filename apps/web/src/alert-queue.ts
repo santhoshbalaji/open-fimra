@@ -19,7 +19,10 @@ export const stepLabel = (key: string) => translate(key.charAt(0).toUpperCase() 
 export const alertSortLabels = { newest: 'Newest observation', oldest: 'Oldest observation', overdue: 'Most overdue first' };
 type AlertSort = keyof typeof alertSortLabels;
 type Queue = keyof typeof queueLabels;
-export interface AlertAssignment { unitId: string; unitName: string; reason: string; actor: string; at: string }
+export interface AlertAssignment { unitId: string; unitName: string; reason: string; actor: string; at: string; action?: 'assign' | 'transfer' }
+export interface DispatchUnit { id: string; name: string; hierarchyId: string; path: string; boundaryVersionId: string | null }
+export interface SupportRequest { id: string; unit: DispatchUnit; reason: string; at: string }
+
 export interface AlertRow extends Detection {
   id: string;
   detection_id: string;
@@ -30,6 +33,11 @@ export interface AlertRow extends Detection {
   overdue: boolean;
   due_at?: string | null;
   can_assign?: boolean;
+  can_transfer?: boolean;
+  dispatch_lead?: DispatchUnit | null;
+  dispatch_support?: DispatchUnit[];
+  original_dispatch?: { rule: { name: string } | null; candidates: DispatchUnit[]; ruleCandidates: string[] };
+  support_requests?: SupportRequest[];
   assignment?: AlertAssignment | null;
   overlay_matches?: OverlayMatch[];
   next_action?: string;

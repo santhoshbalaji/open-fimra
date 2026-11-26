@@ -389,7 +389,7 @@ func (a api) workspaceDevices(w http.ResponseWriter, r *http.Request) {
 	var list json.RawMessage
 	err := a.reader.QueryRow(ctx, `
 WITH admin AS (
-    SELECT EXISTS (SELECT FROM alert_grants g WHERE g.oidc_subject=$1 AND g.slug=$2
+    SELECT EXISTS (SELECT FROM permanent_alert_grants g WHERE g.oidc_subject=$1 AND g.slug=$2
         AND (g.role_slug='state_admin' OR (g.role_slug='division_officer' AND g.can_review))) AS ok
 ), page AS (
     SELECT d.*, u.username, u.display_name, requester.display_name AS requester

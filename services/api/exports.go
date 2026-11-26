@@ -247,6 +247,7 @@ const exportStatusFields = `
 func (a api) readExport(ctx context.Context, slug string, id pgtype.UUID, subject string) (exportStatus, error) {
 	return scanExport(a.pool.QueryRow(ctx, exportStatusFields+`
 		WHERE e.id = $1 AND w.slug = $2 AND e.requested_by = $3
+		  AND (cardinality(e.duty_grants) = 0 OR e.duty_grants <@ dispatch_grant_keys(e.workspace_id, $3, false))
 	`, id, slug, subject))
 }
 
@@ -330,6 +331,7 @@ func (a api) listExports(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := a.pool.Query(ctx, exportStatusFields+`
 		WHERE w.slug = $1 AND e.requested_by = $2
+		  AND (cardinality(e.duty_grants) = 0 OR e.duty_grants <@ dispatch_grant_keys(e.workspace_id, $2, false))
 		ORDER BY e.created_at DESC, e.id DESC LIMIT 20
 	`, slug, caller.Subject)
 	if err != nil {
@@ -373,7 +375,15 @@ func (a api) exportFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var fileKey string
-	if err := a.pool.QueryRow(r.Context(), "SELECT file_key FROM exports WHERE id = $1", id).Scan(&fileKey); err != nil {
+	err := a.pool.QueryRow(r.Context(), `
+		SELECT file_key FROM exports WHERE id = $1
+		  AND (cardinality(duty_grants) = 0 OR duty_grants <@ dispatch_grant_keys(workspace_id, requested_by, false))
+	`, id).Scan(&fileKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "The export was not found.")
+		return
+	}
+	if err != nil {
 		a.exportError(w, "Could not read the export file name", err)
 		return
 	}
