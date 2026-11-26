@@ -3,44 +3,43 @@
   "formatVersion": 1,
   "id": "first-report",
   "version": 1,
-  "title": { "en": "First report", "hi": "प्रारंभिक रिपोर्ट" },
-  "description": {
-    "en": "The first report from the site, sent once the fire is out. The final report follows with the measured burnt area."
-  },
+  "title": { "en": "First report", "hi": "पहली रिपोर्ट" },
+  "description": { "en": "The first report from the site, sent once the fire is out. The final report follows with the measured burnt area.", "hi": "आग बुझने के बाद मौके से पहली रिपोर्ट भेजें। जले क्षेत्र की माप अंतिम रिपोर्ट में दें।" },
   "lists": [
     {
       "key": "cause_groups",
       "choices": [
-        { "key": "human", "label": { "en": "Caused by people" } },
-        { "key": "natural", "label": { "en": "Natural" } },
-        { "key": "unknown", "label": { "en": "Not known yet" } }
+        { "key": "human", "label": { "en": "Caused by people", "hi": "मानवीय कारण" } },
+        { "key": "natural", "label": { "en": "Natural", "hi": "प्राकृतिक कारण" } },
+        { "key": "unknown", "label": { "en": "Not known yet", "hi": "अभी पता नहीं" } }
       ]
     },
     {
       "key": "causes",
       "choices": [
-        { "key": "campfire", "label": { "en": "Campfire or cooking" }, "parent": "human" },
-        { "key": "field-burning", "label": { "en": "Burning on nearby fields" }, "parent": "human" },
-        { "key": "smoking", "label": { "en": "Cigarette or match" }, "parent": "human" },
-        { "key": "human-other", "label": { "en": "Other human cause" }, "parent": "human" },
-        { "key": "lightning", "label": { "en": "Lightning" }, "parent": "natural" },
-        { "key": "natural-other", "label": { "en": "Other natural cause" }, "parent": "natural" },
-        { "key": "under-inquiry", "label": { "en": "Under inquiry" }, "parent": "unknown" }
+        { "key": "campfire", "label": { "en": "Campfire or cooking", "hi": "अलाव या खाना पकाने की आग" }, "parent": "human" },
+        { "key": "field-burning", "label": { "en": "Burning on nearby fields", "hi": "पास के खेतों में जलाई गई आग" }, "parent": "human" },
+        { "key": "smoking", "label": { "en": "Cigarette or match", "hi": "सिगरेट या माचिस" }, "parent": "human" },
+        { "key": "human-other", "label": { "en": "Other human cause", "hi": "अन्य मानवीय कारण" }, "parent": "human" },
+        { "key": "lightning", "label": { "en": "Lightning", "hi": "बिजली गिरना" }, "parent": "natural" },
+        { "key": "natural-other", "label": { "en": "Other natural cause", "hi": "अन्य प्राकृतिक कारण" }, "parent": "natural" },
+        { "key": "under-inquiry", "label": { "en": "Under inquiry", "hi": "जाँच जारी है" }, "parent": "unknown" }
       ]
     }
   ],
+  "languages": ["en", "hi"],
   "sections": [
     {
       "key": "summary",
-      "title": { "en": "Summary" },
+      "title": { "en": "Summary", "hi": "संक्षिप्त विवरण" },
       "items": [
-        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at" }, "source": "observed-at" },
-        { "key": "alert_location", "type": "alert-value", "label": { "en": "Alert location" }, "source": "location" },
-        { "key": "reached_at", "type": "date-time", "label": { "en": "Team reached the site at" }, "required": true, "notInFuture": true },
+        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at", "hi": "उपग्रह ने कब देखा" }, "source": "observed-at" },
+        { "key": "alert_location", "type": "alert-value", "label": { "en": "Alert location", "hi": "अलर्ट का स्थान" }, "source": "location" },
+        { "key": "reached_at", "type": "date-time", "label": { "en": "Team reached the site at", "hi": "दल के मौके पर पहुँचने का समय" }, "required": true, "notInFuture": true },
         {
           "key": "hours_to_reach",
           "type": "calculated",
-          "label": { "en": "Hours from the alert to reaching the site" },
+          "label": { "en": "Hours from the alert to reaching the site", "hi": "अलर्ट से मौके पर पहुँचने तक लगे घंटे" },
           "unit": "h",
           "decimals": 1,
           "calculate": { "op": "hours-between", "start": "observed_at", "end": "reached_at" }
@@ -49,13 +48,13 @@
     },
     {
       "key": "fire",
-      "title": { "en": "The fire" },
+      "title": { "en": "The fire", "hi": "आग का विवरण" },
       "items": [
-        { "key": "cause_group", "type": "single-choice", "label": { "en": "Kind of cause" }, "required": true, "list": "cause_groups" },
+        { "key": "cause_group", "type": "single-choice", "label": { "en": "Kind of cause", "hi": "कारण का प्रकार" }, "required": true, "list": "cause_groups" },
         {
           "key": "cause",
           "type": "single-choice",
-          "label": { "en": "Likely cause" },
+          "label": { "en": "Likely cause", "hi": "संभावित कारण" },
           "required": true,
           "list": "causes",
           "parent": "cause_group"
@@ -63,7 +62,7 @@
         {
           "key": "cause_notes",
           "type": "text",
-          "label": { "en": "Describe the cause" },
+          "label": { "en": "Describe the cause", "hi": "कारण का विवरण दें" },
           "required": true,
           "maxLength": 500,
           "showWhen": {
@@ -77,8 +76,8 @@
         {
           "key": "estimated_area",
           "type": "number",
-          "label": { "en": "Area burnt" },
-          "hint": { "en": "A rough estimate. The final report measures it." },
+          "label": { "en": "Area burnt", "hi": "जला हुआ क्षेत्र" },
+          "hint": { "en": "A rough estimate. The final report measures it.", "hi": "अभी अनुमान दें। सही माप अंतिम रिपोर्ट में दें।" },
           "required": true,
           "unit": "ha",
           "decimals": 2,
@@ -88,79 +87,78 @@
         {
           "key": "vegetation",
           "type": "multiple-choice",
-          "label": { "en": "What is burning" },
+          "label": { "en": "What is burning", "hi": "क्या जल रहा है" },
           "minSelected": 1,
           "choices": [
-            { "key": "grass", "label": { "en": "Grass" } },
-            { "key": "scrub", "label": { "en": "Scrub" } },
-            { "key": "leaf-litter", "label": { "en": "Fallen leaves" } },
-            { "key": "trees", "label": { "en": "Standing trees" } },
-            { "key": "plantation", "label": { "en": "Plantation" } }
+            { "key": "grass", "label": { "en": "Grass", "hi": "घास" } },
+            { "key": "scrub", "label": { "en": "Scrub", "hi": "झाड़ियाँ" } },
+            { "key": "leaf-litter", "label": { "en": "Fallen leaves", "hi": "गिरी हुई पत्तियाँ" } },
+            { "key": "trees", "label": { "en": "Standing trees", "hi": "खड़े पेड़" } },
+            { "key": "plantation", "label": { "en": "Plantation", "hi": "रोपण क्षेत्र" } }
           ]
         },
-        { "key": "site_photos", "type": "photo", "label": { "en": "Photos of the site" }, "required": true, "minCount": 1, "maxCount": 5 }
+        { "key": "site_photos", "type": "photo", "label": { "en": "Photos of the site", "hi": "मौके की तस्वीरें" }, "required": true, "minCount": 1, "maxCount": 5 }
       ]
     },
     {
       "key": "response",
-      "title": { "en": "Response" },
+      "title": { "en": "Response", "hi": "की गई कार्रवाई" },
       "items": [
         {
           "key": "teams",
           "type": "repeat",
-          "title": { "en": "Teams on site" },
-          "itemLabel": { "en": "Team" },
+          "title": { "en": "Teams on site", "hi": "मौके पर पहुँचे दल" },
+          "itemLabel": { "en": "Team", "hi": "दल" },
           "minRepeats": 1,
           "maxRepeats": 20,
           "items": [
-            { "key": "team_name", "type": "text", "label": { "en": "Team name" }, "required": true, "maxLength": 80 },
+            { "key": "team_name", "type": "text", "label": { "en": "Team name", "hi": "दल का नाम" }, "required": true, "maxLength": 80 },
             {
               "key": "members",
               "type": "number",
-              "label": { "en": "People" },
+              "label": { "en": "People", "hi": "लोगों की संख्या" },
               "required": true,
               "unit": "people",
               "decimals": 0,
               "min": 1,
               "max": 200
             },
-            { "key": "team_arrived", "type": "time", "label": { "en": "Arrived at" } }
+            { "key": "team_arrived", "type": "time", "label": { "en": "Arrived at", "hi": "पहुँचने का समय" } }
           ]
         },
         {
           "key": "total_staff",
           "type": "calculated",
-          "label": { "en": "People on site" },
+          "label": { "en": "People on site", "hi": "मौके पर लोगों की संख्या" },
           "unit": "people",
           "decimals": 0,
           "calculate": { "op": "sum", "group": "teams", "field": "members" }
         },
-        { "key": "team_count", "type": "calculated", "label": { "en": "Teams on site" }, "decimals": 0, "calculate": { "op": "count", "group": "teams" } },
+        { "key": "team_count", "type": "calculated", "label": { "en": "Teams on site", "hi": "मौके पर पहुँचे दल" }, "decimals": 0, "calculate": { "op": "count", "group": "teams" } },
         {
           "key": "equipment",
           "type": "multiple-choice",
-          "label": { "en": "Equipment used" },
+          "label": { "en": "Equipment used", "hi": "इस्तेमाल किए गए साधन" },
           "choices": [
-            { "key": "beaters", "label": { "en": "Fire beaters" } },
-            { "key": "blowers", "label": { "en": "Leaf blowers" } },
-            { "key": "water", "label": { "en": "Water" } },
-            { "key": "fire-line", "label": { "en": "Cut a fire line" } }
+            { "key": "beaters", "label": { "en": "Fire beaters", "hi": "आग पीटकर बुझाने के औज़ार" } },
+            { "key": "blowers", "label": { "en": "Leaf blowers", "hi": "हवा से पत्तियाँ हटाने की मशीनें" } },
+            { "key": "water", "label": { "en": "Water", "hi": "पानी" } },
+            { "key": "fire-line", "label": { "en": "Cut a fire line", "hi": "अग्नि रेखा बनाई" } }
           ]
         }
       ]
     },
     {
       "key": "sign_off",
-      "title": { "en": "Sign off" },
+      "title": { "en": "Sign off", "hi": "हस्ताक्षर" },
       "items": [
-        { "key": "remarks", "type": "text", "label": { "en": "Remarks" }, "maxLength": 1000 },
-        { "key": "reporter_signature", "type": "signature", "label": { "en": "Signature of the reporting officer" }, "required": true }
+        { "key": "remarks", "type": "text", "label": { "en": "Remarks", "hi": "टिप्पणी" }, "maxLength": 1000 },
+        { "key": "reporter_signature", "type": "signature", "label": { "en": "Signature of the reporting officer", "hi": "रिपोर्ट देने वाले अधिकारी के हस्ताक्षर" }, "required": true }
       ]
     }
   ],
   "layout": {
     "items": [
-      { "item": "summary", "collapsed": true },
       { "item": "cause_group", "widget": "buttons" },
       { "item": "cause", "widget": "dropdown" },
       { "item": "vegetation", "widget": "checkboxes" },

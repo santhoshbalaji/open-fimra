@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { isDevMode } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
@@ -28,9 +29,9 @@ start.catch(() => {
   const main = document.createElement('main');
   main.className = 'welcome';
   const heading = document.createElement('h1');
-  heading.textContent = 'Open FIMRA is unavailable';
+  heading.textContent = translate('Open FIMRA is unavailable');
   const retry = document.createElement('button');
-  retry.textContent = 'Reload';
+  retry.textContent = translate('Reload');
   retry.onclick = () => location.reload();
   main.append(heading, retry);
   document.body.replaceChildren(main);

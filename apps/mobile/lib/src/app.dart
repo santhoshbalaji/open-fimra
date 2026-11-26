@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -15,6 +17,8 @@ import 'device/local_data.dart';
 import 'device/push.dart';
 import 'device/push_platform.dart';
 import 'forms/report_media_cache.dart';
+import 'l10n/app_localizations.dart';
+import 'l10n/field_language.dart';
 import 'theme/app_theme.dart';
 import 'ui/home.dart';
 import 'ui/sign_in.dart';
@@ -136,12 +140,32 @@ class FimraApp extends StatefulWidget {
 }
 
 class _FimraAppState extends State<FimraApp> {
+  Locale? _locale;
+
+  Future<void> _loadLanguage() async {
+    final locale = await savedFieldLocale();
+    if (!mounted || _languageChanged) return;
+    setState(() => _locale = locale);
+  }
+
+  bool _languageChanged = false;
+
+  Future<void> _setLanguage(Locale? locale) async {
+    if (!mounted) return;
+    setState(() {
+      _languageChanged = true;
+      _locale = locale;
+    });
+    await saveFieldLocale(locale);
+  }
+
   late AppServices _services = widget.servicesFactory(widget.initialConfig);
 
   @override
   void initState() {
     super.initState();
     _services.start();
+    unawaited(_loadLanguage());
   }
 
   @override
@@ -173,6 +197,9 @@ class _FimraAppState extends State<FimraApp> {
         // Discard any open alert, map or form when the session is cleared.
         key: ValueKey(session.status == SessionStatus.signedIn),
         title: 'Open FIMRA',
+        locale: _locale,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         debugShowCheckedModeBanner: false,
         theme: fimraTheme(Brightness.light),
         darkTheme: fimraTheme(Brightness.dark),
@@ -184,11 +211,13 @@ class _FimraAppState extends State<FimraApp> {
             config: _services.config,
             defaults: widget.configStore.defaults,
             onConfigChanged: _changeConfig,
+            onLanguageChanged: _setLanguage,
           ),
           SessionStatus.signedIn => HomeScreen(
             key: ValueKey(_services),
             services: _services,
             mapBuilder: widget.mapBuilder,
+            onLanguageChanged: _setLanguage,
           ),
         },
       );

@@ -4,6 +4,8 @@ export interface WebConfig {
   issuer: string;
   clientId: string;
   apiBaseUrl: string;
+  languages?: string[];
+  workspaceLanguages?: Record<string, string>;
 }
 
 // Defined only by make web-dev in shared worktree mode.

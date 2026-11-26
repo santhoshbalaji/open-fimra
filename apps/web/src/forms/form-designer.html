@@ -1,23 +1,23 @@
 <fimra-live-status class="sr-only" [message]="announcement()" />
 
 <div class="flex flex-wrap items-center gap-2">
-  <nav class="view-switch" aria-label="Designer views">
-    <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="tab() === 'design'" (click)="setTab('design')">Design</button>
-    <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="tab() === 'preview'" (click)="setTab('preview')">Preview</button>
-    <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="tab() === 'file'" (click)="setTab('file')">Form file</button>
+  <nav class="view-switch" [attr.aria-label]=" msg('Designer views') ">
+    <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="tab() === 'design'" (click)="setTab('design')">{{ msg('Design') }}</button>
+    <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="tab() === 'preview'" (click)="setTab('preview')">{{ msg('Preview') }}</button>
+    <button hlmBtn variant="ghost" size="sm" [attr.aria-pressed]="tab() === 'file'" (click)="setTab('file')">{{ msg('Form file') }}</button>
   </nav>
   @if (!readonly()) {
     <button hlmBtn variant="ghost" size="sm" class="ml-auto" [disabled]="!canUndo()" (click)="undo()">
-      <svg fimraIcon="undo-2" aria-hidden="true"></svg> Undo
+      <svg fimraIcon="undo-2" aria-hidden="true"></svg> {{ msg('Undo') }}
     </button>
   }
 </div>
 
 <div class="designer-problems mt-3">
   @if (errors().length) {
-    <fimra-field-error-summary heading="Fix these problems before publishing" [errors]="errors()" (fieldSelected)="showProblem($event)" />
+    <fimra-field-error-summary [heading]=" msg('Fix these problems before publishing') " [errors]="errors()" (fieldSelected)="showProblem($event)" />
   } @else {
-    <fimra-status-badge icon="validation-success" label="No problems found" />
+    <fimra-status-badge icon="validation-success" [label]=" msg('No problems found') " />
   }
 </div>
 
@@ -27,50 +27,50 @@
   }
   @case ('file') {
     <div class="mt-4 grid gap-2">
-      <label for="form-file" class="font-medium">The form as a file, in the form format</label>
-      <p class="text-muted-foreground">Edit stages, shared lists and layout here. Apply the file to check it and see it in the designer.</p>
+      <label for="form-file" class="font-medium">{{ msg('The form as a file, in the form format') }}</label>
+      <p class="text-muted-foreground">{{ msg('Edit stages, shared lists and layout here. Apply the file to check it and see it in the designer.') }}</p>
       <textarea hlmTextarea id="form-file" class="min-h-[420px] text-sm" spellcheck="false" [readOnly]="readonly()"
                 [value]="fileText()" (input)="setFileText($event)"></textarea>
       @if (fileError()) { <p class="text-danger" role="alert">{{ fileError() }}</p> }
-      @if (!readonly()) { <button hlmBtn class="justify-self-start" (click)="applyFile()">Apply the file</button> }
+      @if (!readonly()) { <button hlmBtn class="justify-self-start" (click)="applyFile()">{{ msg('Apply the file') }}</button> }
     </div>
   }
   @default {
     <div class="designer-grid mt-4 grid min-w-0 items-start gap-4" [class.readonly]="readonly()">
       @if (!phone() && !readonly()) {
         <aside class="designer-palette grid gap-2 rounded-card border border-border bg-card p-3" aria-labelledby="palette-heading">
-          <h3 id="palette-heading" class="font-semibold">Add</h3>
+          <h3 id="palette-heading" class="font-semibold">{{ msg('Add') }}</h3>
           <ng-container [ngTemplateOutlet]="palette" />
         </aside>
       }
 
       <section class="designer-outline grid min-w-0 gap-3" aria-labelledby="outline-heading">
         <div class="outline-heading grid gap-2">
-          <h3 id="outline-heading" class="font-semibold">Form outline</h3>
+          <h3 id="outline-heading" class="font-semibold">{{ msg('Form outline') }}</h3>
           @if (phone()) {
             <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <p class="min-w-0 grow wrap-anywhere text-label text-text-secondary">
-                Selected <span class="font-semibold text-text">{{ node() ? nodeName(node()!) : 'Form settings' }}</span>
+                {{ msg('Selected') }} <span class="font-semibold text-text">{{ node() ? nodeName(node()!) : 'Form settings' }}</span>
               </p>
               <div class="flex flex-wrap gap-2">
                 @if (!readonly()) {
                   <button #addTrigger type="button" hlmBtn variant="outline" aria-haspopup="dialog"
                     [attr.aria-expanded]="addPanel.open()" (click)="addPanel.show(addTrigger)">
-                    <svg fimraIcon="plus" aria-hidden="true"></svg> Add
+                    <svg fimraIcon="plus" aria-hidden="true"></svg> {{ msg('Add') }}
                   </button>
                 }
                 <button #propertiesTrigger type="button" hlmBtn variant="outline" aria-haspopup="dialog"
                   [attr.aria-expanded]="propertiesPanel.open()" (click)="propertiesPanel.show(propertiesTrigger)">
-                  <svg fimraIcon="settings" aria-hidden="true"></svg> Properties
+                  <svg fimraIcon="settings" aria-hidden="true"></svg> {{ msg('Properties') }}
                 </button>
               </div>
             </div>
-            <fimra-side-panel #addPanel="fimraSidePanel" class="contents" heading="Add to form">
+            <fimra-side-panel #addPanel="fimraSidePanel" class="contents" [heading]="msg('Add to form')">
               @if (addPanel.open()) {
                 <ng-container [ngTemplateOutlet]="palette" [ngTemplateOutletContext]="{ panel: addPanel }" />
               }
             </fimra-side-panel>
-            <fimra-side-panel #propertiesPanel="fimraSidePanel" class="contents" heading="Properties">
+            <fimra-side-panel #propertiesPanel="fimraSidePanel" class="contents" [heading]="msg('Properties')">
               @if (propertiesPanel.open()) {
                 <div class="designer-properties grid min-w-0 gap-3">
                   <ng-container [ngTemplateOutlet]="properties" />
@@ -81,15 +81,15 @@
         </div>
         <button type="button" class="form-settings rounded-card border border-border bg-card p-3 text-start" [class.selected]="!selected()"
                 [attr.aria-pressed]="!selected()" (click)="select(null)">
-          <span class="block text-subhead">Form settings</span>
+          <span class="block text-subhead">{{ msg('Form settings') }}</span>
         </button>
         @if (!phone() && !readonly()) {
           <p class="text-label text-muted-foreground">
-            Drag the handles to move items, or select an item and press Alt with the up or down arrow. The move buttons do the same.
+            {{ msg('Drag the handles to move items, or select an item and press Alt with the up or down arrow. The move buttons do the same.') }}
           </p>
         }
         <ol cdkDropList id="form-sections" (cdkDropListDropped)="sectionDropped($event)" [cdkDropListDisabled]="phone() || readonly()" class="grid gap-3"
-            aria-label="Sections">
+            [attr.aria-label]="msg('Sections')">
           @for (section of form().sections; track section.key; let s = $index) {
             @let sectionPath = [s];
             <li cdkDrag [cdkDragDisabled]="phone()" class="designer-section rounded-card border border-border bg-card p-3" [class.locked]="frozen(sectionPath)">
@@ -114,19 +114,19 @@
 <ng-template #palette let-panel="panel">
   <div class="grid gap-2">
     <p class="text-label text-text-secondary">
-      @if (phone()) { Choose a type to add it to the outline. }
-      @else { Choose a type to add it to the outline, or drag it into place. }
+      @if (phone()) { {{ msg('Choose a type to add it to the outline.') }} }
+      @else { {{ msg('Choose a type to add it to the outline, or drag it into place.') }} }
     </p>
     <button type="button" hlmBtn variant="outline" size="sm" class="justify-start" (click)="addSection(); panel?.close()">
-      <svg fimraIcon="plus" aria-hidden="true"></svg> Section
+      <svg fimraIcon="plus" aria-hidden="true"></svg> {{ msg('Section') }}
     </button>
     <ul id="form-palette" cdkDropList [cdkDropListData]="null" [cdkDropListConnectedTo]="listIds()" cdkDropListSortingDisabled
         [cdkDropListDisabled]="phone()" [cdkDropListEnterPredicate]="noDrop" class="palette grid gap-1">
       @for (type of fieldTypes; track type.type) {
         <li cdkDrag [cdkDragDisabled]="phone()" [cdkDragData]="type.type">
-          <button type="button" hlmBtn variant="outline" size="sm" class="w-full justify-start" [title]="type.description"
+          <button type="button" hlmBtn variant="outline" size="sm" class="w-full justify-start" [title]="msg(type.description)"
                   (click)="add(type.type) && panel?.close()">
-            <svg fimraIcon="plus" aria-hidden="true"></svg> {{ type.name }}
+            <svg fimraIcon="plus" aria-hidden="true"></svg> {{ msg(type.name) }}
           </button>
         </li>
       }
@@ -138,42 +138,42 @@
   @if (node(); as node) {
     @let path = selected()!;
     @let locked = frozen(path);
-    <h3 id="properties-heading" class="font-semibold">{{ path.length === 1 ? 'Section' : typeName(item()!.type) }}: {{ nodeName(node) }}</h3>
+    <h3 id="properties-heading" class="font-semibold">{{ path.length === 1 ? msg('Section') : typeName(item()!.type) }}: {{ nodeName(node) }}</h3>
     @if (locked) {
       <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4"></svg>
-        Locked by {{ parent()?.form }} version {{ parent()?.version }}. It cannot be changed in this form.</p>
+        {{ msg('Locked by {0} version {1}. It cannot be changed in this form.', [parent()?.form, parent()?.version]) }}</p>
     }
     <fieldset class="grid gap-3" [disabled]="locked || readonly()">
       <div class="grid gap-1">
-        <label for="prop-key" class="font-medium">Key</label>
+        <label for="prop-key" class="font-medium">{{ msg('Key') }}</label>
         <input hlmInput id="prop-key" [value]="node.key" (change)="setKey($event)" spellcheck="false" aria-describedby="prop-key-help">
-        <p id="prop-key-help" class="text-label text-muted-foreground">The column name in reports and exports. Keep it the same from one version to the next.</p>
+        <p id="prop-key-help" class="text-label text-muted-foreground">{{ msg('The column name in reports and exports. Keep it the same from one version to the next.') }}</p>
         @if (keyError()) { <p class="text-danger" role="alert">{{ keyError() }}</p> }
       </div>
       @for (language of languages(); track language) {
         <div class="grid gap-1">
-          <label [for]="'prop-text-' + language" class="font-medium">{{ textName() === 'title' ? 'Title' : 'Question' }}@if (language !== 'en') { ({{ language }})}</label>
+          <label [for]="'prop-text-' + language" class="font-medium">{{ textName() === 'title' ? msg('Title') : msg('Question') }}@if (language !== 'en') { ({{ language }})}</label>
           <input hlmInput [id]="'prop-text-' + language" [value]="text(prop(node, textName()), language)" (change)="setText(textName(), language, $event)">
         </div>
       }
       @if (path.length > 1 && !isContainer(item()!)) {
         <div class="grid gap-1">
-          <label for="prop-hint" class="font-medium">Hint</label>
+          <label for="prop-hint" class="font-medium">{{ msg('Hint') }}</label>
           <input hlmInput id="prop-hint" [value]="text(item()!.hint)" (change)="setText('hint', 'en', $event)">
         </div>
         @if (item()!.type !== 'calculated' && item()!.type !== 'alert-value') {
-          <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item()!.required" (change)="setFlag('required', $event)"> Must be answered</label>
+          <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item()!.required" (change)="setFlag('required', $event)"> {{ msg('Must be answered') }}</label>
         }
       } @else {
         <div class="grid gap-1">
-          <label for="prop-description" class="font-medium">Description</label>
+          <label for="prop-description" class="font-medium">{{ msg('Description') }}</label>
           <input hlmInput id="prop-description" [value]="text(node.description)" (change)="setText('description', 'en', $event)">
         </div>
       }
       @if (path.length > 1) {
         <ng-container [ngTemplateOutlet]="typeProperties" [ngTemplateOutletContext]="{ $implicit: item()! }" />
         <div class="grid gap-1">
-          <label for="prop-move" class="font-medium">Move to</label>
+          <label for="prop-move" class="font-medium">{{ msg('Move to') }}</label>
           <select hlmInput id="prop-move" (change)="moveToPlace($event)">
             @for (place of places(); track place.path.join('-')) {
               <option [value]="placeValue(place.path)" [selected]="placeValue(place.path) === currentPlace()"
@@ -188,39 +188,38 @@
       <label class="flex items-start gap-2 border-t border-border pt-3">
         <input type="checkbox" class="mt-1" [checked]="ownLocks().has(node.key) || frozen(path)" [disabled]="inherited().has(node.key) || readonly()"
                (change)="toggleLock($event)">
-        <span>Lock for the forms that extend this one
-          <span class="block text-label text-muted-foreground">They keep it exactly as it is here, with everything inside it.</span></span>
+        <span>{{ msg('Lock for the forms that extend this one') }}
+          <span class="block text-label text-muted-foreground">{{ msg('They keep it exactly as it is here, with everything inside it.') }}</span></span>
       </label>
     }
     @if (!locked && !readonly()) {
       <button hlmBtn variant="outline" size="sm" class="justify-self-start" (click)="removeSelected()">
-        <svg fimraIcon="trash-2" aria-hidden="true"></svg> Remove {{ path.length === 1 ? 'section' : typeName(item()!.type).toLowerCase() }}
+        <svg fimraIcon="trash-2" aria-hidden="true"></svg> {{ msg('Remove {0}', [path.length === 1 ? 'section' : typeName(item()!.type).toLowerCase()]) }}
       </button>
     }
   } @else {
-    <h3 id="properties-heading" class="font-semibold">Form settings</h3>
+    <h3 id="properties-heading" class="font-semibold">{{ msg('Form settings') }}</h3>
     <fieldset class="grid gap-3" [disabled]="readonly()">
       <div class="grid gap-1">
-        <label for="form-title" class="font-medium">Title</label>
+        <label for="form-title" class="font-medium">{{ msg('Title') }}</label>
         <input hlmInput id="form-title" [value]="text(form().title)" (change)="setFormText('title', $event)">
       </div>
       <div class="grid gap-1">
-        <label for="form-description" class="font-medium">Description</label>
+        <label for="form-description" class="font-medium">{{ msg('Description') }}</label>
         <input hlmInput id="form-description" [value]="text(form().description)" (change)="setFormText('description', $event)">
       </div>
-      <p class="text-label text-muted-foreground">Id {{ form().id }}, version {{ form().version }}. Languages: {{ languages().join(', ') }}.
-        @if (form().stages?.length) { Stages: {{ form().stages!.length }}. } Change these in the form file.</p>
+      <p class="text-label text-muted-foreground">{{ msg('Id {0}, version {1}. Languages: {2}.', [form().id, form().version, languages().join(', ')]) }}
+        @if (form().stages?.length) { {{ msg('Stages: {0}.', [form().stages!.length]) }} } {{ msg('Change these in the form file.') }}</p>
       @if (canLock()) {
         <label class="flex items-start gap-2 border-t border-border pt-3">
           <input type="checkbox" class="mt-1" [checked]="rules().allowExtension" (change)="setAllowExtension($event)">
-          <span>Let {{ level() === 'national' ? 'states' : 'divisions' }} extend this form
-            <span class="block text-label text-muted-foreground">Then lock the sections and questions they must keep as they are.</span></span>
+          <span>{{ msg('Let {0} extend this form', [level() === 'national' ? 'states' : 'divisions']) }}
+            <span class="block text-label text-muted-foreground">{{ msg('Then lock the sections and questions they must keep as they are.') }}</span></span>
         </label>
       }
     </fieldset>
     @if (parent(); as parent) {
-      <p class="text-muted-foreground">Extends {{ parent.form }} version {{ parent.version }}. {{ parent.rules.locked.length }} locked
-        {{ parent.rules.locked.length === 1 ? 'part' : 'parts' }} come from it.</p>
+      <p class="text-muted-foreground">{{ msg('Extends {0} version {1}. {2} locked {3} come from it.', [parent.form, parent.version, parent.rules.locked.length, parent.rules.locked.length === 1 ? 'part' : 'parts']) }}</p>
     }
   }
 </ng-template>
@@ -228,7 +227,7 @@
 <ng-template #itemList let-items let-container="container">
   <ul cdkDropList [id]="listId(container)" [cdkDropListData]="container" [cdkDropListConnectedTo]="listIds()"
       [cdkDropListDisabled]="phone() || readonly() || frozen(container)" [cdkDropListEnterPredicate]="canDrop"
-      (cdkDropListDropped)="dropped($event)" class="item-list grid min-h-10 gap-1" [attr.aria-label]="'Items in ' + containerName(container)">
+      (cdkDropListDropped)="dropped($event)" class="item-list grid min-h-10 gap-1" [attr.aria-label]="msg('Items in ') + containerName(container)">
     @for (item of asItems(items); track item.key; let i = $index) {
       @let path = pathOf(asPath(container), i);
       <li cdkDrag [cdkDragData]="path" [cdkDragDisabled]="phone() || readonly() || frozen(path)">
@@ -252,19 +251,19 @@
     }
     <button type="button" class="row-select min-w-0 flex-1 rounded-control px-2 py-1 text-start" [id]="rowId(path)"
             [attr.aria-pressed]="isSelected(path)" (click)="selectKey(node.key)" (keydown)="rowKey($event, node.key)">
-      <span class="block truncate font-medium">{{ nodeName(node) }}@if (node.required) {<span class="text-danger" aria-label="required"> *</span>}</span>
+      <span class="block truncate font-medium">{{ nodeName(node) }}@if (node.required) {<span class="text-danger" [attr.aria-label]=" msg('required') "> *</span>}</span>
       <span class="flex flex-wrap items-center gap-1 text-label text-muted-foreground">
         <span class="wrap-anywhere">{{ typeName(kind) }} · {{ node.key }}</span>
-        @if (node.showWhen) { <span hlmBadge variant="outline">Conditional</span> }
-        @if (frozen(path)) { <fimra-status-badge icon="locked" label="Locked by template" /> }
-        @else if (lockedHere(path)) { <fimra-status-badge icon="locked" label="Locked for extensions" /> }
+        @if (node.showWhen) { <span hlmBadge variant="outline">{{ msg('Conditional') }}</span> }
+        @if (frozen(path)) { <fimra-status-badge icon="locked" [label]=" msg('Locked by template') " /> }
+        @else if (lockedHere(path)) { <fimra-status-badge icon="locked" [label]=" msg('Locked for extensions') " /> }
       </span>
     </button>
     @if (!readonly()) {
       @let fixedPlace = path.length > 1 && frozen(path.slice(0, -1));
-      <button hlmBtn variant="ghost" size="icon-sm" [disabled]="first(path) || fixedPlace" (click)="moveKey(node.key, -1)" [attr.aria-label]="'Move ' + nodeName(node) + ' up'">
+      <button hlmBtn variant="ghost" size="icon-sm" [disabled]="first(path) || fixedPlace" (click)="moveKey(node.key, -1)" [attr.aria-label]="msg('Move ') + nodeName(node) + msg(' up')">
         <svg fimraIcon="arrow-up" aria-hidden="true"></svg></button>
-      <button hlmBtn variant="ghost" size="icon-sm" [disabled]="last(path) || fixedPlace" (click)="moveKey(node.key, 1)" [attr.aria-label]="'Move ' + nodeName(node) + ' down'">
+      <button hlmBtn variant="ghost" size="icon-sm" [disabled]="last(path) || fixedPlace" (click)="moveKey(node.key, 1)" [attr.aria-label]="msg('Move ') + nodeName(node) + msg(' down')">
         <svg fimraIcon="arrow-down" aria-hidden="true"></svg></button>
     }
   </div>
@@ -274,89 +273,89 @@
   @switch (item.type) {
     @case ('text') {
       <div class="grid grid-cols-2 gap-2">
-        <div class="grid gap-1"><label for="prop-min-length" class="font-medium">Fewest characters</label>
+        <div class="grid gap-1"><label for="prop-min-length" class="font-medium">{{ msg('Fewest characters') }}</label>
           <input hlmInput id="prop-min-length" type="number" min="0" [value]="numberOf('minLength')" (change)="setNumber('minLength', $event)"></div>
-        <div class="grid gap-1"><label for="prop-max-length" class="font-medium">Most characters</label>
+        <div class="grid gap-1"><label for="prop-max-length" class="font-medium">{{ msg('Most characters') }}</label>
           <input hlmInput id="prop-max-length" type="number" min="1" [value]="numberOf('maxLength')" (change)="setNumber('maxLength', $event)"></div>
       </div>
-      <div class="grid gap-1"><label for="prop-pattern" class="font-medium">Pattern</label>
+      <div class="grid gap-1"><label for="prop-pattern" class="font-medium">{{ msg('Pattern') }}</label>
         <input hlmInput id="prop-pattern" spellcheck="false" [value]="stringOf('pattern')" (change)="setString('pattern', $event)"></div>
-      <div class="grid gap-1"><label for="prop-pattern-hint" class="font-medium">Pattern explained</label>
+      <div class="grid gap-1"><label for="prop-pattern-hint" class="font-medium">{{ msg('Pattern explained') }}</label>
         <input hlmInput id="prop-pattern-hint" [value]="text(item.patternHint)" (change)="setText('patternHint', 'en', $event)"></div>
     }
     @case ('number') {
       <div class="grid grid-cols-2 gap-2">
-        <div class="grid gap-1"><label for="prop-unit" class="font-medium">Unit</label>
+        <div class="grid gap-1"><label for="prop-unit" class="font-medium">{{ msg('Unit') }}</label>
           <input hlmInput id="prop-unit" [value]="stringOf('unit')" placeholder="ha" (change)="setString('unit', $event)"></div>
-        <div class="grid gap-1"><label for="prop-decimals" class="font-medium">Decimal places</label>
+        <div class="grid gap-1"><label for="prop-decimals" class="font-medium">{{ msg('Decimal places') }}</label>
           <input hlmInput id="prop-decimals" type="number" min="0" max="6" [value]="numberOf('decimals')" (change)="setNumber('decimals', $event)"></div>
-        <div class="grid gap-1"><label for="prop-min" class="font-medium">Smallest</label>
+        <div class="grid gap-1"><label for="prop-min" class="font-medium">{{ msg('Smallest') }}</label>
           <input hlmInput id="prop-min" type="number" [value]="numberOf('min')" (change)="setNumber('min', $event)"></div>
-        <div class="grid gap-1"><label for="prop-max" class="font-medium">Largest</label>
+        <div class="grid gap-1"><label for="prop-max" class="font-medium">{{ msg('Largest') }}</label>
           <input hlmInput id="prop-max" type="number" [value]="numberOf('max')" (change)="setNumber('max', $event)"></div>
       </div>
     }
-    @case ('date') { <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item.notInFuture" (change)="setFlag('notInFuture', $event)"> Not later than today</label> }
-    @case ('date-time') { <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item.notInFuture" (change)="setFlag('notInFuture', $event)"> Not later than now</label> }
+    @case ('date') { <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item.notInFuture" (change)="setFlag('notInFuture', $event)"> {{ msg('Not later than today') }}</label> }
+    @case ('date-time') { <label class="flex items-center gap-2"><input type="checkbox" [checked]="!!item.notInFuture" (change)="setFlag('notInFuture', $event)"> {{ msg('Not later than now') }}</label> }
     @case ('repeat') {
-      <div class="grid gap-1"><label for="prop-item-label" class="font-medium">Name of one entry</label>
-        <input hlmInput id="prop-item-label" [value]="text(item.itemLabel)" placeholder="Team" (change)="setText('itemLabel', 'en', $event)"></div>
+      <div class="grid gap-1"><label for="prop-item-label" class="font-medium">{{ msg('Name of one entry') }}</label>
+        <input hlmInput id="prop-item-label" [value]="text(item.itemLabel)" [placeholder]="msg('Team')" (change)="setText('itemLabel', 'en', $event)"></div>
       <div class="grid grid-cols-2 gap-2">
-        <div class="grid gap-1"><label for="prop-min-repeats" class="font-medium">Fewest entries</label>
+        <div class="grid gap-1"><label for="prop-min-repeats" class="font-medium">{{ msg('Fewest entries') }}</label>
           <input hlmInput id="prop-min-repeats" type="number" min="0" [value]="numberOf('minRepeats')" (change)="setNumber('minRepeats', $event)"></div>
-        <div class="grid gap-1"><label for="prop-max-repeats" class="font-medium">Most entries</label>
+        <div class="grid gap-1"><label for="prop-max-repeats" class="font-medium">{{ msg('Most entries') }}</label>
           <input hlmInput id="prop-max-repeats" type="number" min="1" [value]="numberOf('maxRepeats')" (change)="setNumber('maxRepeats', $event)"></div>
       </div>
     }
     @case ('photo') { <ng-container [ngTemplateOutlet]="counts" /> }
     @case ('file') {
       <ng-container [ngTemplateOutlet]="counts" />
-      <div class="grid gap-1"><label for="prop-accept" class="font-medium">File endings</label>
+      <div class="grid gap-1"><label for="prop-accept" class="font-medium">{{ msg('File endings') }}</label>
         <input hlmInput id="prop-accept" [value]="acceptText()" placeholder=".pdf, .csv" (change)="setAccept($event)"></div>
-      <div class="grid gap-1"><label for="prop-size" class="font-medium">Largest file in MB</label>
+      <div class="grid gap-1"><label for="prop-size" class="font-medium">{{ msg('Largest file in MB') }}</label>
         <input hlmInput id="prop-size" type="number" min="1" [value]="numberOf('maxSizeMegabytes')" (change)="setNumber('maxSizeMegabytes', $event)"></div>
     }
     @case ('point') { <ng-container [ngTemplateOutlet]="accuracy" /> }
     @case ('track') { <ng-container [ngTemplateOutlet]="accuracy" /> }
     @case ('polygon') { <ng-container [ngTemplateOutlet]="accuracy" /> }
     @case ('alert-value') {
-      <div class="grid gap-1"><label for="prop-source" class="font-medium">Value</label>
+      <div class="grid gap-1"><label for="prop-source" class="font-medium">{{ msg('Value') }}</label>
         <select hlmInput id="prop-source" (change)="setString('source', $event)">
-          @for (source of alertSources; track source.value) { <option [value]="source.value" [selected]="item.source === source.value">{{ source.label }}</option> }
+          @for (source of alertSources; track source.value) { <option [value]="source.value" [selected]="item.source === source.value">{{ msg(source.label) }}</option> }
         </select></div>
     }
     @case ('calculated') {
       <div class="grid grid-cols-2 gap-2">
-        <div class="grid gap-1"><label for="prop-unit" class="font-medium">Unit</label>
+        <div class="grid gap-1"><label for="prop-unit" class="font-medium">{{ msg('Unit') }}</label>
           <input hlmInput id="prop-unit" [value]="stringOf('unit')" (change)="setString('unit', $event)"></div>
-        <div class="grid gap-1"><label for="prop-decimals" class="font-medium">Decimal places</label>
+        <div class="grid gap-1"><label for="prop-decimals" class="font-medium">{{ msg('Decimal places') }}</label>
           <input hlmInput id="prop-decimals" type="number" min="0" max="6" [value]="numberOf('decimals')" (change)="setNumber('decimals', $event)"></div>
       </div>
-      <div class="grid gap-1"><label for="prop-calculate" class="font-medium">Calculation</label>
+      <div class="grid gap-1"><label for="prop-calculate" class="font-medium">{{ msg('Calculation') }}</label>
         <textarea hlmTextarea id="prop-calculate" class="min-h-28 text-sm" spellcheck="false" [value]="jsonOf('calculate')"
                   (change)="setJSON('calculate', $event)" aria-describedby="prop-calculate-help"></textarea>
-        <p id="prop-calculate-help" class="text-label text-muted-foreground">For example {{ '{' }}"op": "sum", "group": "teams", "field": "members"{{ '}' }}. The form format lists every calculation.</p>
+        <p id="prop-calculate-help" class="text-label text-muted-foreground">{{ msg('For example {0}"op": "sum", "group": "teams", "field": "members"{1}. The form format lists every calculation.', ['{', '}']) }}</p>
         @if (jsonError()) { <p class="text-danger" role="alert">{{ jsonError() }}</p> }
       </div>
     }
   }
   @if (item.type === 'single-choice' || item.type === 'multiple-choice') {
     <fieldset class="grid gap-2">
-      <legend class="font-medium">Choices</legend>
+      <legend class="font-medium">{{ msg('Choices') }}</legend>
       @if (ownChoices()) {
         @for (choice of choices(); track $index; let c = $index) {
           <div class="choice-row grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] items-center gap-1">
-            <input hlmInput [value]="choice.key" spellcheck="false" (change)="setChoice(c, 'key', $event)" [attr.aria-label]="'Key of choice ' + (c + 1)">
-            <input hlmInput [value]="text(choice.label)" (change)="setChoice(c, 'label', $event)" [attr.aria-label]="'Label of choice ' + (c + 1)">
+            <input hlmInput [value]="choice.key" spellcheck="false" (change)="setChoice(c, 'key', $event)" [attr.aria-label]="msg('Key of choice ') + (c + 1)">
+            <input hlmInput [value]="text(choice.label)" (change)="setChoice(c, 'label', $event)" [attr.aria-label]="msg('Label of choice ') + (c + 1)">
             <span class="flex">
-              <button hlmBtn variant="ghost" size="icon-sm" type="button" [disabled]="c === 0" (click)="moveChoice(c, -1)" [attr.aria-label]="'Move choice ' + (c + 1) + ' up'"><svg fimraIcon="arrow-up" aria-hidden="true"></svg></button>
-              <button hlmBtn variant="ghost" size="icon-sm" type="button" (click)="removeChoice(c)" [attr.aria-label]="'Remove choice ' + (c + 1)"><svg fimraIcon="trash-2" aria-hidden="true"></svg></button>
+              <button hlmBtn variant="ghost" size="icon-sm" type="button" [disabled]="c === 0" (click)="moveChoice(c, -1)" [attr.aria-label]="msg('Move choice ') + (c + 1) + msg(' up')"><svg fimraIcon="arrow-up" aria-hidden="true"></svg></button>
+              <button hlmBtn variant="ghost" size="icon-sm" type="button" (click)="removeChoice(c)" [attr.aria-label]="msg('Remove choice ') + (c + 1)"><svg fimraIcon="trash-2" aria-hidden="true"></svg></button>
             </span>
           </div>
         }
-        <button hlmBtn variant="outline" size="sm" type="button" class="justify-self-start" (click)="addChoice()"><svg fimraIcon="plus" aria-hidden="true"></svg> Add a choice</button>
+        <button hlmBtn variant="outline" size="sm" type="button" class="justify-self-start" (click)="addChoice()"><svg fimraIcon="plus" aria-hidden="true"></svg> {{ msg('Add a choice') }}</button>
       } @else {
-        <p class="text-muted-foreground">Uses the shared list "{{ item.list }}": {{ choices().length }} choices. Change shared lists in the form file.</p>
+        <p class="text-muted-foreground">{{ msg('Uses the shared list "{0}": {1} choices. Change shared lists in the form file.', [item.list, choices().length]) }}</p>
       }
     </fieldset>
   }
@@ -364,57 +363,57 @@
 
 <ng-template #counts>
   <div class="grid grid-cols-2 gap-2">
-    <div class="grid gap-1"><label for="prop-min-count" class="font-medium">Fewest</label>
+    <div class="grid gap-1"><label for="prop-min-count" class="font-medium">{{ msg('Fewest') }}</label>
       <input hlmInput id="prop-min-count" type="number" min="0" [value]="numberOf('minCount')" (change)="setNumber('minCount', $event)"></div>
-    <div class="grid gap-1"><label for="prop-max-count" class="font-medium">Most</label>
+    <div class="grid gap-1"><label for="prop-max-count" class="font-medium">{{ msg('Most') }}</label>
       <input hlmInput id="prop-max-count" type="number" min="1" max="20" [value]="numberOf('maxCount')" (change)="setNumber('maxCount', $event)"></div>
   </div>
 </ng-template>
 
 <ng-template #accuracy>
-  <div class="grid gap-1"><label for="prop-accuracy" class="font-medium">Least accuracy accepted, in metres</label>
+  <div class="grid gap-1"><label for="prop-accuracy" class="font-medium">{{ msg('Least accuracy accepted, in metres') }}</label>
     <input hlmInput id="prop-accuracy" type="number" min="1" [value]="numberOf('maxAccuracyMetres')" (change)="setNumber('maxAccuracyMetres', $event)"></div>
 </ng-template>
 
 <ng-template #conditionEditor let-node>
   @let rules = rulesOf(node.showWhen);
   <fieldset class="condition-editor grid gap-2 border-t border-border pt-3">
-    <legend class="font-medium">When to show it</legend>
+    <legend class="font-medium">{{ msg('When to show it') }}</legend>
     @if (rules === null) {
-      <label for="prop-show-when" class="text-label text-muted-foreground">This condition is too complex for the simple editor. Edit it as JSON.</label>
+      <label for="prop-show-when" class="text-label text-muted-foreground">{{ msg('This condition is too complex for the simple editor. Edit it as JSON.') }}</label>
       <textarea hlmTextarea id="prop-show-when" class="min-h-28 text-sm" spellcheck="false" [value]="jsonOf('showWhen')" (change)="setJSON('showWhen', $event)"></textarea>
       @if (jsonError()) { <p class="text-danger" role="alert">{{ jsonError() }}</p> }
     } @else {
-      @if (rules.length === 0) { <p class="text-muted-foreground">Always shown.</p> }
+      @if (rules.length === 0) { <p class="text-muted-foreground">{{ msg('Always shown.') }}</p> }
       @if (rules.length > 1) {
-        <label class="flex items-center gap-2">Show it when
-          <select hlmInput class="w-auto" (change)="setJoin($event)" aria-label="How the rules combine">
-            <option value="all" [selected]="joinOf(node.showWhen) === 'all'">all of these are true</option>
-            <option value="any" [selected]="joinOf(node.showWhen) === 'any'">any of these is true</option>
+        <label class="flex items-center gap-2">{{ msg('Show it when') }}
+          <select hlmInput class="w-auto" (change)="setJoin($event)" [attr.aria-label]=" msg('How the rules combine') ">
+            <option value="all" [selected]="joinOf(node.showWhen) === 'all'">{{ msg('all of these are true') }}</option>
+            <option value="any" [selected]="joinOf(node.showWhen) === 'any'">{{ msg('any of these is true') }}</option>
           </select>
         </label>
       }
       @for (rule of rules; track $index; let r = $index) {
         <div class="condition-rule grid gap-1 rounded-control border border-border p-2">
-          <select hlmInput (change)="setRule(r, 'field', $event)" [attr.aria-label]="'Question tested by rule ' + (r + 1)">
+          <select hlmInput (change)="setRule(r, 'field', $event)" [attr.aria-label]="msg('Question tested by rule ') + (r + 1)">
             @for (field of conditionFields(); track field.key) { <option [value]="field.key" [selected]="field.key === rule.field">{{ nodeName(field) }}</option> }
           </select>
-          <select hlmInput (change)="setRule(r, 'op', $event)" [attr.aria-label]="'Test of rule ' + (r + 1)">
+          <select hlmInput (change)="setRule(r, 'op', $event)" [attr.aria-label]="msg('Test of rule ') + (r + 1)">
             @for (test of testsOf(rule); track test) { <option [value]="test" [selected]="test === rule.op">{{ testWords[test] }}</option> }
           </select>
           @if (rule.op !== 'answered') {
             @if (choicesFor(rule).length) {
-              <select hlmInput (change)="setRule(r, 'value', $event)" [attr.aria-label]="'Value of rule ' + (r + 1)">
+              <select hlmInput (change)="setRule(r, 'value', $event)" [attr.aria-label]="msg('Value of rule ') + (r + 1)">
                 @for (choice of choicesFor(rule); track choice.key) { <option [value]="choice.key" [selected]="choice.key === rule.value">{{ text(choice.label) }}</option> }
               </select>
             } @else {
-              <input hlmInput [value]="ruleValue(rule)" (change)="setRule(r, 'value', $event)" [attr.aria-label]="'Value of rule ' + (r + 1)">
+              <input hlmInput [value]="ruleValue(rule)" (change)="setRule(r, 'value', $event)" [attr.aria-label]="msg('Value of rule ') + (r + 1)">
             }
           }
-          <button hlmBtn variant="ghost" size="sm" type="button" class="justify-self-start" (click)="removeRule(r)">Remove this rule</button>
+          <button hlmBtn variant="ghost" size="sm" type="button" class="justify-self-start" (click)="removeRule(r)">{{ msg('Remove this rule') }}</button>
         </div>
       }
-      <button hlmBtn variant="outline" size="sm" type="button" class="justify-self-start" (click)="addRule()"><svg fimraIcon="plus" aria-hidden="true"></svg> Add a rule</button>
+      <button hlmBtn variant="outline" size="sm" type="button" class="justify-self-start" (click)="addRule()"><svg fimraIcon="plus" aria-hidden="true"></svg> {{ msg('Add a rule') }}</button>
     }
   </fieldset>
 </ng-template>

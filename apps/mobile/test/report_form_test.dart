@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:fimra_field/src/data/field_store.dart';
 import 'package:fimra_field/src/forms/report_form.dart';
+import 'package:fimra_field/src/l10n/app_localizations.dart';
 import 'package:fimra_field/src/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,6 +64,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: fimraTheme(Brightness.light),
         home: Builder(
           builder: (context) => Scaffold(
@@ -94,7 +97,7 @@ void main() {
     await tester.tap(find.text('Fill report'));
     await tester.pumpAndSettle();
     expect(find.text('Choose photo'), findsNothing);
-    await tester.tap(find.text('Save to outbox'));
+    await tester.tap(find.text('Save to send later'));
     await tester.pumpAndSettle();
     expect(find.textContaining('“Status” is required'), findsOneWidget);
     await tester.tap(find.byType(DropdownButtonFormField<String>).last);
@@ -112,7 +115,7 @@ void main() {
     expect(find.text('पहली रिपोर्ट'), findsOneWidget);
     expect(find.text('दल का नाम *'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField), 'Demo Team');
-    await tester.tap(find.text('Save to outbox'));
+    await tester.tap(find.text('Save to send later'));
     await tester.pumpAndSettle();
     expect(saved, {
       'status': 'open',
@@ -159,6 +162,8 @@ void main() {
     String? language;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: fimraTheme(Brightness.light),
         home: Builder(
           builder: (context) => Scaffold(

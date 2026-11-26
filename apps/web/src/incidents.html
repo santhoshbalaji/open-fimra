@@ -1,13 +1,13 @@
 <ng-template #placeCell let-row>
   <button type="button" hlmBtn variant="link" class="h-auto min-h-9 max-w-full px-0 text-start whitespace-normal wrap-anywhere"
-    [attr.data-incident-id]="row.id" [attr.aria-label]="places(row) + ', incident #' + row.id"
+    [attr.data-incident-id]="row.id" [attr.aria-label]="places(row) + msg(', incident #') + row.id"
     [attr.aria-expanded]="selectedId() === row.id" (click)="open(row.id)">{{ places(row) }}</button>
 </ng-template>
 
 <ng-template #statusCell let-row>
   <div class="flex flex-wrap gap-1">
     <fimra-status-badge [icon]="row.terminal ? 'complete' : 'step'" [label]="row.step_label" />
-    @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+    @if (row.overdue) { <fimra-status-badge icon="overdue" [label]=" msg('Overdue') " /> }
   </div>
 </ng-template>
 
@@ -16,22 +16,22 @@
 </ng-template>
 
 <div class="incident-workspace" [class.has-detail]="selectedId()">
-  <section #list class="incident-list" [fimraListScroll]="listKey()" aria-label="Incident list">
+  <section #list class="incident-list" [fimraListScroll]="listKey()" [attr.aria-label]=" msg('Incident list') ">
     <p #listSummary tabindex="-1" class="rounded-control text-body wrap-anywhere focus-visible:outline-2 focus-visible:outline-ring">
       @if (total(); as count) {
-        <strong>{{ format.number(count) }} {{ count === 1 ? 'incident' : 'incidents' }}</strong>
+        <strong>{{ msg(count === 1 ? '{0} incident' : '{0} incidents', [format.number(count)]) }}</strong>
         <span aria-hidden="true"> · </span>
       }
       {{ scope() }}
     </p>
-    <fimra-data-table caption="Incidents" [phoneCards]="true" [columns]="columns()" [page]="page()" [state]="listState()"
+    <fimra-data-table [caption]=" msg('Incidents') " [phoneCards]="true" [columns]="columns()" [page]="page()" [state]="listState()"
       [scrollKey]="tableKey()" [rowKey]="rowKey" [rowLabel]="places" (pageRequest)="changePage($event)" (retry)="retryList()" />
     @if (cursor() && listState().kind === 'empty') {
-      <button hlmBtn variant="outline" class="self-start" (click)="firstPage()">First page</button>
+      <button hlmBtn variant="outline" class="self-start" (click)="firstPage()">{{ msg('First page') }}</button>
     }
   </section>
 
-  <fimra-side-panel class="incident-panel" [heading]="'Incident #' + selectedId()" [fullHeight]="true" [scrollDock]="true" (closed)="closed()">
+  <fimra-side-panel class="incident-panel" [heading]="msg('Incident #') + selectedId()" [fullHeight]="true" [scrollDock]="true" (closed)="closed()">
     @if (selectedId()) {
       <fimra-state-region [state]="detailState()" (retry)="retryDetail()">
         @if (incident(); as row) {
@@ -40,42 +40,42 @@
               <p class="text-base font-medium wrap-anywhere">{{ places(row) }}</p>
               <div class="flex flex-wrap items-center gap-2">
                 <fimra-status-badge [icon]="row.terminal ? 'complete' : 'step'" [label]="row.step_label" />
-                @if (row.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
-                <time class="text-label text-text-secondary" [attr.datetime]="activity(row).toISOString()">Updated {{ format.dateTime(activity(row)) }}</time>
+                @if (row.overdue) { <fimra-status-badge icon="overdue" [label]=" msg('Overdue') " /> }
+                <time class="text-label text-text-secondary" [attr.datetime]="activity(row).toISOString()">{{ msg('Updated {0}', [format.dateTime(activity(row))]) }}</time>
               </div>
             </div>
 
             <section aria-labelledby="incident-actions" class="grid min-w-0 gap-2">
-              <h3 id="incident-actions" class="text-base font-semibold">Incident actions</h3>
+              <h3 id="incident-actions" class="text-base font-semibold">{{ msg('Incident actions') }}</h3>
               @if (row.merged_into; as target) {
-                <p>This incident joined incident #{{ target }}, which now holds its alerts.</p>
-                <button hlmBtn variant="link" class="justify-self-start px-0" (click)="open(target)">Open incident #{{ target }}</button>
+                <p>{{ msg('This incident joined incident #{0}, which now holds its alerts.', [target]) }}</p>
+                <button hlmBtn variant="link" class="justify-self-start px-0" (click)="open(target)">{{ msg('Open incident #{0}', [target]) }}</button>
               }
               <fimra-workflow #workflow class="m-0!" subject="incident" [url]="incidentsUrl() + '/' + row.id"
                 [stepTime]="row.step_time" [alertLink]="alertLink" (changed)="changed()" />
               <a hlmBtn variant="outline" class="justify-self-start"
-                [routerLink]="navigation.href('/monitor/map', { incident: row.id })">Show incident on map</a>
+                [routerLink]="navigation.href('/monitor/map', { incident: row.id })">{{ msg('Show incident on map') }}</a>
             </section>
 
             <section aria-labelledby="member-alerts" class="grid min-w-0 gap-2 border-t border-divider pt-4">
-              <h3 id="member-alerts" class="text-base font-semibold">Member alerts ({{ format.number(row.alert_count) }})</h3>
+              <h3 id="member-alerts" class="text-base font-semibold">{{ msg('Member alerts ({0})', [format.number(row.alert_count)]) }}</h3>
               <fimra-state-region [state]="memberState()" (retry)="retryMembers()">
                 <ul role="list" class="grid gap-2">
                   @for (alert of members(); track alert.id) {
                     <li class="grid gap-2 rounded-control border border-border p-3 wrap-anywhere" [class.border-action]="member()?.id === alert.id">
                       <button type="button" hlmBtn variant="link" class="h-auto min-h-9 max-w-full justify-self-start px-0 text-start whitespace-normal"
                         [attr.aria-expanded]="member()?.id === alert.id" (click)="selectMember(alert.id)">
-                        {{ alert.beat_name || 'Unknown beat' }} · Alert #{{ alert.id }}
+                        {{ msg('{0} · Alert #{1}', [alert.beat_name || 'Unknown beat', alert.id]) }}
                       </button>
-                      <p class="text-label text-text-secondary">{{ classes[alert.forest_class] }} · {{ format.dateTime(date(alert.observed_at)) }}</p>
+                      <p class="text-label text-text-secondary">{{ msg(classes[alert.forest_class]) }} · {{ format.dateTime(date(alert.observed_at)) }}</p>
                       <div class="flex flex-wrap gap-1">
                         <fimra-status-badge icon="step" [label]="alert.step_label" />
-                        @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+                        @if (alert.overdue) { <fimra-status-badge icon="overdue" [label]=" msg('Overdue') " /> }
                       </div>
                       @if (member()?.id === alert.id) {
                         <div class="flex flex-wrap gap-2">
-                          <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/map', { incident: row.id, alert: alert.id })">Show alert #{{ alert.id }} on map</a>
-                          <a hlmBtn variant="ghost" [routerLink]="navigation.href('/monitor/alerts', { alert: alert.id })">Open alert #{{ alert.id }}</a>
+                          <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/map', { incident: row.id, alert: alert.id })">{{ msg('Show alert #{0} on map', [alert.id]) }}</a>
+                          <a hlmBtn variant="ghost" [routerLink]="navigation.href('/monitor/alerts', { alert: alert.id })">{{ msg('Open alert #{0}', [alert.id]) }}</a>
                         </div>
                       }
                     </li>
@@ -86,7 +86,7 @@
 
             @if (workflow.history()) {
               <section aria-labelledby="incident-timeline" class="grid min-w-0 gap-2 border-t border-divider pt-4">
-                <h3 id="incident-timeline" class="text-base font-semibold">Timeline</h3>
+                <h3 id="incident-timeline" class="text-base font-semibold">{{ msg('Timeline') }}</h3>
                 <fimra-timeline [events]="workflow.timeline()" [now]="nowDate()" allActivityLabel="Show full history" />
               </section>
             }

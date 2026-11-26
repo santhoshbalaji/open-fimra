@@ -1,7 +1,6 @@
 <div class="grid gap-4 px-(--page-gutter) pb-10">
   <p class="max-w-prose text-muted-foreground">
-    Each sign-in to the field app on a phone is listed here. A phone gets new fire alerts as notifications while it is
-    signed in. If a phone is lost, wipe it: it deletes its field data and sign-in the next time it connects.
+    {{ msg('Each sign-in to the field app on a phone is listed here. A phone gets new fire alerts as notifications while it is signed in. If a phone is lost, wipe it: it deletes its field data and sign-in the next time it connects.') }}
   </p>
   @if (error()) {
     <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
@@ -18,39 +17,39 @@
 
   <section hlmCard aria-labelledby="mine-heading">
     <hlm-card-header>
-      <h2 hlmCardTitle id="mine-heading" class="text-subhead">Your phones</h2>
-      <p hlmCardDescription>Remove a phone you no longer use. It stops getting notifications at once.</p>
+      <h2 hlmCardTitle id="mine-heading" class="text-subhead">{{ msg('Your phones') }}</h2>
+      <p hlmCardDescription>{{ msg('Remove a phone you no longer use. It stops getting notifications at once.') }}</p>
     </hlm-card-header>
     <div hlmCardContent>
       @if (mine(); as mine) {
         @if (mine.length) {
-          <div hlmTableContainer class="rounded-control border border-border" tabindex="0" role="region" aria-label="Your field phones table">
+          <div hlmTableContainer class="rounded-control border border-border" tabindex="0" role="region" [attr.aria-label]=" msg('Your field phones table') ">
             <table hlmTable class="my-phones">
-              <caption class="sr-only">Your field phones</caption>
+              <caption class="sr-only">{{ msg('Your field phones') }}</caption>
               <thead hlmTHead>
                 <tr hlmTr>
-                  <th hlmTh scope="col">Phone</th><th hlmTh scope="col">Status</th>
-                  <th hlmTh scope="col" class="max-sm:hidden">Notifications</th><th hlmTh scope="col" class="max-sm:hidden">Last contact</th>
-                  <th hlmTh scope="col"><span class="sr-only">Actions</span></th>
+                  <th hlmTh scope="col">{{ msg('Phone') }}</th><th hlmTh scope="col">{{ msg('Status') }}</th>
+                  <th hlmTh scope="col" class="max-sm:hidden">{{ msg('Notifications') }}</th><th hlmTh scope="col" class="max-sm:hidden">{{ msg('Last contact') }}</th>
+                  <th hlmTh scope="col"><span class="sr-only">{{ msg('Actions') }}</span></th>
                 </tr>
               </thead>
               <tbody hlmTBody>
                 @for (device of mine; track device.id) {
                   <tr hlmTr>
                     <td hlmTd class="whitespace-normal">{{ platform(device) }}
-                      <span class="block text-xs text-muted-foreground">App {{ device.appVersion }}</span>
+                      <span class="block text-xs text-muted-foreground">{{ msg('App {0}', [device.appVersion]) }}</span>
                     </td>
                     <td hlmTd><ng-container *ngTemplateOutlet="status; context: { $implicit: device }" /></td>
-                    <td hlmTd class="max-sm:hidden">{{ device.push ? 'On' : 'Off' }}</td>
+                    <td hlmTd class="max-sm:hidden">{{ device.push ? msg('On') : msg('Off') }}</td>
                     <td hlmTd class="tabular-nums max-sm:hidden"><time [attr.datetime]="device.lastSeenAt">{{ dateTime(device.lastSeenAt) }}</time></td>
                     <td hlmTd class="phone-actions text-right whitespace-nowrap">
                       @if (device.status === 'active') {
-                        <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Remove ' + platform(device) + ', app ' + device.appVersion"
-                                (click)="pending.set({ device, action: 'remove', area: false })">Remove</button>
+                        <button hlmBtn size="sm" variant="outline" [attr.aria-label]="msg('Remove ') + platform(device) + msg(', app ') + device.appVersion"
+                                (click)="pending.set({ device, action: 'remove', area: false })">{{ msg('Remove') }}</button>
                       }
                       @if (canWipe(device)) {
-                        <button hlmBtn size="sm" variant="ghost" class="ml-1" [attr.aria-label]="'Wipe ' + platform(device) + ', app ' + device.appVersion"
-                                (click)="pending.set({ device, action: 'wipe', area: false })">Wipe</button>
+                        <button hlmBtn size="sm" variant="ghost" class="ml-1" [attr.aria-label]="msg('Wipe ') + platform(device) + msg(', app ') + device.appVersion"
+                                (click)="pending.set({ device, action: 'wipe', area: false })">{{ msg('Wipe') }}</button>
                       }
                     </td>
                   </tr>
@@ -59,12 +58,12 @@
             </table>
           </div>
         } @else {
-          <fimra-empty-state heading="No phones yet" detail="Sign in to the field app on a phone to get alerts there." />
+          <fimra-empty-state [heading]=" msg('No phones yet') " [detail]="msg('Sign in to the field app on a phone to get alerts there.')" />
         }
       } @else if (!error()) {
         <div class="grid gap-2" aria-hidden="true"><hlm-skeleton class="h-9 w-full" /><hlm-skeleton class="h-9 w-full" /></div>
       } @else {
-        <button hlmBtn variant="outline" (click)="error.set(''); load()">Retry</button>
+        <button hlmBtn variant="outline" (click)="error.set(''); load()">{{ msg('Retry') }}</button>
       }
     </div>
   </section>
@@ -72,20 +71,20 @@
   @if (manages()) {
     <section hlmCard aria-labelledby="area-heading">
       <hlm-card-header>
-        <h2 hlmCardTitle id="area-heading" class="text-subhead">Phones in your area</h2>
-        <p hlmCardDescription>Phones of people with a role in your units. A wipe cannot be undone.</p>
+        <h2 hlmCardTitle id="area-heading" class="text-subhead">{{ msg('Phones in your area') }}</h2>
+        <p hlmCardDescription>{{ msg('Phones of people with a role in your units. A wipe cannot be undone.') }}</p>
       </hlm-card-header>
       <div hlmCardContent>
         @if (area(); as area) {
           @if (area.length) {
-            <div hlmTableContainer class="rounded-control border border-border" tabindex="0" role="region" aria-label="Area field phones table">
+            <div hlmTableContainer class="rounded-control border border-border" tabindex="0" role="region" [attr.aria-label]=" msg('Area field phones table') ">
               <table hlmTable class="area-phones">
-                <caption class="sr-only">Field phones in your area</caption>
+                <caption class="sr-only">{{ msg('Field phones in your area') }}</caption>
                 <thead hlmTHead>
                   <tr hlmTr>
-                    <th hlmTh scope="col">Person</th><th hlmTh scope="col" class="max-sm:hidden">Phone</th>
-                    <th hlmTh scope="col">Status</th><th hlmTh scope="col" class="max-sm:hidden">Last contact</th>
-                    <th hlmTh scope="col"><span class="sr-only">Actions</span></th>
+                    <th hlmTh scope="col">{{ msg('Person') }}</th><th hlmTh scope="col" class="max-sm:hidden">{{ msg('Phone') }}</th>
+                    <th hlmTh scope="col">{{ msg('Status') }}</th><th hlmTh scope="col" class="max-sm:hidden">{{ msg('Last contact') }}</th>
+                    <th hlmTh scope="col"><span class="sr-only">{{ msg('Actions') }}</span></th>
                   </tr>
                 </thead>
                 <tbody hlmTBody>
@@ -95,17 +94,17 @@
                         <span class="block text-xs text-muted-foreground">{{ device.owner?.username }}</span>
                       </td>
                       <td hlmTd class="whitespace-normal max-sm:hidden">{{ platform(device) }}
-                        <span class="block text-xs text-muted-foreground">App {{ device.appVersion }}</span>
+                        <span class="block text-xs text-muted-foreground">{{ msg('App {0}', [device.appVersion]) }}</span>
                       </td>
                       <td hlmTd>
                         <ng-container *ngTemplateOutlet="status; context: { $implicit: device }" />
-                        @if (device.wipeRequestedBy) { <span class="block text-xs text-muted-foreground">By {{ device.wipeRequestedBy }}</span> }
+                        @if (device.wipeRequestedBy) { <span class="block text-xs text-muted-foreground">{{ msg('By {0}', [device.wipeRequestedBy]) }}</span> }
                       </td>
                       <td hlmTd class="tabular-nums max-sm:hidden"><time [attr.datetime]="device.lastSeenAt">{{ dateTime(device.lastSeenAt) }}</time></td>
                       <td hlmTd class="phone-actions text-right">
                         @if (canWipe(device)) {
-                          <button hlmBtn size="sm" variant="outline" [attr.aria-label]="'Wipe the phone of ' + owner(device)"
-                                  (click)="pending.set({ device, action: 'wipe', area: true })">Wipe</button>
+                          <button hlmBtn size="sm" variant="outline" [attr.aria-label]="msg('Wipe the phone of ') + owner(device)"
+                                  (click)="pending.set({ device, action: 'wipe', area: true })">{{ msg('Wipe') }}</button>
                         }
                       </td>
                     </tr>
@@ -114,7 +113,7 @@
               </table>
             </div>
           } @else {
-            <fimra-empty-state heading="No phones in your area" detail="Phones appear here once staff sign in to the field app." />
+            <fimra-empty-state [heading]=" msg('No phones in your area') " [detail]="msg('Phones appear here once staff sign in to the field app.')" />
           }
         } @else {
           <div class="grid gap-2" aria-hidden="true"><hlm-skeleton class="h-9 w-full" /></div>
@@ -129,20 +128,19 @@
     @if (pending(); as ask) {
       <hlm-dialog-header>
         @if (ask.action === 'remove') {
-          <h3 hlmDialogTitle class="text-title">Remove this {{ platform(ask.device).toLowerCase() }}?</h3>
-          <p hlmDialogDescription>It stops getting notifications at once and is signed out the next time it connects.</p>
+          <h3 hlmDialogTitle class="text-title">{{ msg('Remove this {0}?', [platform(ask.device).toLowerCase()]) }}</h3>
+          <p hlmDialogDescription>{{ msg('It stops getting notifications at once and is signed out the next time it connects.') }}</p>
         } @else {
-          <h3 hlmDialogTitle class="text-title">Wipe {{ ask.area ? 'the phone of ' + owner(ask.device) : 'this phone' }}?</h3>
+          <h3 hlmDialogTitle class="text-title">{{ msg('Wipe {0}?', [ask.area ? 'the phone of ' + owner(ask.device) : 'this phone']) }}</h3>
           <p hlmDialogDescription>
-            The next time it connects, the field app deletes its field data and sign-in and returns to the sign-in page.
-            It gets no more notifications. This cannot be undone.
+            {{ msg('The next time it connects, the field app deletes its field data and sign-in and returns to the sign-in page. It gets no more notifications. This cannot be undone.') }}
           </p>
         }
       </hlm-dialog-header>
       <hlm-dialog-footer>
-        <button hlmBtn variant="outline" [disabled]="busy()" (click)="pending.set(null)">Cancel</button>
+        <button hlmBtn variant="outline" [disabled]="busy()" (click)="pending.set(null)">{{ msg('Cancel') }}</button>
         <button hlmBtn variant="destructive" [disabled]="busy()" (click)="confirm()">
-          {{ ask.action === 'remove' ? 'Remove phone' : 'Wipe phone' }}
+          {{ ask.action === 'remove' ? msg('Remove phone') : msg('Wipe phone') }}
         </button>
       </hlm-dialog-footer>
     }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../app.dart';
+import '../l10n/field_language.dart';
 import 'alert_detail.dart';
 import 'alert_list.dart';
 import 'alert_map.dart';
@@ -27,9 +28,10 @@ class WorkspaceView {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.services, this.mapBuilder});
+  const HomeScreen({super.key, required this.services, this.mapBuilder, this.onLanguageChanged});
   final AppServices services;
   final MapBuilder? mapBuilder;
+  final Future<void> Function(Locale?)? onLanguageChanged;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -89,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fieldProblem(context, error.message))));
     }
   }
 
@@ -129,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
       setState(() {
-        _problem = error.offline ? 'Connect to the internet and try again.' : error.message;
+        _problem = error.offline ? fieldText(context).connectToTheInternetAnd : fieldProblem(context, error.message);
         _loading = false;
       });
     }
@@ -156,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     } on ApiException catch (error) {
       if (!mounted) return;
-      final message = error.offline ? 'Connect to the internet to open this alert.' : error.message;
+      final message = error.offline ? fieldText(context).connectToTheInternetTo : fieldProblem(context, error.message);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
@@ -170,11 +172,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Sign out and clear the outbox?'),
-            content: const Text('Signing out deletes drafts and work waiting to send.'),
+            title: Text(fieldText(context).signOutAndClearThe),
+            content: Text(fieldText(context).signingOutDeletesDraftsAnd),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(fieldText(context).cancel)),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(fieldText(context).signOut)),
             ],
           ),
         );
@@ -241,10 +243,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'Account',
+            tooltip: fieldText(context).account,
             padding: const EdgeInsets.all(12),
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (value) {
+              if (value == 'language' && widget.onLanguageChanged != null) {
+                unawaited(chooseFieldLanguage(context, widget.onLanguageChanged!));
+              }
               if (value == 'workspace') _chooseWorkspace();
               if (value == 'devices') _openDevices();
               final repo = widget.services.offline;
@@ -260,13 +265,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             itemBuilder: (context) => [
               PopupMenuItem(
                 enabled: false,
-                child: Text('Signed in as ${profile?.username ?? widget.services.session.username ?? ''}'),
+                child: Text(
+                  fieldText(
+                    context,
+                  ).signedInAs((profile?.username ?? widget.services.session.username ?? '').toString()),
+                ),
               ),
-              if (multiple) const PopupMenuItem(value: 'workspace', child: Text('Change workspace')),
+              if (multiple) PopupMenuItem(value: 'workspace', child: Text(fieldText(context).changeWorkspace)),
               if (widget.services.devices != null)
-                const PopupMenuItem(value: 'devices', child: Text('Notifications and phones')),
-              if (widget.services.offline != null) const PopupMenuItem(value: 'outbox', child: Text('Report outbox')),
-              const PopupMenuItem(value: 'sign-out', child: Text('Sign out')),
+                PopupMenuItem(value: 'devices', child: Text(fieldText(context).notificationsAndPhones)),
+              if (widget.services.offline != null)
+                PopupMenuItem(value: 'outbox', child: Text(fieldText(context).reportsWaitingToSend)),
+              if (widget.onLanguageChanged != null)
+                PopupMenuItem(value: 'language', child: Text(fieldText(context).language)),
+              PopupMenuItem(value: 'sign-out', child: Text(fieldText(context).signOut)),
             ],
           ),
         ],
@@ -280,13 +292,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _tab = index;
                 if (index == 1) _mapBuilt = true;
               }),
-              destinations: const [
+              destinations: [
                 NavigationDestination(
                   icon: Icon(Icons.list_alt_outlined),
                   selectedIcon: Icon(Icons.list_alt),
-                  label: 'Alerts',
+                  label: fieldText(context).alerts,
                 ),
-                NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Map'),
+                NavigationDestination(
+                  icon: Icon(Icons.map_outlined),
+                  selectedIcon: Icon(Icons.map),
+                  label: fieldText(context).map,
+                ),
               ],
             ),
     );
@@ -298,17 +314,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (problem != null) {
       return MessageView(
         icon: Icons.cloud_off_outlined,
-        title: 'Could not load your workspaces',
+        title: fieldText(context).couldNotLoadYourWorkspaces,
         body: problem,
-        action: FilledButton(onPressed: _load, child: const Text('Try again')),
+        action: FilledButton(onPressed: _load, child: Text(fieldText(context).tryAgain)),
       );
     }
     if (view == null) {
       return MessageView(
         icon: Icons.lock_outline,
-        title: 'You have no access to a workspace yet',
-        body: 'Ask your administrator to give you a role, then try again.',
-        action: OutlinedButton(onPressed: _load, child: const Text('Try again')),
+        title: fieldText(context).youHaveNoAccessTo,
+        body: fieldText(context).askYourAdministratorToGive,
+        action: OutlinedButton(onPressed: _load, child: Text(fieldText(context).tryAgain)),
       );
     }
     return IndexedStack(

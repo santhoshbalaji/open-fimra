@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, ViewEncapsulation,
@@ -25,33 +26,34 @@ interface MapPreview {
   styleUrl: './layers-map.css',
   template: `
     <figure class="grid min-w-0 gap-2" [class.min-h-72]="state().kind === 'loading'">
-      <figcaption class="font-semibold">Draft map</figcaption>
+      <figcaption class="font-semibold">{{ msg('Draft map') }}</figcaption>
       <fimra-state-region [state]="state()" (retry)="load()" />
       @if (preview(); as mapPreview) {
         <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <span class="inline-flex items-center gap-2"><span class="w-5 border-t-2 border-primary" aria-hidden="true"></span>Draft features</span>
+          <span class="inline-flex items-center gap-2"><span class="w-5 border-t-2 border-primary" aria-hidden="true"></span>{{ msg('Draft features') }}</span>
           @if (mapPreview.boundary) {
             <span class="inline-flex items-center gap-2"><span class="w-5 border-t-2 border-dashed border-text-secondary"
-              aria-hidden="true"></span>Workspace boundary</span>
+              aria-hidden="true"></span>{{ msg('Workspace boundary') }}</span>
           }
         </div>
         <div #container class="h-64 overflow-hidden rounded-control border border-border bg-background sm:h-80"></div>
         <div class="flex flex-wrap gap-2">
-          <button hlmBtn variant="outline" type="button" aria-label="Zoom in on draft map" (click)="zoom(1)">Zoom in</button>
-          <button hlmBtn variant="outline" type="button" aria-label="Zoom out on draft map" (click)="zoom(-1)">Zoom out</button>
-          <button hlmBtn variant="outline" type="button" (click)="fit()">Fit draft</button>
+          <button hlmBtn variant="outline" type="button" [attr.aria-label]=" msg('Zoom in on draft map') " (click)="zoom(1)">{{ msg('Zoom in') }}</button>
+          <button hlmBtn variant="outline" type="button" [attr.aria-label]=" msg('Zoom out on draft map') " (click)="zoom(-1)">{{ msg('Zoom out') }}</button>
+          <button hlmBtn variant="outline" type="button" (click)="fit()">{{ msg('Fit draft') }}</button>
           @if (mapPreview.boundary) {
-            <button hlmBtn variant="outline" type="button" (click)="fitWorkspace()">Fit workspace</button>
+            <button hlmBtn variant="outline" type="button" (click)="fitWorkspace()">{{ msg('Fit workspace') }}</button>
           }
         </div>
         @if (mapPreview.truncated) {
-          <p class="text-sm text-muted-foreground">The map shows a sample of the checked features.</p>
+          <p class="text-sm text-muted-foreground">{{ msg('The map shows a sample of the checked features.') }}</p>
         }
       }
     </figure>
   `
 })
 export class LayerPreviewMap implements OnInit {
+  protected readonly msg = translate;
   readonly url = input.required<string>();
   protected readonly preview = signal<MapPreview | null>(null);
   protected readonly state = signal<DataState>({ kind: 'loading', heading: 'Loading the draft map' });

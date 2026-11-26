@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../data/field_store.dart';
+import '../l10n/field_language.dart';
 import '../map/map_style.dart';
 import '../theme/app_theme.dart';
 import '../ui/alert_detail.dart';
@@ -38,7 +39,7 @@ class GeometryField extends StatelessWidget {
       'point' when coordinates != null => '${coordinates[1]}, ${coordinates[0]}',
       'track' when coordinates != null => '${coordinates.length} points',
       'polygon' when coordinates != null => '${(coordinates.first as List).length - 1} corners',
-      _ => 'No location saved',
+      _ => fieldText(context).noLocationSaved,
     };
     Future<void> open() async {
       final result = await Navigator.of(context).push<Json>(
@@ -69,13 +70,16 @@ class GeometryField extends StatelessWidget {
               onPressed: changed == null ? null : open,
               icon: const Icon(Icons.place_outlined),
               label: Text(switch (kind) {
-                'track' => 'Record track',
-                'polygon' => 'Draw area',
-                _ => 'Set location',
+                'track' => fieldText(context).recordTrack,
+                'polygon' => fieldText(context).drawArea,
+                _ => fieldText(context).setLocation,
               }),
             ),
             if (value != null)
-              TextButton(onPressed: changed == null ? null : () => changed!(null), child: const Text('Clear')),
+              TextButton(
+                onPressed: changed == null ? null : () => changed!(null),
+                child: Text(fieldText(context).clear),
+              ),
           ],
         ),
       ],
@@ -165,7 +169,7 @@ class _GeometryEditorState extends State<_GeometryEditor> {
     final max = widget.maxAccuracy;
     if (max != null && (fix.accuracy > max || !fix.accuracy.isFinite)) {
       setState(
-        () => _problem = 'Location is only accurate to ${fix.accuracy.round()} m. Wait for a fix within $max m.',
+        () => _problem = fieldText(context).locationAccuracy((fix.accuracy.round()).toString(), (max).toString()),
       );
       return;
     }
@@ -192,7 +196,7 @@ class _GeometryEditorState extends State<_GeometryEditor> {
           onError: (Object _) {
             if (mounted) {
               _stop();
-              setState(() => _problem = 'Could not record your location. Try again.');
+              setState(() => _problem = fieldText(context).couldNotRecordYourLocation);
             }
           },
         );
@@ -203,9 +207,9 @@ class _GeometryEditorState extends State<_GeometryEditor> {
         if (mounted) _fix(fix, centre: true);
       }
     } on LocationProblem catch (error) {
-      if (mounted) setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = error.message(context));
     } on Exception {
-      if (mounted) setState(() => _problem = 'Could not read your location. Try again.');
+      if (mounted) setState(() => _problem = fieldText(context).couldNotReadYourLocation);
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -300,7 +304,7 @@ class _GeometryEditorState extends State<_GeometryEditor> {
         : 2;
     final recording = _recording != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Report map')),
+      appBar: AppBar(title: Text(fieldText(context).reportMap)),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) => Column(
@@ -335,12 +339,12 @@ class _GeometryEditorState extends State<_GeometryEditor> {
                       ),
                       Text(
                         _point
-                            ? 'Tap the map or use your location.'
+                            ? fieldText(context).tapTheMapOrUse
                             : _polygon
-                            ? 'Tap the map to add corners, or use your location at each corner.'
+                            ? fieldText(context).tapTheMapToAdd
                             : recording
-                            ? 'Walk the route, then stop recording.'
-                            : 'Record while walking or add points from your location.',
+                            ? fieldText(context).walkTheRouteThenStop
+                            : fieldText(context).recordWhileWalkingOrAdd,
                       ),
                       Text('${_points.length} ${_polygon ? 'corners' : 'points'}'),
                       if (_problem != null) Semantics(liveRegion: true, child: Text(_problem!)),
@@ -354,12 +358,14 @@ class _GeometryEditorState extends State<_GeometryEditor> {
                                   : recording
                                   ? _stop
                                   : () => _gps(record: true),
-                              child: Text(recording ? 'Stop recording' : 'Start recording'),
+                              child: Text(
+                                recording ? fieldText(context).stopRecording : fieldText(context).startRecording,
+                              ),
                             ),
                           if (!recording)
                             OutlinedButton(
                               onPressed: _locating ? null : () => _gps(record: false),
-                              child: Text(_point ? 'Use GPS' : 'Add GPS point'),
+                              child: Text(_point ? fieldText(context).useGPS : fieldText(context).addGPSPoint),
                             ),
                           if (_points.isNotEmpty && !recording)
                             TextButton(
@@ -367,13 +373,13 @@ class _GeometryEditorState extends State<_GeometryEditor> {
                                 setState(_points.removeLast);
                                 unawaited(_redraw());
                               },
-                              child: const Text('Undo'),
+                              child: Text(fieldText(context).undo),
                             ),
                           FilledButton(
                             onPressed: recording || _locating || _points.length < minimum
                                 ? null
                                 : () => Navigator.pop(context, _geometry()),
-                            child: const Text('Use shape'),
+                            child: Text(fieldText(context).useShape),
                           ),
                         ],
                       ),

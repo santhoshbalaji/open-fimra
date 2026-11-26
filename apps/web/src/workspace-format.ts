@@ -1,4 +1,7 @@
-export type WorkspaceLocale = 'en-IN' | 'hi-IN';
+import { computed } from '@angular/core';
+import { formatLocale } from './language';
+
+export type WorkspaceLocale = string;
 
 export const reportingTimeZone = 'Asia/Kolkata';
 
@@ -75,3 +78,15 @@ export class WorkspaceFormat {
 }
 
 export const defaultWorkspaceFormat = new WorkspaceFormat();
+
+const activeWorkspaceFormat = computed(() => new WorkspaceFormat(formatLocale()));
+
+export const workspaceFormat = {
+  number: (value: number) => activeWorkspaceFormat().number(value),
+  plural: (value: number) => activeWorkspaceFormat().plural(value),
+  dateTime: (instant: Date) => activeWorkspaceFormat().dateTime(instant),
+  date: (day: Date) => activeWorkspaceFormat().date(day),
+  time: (seconds: number, showSeconds: boolean) => activeWorkspaceFormat().time(seconds, showSeconds),
+  age: (instant: Date, now: Date) => activeWorkspaceFormat().age(instant, now),
+  duration: (seconds: number) => activeWorkspaceFormat().duration(seconds)
+};

@@ -1,3 +1,4 @@
+import { formatLocale, language, translate } from './language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmInput } from '@spartan-ng/helm/input';
@@ -18,7 +19,7 @@ import { StatusBadge } from './ui/status-badge';
 import { LiveStatus } from './ui/live-status';
 import { DataState, StateRegion } from './ui/state-region';
 import { ageLabels } from './token-values';
-import { reportingTimeZone } from './workspace-format';
+import { reportingTimeZone, workspaceFormat } from './workspace-format';
 import { alertSymbol, reportAge, reportClass, reportClasses, SituationReportSymbol } from './situation-report-symbol';
 import { Icon } from './ui/icon';
 
@@ -76,12 +77,14 @@ export function indiaToday(now = new Date()): string {
 }
 
 export function formatTime(value: string): string {
-  return timeFormat.format(new Date(value));
+  const instant = new Date(value);
+  return language() === 'en' ? timeFormat.format(instant) : workspaceFormat.dateTime(instant);
 }
 
 /** A response time in plain words, the same as in the PDF. */
 export function duration(seconds: number | null): string {
-  if (seconds === null || seconds === undefined) return 'No data';
+  if (seconds === null || seconds === undefined) return translate('No data');
+  if (language() !== 'en') return workspaceFormat.duration(seconds);
   const value = Math.max(0, seconds);
   if (value < 60) return `${Math.round(value)} s`;
   const minutes = Math.round(value / 60);
@@ -95,11 +98,16 @@ export function duration(seconds: number | null): string {
 export function periodText(period: SituationReport['period'], includeZone = true): string {
   let text: string;
   const date = (value: string) => new Date(value + 'T00:00:00Z');
-  if (period.hours) text = `Past ${period.hours} hours: ${formatTime(period.start)} to ${formatTime(period.end)}`;
-  else if (period.from === period.to) text = `${weekday.format(date(period.from))} ${shortDay.format(date(period.from))}`;
-  else text = `${shortDay.format(date(period.from))} to ${shortDay.format(date(period.to))} (${period.days} days)`;
-  if (period.partial && !period.hours) text += `, up to ${formatTime(period.end)}`;
-  return includeZone ? text + ', ' + zoneLabel : text;
+  if (period.hours) text = translate('Past {0} hours: {1} to {2}', [workspaceFormat.number(period.hours), formatTime(period.start), formatTime(period.end)]);
+  else if (period.from === period.to) text = language() === 'en'
+    ? `${weekday.format(date(period.from))} ${shortDay.format(date(period.from))}`
+    : new Intl.DateTimeFormat(formatLocale(), { dateStyle: 'full', timeZone: 'UTC' }).format(date(period.from));
+  else {
+    const day = (value: string) => language() === 'en' ? shortDay.format(date(value)) : workspaceFormat.date(date(value));
+    text = translate('{0} to {1} ({2} days)', [day(period.from), day(period.to), workspaceFormat.number(period.days)]);
+  }
+  if (period.partial && !period.hours) text += translate(', up to {0}', [formatTime(period.end)]);
+  return includeZone ? text + ', ' + translate(zoneLabel) : text;
 }
 
 function rings(geometry: Geometry | null): number[][][] {
@@ -182,6 +190,7 @@ export function projectMap(map: SituationReport['map'], end = '', width = mapSiz
   styleUrl: './situation-report.css'
 })
 export class SituationReportView {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly workspace = inject(WorkspaceService);
@@ -214,16 +223,16 @@ export class SituationReportView {
   readonly downloading = signal(false);
   readonly pdfBusy = computed(() => this.sendingPdf() || this.downloading() || this.pdf()?.status === 'pending');
   readonly pdfLabel = computed(() => {
-    if (this.downloading()) return 'Downloading PDF…';
-    if (this.pdfBusy()) return 'Preparing PDF…';
-    if (this.pdfNeedsReport()) return 'Refresh report';
-    if (this.pdfMessage()) return 'Retry PDF';
+    if (this.downloading()) return translate('Downloading PDF…');
+    if (this.pdfBusy()) return translate('Preparing PDF…');
+    if (this.pdfNeedsReport()) return translate('Refresh report');
+    if (this.pdfMessage()) return translate('Retry PDF');
     const file = this.pdf();
-    if (file?.status !== 'ready') return 'Download PDF';
-    return `Download PDF (${file.pageCount} ${file.pageCount === 1 ? 'page' : 'pages'})`;
+    if (file?.status !== 'ready' || file.pageCount == null) return translate('Download PDF');
+    return translate(file.pageCount === 1 ? 'Download PDF ({0} page)' : 'Download PDF ({0} pages)', [workspaceFormat.number(file.pageCount)]);
   });
   readonly pdfStatus = computed(() => this.pdfBusy() ? this.pdfLabel() :
-    this.pdf()?.status === 'ready' && !this.pdfMessage() ? 'PDF ready. Use Download PDF to save another copy.' : '');
+    this.pdf()?.status === 'ready' && !this.pdfMessage() ? translate('PDF ready. Use Download PDF to save another copy.') : '');
   readonly mapSize = mapSize;
   readonly duration = duration;
   readonly formatTime = formatTime;
@@ -231,8 +240,9 @@ export class SituationReportView {
   readonly alertSymbol = alertSymbol;
   readonly incidentSymbol = alertSymbol('incident');
   readonly zoneLabel = zoneLabel;
+  protected readonly number = workspaceFormat.number;
   readonly mapAges = computed(() => this.map()?.alerts.some(alert => alert.age !== null)
-    ? [...ageLabels.slice(0, -1), '3 days or more'] : []);
+    ? [...ageLabels.slice(0, -1), translate('3 days or more')] : []);
   readonly mapCounts = computed(() => {
     const alerts = this.map()?.alerts ?? [];
     const incidents = this.map()?.incidents ?? [];
@@ -243,7 +253,7 @@ export class SituationReportView {
     return [
       ...this.classKeys.map(key => ({ label: this.label('forestClasses', key),
         ...tally(alerts.filter(alert => alert.forestClass === key)) })),
-      { label: 'Incidents', ...tally(incidents) }
+      { label: translate('Incidents'), ...tally(incidents) }
     ];
   });
   readonly queueKeys = ['unit', 'edge_review', 'triage'];
@@ -256,7 +266,7 @@ export class SituationReportView {
   readonly workspaceName = computed(() => this.workspace.current()?.name);
   readonly unitLabel = computed(() => {
     const unit = this.selectedUnit();
-    return unit ? `${unit.name} (${unit.levelLabel})` : 'Choose a unit';
+    return unit ? `${unit.name} (${unit.levelLabel})` : translate('Choose a unit');
   });
   readonly map = computed(() => {
     const report = this.report();
@@ -268,15 +278,15 @@ export class SituationReportView {
     return report.unit?.name === report.workspace.name ? report.scope : `${report.scope} · ${report.workspace.name}`;
   });
   readonly preparedFor = computed(() => (this.report()?.preparedFor ?? [])
-    .map(grant => `${this.report()?.labels.roles[grant.role] ?? grant.role}, ${grant.unitName} (${grant.levelLabel})`).join('; '));
+    .map(grant => `${translate(this.report()?.labels.roles[grant.role] ?? grant.role)}, ${grant.unitName} (${translate(grant.levelLabel)})`).join('; '));
   readonly figures = computed(() => {
     const report = this.report();
     if (!report) return [];
     return [
-      { label: 'Detections', value: Object.values(report.counts.detections).reduce((a, b) => a + b, 0) },
-      { label: 'Alerts', value: report.alerts.total }, { label: 'Active alerts', value: report.alerts.active },
-      { label: 'Overdue alerts', value: report.counts.overdue }, { label: 'Incidents', value: report.incidents.total },
-      { label: 'Forms missing', value: report.fieldReports.missing }
+      { label: translate('Detections'), value: Object.values(report.counts.detections).reduce((a, b) => a + b, 0) },
+      { label: translate('Alerts'), value: report.alerts.total }, { label: translate('Active alerts'), value: report.alerts.active },
+      { label: translate('Overdue alerts'), value: report.counts.overdue }, { label: translate('Incidents'), value: report.incidents.total },
+      { label: translate('Forms missing'), value: report.fieldReports.missing }
     ];
   });
   readonly periodSummary = computed(() => {
@@ -298,8 +308,8 @@ export class SituationReportView {
         next: ({ units }) => {
           this.units.set(units);
           this.unitState.set(units.length
-            ? { kind: 'ready', announcement: 'Units loaded' }
-            : { kind: 'empty', heading: 'There are no units you can report on.' });
+            ? { kind: 'ready', announcement: translate('Units loaded') }
+            : { kind: 'empty', heading: translate('There are no units you can report on.') });
           if (!this.navigation && units.length) {
             this.unitKey.set(this.initialUnit(units));
             void this.loadReport();
@@ -308,11 +318,11 @@ export class SituationReportView {
         error: (error: HttpErrorResponse) => {
           if (error.status === 401) { this.auth.sessionEnded(); return; }
           if (error.status === 403 && !serverMessage(error).includes('own area')) {
-            this.unitState.set({ kind: 'forbidden', heading: 'You do not have access to these units.' });
+            this.unitState.set({ kind: 'forbidden', heading: translate('You do not have access to these units.') });
             this.workspace.deny();
             return;
           }
-          this.unitState.set({ kind: 'error', heading: 'Could not load units for the report.' });
+          this.unitState.set({ kind: 'error', heading: translate('Could not load units for the report.') });
         }
       });
       onCleanup(() => request.unsubscribe());
@@ -335,7 +345,7 @@ export class SituationReportView {
         untracked(() => {
           this.clearReport();
           if (!path || unit) void this.loadReport();
-          else this.message.set('Choose a unit you can report on.');
+          else this.message.set(translate('Choose a unit you can report on.'));
         });
       });
     }
@@ -366,7 +376,9 @@ export class SituationReportView {
   }
 
   label(group: 'forestClasses' | 'queues', key: string): string {
-    return this.report()?.labels[group][key] ?? key;
+    if (group === 'queues' && key === 'triage') return translate('Needs a unit');
+    if (group === 'queues' && key === 'edge_review') return translate('Near a forest boundary');
+    return translate(this.report()?.labels[group][key] ?? key);
   }
 
   pickKind(value: string | null | undefined): void {
@@ -505,7 +517,7 @@ export class SituationReportView {
       if (request === this.reportRequest) {
         const response = error as HttpErrorResponse;
         if (response.status === 401 || response.status === 404 || response.status === 410) this.pdfFailed(response);
-        else this.pdfMessage.set('The PDF could not download. Try again.');
+        else this.pdfMessage.set(translate('The PDF could not download. Try again.'));
       }
     } finally {
       if (request === this.reportRequest) this.downloading.set(false);
@@ -516,7 +528,7 @@ export class SituationReportView {
     if (request !== this.reportRequest) return;
     this.pdf.set(status);
     if (status.status === 'ready') void this.downloadPdf(status, request, endpoint);
-    if (status.status === 'failed') this.pdfMessage.set('The PDF could not be drawn. Try again.');
+    if (status.status === 'failed') this.pdfMessage.set(translate('The PDF could not be drawn. Try again.'));
     if (status.status === 'expired') this.pdfUnavailable();
     if (status.status !== 'pending') return;
     this.timer = setTimeout(async () => {
@@ -534,18 +546,18 @@ export class SituationReportView {
     if (error.status === 401) { this.auth.sessionEnded(); return; }
     if (error.status === 404 || error.status === 410) {
       this.pdfUnavailable();
-    } else this.pdfMessage.set(serverMessage(error) || 'The PDF could not be prepared. Try again.');
+    } else this.pdfMessage.set(serverMessage(error) || translate('The PDF could not be prepared. Try again.'));
   }
 
   private pdfUnavailable(): void {
     this.pdfNeedsReport.set(true);
-    this.pdfMessage.set('Refresh the report to prepare its PDF.');
+    this.pdfMessage.set(translate('Refresh the report to prepare its PDF.'));
   }
 
   private failed(error: HttpErrorResponse): void {
     if (error.status === 401) { this.auth.sessionEnded(); return; }
     if (error.status === 403 && !serverMessage(error).includes('own area')) { this.workspace.deny(); return; }
-    this.message.set(serverMessage(error) || 'The report could not be made. Try again.');
+    this.message.set(serverMessage(error) || translate('The report could not be made. Try again.'));
   }
 }
 

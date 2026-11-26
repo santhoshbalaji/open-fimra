@@ -1,3 +1,5 @@
+import { workspaceFormat } from './workspace-format';
+import { translate } from './language';
 import { HttpClient, type HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth';
@@ -43,8 +45,10 @@ export const filterPeriods = [
 
 export function filterPeriodLabel(hours: number): string {
   const preset = filterPeriods.find(period => period.hours === hours);
-  if (preset) return preset.label;
-  return hours % 24 === 0 ? `Last ${hours / 24} days` : `Last ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  if (preset) return translate(preset.label);
+  return hours % 24 === 0
+    ? translate('Last {0} days', [workspaceFormat.number(hours / 24)])
+    : translate(hours === 1 ? 'Last {0} hour' : 'Last {0} hours', [workspaceFormat.number(hours)]);
 }
 
 export type ScopeFilterKey = 'hours' | 'class' | 'unitPath';
@@ -70,7 +74,7 @@ export class ScopeFilters {
   readonly failed = computed(() => this.current()?.failed ?? false);
   readonly unitLabel = computed(() => {
     const path = this.filters.unitPath();
-    if (!path) return 'All assigned units';
+    if (!path) return translate('All assigned units');
     return this.units().find(unit => unit.path === path)?.label ??
       this.workspace.jurisdictions().find(([grant]) => grant === path)?.[1] ?? 'Selected unit';
   });

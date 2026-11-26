@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
@@ -6,7 +7,7 @@ import { Observable } from 'rxjs';
 import { classes, ForestClass } from './detections';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 import { Icon } from './ui/icon';
 import { LiveStatus } from './ui/live-status';
 import { SidePanel } from './ui/side-panel';
@@ -45,6 +46,7 @@ type InboxFilter = 'all' | 'unread';
   styleUrl: './notifications.css'
 })
 export class Notifications {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly destroy = inject(DestroyRef);
@@ -64,24 +66,24 @@ export class Notifications {
   readonly labels = { alert_new: 'New fire alert', alert_overdue: 'Fire alert overdue', feed_open: 'Feed needs attention' };
   readonly now = signal(new Date());
   readonly count = computed(() => this.inbox()?.unreadCount ?? 0);
-  readonly unreadMessage = computed(() => this.inbox() ? this.format.number(this.count()) + ' unread' : '');
-  readonly bellLabel = computed(() => ['Notifications', this.unreadMessage()].filter(Boolean).join(', '));
+  readonly unreadMessage = computed(() => this.inbox() ? translate('{0} unread', [this.format.number(this.count())]) : '');
+  readonly bellLabel = computed(() => [translate('Notifications'), this.unreadMessage()].filter(Boolean).join(', '));
   readonly state = computed<DataState>(() => {
     const failure = this.failure();
     if (failure) return { kind: 'error', heading: failure.message };
     if (this.busy()) {
       const at = this.loadedAt();
       return at
-        ? { kind: 'stale', heading: 'Updating notifications', observedAt: { dateTime: at.toISOString(), label: this.format.dateTime(at) } }
-        : { kind: 'loading', heading: 'Loading notifications' };
+        ? { kind: 'stale', heading: translate('Updating notifications'), observedAt: { dateTime: at.toISOString(), label: this.format.dateTime(at) } }
+        : { kind: 'loading', heading: translate('Loading notifications') };
     }
     const inbox = this.inbox();
     if (inbox && !inbox.items.length && !inbox.hasMore) {
-      return { kind: 'empty', heading: this.filter() === 'unread' ? 'You have no unread notifications.' : 'You have no notifications.' };
+      return { kind: 'empty', heading: this.filter() === 'unread' ? translate('You have no unread notifications.') : translate('You have no notifications.') };
     }
     return { kind: 'ready' };
   });
-  private readonly format = defaultWorkspaceFormat;
+  private readonly format = workspaceFormat;
 
   constructor() {
     this.load('all');
@@ -103,10 +105,10 @@ export class Notifications {
   }
 
   title(item: Notice): string {
-    if (!item.alertId) return this.labels[item.event];
+    if (!item.alertId) return translate(this.labels[item.event]);
     const place = [item.beatName, item.divisionName].filter(Boolean).join(', ');
-    const title = item.forestClass ? classes[item.forestClass] : 'Fire alert';
-    return title + ' · ' + (place || 'Unknown unit');
+    const title = item.forestClass ? translate(classes[item.forestClass]) : translate('Fire alert');
+    return title + ' · ' + (place || translate('Unknown unit'));
   }
 
   dateTime(value: string): string {
@@ -140,7 +142,7 @@ export class Notifications {
   private load(filter: InboxFilter, before?: string): void {
     const params: Record<string, string> = { view: filter };
     if (before) params['before'] = before;
-    this.request(this.http.get<Inbox>(this.endpoint, { params }), 'Could not load notifications.',
+    this.request(this.http.get<Inbox>(this.endpoint, { params }), translate('Could not load notifications.'),
       () => this.load(filter, before), page => {
         const list = this.list()?.nativeElement;
         const switching = filter !== this.filter();
@@ -156,13 +158,13 @@ export class Notifications {
 
   markRead(item: Notice): void {
     if (item.readAt) return;
-    this.request(this.http.post(this.endpoint + '/' + item.id + '/read', null), 'Could not mark the notification as read.',
+    this.request(this.http.post(this.endpoint + '/' + item.id + '/read', null), translate('Could not mark the notification as read.'),
       () => this.markRead(item), () => this.updateRead(item.id));
   }
 
   markAllRead(): void {
     if (!this.count()) return;
-    this.request(this.http.post(this.endpoint + '/read-all', null), 'Could not mark all notifications as read.',
+    this.request(this.http.post(this.endpoint + '/read-all', null), translate('Could not mark all notifications as read.'),
       () => this.markAllRead(), () => this.updateRead());
   }
 

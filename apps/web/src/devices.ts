@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
@@ -14,7 +15,7 @@ import { WEB_CONFIG } from './config';
 import { EmptyState } from './ui/empty-state';
 import { Icon, IconName } from './ui/icon';
 import { WorkspaceService } from './workspace';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 export type DeviceStatus = 'active' | 'signed_out' | 'removed' | 'wipe_pending' | 'wiped';
 
@@ -45,11 +46,12 @@ interface Pending { device: Device; action: 'remove' | 'wipe'; area: boolean }
   host: { class: 'block min-w-0' }
 })
 export class Devices implements OnInit {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly api = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly workspace = inject(WorkspaceService);
-  readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
+  readonly dateTime = (value: string) => workspaceFormat.dateTime(new Date(value));
   readonly mine = signal<Device[] | null>(null);
   /** Null while loading, and stays null for people who manage no phones. */
   readonly area = signal<Device[] | null>(null);
@@ -80,7 +82,7 @@ export class Devices implements OnInit {
   }
 
   platform(device: Device): string {
-    return device.platform === 'web' ? 'Browser test build' : device.platform === 'ios' ? 'iPhone' : 'Android phone';
+    return device.platform === 'web' ? translate('Browser test build') : device.platform === 'ios' ? 'iPhone' : translate('Android phone');
   }
 
   owner(device: Device): string {
@@ -105,8 +107,8 @@ export class Devices implements OnInit {
       next: () => {
         this.busy.set(false);
         this.pending.set(null);
-        toast.success(action === 'remove' ? 'The phone was removed.'
-          : 'The phone will delete its field data the next time it connects.');
+        toast.success(action === 'remove' ? translate('The phone was removed.')
+          : translate('The phone will delete its field data the next time it connects.'));
         this.load();
       },
       error: (error: HttpErrorResponse) => { this.busy.set(false); this.pending.set(null); this.failed(error); }
@@ -115,6 +117,6 @@ export class Devices implements OnInit {
 
   private failed(error: HttpErrorResponse): void {
     if (error.status === 401) this.auth.sessionEnded();
-    this.error.set(typeof error.error?.error === 'string' ? error.error.error : 'The phone list could not load. Try again.');
+    this.error.set(typeof error.error?.error === 'string' ? error.error.error : translate('The phone list could not load. Try again.'));
   }
 }

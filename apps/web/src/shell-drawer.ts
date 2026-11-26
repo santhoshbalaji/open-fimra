@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, effect, inject, input, output, viewChild, type TemplateRef } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -9,18 +10,19 @@ import { SidePanel } from './ui/side-panel';
   selector: 'fimra-shell-drawer',
   imports: [NgTemplateOutlet, HlmButton, SidePanel],
   template: `
-    <fimra-side-panel heading="Destinations" [sheetOnly]="true" (closed)="drawerClosed()">
+    <fimra-side-panel [heading]=" msg('Destinations') " [sheetOnly]="true" (closed)="drawerClosed()">
       <div class="shell-drawer">
         <p>{{ scope() }}</p>
-        <nav aria-label="Destinations">
+        <nav [attr.aria-label]=" msg('Destinations') ">
           <ng-container *ngTemplateOutlet="links(); context: { close: dismiss }" />
         </nav>
-        <button hlmBtn variant="ghost" (click)="appearance.toggle()" [attr.aria-pressed]="appearance.theme() === 'dark'">Dark theme</button>
+        <button hlmBtn variant="ghost" (click)="appearance.toggle()" [attr.aria-pressed]="appearance.theme() === 'dark'">{{ msg('Dark theme') }}</button>
       </div>
     </fimra-side-panel>
   `
 })
 export class ShellDrawer {
+  protected readonly msg = translate;
   readonly request = input.required<{ trigger: HTMLElement }>();
   readonly scope = input.required<string>();
   readonly links = input.required<TemplateRef<{ close: (path: DestinationPath, event: MouseEvent) => void }>>();

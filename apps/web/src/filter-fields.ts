@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger } from '@spartan-ng/helm/select';
 import { HlmInput } from '@spartan-ng/helm/input';
@@ -19,38 +20,38 @@ const unitPageSize = 20;
   host: { class: 'contents' },
   template: `
     <hlm-field class="scope-filter-field">
-      <label hlmFieldLabel for="filter-period">Period</label>
+      <label hlmFieldLabel for="filter-period">{{ msg('Period') }}</label>
       <div class="scope-period-control">
         <select hlmInput id="filter-period" #period (change)="changePeriod(period.value)">
           @for (option of periods; track option.hours) {
-            <option [value]="option.hours" [selected]="selectedPeriod() === option.hours">{{ option.label }}</option>
+            <option [value]="option.hours" [selected]="selectedPeriod() === option.hours">{{ msg(option.label) }}</option>
           }
-          <option value="custom" [selected]="selectedPeriod() === 'custom'">Custom window</option>
+          <option value="custom" [selected]="selectedPeriod() === 'custom'">{{ msg('Custom window') }}</option>
         </select>
         <svg fimraIcon="chevron-down" aria-hidden="true"></svg>
       </div>
       @if (selectedPeriod() === 'custom') {
         <form class="grid gap-2" (submit)="$event.preventDefault(); applyHours(hours.valueAsNumber, period)">
-          <label hlmFieldLabel for="filter-hours">Hours back from now</label>
+          <label hlmFieldLabel for="filter-hours">{{ msg('Hours back from now') }}</label>
           <input hlmInput id="filter-hours" #hours #customHours aria-describedby="filter-hours-hint"
             type="number" min="1" max="720" step="1" required [value]="filters.hours()">
-          <p id="filter-hours-hint" class="text-label text-text-secondary">1 to 720 hours</p>
-          <button type="submit" hlmBtn variant="outline">Apply period</button>
+          <p id="filter-hours-hint" class="text-label text-text-secondary">{{ msg('1 to 720 hours') }}</p>
+          <button type="submit" hlmBtn variant="outline">{{ msg('Apply period') }}</button>
         </form>
       }
     </hlm-field>
     <hlm-field class="scope-filter-field">
-      <label hlmFieldLabel for="forest">Forest class</label>
+      <label hlmFieldLabel for="forest">{{ msg('Forest class') }}</label>
       <hlm-select [value]="filters.forestClass() || 'all'" (valueChange)="selectForest($event)">
         <hlm-select-trigger buttonId="forest">{{ forestLabel() }}</hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal><hlm-select-item value="all">All classes</hlm-select-item>
-          @for (key of classKeys; track key) { <hlm-select-item [value]="key">{{ classes[key] }}</hlm-select-item> }
+        <hlm-select-content *hlmSelectPortal><hlm-select-item value="all">{{ msg('All classes') }}</hlm-select-item>
+          @for (key of classKeys; track key) { <hlm-select-item [value]="key">{{ msg(classes[key]) }}</hlm-select-item> }
         </hlm-select-content>
       </hlm-select>
     </hlm-field>
     <hlm-field class="scope-filter-field unit-filter-field" (focusout)="leaveUnitField($event)"
       (keydown.escape)="dismissUnits($event, unitTrigger)">
-      <span [id]="pickerId + '-label'" class="scope-filter-label">Unit</span>
+      <span [id]="pickerId + '-label'" class="scope-filter-label">{{ msg('Unit') }}</span>
       <button hlmBtn variant="outline" type="button" #unitTrigger class="scope-unit-trigger"
         [id]="pickerId + '-trigger'" [attr.aria-labelledby]="pickerId + '-label ' + pickerId + '-trigger'"
         [attr.aria-expanded]="unitOpen()" [attr.aria-controls]="unitOpen() ? pickerId : null"
@@ -60,20 +61,20 @@ const unitPageSize = 20;
       </button>
       @if (unitOpen()) {
         <div [id]="pickerId" class="unit-filter-options rounded-control border border-border bg-popover p-3 text-popover-foreground shadow-lg">
-          <label hlmFieldLabel [for]="pickerId + '-search'">Search units</label>
+          <label hlmFieldLabel [for]="pickerId + '-search'">{{ msg('Search units') }}</label>
           <input hlmInput type="search" #unitSearch [id]="pickerId + '-search'" [value]="search()"
             (input)="search.set(unitSearch.value)">
           @if (scope.loading()) {
-            <p role="status">Loading units…</p>
+            <p role="status">{{ msg('Loading units…') }}</p>
           } @else if (scope.failed()) {
-            <p role="status">Could not load units.</p>
-            <button type="button" hlmBtn variant="outline" (click)="retryUnits()">Retry</button>
+            <p role="status">{{ msg('Could not load units.') }}</p>
+            <button type="button" hlmBtn variant="outline" (click)="retryUnits()">{{ msg('Retry') }}</button>
           } @else {
             <p role="status" class="text-label text-text-secondary">{{ unitResultsLabel() }}</p>
           }
           <div class="unit-filter-results">
             <button type="button" hlmBtn variant="ghost" [attr.aria-current]="!filters.unitPath() ? 'true' : null"
-              (click)="chooseUnit('', unitTrigger)">All assigned units</button>
+              (click)="chooseUnit('', unitTrigger)">{{ msg('All assigned units') }}</button>
             @for (unit of visibleUnits(); track unit.path) {
               <button type="button" hlmBtn variant="ghost" [attr.aria-current]="unit.path === filters.unitPath() ? 'true' : null"
                 (click)="chooseUnit(unit.path, unitTrigger)">{{ unit.label }}</button>
@@ -84,12 +85,13 @@ const unitPageSize = 20;
     </hlm-field>
     @if (!forReports()) {
       <label hlmFieldLabel class="scope-filter-toggle" for="low-bandwidth">
-        <hlm-switch inputId="low-bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> Low bandwidth
+        <hlm-switch inputId="low-bandwidth" [checked]="filters.lowBandwidth()" (checkedChange)="filters.setLowBandwidth($event)" /> {{ msg('Low bandwidth') }}
       </label>
     }
   `
 })
 export class FilterFields {
+  protected readonly msg = translate;
   readonly forReports = input(false);
   protected readonly filters = inject(DashboardFilters);
   protected readonly scope = inject(ScopeFilters);
@@ -107,7 +109,7 @@ export class FilterFields {
   protected readonly classKeys = Object.keys(classes) as ForestClass[];
   protected readonly forestLabel = computed(() => {
     const key = this.filters.forestClass();
-    return key ? classes[key] : 'All classes';
+    return key ? classes[key] : translate('All classes');
   });
   protected readonly selectedPeriod = computed(() => {
     const hours = this.filters.hours();
@@ -121,9 +123,9 @@ export class FilterFields {
   protected readonly visibleUnits = computed(() => this.matchingUnits().slice(0, unitPageSize));
   protected readonly unitResultsLabel = computed(() => {
     const count = this.matchingUnits().length;
-    if (!count) return 'No matching units.';
-    if (count > unitPageSize) return `Showing ${unitPageSize} of ${count} units. Search to narrow the list.`;
-    return count === 1 ? '1 unit found.' : `${count} units found.`;
+    if (!count) return translate('No matching units.');
+    if (count > unitPageSize) return translate('Showing {0} of {1} units. Search to narrow the list.', [unitPageSize, count]);
+    return count === 1 ? translate('1 unit found.') : translate('{0} units found.', [count]);
   });
 
   protected changePeriod(value: string): void {

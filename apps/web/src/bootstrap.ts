@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
@@ -32,6 +33,7 @@ export function slugFrom(name: string): string {
   host: { class: 'block h-full overflow-auto max-sm:scroll-pt-16 max-sm:scroll-pb-16' }
 })
 export class Bootstrap {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly workspace = inject(WorkspaceService);

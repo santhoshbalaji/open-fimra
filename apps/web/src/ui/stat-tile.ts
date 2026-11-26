@@ -1,6 +1,7 @@
+import { translate } from '../language';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink, UrlTree } from '@angular/router';
-import { defaultWorkspaceFormat, WorkspaceFormat } from '../workspace-format';
+import { workspaceFormat, WorkspaceFormat } from '../workspace-format';
 
 @Component({
   selector: 'fimra-stat-tile',
@@ -13,23 +14,24 @@ import { defaultWorkspaceFormat, WorkspaceFormat } from '../workspace-format';
         @if (route(); as route) {
           <a class="text-action underline underline-offset-2 after:absolute after:inset-0 after:rounded-card
             focus-visible:after:outline-2 focus-visible:after:outline-focus"
-            [routerLink]="route" [attr.aria-describedby]="valueId()">{{ label() }}</a>
+            [routerLink]="route" [attr.aria-describedby]="valueId()">{{ msg(label()) }}</a>
         } @else if (href(); as href) {
           <a class="rounded-control text-action underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-focus"
-            [href]="href">{{ label() }}</a>
-        } @else { {{ label() }} }
+            [href]="href">{{ msg(label()) }}</a>
+        } @else { {{ msg(label()) }} }
       </dt>
       <dd class="text-figure tabular-nums" [attr.id]="valueId()">{{ displayValue() }}</dd>
-      <dd class="text-body text-text-secondary">{{ scope() }}</dd>
+      <dd class="text-body text-text-secondary">{{ msg(scope()) }}</dd>
       @if (freshAt(); as updated) {
         <dd class="text-label text-text-secondary">
-          {{ freshnessLabel() }} <time [attr.datetime]="updated.toISOString()">{{ format().dateTime(updated) }}</time>
+          {{ msg(freshnessLabel()) }} <time [attr.datetime]="updated.toISOString()">{{ format().dateTime(updated) }}</time>
         </dd>
       }
     </dl>
   `
 })
 export class StatTile {
+  protected readonly msg = translate;
   readonly value = input.required<number | string>();
   readonly label = input.required<string>();
   readonly scope = input.required<string>();
@@ -38,10 +40,10 @@ export class StatTile {
   readonly href = input<string>();
   readonly route = input<UrlTree>();
   readonly valueId = input<string>();
-  readonly format = input<WorkspaceFormat>(defaultWorkspaceFormat);
+  readonly format = input<Pick<WorkspaceFormat, keyof WorkspaceFormat>>(workspaceFormat);
 
   protected readonly displayValue = computed(() => {
     const value = this.value();
-    return typeof value === 'number' ? this.format().number(value) : value;
+    return typeof value === 'number' ? this.format().number(value) : translate(value);
   });
 }

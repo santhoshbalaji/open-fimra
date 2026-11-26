@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient } from '@angular/common/http';
 import { Component, type TemplateRef, inject, signal, viewChild } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -13,25 +14,26 @@ import { WorkspaceService } from './workspace';
   template: `
     <ng-template #primary>
       @if (!workspace.setupPending()) {
-        <button hlmBtn [disabled]="busy()" (click)="reopen()">Reopen setup</button>
+        <button hlmBtn [disabled]="busy()" (click)="reopen()">{{ msg('Reopen setup') }}</button>
       }
     </ng-template>
     <ng-template #secondary>
       @if (workspace.setupPending()) {
-        <button hlmBtn variant="ghost" type="button" (click)="navigation.monitor()">Leave setup for now</button>
+        <button hlmBtn variant="ghost" type="button" (click)="navigation.monitor()">{{ msg('Leave setup for now') }}</button>
       }
     </ng-template>
     @if (workspace.setupPending()) {
       <fimra-setup-wizard (finished)="finished()" (openLayers)="navigation.go('/settings/layers')" />
     } @else {
       <section class="grid gap-2 px-(--page-gutter) pb-12">
-        <p>First-run setup is complete.</p>
+        <p>{{ msg('First-run setup is complete.') }}</p>
         @if (message()) { <p role="alert">{{ message() }}</p> }
       </section>
     }
   `
 })
 export class SetupScreen {
+  protected readonly msg = translate;
   readonly pagePrimary = viewChild<TemplateRef<unknown>>('primary');
   readonly pageSecondary = viewChild<TemplateRef<unknown>>('secondary');
   readonly workspace = inject(WorkspaceService);

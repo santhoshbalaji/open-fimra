@@ -1,10 +1,10 @@
-<a class="shell-button skip-link" href="#task" (click)="skipToContent($event)">Skip to content</a>
+<a class="shell-button skip-link" href="#task" (click)="skipToContent($event)">{{ msg('Skip to content') }}</a>
 <fimra-live-status class="sr-only" [message]="routeAnnouncement()" />
 @if (auth.user(); as user) {
-  @let name = user.profile.name || user.profile.preferred_username || user.profile.email || 'User';
+  @let name = user.profile.name || user.profile.preferred_username || user.profile.email || msg('User');
   @if (workspace.current(); as current) {
     <header class="topbar bg-card">
-      <button data-variant="outline" class="shell-button destination-drawer" aria-haspopup="dialog" #menu (click)="drawerRequest.set({ trigger: menu })">Menu</button>
+      <button data-variant="outline" class="shell-button destination-drawer" aria-haspopup="dialog" #menu (click)="drawerRequest.set({ trigger: menu })">{{ msg('Menu') }}</button>
       @if (drawerRequest(); as request) {
         @defer (on immediate) {
           <fimra-shell-drawer [request]="request" [scope]="current.name + ' · ' + scope()" [links]="links"
@@ -14,15 +14,15 @@
       <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
       <div class="workspace">
         <p class="workspace-name" [title]="current.name">{{ current.name }}</p>
-        <p class="workspace-scope" [title]="scope()">{{ scope() || 'Assigned units' }}</p>
+        <p class="workspace-scope" [title]="scope()">{{ scope() || msg('Assigned units') }}</p>
       </div>
       <div class="header-actions">
         <button #search data-variant="ghost" class="shell-button search-trigger" (click)="openPalette(search)"
-                title="Search destinations" aria-keyshortcuts="Control+K Meta+K">
-          <span>Search</span><kbd>⌘/Ctrl K</kbd>
+                [title]=" msg('Search destinations') " aria-keyshortcuts="Control+K Meta+K">
+          <span>{{ msg('Search') }}</span><kbd>⌘/Ctrl K</kbd>
         </button>
         <button data-variant="ghost" class="shell-button theme-trigger" (click)="appearance.toggle()"
-                aria-label="Dark theme" [attr.aria-pressed]="appearance.theme() === 'dark'">
+                [attr.aria-label]=" msg('Dark theme') " [attr.aria-pressed]="appearance.theme() === 'dark'">
           @defer (on immediate) {
             @if (appearance.theme() === 'dark') { <svg fimraIcon="sun" aria-hidden="true"></svg> }
             @else { <svg fimraIcon="moon" aria-hidden="true"></svg> }
@@ -34,64 +34,64 @@
         @placeholder { <span class="user-trigger user-name">{{ name }}</span> }
       </div>
     </header>
-    <nav aria-label="Destinations" class="desktop-destinations">
+    <nav [attr.aria-label]=" msg('Destinations') " class="desktop-destinations">
       <ng-container *ngTemplateOutlet="links; context: { close: null }" />
     </nav>
     <ng-template #links let-close="close">
       @for (group of groups; track group) {
         @if (group === 'Dashboard') {
           <a class="shell-button" data-variant="ghost" [routerLink]="navigation.href('/dashboard')" (click)="close?.('/dashboard', $event)"
-             [attr.aria-current]="navigation.path() === '/dashboard' ? 'page' : null">Dashboard</a>
+             [attr.aria-current]="navigation.path() === '/dashboard' ? 'page' : null">{{ msg('Dashboard') }}</a>
         } @else {
-          <div class="destination-group" role="group" [attr.aria-label]="group">
-            <span class="destination-label" aria-hidden="true">{{ group }}</span>
+          <div class="destination-group" role="group" [attr.aria-label]="msg(group)">
+            <span class="destination-label" aria-hidden="true">{{ msg(group) }}</span>
             @for (item of navigation.authorized(); track item.path) {
               @if (item.group === group) {
                 <a class="shell-button" data-variant="ghost" [routerLink]="navigation.href(item.path)" (click)="close?.(item.path, $event)"
-                   [attr.aria-current]="navigation.path() === item.path ? 'page' : null">{{ item.name }}</a>
+                   [attr.aria-current]="navigation.path() === item.path ? 'page' : null">{{ msg(item.name) }}</a>
               }
             }
           </div>
         }
       }
     </ng-template>
-    @if (auth.error()) { <p role="alert" class="shell-message">{{ auth.error() }}</p> }
+    @if (auth.error()) { <p role="alert" class="shell-message">{{ msg(auth.error() || '') }}</p> }
   }
   @let destination = navigation.destination();
   <main id="task" tabindex="-1" [class.welcome]="(!workspace.current() || !destination) && !showBootstrap()"
         [class.page-frame]="!!workspace.current() && !!destination" [class.page-full]="destination?.group === 'Monitor'">
     @if (workspace.failed()) {
       <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
-      <h1>Workspace unavailable</h1>
-      <p>Open FIMRA could not load your workspace.</p>
-      <button class="shell-button" (click)="workspace.reload()">Retry</button>
+      <h1>{{ msg('Workspace unavailable') }}</h1>
+      <p>{{ msg('Open FIMRA could not load your workspace.') }}</p>
+      <button class="shell-button" (click)="workspace.reload()">{{ msg('Retry') }}</button>
     } @else if (!workspace.loaded()) {
-      <h1>Loading your workspace</h1>
-      <fimra-live-status class="sr-only" message="Loading your workspace" />
-      <button class="shell-button" data-variant="outline" (click)="reload()">Reload</button>
+      <h1>{{ msg('Loading your workspace') }}</h1>
+      <fimra-live-status class="sr-only" [message]=" msg('Loading your workspace') " />
+      <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
     } @else if (showBootstrap()) {
       @defer (on immediate) { <fimra-bootstrap /> }
     } @else if (!workspace.current() || navigation.path() === '/restricted') {
       @if (!workspace.current()) {
         <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
       }
-      <fimra-page-header title="Restricted access" />
-      <p>Signed in as <strong>{{ name }}</strong>@if (user.profile.email && user.profile.email !== name) { ({{ user.profile.email }})}.</p>
-      <p>Ask your workspace administrator to assign a role for the area you work in.</p>
+      <fimra-page-header [title]=" msg('Restricted access') " />
+      <p>{{ msg('Signed in as') }} <strong>{{ name }}</strong>@if (user.profile.email && user.profile.email !== name) { ({{ user.profile.email }})}.</p>
+      <p>{{ msg('Ask your workspace administrator to assign a role for the area you work in.') }}</p>
       <div class="welcome-actions">
-        <button class="shell-button" (click)="auth.signOut(true)">Switch account</button>
-        <button class="shell-button" data-variant="outline" (click)="auth.signOut()">Sign out</button>
+        <button class="shell-button" (click)="auth.signOut(true)">{{ msg('Switch account') }}</button>
+        <button class="shell-button" data-variant="outline" (click)="auth.signOut()">{{ msg('Sign out') }}</button>
       </div>
-      @if (auth.error() && !workspace.current()) { <p role="alert">{{ auth.error() }}</p> }
+      @if (auth.error() && !workspace.current()) { <p role="alert">{{ msg(auth.error() || '') }}</p> }
     } @else if (!navigation.destination()) {
-      <h1>Opening your workspace</h1>
-      <fimra-live-status class="sr-only" message="Opening your workspace" />
-      <button class="shell-button" data-variant="outline" (click)="reload()">Reload</button>
+      <h1>{{ msg('Opening your workspace') }}</h1>
+      <fimra-live-status class="sr-only" [message]=" msg('Opening your workspace') " />
+      <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
     }
     @if (workspace.current()) {
       @if (destination) {
         <fimra-page-header class="shell-page-header" [class.monitor-header]="showFilters()"
-                           [title]="destination.name" [scope]="showFilters() ? '' : scope() || 'Assigned units'">
+                           [title]="msg(destination.name)" [scope]="showFilters() ? '' : scope() || 'Assigned units'">
           @if (headerSlots()?.pageFreshness?.(); as freshness) {
             <ng-container pageFreshness [ngTemplateOutlet]="freshness" />
           }
@@ -110,7 +110,7 @@
       }
       @let phoneLists = destination?.path === '/settings/devices';
       <div class="page-content" [attr.tabindex]="phoneLists ? 0 : null"
-           [attr.role]="phoneLists ? 'region' : null" [attr.aria-label]="phoneLists ? 'Phone lists' : null">
+           [attr.role]="phoneLists ? 'region' : null" [attr.aria-label]="phoneLists ? msg('Phone lists') : null">
         <router-outlet (activate)="screenOpened($event)" (deactivate)="headerSlots.set(null)" />
       </div>
     }
@@ -122,20 +122,20 @@
   <main id="task" tabindex="-1" class="welcome">
     <img class="logo" [src]="'logo/lockup-' + appearance.theme() + '.svg'" alt="Open FIMRA">
     @if (auth.error()) {
-      <h1>Sign-in unavailable</h1>
-      <p>{{ auth.error() }}</p>
-      <button class="shell-button" (click)="auth.signIn()">Retry sign-in</button>
+      <h1>{{ msg('Sign-in unavailable') }}</h1>
+      <p>{{ msg(auth.error() || '') }}</p>
+      <button class="shell-button" (click)="auth.signIn()">{{ msg('Retry sign-in') }}</button>
     } @else if (auth.opening()) {
-      <h1>Opening sign-in</h1>
-      <fimra-live-status class="sr-only" message="Opening sign-in" />
-      <button class="shell-button" data-variant="outline" (click)="reload()">Reload</button>
+      <h1>{{ msg('Opening sign-in') }}</h1>
+      <fimra-live-status class="sr-only" [message]=" msg('Opening sign-in') " />
+      <button class="shell-button" data-variant="outline" (click)="reload()">{{ msg('Reload') }}</button>
     } @else if (auth.signedOut()) {
-      <h1>You signed out</h1>
-      <button class="shell-button" (click)="auth.signIn()">Sign in</button>
+      <h1>{{ msg('You signed out') }}</h1>
+      <button class="shell-button" (click)="auth.signIn()">{{ msg('Sign in') }}</button>
     } @else {
-      <h1>Sign in to Open FIMRA</h1>
-      <p>Use your department account to open your workspace.</p>
-      <button class="shell-button" (click)="auth.signIn()">Sign in</button>
+      <h1>{{ msg('Sign in to Open FIMRA') }}</h1>
+      <p>{{ msg('Use your department account to open your workspace.') }}</p>
+      <button class="shell-button" (click)="auth.signIn()">{{ msg('Sign in') }}</button>
     }
   </main>
 }

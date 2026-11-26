@@ -301,6 +301,7 @@ starter-pack-test: ## Check the starter forms with the Go validator and against 
 	cd packages/starter-pack && go vet ./... && go test -count=1 ./...
 
 check: token-check ## Run the repository checks that continuous integration runs
+	node scripts/check-locales.mjs
 	scripts/check-repo.sh
 	python3 seed/generate.py --check
 	$(COMPOSE) config --quiet
@@ -508,6 +509,12 @@ SHELL_SHOTS ?= $(HOME)/open-fimra-screenshots/u4
 shell-walkthrough: web-build ## Check routes, history and shell accessibility against the seeded development stack
 	WEB_PORT=$(WEB_PORT) SHOTS="$(SHELL_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh
+
+LANGUAGE_SHOTS ?= $(HOME)/open-fimra-screenshots/languages
+.PHONY: language-walkthrough
+language-walkthrough: web-build ## Check Hindi screens at desktop and phone sizes in a synthetic workspace
+	WEB_PORT=$(WEB_PORT) SHOTS="$(LANGUAGE_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh language-walkthrough.mjs
 
 INCIDENT_SHOTS ?= $(HOME)/open-fimra-screenshots/u7
 .PHONY: incident-walkthrough

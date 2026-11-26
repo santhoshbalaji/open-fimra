@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 export interface BreadcrumbLink {
@@ -9,7 +10,7 @@ export interface BreadcrumbLink {
   selector: 'fimra-breadcrumbs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav aria-label="Breadcrumb">
+    <nav [attr.aria-label]=" msg('Breadcrumb') ">
       <ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-body">
         @for (link of ancestors(); track $index) {
           <li class="flex min-w-0 items-center gap-2 wrap-anywhere">
@@ -24,6 +25,7 @@ export interface BreadcrumbLink {
   `
 })
 export class Breadcrumbs {
+  protected readonly msg = translate;
   readonly ancestors = input<readonly BreadcrumbLink[]>([]);
   readonly current = input.required<string>();
 }

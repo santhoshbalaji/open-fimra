@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, input, model, output } from '@angular/core';
@@ -6,7 +7,7 @@ import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmSkeleton } from '@spartan-ng/helm/skeleton';
 import { map } from 'rxjs';
 import { ShellListScroll } from '../shell-list-scroll';
-import { defaultWorkspaceFormat } from '../workspace-format';
+import { workspaceFormat } from '../workspace-format';
 import { Icon } from './icon';
 import { LiveStatus } from './live-status';
 import { DataState, StateRegion } from './state-region';
@@ -50,6 +51,7 @@ const ready: DataState = { kind: 'ready' };
   templateUrl: './data-table.html'
 })
 export class DataTable<Row> {
+  protected readonly msg = translate;
   readonly caption = input.required<string>();
   readonly columns = input.required<readonly TableColumn<Row>[]>();
   /** Supply the last successful page. Retain it during refresh and failed requests. */
@@ -82,15 +84,15 @@ export class DataTable<Row> {
   protected readonly sortLabel = computed(() => {
     const sort = this.sort();
     const column = this.columns().find(column => column.id === sort?.columnId);
-    return column && sort ? `Sorted by ${column.label}, ${sort.direction}` : '';
+    return column && sort ? translate('Sorted by {0}, {1}', [translate(column.label), translate(sort.direction)]) : '';
   });
   protected readonly pageLabel = computed(() =>
-    `Page ${defaultWorkspaceFormat.number(this.page().position.previousCursors.length + 1)}`);
+    translate('Page {0}', [workspaceFormat.number(this.page().position.previousCursors.length + 1)]));
   protected readonly selectionLabel = computed(() => {
     const count = this.selected()?.size ?? 0;
-    return count ? `${defaultWorkspaceFormat.number(count)} selected` : '';
+    return count ? translate('{0} selected', [workspaceFormat.number(count)]) : '';
   });
-  protected readonly selectionStatus = computed(() => this.selectionLabel() || 'No rows selected');
+  protected readonly selectionStatus = computed(() => this.selectionLabel() || translate('No rows selected'));
   protected readonly pageSelectionCount = computed(() =>
     this.page().rows.filter(row => this.isSelected(row)).length);
   protected readonly allSelected = computed(() => !!this.pageSelectionCount()

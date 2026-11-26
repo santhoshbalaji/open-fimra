@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { Component, ElementRef, input, output, signal, viewChild } from '@angular/core';
 
@@ -9,15 +10,16 @@ import { Component, ElementRef, input, output, signal, viewChild } from '@angula
   template: `
     <canvas #pad width="480" height="160" [id]="inputId()" role="img" tabindex="0"
       [attr.aria-describedby]="describedBy()"
-      [attr.aria-label]="drawn() ? 'Signature drawn. Save it or clear it.' : 'Signature area. Draw your signature here.'"
+      [attr.aria-label]="drawn() ? msg('Signature drawn. Save it or clear it.') : msg('Signature area. Draw your signature here.')"
       (pointerdown)="start($event)" (pointermove)="move($event)" (pointerup)="end()" (pointerleave)="end()"></canvas>
     <div class="shape-actions">
-      <button hlmBtn type="button" size="sm" [disabled]="!drawn() || busy()" (click)="save()">Save signature</button>
-      <button hlmBtn type="button" variant="ghost" size="sm" [disabled]="!drawn() || busy()" (click)="clear()">Clear</button>
+      <button hlmBtn type="button" size="sm" [disabled]="!drawn() || busy()" (click)="save()">{{ msg('Save signature') }}</button>
+      <button hlmBtn type="button" variant="ghost" size="sm" [disabled]="!drawn() || busy()" (click)="clear()">{{ msg('Clear') }}</button>
     </div>
   `
 })
 export class SignaturePad {
+  protected readonly msg = translate;
   readonly inputId = input.required<string>();
   readonly describedBy = input<string | null>(null);
   readonly busy = input(false);

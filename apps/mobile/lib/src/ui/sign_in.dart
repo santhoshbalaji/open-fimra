@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/session.dart';
 import '../config.dart';
+import '../l10n/field_language.dart';
 import '../theme/app_theme.dart';
 import 'widgets.dart';
 
@@ -14,12 +15,14 @@ class SignInScreen extends StatelessWidget {
     required this.config,
     required this.defaults,
     required this.onConfigChanged,
+    this.onLanguageChanged,
   });
 
   final Session session;
   final AppConfig config;
   final AppConfig defaults;
   final ConfigChanged onConfigChanged;
+  final Future<void> Function(Locale?)? onLanguageChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -38,10 +41,10 @@ class SignInScreen extends StatelessWidget {
                 children: [
                   const Center(child: FimraLogo(lockup: true, height: 56)),
                   const SizedBox(height: 32),
-                  Text('Field app', style: text.headlineSmall, textAlign: TextAlign.center),
+                  Text(fieldText(context).fieldApp, style: text.headlineSmall, textAlign: TextAlign.center),
                   const SizedBox(height: 8),
                   Text(
-                    'Sign in with your department account to see the fire alerts in your area.',
+                    fieldText(context).signInWithYourDepartment,
                     style: text.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -52,7 +55,7 @@ class SignInScreen extends StatelessWidget {
                     icon: busy
                         ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.login),
-                    label: Text(busy ? 'Waiting for sign-in' : 'Sign in'),
+                    label: Text(busy ? fieldText(context).waitingForSignIn : fieldText(context).signIn),
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(
@@ -65,11 +68,18 @@ class SignInScreen extends StatelessWidget {
                             ),
                           ),
                     icon: const Icon(Icons.dns_outlined),
-                    label: const Text('Server settings'),
+                    label: Text(fieldText(context).serverSettings),
                   ),
+                  if (onLanguageChanged case final change?)
+                    TextButton(
+                      onPressed: () => chooseFieldLanguage(context, change),
+                      child: Text(fieldText(context).language),
+                    ),
                   const SizedBox(height: 8),
                   Text(
-                    'Server: ${Uri.tryParse(config.apiBaseUrl)?.authority ?? config.apiBaseUrl}',
+                    fieldText(
+                      context,
+                    ).serverName((Uri.tryParse(config.apiBaseUrl)?.authority ?? config.apiBaseUrl).toString()),
                     style: text.bodySmall,
                     textAlign: TextAlign.center,
                   ),
@@ -113,7 +123,9 @@ class _Problem extends StatelessWidget {
                 Icon(Icons.error_outline, color: p.danger),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(serverProblem ? 'Cannot reach the server. Check the address or try again.' : message),
+                  child: Text(
+                    serverProblem ? fieldText(context).cannotReachTheServerCheck : fieldProblem(context, message),
+                  ),
                 ),
               ],
             ),
@@ -121,7 +133,7 @@ class _Problem extends StatelessWidget {
           if (serverProblem)
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              title: const Text('Technical details'),
+              title: Text(fieldText(context).technicalDetails),
               expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
               children: [SelectableText(message)],
             ),
@@ -170,46 +182,52 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Server settings')),
+      appBar: AppBar(title: Text(fieldText(context).serverSettings)),
       body: Form(
         key: _form,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(
-              'Use these to reach a development machine or a test server. Saving signs you out.',
-              style: text.bodyMedium,
-            ),
+            Text(fieldText(context).useTheseToReachA, style: text.bodyMedium),
             const SizedBox(height: 16),
             TextFormField(
               controller: _api,
               keyboardType: TextInputType.url,
-              decoration: const InputDecoration(labelText: 'Core API address', hintText: 'https://fimra.example.org'),
-              validator: (value) => AppConfig.checkAddress(value ?? ''),
+              decoration: InputDecoration(
+                labelText: fieldText(context).coreAPIAddress,
+                hintText: 'https://fimra.example.org',
+              ),
+              validator: (value) {
+                final problem = AppConfig.checkAddress(value ?? '');
+                return problem == null ? null : fieldProblem(context, problem);
+              },
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _issuer,
               keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Sign-in address',
+              decoration: InputDecoration(
+                labelText: fieldText(context).signInAddress,
                 hintText: 'https://id.example.org/realms/open-fimra',
-                helperText: 'The address the core API trusts as its token issuer',
+                helperText: fieldText(context).theAddressTheCoreAPI,
               ),
-              validator: (value) => AppConfig.checkAddress(value ?? ''),
+              validator: (value) {
+                final problem = AppConfig.checkAddress(value ?? '');
+                return problem == null ? null : fieldProblem(context, problem);
+              },
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _client,
-              decoration: const InputDecoration(labelText: 'App client ID'),
-              validator: (value) => (value ?? '').trim().isEmpty ? 'Enter the client ID' : null,
+              decoration: InputDecoration(labelText: fieldText(context).appClientID),
+              validator: (value) => (value ?? '').trim().isEmpty ? fieldText(context).enterTheClientID : null,
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: _save, child: const Text('Save')),
+            FilledButton(onPressed: _save, child: Text(fieldText(context).save)),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: widget.config == widget.defaults ? null : () => _save(reset: true),
-              child: const Text('Use the built-in settings'),
+              child: Text(fieldText(context).useTheBuiltInSettings),
             ),
           ],
         ),

@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
@@ -8,7 +9,7 @@ import type { AlertRow } from '../alert-queue';
 import { AuthService } from '../auth';
 import { StatusBadge } from '../ui/status-badge';
 import { SidePanel } from '../ui/side-panel';
-import { defaultWorkspaceFormat } from '../workspace-format';
+import { workspaceFormat } from '../workspace-format';
 import { decisionLabels, type AssignedForm, type Submission } from './form-api';
 import { FormFill } from './form-fill';
 import { SubmissionView } from './submission-view';
@@ -30,26 +31,26 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
   template: `
     @if (forms(); as list) {
       @if (list.length || submissions().length) {
-        <h3>Reports</h3>
+        <h3>{{ msg('Reports') }}</h3>
         @if (list.length) {
           <ul class="report-forms">
             @for (f of list; track f.form + f.step) {
               <li>
-                <span><strong>{{ f.title }}</strong> <small>at {{ stepLabel(f.step) }}</small></span>
-                @if (f.requiredNow) { <fimra-status-badge icon="overdue" label="Needed before the next step" /> }
-                @else if (f.submitted) { <fimra-status-badge icon="complete" label="Sent" /> }
+                <span><strong>{{ f.title }}</strong> <small>{{ msg('at {0}', [stepLabel(f.step)]) }}</small></span>
+                @if (f.requiredNow) { <fimra-status-badge icon="overdue" [label]=" msg('Needed before the next step') " /> }
+                @else if (f.submitted) { <fimra-status-badge icon="complete" [label]=" msg('Sent') " /> }
                 @if (canFill(f)) {
-                  <button hlmBtn size="sm" [variant]="f.requiredNow ? 'primary' : 'outline'" (click)="fill(f)">Fill in {{ f.title }}</button>
+                  <button hlmBtn size="sm" [variant]="f.requiredNow ? 'primary' : 'outline'" (click)="fill(f)">{{ msg('Start {0}', [f.title]) }}</button>
                 }
               </li>
             }
           </ul>
         }
         @if (submissions().length) {
-          <ul class="report-list" aria-label="Reports sent for this alert">
+          <ul class="report-list" [attr.aria-label]=" msg('Reports sent for this alert') ">
             @for (s of submissions(); track s.id) {
               <li>
-                <button #report hlmBtn variant="link" size="sm" (click)="selected.set(s.id); review.show(report)">{{ titleOf(s.form) }}, version {{ s.version }}</button>
+                <button #report hlmBtn variant="link" size="sm" (click)="selected.set(s.id); review.show(report)">{{ msg('{0}, version {1}', [titleOf(s.form), s.version]) }}</button>
                 <small>{{ s.submittedBy }} · {{ time(s.receivedAt) }}</small>
                 <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
                   [label]="labels[s.approval?.decision ?? 'pending']" />
@@ -61,7 +62,7 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
     } @else if (message()) {
       <p role="status">{{ message() }}</p>
     }
-    <fimra-side-panel #review="fimraSidePanel" heading="Review field report" [fullHeight]="true" (closed)="selected.set(null)">
+    <fimra-side-panel #review="fimraSidePanel" [heading]=" msg('Review field report') " [fullHeight]="true" (closed)="selected.set(null)">
       @if (selected(); as id) {
         @defer (on immediate) {
           <fimra-submission-view [workspaceUrl]="workspaceUrl()" [submissionId]="id" (decided)="reload()" />
@@ -72,15 +73,15 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
       <hlm-dialog-content *hlmDialogPortal class="report-dialog" [showCloseButton]="false">
         @if (open(); as o) {
           <div class="report-dialog-heading">
-            <h2 hlmDialogTitle>Fill in {{ o.form.title }}</h2>
-            <button hlmBtn variant="ghost" size="sm" (click)="open.set(null)">Close</button>
+            <h2 hlmDialogTitle>{{ msg('Start {0}', [o.form.title]) }}</h2>
+            <button hlmBtn variant="ghost" size="sm" (click)="open.set(null)">{{ msg('Close') }}</button>
           </div>
           @defer (on immediate) {
             <fimra-form-fill [workspaceUrl]="workspaceUrl()" [form]="o.form.form" [version]="o.form.version" [step]="o.form.step"
               [stepLabel]="stepLabel(o.form.step)" [currentStepLabel]="stepLabel(currentStep())"
               [alert]="alert()" [initial]="o.initial" (submitted)="reload()" (cancelled)="open.set(null)" />
           } @placeholder {
-            <hlm-skeleton class="h-24" role="status" aria-label="Loading" />
+            <hlm-skeleton class="h-24" role="status" [attr.aria-label]=" msg('Loading') " />
           }
         }
       </hlm-dialog-content>
@@ -88,6 +89,7 @@ interface Draft { form: AssignedForm; initial: Record<string, unknown> }
   `
 })
 export class AlertReports {
+  protected readonly msg = translate;
   /** The workspace's API address, ending in /api/v1/workspaces/{slug}. */
   readonly workspaceUrl = input.required<string>();
   readonly alert = input.required<AlertRow>();
@@ -150,7 +152,7 @@ export class AlertReports {
   }
 
   time(value: string): string {
-    return defaultWorkspaceFormat.dateTime(new Date(value));
+    return workspaceFormat.dateTime(new Date(value));
   }
 
   fill(form: AssignedForm): void {

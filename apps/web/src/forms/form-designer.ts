@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
@@ -46,6 +47,7 @@ const simpleTests = new Set(['answered', 'equals', 'not-equals', 'more-than', 'a
   host: { class: 'block' }
 })
 export class FormDesigner {
+  protected readonly msg = translate;
   readonly form = model.required<FormDefinition>();
   /** This version's own template rules, including locks it inherits. */
   readonly rules = model<TemplateRules>({ allowExtension: false, locked: [] });

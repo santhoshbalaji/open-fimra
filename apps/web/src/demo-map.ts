@@ -1,4 +1,5 @@
 import { overlayKindLabels } from './boundary-overlays';
+import { translate } from './language';
 import { NgTemplateOutlet } from '@angular/common';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -31,7 +32,7 @@ import { ThemeService, type Theme } from './theme';
 import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
 import { DataTable, type TableColumn } from './ui/data-table';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 
 const detectionGroup: MapLayerGroup = { id: 'detections', label: 'Fire detections', minZoom: 0 };
 const incidentGroup: MapLayerGroup = {
@@ -58,6 +59,7 @@ function pointCollection(points: [number, number][]): FeatureCollection<Point> {
   templateUrl: './demo-map.html'
 })
 export class DemoMap implements AfterViewInit, OnDestroy {
+  protected readonly msg = translate;
   readonly navigation = inject(ShellNavigation);
   readonly linkedMessage = signal('');
   private readonly alertId = computed(() => recordId(this.navigation.query().get('alert')));
@@ -77,7 +79,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     return ageLabels.slice(0, this.hours() <= 6 ? 1 : this.hours() <= 24 ? 2 : this.hours() <= 72 ? 3 : 4)
       .map((label, i) => ({
         colour: 'var(--map-age-' + (i + 1) + ')',
-        label: i === 3 && this.hours() > 168 ? '3 days or more' : label,
+        label: i === 3 && this.hours() > 168 ? translate('3 days or more') : label,
         short: ['<6h', '6–24h', '1–3d', this.hours() > 168 ? '3d+' : '3–7d'][i]
       }));
   });
@@ -91,7 +93,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   places(detection: Detection) {
     const [first, ...rest] = placesOf(detection, this.placeLevels());
     const named = (place: { label: string; name: string }) => place.name || 'Unknown ' + place.label.toLowerCase();
-    return { first, firstName: first ? named(first) : 'Unknown place', rest: rest.map(named).join(' · '), all: [first, ...rest].filter(Boolean) };
+    return { first, firstName: first ? named(first) : translate('Unknown place'), rest: rest.map(named).join(' · '), all: [first, ...rest].filter(Boolean) };
   }
   readonly error = signal('');
   private readonly geographyError = signal(false);
@@ -122,20 +124,20 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   );
   readonly mapDataState = computed<DataState>(() => {
     const missing = [
-      this.tileError() && this.showDetections() ? 'Fire detection tiles' : '',
+      this.tileError() && this.showDetections() ? translate('Fire detection tiles') : '',
       this.referenceError() && this.reference().some(group => this.layerEnabled(group) && this.zoomLevel() >= group.minZoom)
-        ? (this.filters.lowBandwidth() ? 'Workspace outline tiles' : 'Reference tiles (boundaries, forest and known heat source areas)') : '',
-      this.geographyError() ? 'Workspace boundary and layer information' : '',
-      this.incidentError() && this.showIncidents() ? 'Reported incidents' : ''
+        ? (this.filters.lowBandwidth() ? translate('Workspace outline tiles') : translate('Reference tiles (boundaries, forest and known heat source areas)')) : '',
+      this.geographyError() ? translate('Workspace boundary and layer information') : '',
+      this.incidentError() && this.showIncidents() ? translate('Reported incidents') : ''
     ].filter(Boolean);
     if (missing.length) {
-      const detail = missing.join('. ') + '. You can still use the alert queue.';
-      return { kind: 'error', heading: 'Some map data is missing', detail };
+      const detail = missing.join('. ') + translate('. You can still use the alert queue.');
+      return { kind: 'error', heading: translate('Some map data is missing'), detail };
     }
     if (!this.showDetections() || this.error()) return { kind: 'ready' };
-    if (!this.detectionsDrawn()) return { kind: 'loading', heading: 'Loading fire detections' };
+    if (!this.detectionsDrawn()) return { kind: 'loading', heading: translate('Loading fire detections') };
     return this.visible().length ? { kind: 'ready' } :
-      { kind: 'empty', heading: 'No detections in view', detail: 'Pan the map or change the filters.' };
+      { kind: 'empty', heading: translate('No detections in view'), detail: translate('Pan the map or change the filters.') };
   });
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
@@ -171,7 +173,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   protected readonly detailHeading = computed(() => {
     const alert = this.queue.pinned();
     const id = alert?.id || this.alertId();
-    return id ? 'Alert #' + id : 'Detection #' + (this.selected()?.id ?? this.detectionId());
+    return id ? translate('Alert #{0}', [id]) : translate('Detection #{0}', [this.selected()?.id ?? this.detectionId()]);
   });
   private readonly detailRequested = computed(() => !this.mapOnly() && !!(this.alertId() || this.detectionId()));
   private readonly detailReady = computed(() => !!this.selected());
@@ -185,23 +187,31 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   }, { equal: (a, b) => a?.[0] === b?.[0] && a?.[1] === b?.[1] });
   readonly now = this.queue.now;
   readonly detectionAge = detectionAge;
-  readonly dateTime = (value: string | number) => defaultWorkspaceFormat.dateTime(new Date(value));
+  readonly dateTime = (value: string | number) => workspaceFormat.dateTime(new Date(value));
   readonly rowAge = (row: AlertRow) => {
     const observed = row.observed_at * 1000;
     const now = this.now();
-    return now - observed < 60_000 ? 'Just now' : defaultWorkspaceFormat.age(new Date(observed), new Date(now));
+    return now - observed < 60_000 ? translate('Just now') : workspaceFormat.age(new Date(observed), new Date(now));
   };
+  protected nextAction(action: string): string {
+    const prefix = 'Next step: ';
+    if (action === 'Workflow complete') return translate('All steps complete');
+    if (!action.startsWith(prefix)) return translate(action);
+    const step = action.slice(prefix.length);
+    return translate('Next step: {0}', [translate(step === 'Acknowledged' ? 'Acknowledge alert' : step)]);
+  }
+
   readonly rowKey = (row: AlertRow) => row.id;
   readonly rowLabel = (row: AlertRow) => alertRowLabel(row, row.assignment?.unitName ?? this.places(row).firstName);
   private readonly rowHeading = viewChild<TemplateRef<{ $implicit: AlertRow }>>('rowHeading');
   private readonly rowStatus = viewChild<TemplateRef<{ $implicit: AlertRow }>>('rowStatus');
   readonly queueCaption = computed(() =>
-    (this.queue.listScope() || 'Alerts') + ' · ' + (this.queue.allQueues() ? 'All queues' : queueLabels[this.queue.active()]));
+    (this.queue.listScope() || translate('Alerts')) + ' · ' + (this.queue.allQueues() ? translate('All queues') : translate(queueLabels[this.queue.active()])));
   readonly queueColumns = computed<TableColumn<AlertRow>[]>(() => [
     { id: 'alert', label: 'Place and alert', rowHeading: true, value: this.rowLabel, cell: this.rowHeading() },
-    { id: 'workflow', label: 'Workflow', value: row => row.step_label, cell: this.rowStatus() },
-    { id: 'observed', label: 'Observed', sortable: true, value: row => this.dateTime(row.observed_at * 1000) },
-    { id: 'forest', label: 'Forest class', value: row => this.classes[row.forest_class] }
+    { id: 'workflow', label: translate('Workflow'), value: row => row.step_label, cell: this.rowStatus() },
+    { id: 'observed', label: translate('Observed'), sortable: true, value: row => this.dateTime(row.observed_at * 1000) },
+    { id: 'forest', label: translate('Forest class'), value: row => this.classes[row.forest_class] }
   ]);
   readonly dockState = computed<DataState>(() => {
     const state = this.queue.state();
@@ -396,7 +406,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         error: err => {
           if (err.status === 401) this.auth.sessionEnded();
           if (err.status === 404) this.queue.select(null);
-          this.linkedMessage.set('This alert could not be opened.');
+          this.linkedMessage.set(translate('This alert could not be opened.'));
         }
       });
       onCleanup(() => request.unsubscribe());
@@ -425,7 +435,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         }),
         error: err => {
           if (err.status === 401) this.auth.sessionEnded();
-          this.linkedMessage.set('This incident could not be shown on the map.');
+          this.linkedMessage.set(translate('This incident could not be shown on the map.'));
         }
       });
       onCleanup(() => request.unsubscribe());
@@ -591,12 +601,12 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         this.centerSelection();
       });
       this.resize.observe(this.container().nativeElement);
-      map.getCanvas().setAttribute('aria-label', 'Workspace map. Use arrow keys to pan and plus or minus to zoom.');
+      map.getCanvas().setAttribute('aria-label', translate('Workspace map. Use arrow keys to pan and plus or minus to zoom.'));
       map.on('zoom', () => this.zoomLevel.set(map.getZoom()));
       map.on('error', event => {
         const source = 'sourceId' in event ? event.sourceId : undefined;
         if (source === 'detections' || source === 'reference') this.tileFailed(source, event.error);
-        else this.error.set('The map display encountered an error. Reload to try again.');
+        else this.error.set(translate('The map display encountered an error. Reload to try again.'));
       });
       map.on('click', event => {
         if (!this.showDetections() || !map.getLayer('detections')) return;
@@ -639,7 +649,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         this.timer = setInterval(() => this.refreshDetections(), 60_000);
       });
     } catch {
-      this.error.set('The map needs WebGL. Turn on graphics acceleration in your browser and reload.');
+      this.error.set(translate('The map needs WebGL. Turn on graphics acceleration in your browser and reload.'));
     }
   }
 
@@ -738,7 +748,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   private showAssignmentError(error: HttpErrorResponse): void {
     if (error.status === 401) this.auth.sessionEnded();
-    this.assignmentError.set(error.error?.error || 'Could not load or save this assignment. Try again.');
+    this.assignmentError.set(error.error?.error || translate('Could not load or save this assignment. Try again.'));
   }
 
   openReport(key: string): void {

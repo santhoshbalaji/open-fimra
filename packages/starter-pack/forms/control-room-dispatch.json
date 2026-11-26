@@ -3,39 +3,38 @@
   "formatVersion": 1,
   "id": "control-room-dispatch",
   "version": 1,
-  "title": { "en": "Control-room dispatch", "hi": "नियंत्रण कक्ष से टीम रवाना" },
-  "description": {
-    "en": "The control room fills in the first stage when it sends a team. The team fills in the second stage when it reaches the site."
-  },
+  "title": { "en": "Control-room dispatch", "hi": "नियंत्रण कक्ष से दल भेजने का विवरण" },
+  "description": { "en": "The control room fills in the first stage when it sends a team. The team fills in the second stage when it reaches the site.", "hi": "दल भेजते समय नियंत्रण कक्ष पहला चरण भरता है। मौके पर पहुँचकर दल दूसरा चरण भरता है।" },
   "stages": [
-    { "key": "dispatch", "title": { "en": "Team sent" }, "workflowStep": "team_sent" },
-    { "key": "arrival", "title": { "en": "Reached site" }, "workflowStep": "reached_site" }
+    { "key": "dispatch", "title": { "en": "Team sent", "hi": "दल भेजा गया" }, "workflowStep": "team_sent" },
+    { "key": "arrival", "title": { "en": "Reached site", "hi": "मौके पर पहुँचे" }, "workflowStep": "reached_site" }
   ],
+  "languages": ["en", "hi"],
   "sections": [
     {
       "key": "alert",
-      "title": { "en": "Alert" },
+      "title": { "en": "Alert", "hi": "अलर्ट" },
       "stage": "dispatch",
       "items": [
-        { "key": "alert_id", "type": "alert-value", "label": { "en": "Alert number" }, "source": "alert-id" },
-        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at" }, "source": "observed-at" },
-        { "key": "alert_location", "type": "alert-value", "label": { "en": "Alert location" }, "source": "location" },
-        { "key": "responsible_unit", "type": "alert-value", "label": { "en": "Responsible beat" }, "source": "unit" },
-        { "key": "forest_class", "type": "alert-value", "label": { "en": "Inside or near the forest" }, "source": "forest-class" },
-        { "key": "fire_power", "type": "alert-value", "label": { "en": "Fire strength" }, "source": "fire-power" }
+        { "key": "alert_id", "type": "alert-value", "label": { "en": "Alert number", "hi": "अलर्ट संख्या" }, "source": "alert-id" },
+        { "key": "observed_at", "type": "alert-value", "label": { "en": "Seen by the satellite at", "hi": "उपग्रह ने कब देखा" }, "source": "observed-at" },
+        { "key": "alert_location", "type": "alert-value", "label": { "en": "Alert location", "hi": "अलर्ट का स्थान" }, "source": "location" },
+        { "key": "responsible_unit", "type": "alert-value", "label": { "en": "Responsible beat", "hi": "संबंधित बीट" }, "source": "unit" },
+        { "key": "forest_class", "type": "alert-value", "label": { "en": "Inside or near the forest", "hi": "वन के अंदर या पास" }, "source": "forest-class" },
+        { "key": "fire_power", "type": "alert-value", "label": { "en": "Fire strength", "hi": "आग की तीव्रता" }, "source": "fire-power" }
       ]
     },
     {
       "key": "dispatch",
-      "title": { "en": "Team sent" },
+      "title": { "en": "Team sent", "hi": "दल भेजा गया" },
       "stage": "dispatch",
       "items": [
-        { "key": "team_name", "type": "text", "label": { "en": "Team name" }, "required": true, "maxLength": 80 },
-        { "key": "team_leader", "type": "text", "label": { "en": "Team leader" }, "required": true, "maxLength": 80 },
+        { "key": "team_name", "type": "text", "label": { "en": "Team name", "hi": "दल का नाम" }, "required": true, "maxLength": 80 },
+        { "key": "team_leader", "type": "text", "label": { "en": "Team leader", "hi": "दल प्रभारी" }, "required": true, "maxLength": 80 },
         {
           "key": "team_size",
           "type": "number",
-          "label": { "en": "People in the team" },
+          "label": { "en": "People in the team", "hi": "दल में लोगों की संख्या" },
           "required": true,
           "unit": "people",
           "decimals": 0,
@@ -45,54 +44,54 @@
         {
           "key": "vehicle",
           "type": "single-choice",
-          "label": { "en": "Travelling by" },
+          "label": { "en": "Travelling by", "hi": "जाने का साधन" },
           "required": true,
           "choices": [
-            { "key": "jeep", "label": { "en": "Jeep" } },
-            { "key": "motorcycle", "label": { "en": "Motorcycle" } },
-            { "key": "on-foot", "label": { "en": "On foot" } },
-            { "key": "other", "label": { "en": "Other" } }
+            { "key": "jeep", "label": { "en": "Jeep", "hi": "जीप" } },
+            { "key": "motorcycle", "label": { "en": "Motorcycle", "hi": "मोटरसाइकिल" } },
+            { "key": "on-foot", "label": { "en": "On foot", "hi": "पैदल" } },
+            { "key": "other", "label": { "en": "Other", "hi": "अन्य" } }
           ]
         },
         {
           "key": "vehicle_other",
           "type": "text",
-          "label": { "en": "Other way of travelling" },
+          "label": { "en": "Other way of travelling", "hi": "जाने का अन्य साधन" },
           "required": true,
           "showWhen": { "op": "equals", "field": "vehicle", "value": "other" }
         },
-        { "key": "dispatched_at", "type": "date-time", "label": { "en": "Sent at" }, "required": true, "notInFuture": true },
-        { "key": "instructions", "type": "text", "label": { "en": "Instructions for the team" }, "maxLength": 1000 }
+        { "key": "dispatched_at", "type": "date-time", "label": { "en": "Sent at", "hi": "दल कब भेजा गया" }, "required": true, "notInFuture": true },
+        { "key": "instructions", "type": "text", "label": { "en": "Instructions for the team", "hi": "दल के लिए निर्देश" }, "maxLength": 1000 }
       ]
     },
     {
       "key": "arrival",
-      "title": { "en": "Reached site" },
+      "title": { "en": "Reached site", "hi": "मौके पर पहुँचे" },
       "stage": "arrival",
       "items": [
-        { "key": "reached_at", "type": "date-time", "label": { "en": "Reached the site at" }, "required": true, "notInFuture": true },
+        { "key": "reached_at", "type": "date-time", "label": { "en": "Reached the site at", "hi": "मौके पर पहुँचने का समय" }, "required": true, "notInFuture": true },
         {
           "key": "site_location",
           "type": "point",
-          "label": { "en": "Where the team is standing" },
+          "label": { "en": "Where the team is standing", "hi": "दल का वर्तमान स्थान" },
           "required": true,
           "maxAccuracyMetres": 50
         },
         {
           "key": "fire_found",
           "type": "single-choice",
-          "label": { "en": "Was there a fire?" },
+          "label": { "en": "Was there a fire?", "hi": "क्या आग लगी थी?" },
           "required": true,
           "choices": [
-            { "key": "yes", "label": { "en": "Yes, at the alert location" } },
-            { "key": "elsewhere", "label": { "en": "Yes, but somewhere else nearby" } },
-            { "key": "no", "label": { "en": "No fire found" } }
+            { "key": "yes", "label": { "en": "Yes, at the alert location", "hi": "हाँ, अलर्ट वाले स्थान पर" } },
+            { "key": "elsewhere", "label": { "en": "Yes, but somewhere else nearby", "hi": "हाँ, लेकिन पास में किसी दूसरी जगह" } },
+            { "key": "no", "label": { "en": "No fire found", "hi": "आग नहीं मिली" } }
           ]
         },
         {
           "key": "travel_hours",
           "type": "calculated",
-          "label": { "en": "Hours to reach the site" },
+          "label": { "en": "Hours to reach the site", "hi": "मौके तक पहुँचने में लगे घंटे" },
           "unit": "h",
           "decimals": 1,
           "calculate": { "op": "hours-between", "start": "dispatched_at", "end": "reached_at" }
@@ -102,8 +101,8 @@
   ],
   "layout": {
     "pages": [
-      { "key": "send", "title": { "en": "Send a team" }, "sections": ["alert", "dispatch"] },
-      { "key": "arrive", "title": { "en": "On site" }, "sections": ["arrival"] }
+      { "key": "send", "title": { "en": "Send a team", "hi": "दल भेजें" }, "sections": ["alert", "dispatch"] },
+      { "key": "arrive", "title": { "en": "On site", "hi": "मौके पर" }, "sections": ["arrival"] }
     ],
     "items": [
       { "item": "alert", "collapsed": true },

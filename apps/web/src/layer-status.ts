@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmBadge } from '@spartan-ng/helm/badge';
 import { FieldErrorSummary } from './ui/field-error-summary';
@@ -21,6 +22,7 @@ const states = {
   template: `<fimra-status-badge class="mx-0!" [icon]="badge().icon" [label]="badge().label" />`
 })
 export class LayerStatusBadge {
+  protected readonly msg = translate;
   readonly status = input<LayerStatus>();
   readonly blocked = input(false);
   readonly readFailed = input(false);
@@ -30,8 +32,8 @@ export class LayerStatusBadge {
   protected readonly badge = computed(() => {
     const status = this.status();
     const published = this.alreadyPublished() && status !== 'published';
-    const [icon, label] = this.blocked() ? ['overdue', 'Needs a corrected file'] as const :
-      status ? states[status] : published ? states.published : ['draft', 'Not uploaded'] as const;
+    const [icon, label] = this.blocked() ? ['overdue', translate('Needs a corrected file')] as const :
+      status ? states[status] : published ? states.published : ['draft', translate('Not uploaded')] as const;
     const text = status === 'ready' && !this.blocked() ? this.readyLabel() : label;
     return {
       icon: this.readFailed() ? 'overdue' as const : icon,
@@ -74,11 +76,11 @@ const guidance: Record<string, string> = {
   host: { class: 'grid gap-3' },
   template: `
     @if (summary()) {
-      <fimra-field-error-summary heading="Layer problems to fix" [errors]="blockers()" />
+      <fimra-field-error-summary [heading]=" msg('Layer problems to fix') " [errors]="blockers()" />
     }
     @if (needsReplacement()) {
       <p [id]="idPrefix() + '-repair'" class="font-medium text-danger">
-        Correct these problems in the source file or upload settings, then choose and upload a replacement.
+        {{ msg('Correct these problems in the source file or upload settings, then choose and upload a replacement.') }}
       </p>
     }
     <ng-content select="[layerRepairAction]" />
@@ -90,9 +92,9 @@ const guidance: Record<string, string> = {
             [class.border-s-danger]="item.problem.blocksPublish" [class.border-s-4]="item.problem.blocksPublish">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
               @if (item.problem.blocksPublish) {
-                <span hlmBadge variant="destructive">Blocks publishing</span>
+                <span hlmBadge variant="destructive">{{ msg('Blocks publishing') }}</span>
               } @else {
-                <span hlmBadge variant="outline">Review</span>
+                <span hlmBadge variant="outline">{{ msg('Review') }}</span>
               }
               @if (item.problem.featureRef) { <span class="text-sm text-muted-foreground">{{ item.problem.featureRef }}</span> }
             </div>
@@ -106,12 +108,13 @@ const guidance: Record<string, string> = {
     }
     @if (!summary() && reviewCount(); as count) {
       <p class="text-sm text-muted-foreground">
-        {{ count }} {{ count === 1 ? 'item' : 'items' }} to review that do not block publishing.
+        {{ msg('{0} {1} to review that do not block publishing.', [count, count === 1 ? 'item' : 'items']) }}
       </p>
     }
   `
 })
 export class LayerChecks {
+  protected readonly msg = translate;
   readonly idPrefix = input.required<string>();
   readonly problems = input.required<readonly LayerProblem[]>();
   readonly failed = input(false);

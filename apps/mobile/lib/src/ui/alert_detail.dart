@@ -9,7 +9,9 @@ import '../api/models.dart';
 import '../auth/pkce.dart';
 import '../data/field_store.dart';
 import '../device/device_store.dart';
+import '../forms/answers.dart';
 import '../forms/report_form.dart';
+import '../l10n/field_language.dart';
 import '../theme/app_theme.dart';
 import '../theme/status_icons.dart';
 import 'alert_map.dart';
@@ -31,18 +33,23 @@ Future<({double latitude, double longitude})> deviceLocation() async {
 
 Future<void> ensureLocationPermission() async {
   if (!await Geolocator.isLocationServiceEnabled()) {
-    throw const LocationProblem('Location is switched off. Switch it on and try again.');
+    throw LocationProblem.serviceOff;
   }
   var permission = await Geolocator.checkPermission();
   if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
   if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-    throw const LocationProblem('Location access is off. Allow location access and try again.');
+    throw LocationProblem.permissionDenied;
   }
 }
 
-class LocationProblem implements Exception {
-  const LocationProblem(this.message);
-  final String message;
+enum LocationProblem implements Exception {
+  serviceOff,
+  permissionDenied;
+
+  String message(BuildContext context) => switch (this) {
+    serviceOff => fieldText(context).locationIsSwitchedOffSwitch,
+    permissionDenied => fieldText(context).locationAccessIsOffAllow,
+  };
 }
 
 /// Details of one alert, its timeline and the steps the user may take.
@@ -108,7 +115,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
       if (mounted) {
         setState(() {
           _reportData = null;
-          _reportsProblem = error.message;
+          _reportsProblem = fieldProblem(context, error.message);
         });
       }
     }
@@ -128,7 +135,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
       await _openForm(assignment, canSend: canSend, fromStep: fromStep, move: move, draft: draft, reachedAt: reachedAt);
     } on Exception {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the report.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fieldText(context).couldNotOpenTheReport)));
       }
     } finally {
       _formOpen = false;
@@ -245,7 +252,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     );
     if (result == true && mounted) {
       _changed = true;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report saved to the outbox.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(fieldText(context).reportSavedToSendLater)));
     }
   }
 
@@ -297,19 +304,19 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                Text(workflowName(context, title), style: Theme.of(context).textTheme.titleSmall),
                 ReportDelivery(item: saved, sent: sent),
               ],
             ),
           ),
         );
       } else if (canDraft && _problem == null) {
-        final name = title == 'First report' ? 'first report' : title;
+        final name = title == 'First report' ? fieldText(context).firstReportActionName : workflowName(context, title);
         final buttonLabel = draft != null
-            ? 'Resume $name draft'
+            ? fieldText(context).resumeDraft(name)
             : canSend
-            ? 'File $name'
-            : 'Start $name draft';
+            ? fieldText(context).startReport(name)
+            : fieldText(context).startDraft(name);
         void open() => _fill(
           assignment,
           canSend: canSend,
@@ -339,7 +346,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
           if (reportActions.isNotEmpty || (!needsCurrentReport && nextMoves.isNotEmpty))
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Next action', style: text.titleMedium),
+              child: Text(fieldText(context).nextAction, style: text.titleMedium),
             ),
           ...reportActions,
           if (!needsCurrentReport)
@@ -347,10 +354,10 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
               FilledButton.icon(
                 onPressed: () => _take(move, current),
                 icon: Icon(move.locationRequired ? Icons.my_location : FimraStatusIcon.step),
-                label: Text(_actionLabel(move)),
+                label: Text(_actionLabel(context, move)),
               ),
           if (moves.isEmpty && history != null && reportActions.isEmpty && pending.isEmpty)
-            const Text('There are no steps you can take on this alert.'),
+            Text(fieldText(context).thereAreNoStepsYou),
         ],
         const SizedBox(height: 8),
         _mapButton(),
@@ -376,25 +383,29 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                 context,
               ).push(MaterialPageRoute<void>(builder: (_) => OutboxScreen(repo: widget.view.services.offline!))),
               icon: const Icon(Icons.outbox_outlined),
-              label: const Text('Report outbox'),
+              label: Text(fieldText(context).reportsWaitingToSend),
             ),
           ),
-        if (_reportsProblem != null) const StatusBadge(icon: Icons.error_outline, label: 'Could not load the forms'),
+        if (_reportsProblem != null)
+          StatusBadge(icon: Icons.error_outline, label: fieldText(context).couldNotLoadTheForms),
         ...otherReports,
         if (outcomes.isNotEmpty && _problem == null && _reportsProblem == null)
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Other outcomes'),
+            title: Text(fieldText(context).otherOutcomes),
             children: [
               for (final move in outcomes)
-                OutlinedButton(onPressed: () => _take(move, current), child: Text(_actionLabel(move))),
+                OutlinedButton(onPressed: () => _take(move, current), child: Text(_actionLabel(context, move))),
             ],
           ),
         for (final report in objects(_reportData?['submissions']))
           if (object(report['approval'])['decision'] case final String decision)
             StatusBadge(
               icon: decision == 'approved' ? Icons.check_circle_outline : Icons.assignment_return_outlined,
-              label: 'Report version ${report['version']} · ${decision == 'approved' ? 'Approved' : 'Returned'}',
+              label: fieldText(context).reportVersion(
+                (report['version']).toString(),
+                decision == 'approved' ? fieldText(context).approved : fieldText(context).returned,
+              ),
             ),
       ],
     );
@@ -406,13 +417,13 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
       onPressed: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('Alert map')),
+            appBar: AppBar(title: Text(fieldText(context).alertMap)),
             body: AlertMapView(view: widget.view, focus: _alert, onOpen: (_) {}),
           ),
         ),
       ),
       icon: const Icon(Icons.map_outlined),
-      label: const Text('Show on map'),
+      label: Text(fieldText(context).showOnMap),
     ),
   );
 
@@ -455,8 +466,8 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
     if (saved != true || !mounted) return;
     _changed = true;
     final message = widget.view.services.offline == null
-        ? '${move.label} recorded.'
-        : '${move.label} saved to the outbox.';
+        ? fieldText(context).stepRecorded(workflowName(context, move.label))
+        : fieldText(context).stepSavedToSendLater(workflowName(context, move.label));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     await _load();
   }
@@ -471,7 +482,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
         if (!didPop) Navigator.of(context).pop(_changed);
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Alert details')),
+        appBar: AppBar(title: Text(fieldText(context).alertDetails)),
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
@@ -479,16 +490,22 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
             children: [
               Semantics(
                 headingLevel: 1,
-                child: Text('${_alert.placeName(widget.view.map)} · Alert #${_alert.id}', style: text.titleLarge),
+                child: Text(
+                  fieldText(context).alertAtPlace(_alert.placeName(widget.view.map), _alert.id),
+                  style: text.titleLarge,
+                ),
               ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: [StatusBadge.step(_alert.stepLabel), if (_alert.overdue) StatusBadge.overdue()],
+                children: [
+                  StatusBadge.step(workflowName(context, _alert.stepLabel)),
+                  if (_alert.overdue) StatusBadge.overdue(context),
+                ],
               ),
               const SizedBox(height: 8),
-              Text('Seen ${formatTime(_alert.observedAt)}'),
+              Text(fieldText(context).seenAt(formatTime(_alert.observedAt, context))),
               const SizedBox(height: 8),
               if (widget.view.services.offline case final repo?)
                 FieldSyncStatus(repo: repo, workspace: _slug, alert: _alert.id)
@@ -498,10 +515,10 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                   child: StatusBadge(
                     icon: _problem == null ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
                     label: _problem != null
-                        ? 'Could not connect'
+                        ? fieldText(context).couldNotConnect
                         : history == null
-                        ? 'Connecting'
-                        : 'Connected',
+                        ? fieldText(context).connecting
+                        : fieldText(context).connected,
                   ),
                 ),
               const SizedBox(height: 8),
@@ -512,14 +529,14 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
               if (_problem != null)
                 MessageView(
                   icon: Icons.cloud_off_outlined,
-                  title: 'Could not load the timeline',
-                  body: 'Check your connection and try again.',
-                  action: FilledButton(onPressed: _load, child: const Text('Retry')),
+                  title: fieldText(context).couldNotLoadTheTimeline,
+                  body: fieldText(context).checkYourConnectionAndTry,
+                  action: FilledButton(onPressed: _load, child: Text(fieldText(context).retry)),
                 )
               else if (history == null)
                 const Center(child: CircularProgressIndicator())
               else ...[
-                Text('Timeline', style: text.titleMedium),
+                Text(fieldText(context).timeline, style: text.titleMedium),
                 const SizedBox(height: 8),
                 for (final entry in history.entries.reversed) _TimelineEntry(entry),
               ],
@@ -539,20 +556,32 @@ class _Facts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <(String, String)>[
-      ('Forest class', alert.forest?.label ?? alert.forestClass),
+      (fieldText(context).forestClass, forestName(context, alert.forest, alert.forestClass)),
       for (final level in map.placeOrder(alert.placeHierarchy))
-        if (alert.places[level.slug] case final place?) (level.label, '${place.name} (${place.code})'),
-      ('Location', '${alert.latitude.toStringAsFixed(5)}, ${alert.longitude.toStringAsFixed(5)}'),
-      if (alert.source case final source?) ('Source', sourceLabel(source)),
-      if (alert.product case final product?) ('Product', productLabel(product)),
-      if (alert.confidence case final confidence?) ('Confidence', confidenceLabel(confidence)),
-      if (alert.frpMw case final power?) ('Fire radiative power', '${power.toStringAsFixed(1)} megawatts'),
-      if (alert.alertQueue != AlertQueue.unit) ('Queue', alert.alertQueue?.label ?? alert.queue),
+        if (alert.places[level.slug] case final place?)
+          (
+            formText(level.labels, Localizations.localeOf(context).toLanguageTag()).isEmpty
+                ? level.slug
+                : formText(level.labels, Localizations.localeOf(context).toLanguageTag()),
+            '${place.name} (${place.code})',
+          ),
+      (fieldText(context).location, '${alert.latitude.toStringAsFixed(5)}, ${alert.longitude.toStringAsFixed(5)}'),
+      if (alert.source case final source?) (fieldText(context).source, sourceLabel(context, source)),
+      if (alert.product case final product?) (fieldText(context).product, productLabel(context, product)),
+      if (alert.confidence case final confidence?)
+        (fieldText(context).confidence, confidenceLabel(confidence, context)),
+      if (alert.frpMw case final power?)
+        (
+          fieldText(context).fireStrength,
+          fieldText(context).megawatts(formatNumber(context, power, fractionDigits: 1)),
+        ),
+      if (alert.alertQueue != AlertQueue.unit)
+        (fieldText(context).queue, queueName(context, alert.alertQueue, alert.queue)),
     ];
     final text = Theme.of(context).textTheme;
     return Card(
       child: ExpansionTile(
-        title: const Text('Details'),
+        title: Text(fieldText(context).details),
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -590,13 +619,13 @@ class _Facts extends StatelessWidget {
   }
 }
 
-String _actionLabel(WorkflowMove move) => switch (move.step) {
-  'acknowledged' => 'Acknowledge',
-  'reached_site' => 'Mark reached',
-  'team_sent' => 'Mark team sent',
-  'controlled' => 'Mark controlled',
-  'extinguished' => 'Mark extinguished',
-  _ => move.label,
+String _actionLabel(BuildContext context, WorkflowMove move) => switch (move.step) {
+  'acknowledged' => fieldText(context).acknowledgeAlert,
+  'reached_site' => fieldText(context).markReached,
+  'team_sent' => fieldText(context).markTeamSent,
+  'controlled' => fieldText(context).markControlled,
+  'extinguished' => fieldText(context).markExtinguished,
+  _ => workflowName(context, move.label),
 };
 
 class _TimelineEntry extends StatelessWidget {
@@ -608,9 +637,9 @@ class _TimelineEntry extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = FimraColours.of(context);
     final details = [
-      formatTime(entry.at),
-      entry.actor ?? 'System',
-      if (entry.latitude != null) 'with location',
+      formatTime(entry.at, context),
+      entry.actor ?? fieldText(context).system,
+      if (entry.latitude != null) fieldText(context).withLocation,
     ].join(' · ');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -623,11 +652,12 @@ class _TimelineEntry extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.label, style: text.titleSmall),
+                Text(workflowName(context, entry.label), style: text.titleSmall),
                 Text(details, style: text.bodySmall),
                 if (entry.note.isNotEmpty) Text(entry.note, style: text.bodyMedium),
-                if (entry.reason.isNotEmpty) Text('Location exception: ${entry.reason}', style: text.bodyMedium),
-                if (entry.reportPending) StatusBadge.step('Report pending'),
+                if (entry.reason.isNotEmpty)
+                  Text(fieldText(context).locationExceptionReason(entry.reason), style: text.bodyMedium),
+                if (entry.reportPending) StatusBadge.step(fieldText(context).waitingForAReport),
               ],
             ),
           ),
@@ -677,7 +707,7 @@ class _StepSheetState extends State<StepSheet> {
   Future<void> _save() async {
     final move = widget.move;
     if (_exception && _reason.text.trim().isEmpty) {
-      setState(() => _problem = 'Give a reason for recording this step without your location.');
+      setState(() => _problem = fieldText(context).giveAReasonForRecording);
       return;
     }
     setState(() {
@@ -706,13 +736,13 @@ class _StepSheetState extends State<StepSheet> {
       }
       if (mounted) Navigator.of(context).pop(true);
     } on LocationProblem catch (error) {
-      if (mounted) setState(() => _problem = error.message);
+      if (mounted) setState(() => _problem = error.message(context));
     } on ApiException catch (error) {
       if (mounted) setState(() => _problem = error.message);
     } on StateError {
-      if (mounted) setState(() => _problem = 'Could not save this step on the phone.');
+      if (mounted) setState(() => _problem = fieldText(context).couldNotSaveThisStep);
     } on Exception {
-      if (mounted) setState(() => _problem = 'Could not save this step. Check your location and try again.');
+      if (mounted) setState(() => _problem = fieldText(context).couldNotSaveThisStep2);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -730,14 +760,14 @@ class _StepSheetState extends State<StepSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(move.label, style: text.titleLarge),
+              Text(workflowName(context, move.label), style: text.titleLarge),
               const SizedBox(height: 8),
               Text(
                 move.terminal
-                    ? 'This ends the workflow for this alert.'
+                    ? fieldText(context).thisEndsTheWorkflowFor
                     : move.locationRequired
-                    ? 'Your current location is saved with this step. You need to be near the fire.'
-                    : 'This is saved with your name and the time.',
+                    ? fieldText(context).yourCurrentLocationIsSaved
+                    : fieldText(context).thisIsSavedWithYour,
                 style: text.bodyMedium,
               ),
               const SizedBox(height: 16),
@@ -745,7 +775,7 @@ class _StepSheetState extends State<StepSheet> {
                 controller: _note,
                 maxLines: 3,
                 minLines: 1,
-                decoration: const InputDecoration(labelText: 'Note (optional)'),
+                decoration: InputDecoration(labelText: fieldText(context).noteOptional),
               ),
               if (move.locationRequired && move.canOverride) ...[
                 const SizedBox(height: 8),
@@ -753,13 +783,13 @@ class _StepSheetState extends State<StepSheet> {
                   contentPadding: EdgeInsets.zero,
                   value: _exception,
                   onChanged: _busy ? null : (value) => setState(() => _exception = value ?? false),
-                  title: const Text('Record without my location'),
-                  subtitle: const Text('For supervising officers. A reason is required.'),
+                  title: Text(fieldText(context).recordWithoutMyLocation),
+                  subtitle: Text(fieldText(context).forSupervisingOfficersAReason),
                 ),
                 if (_exception)
                   TextField(
                     controller: _reason,
-                    decoration: const InputDecoration(labelText: 'Reason'),
+                    decoration: InputDecoration(labelText: fieldText(context).reason),
                   ),
               ],
               if (_problem != null) ...[
@@ -773,11 +803,16 @@ class _StepSheetState extends State<StepSheet> {
                 ),
               ],
               const SizedBox(height: 16),
-              if (widget.view.services.offline != null)
-                const Text('The server will confirm this step when it receives it.'),
-              FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Saving' : 'Save')),
+              if (widget.view.services.offline != null) Text(fieldText(context).theServerWillConfirmThis),
+              FilledButton(
+                onPressed: _busy ? null : _save,
+                child: Text(_busy ? fieldText(context).saving : fieldText(context).save),
+              ),
               const SizedBox(height: 8),
-              TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+              TextButton(
+                onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+                child: Text(fieldText(context).cancel),
+              ),
             ],
           ),
         ),

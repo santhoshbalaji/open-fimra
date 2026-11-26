@@ -1,3 +1,4 @@
+import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
@@ -21,7 +22,7 @@ import { DataState, StateRegion } from './ui/state-region';
 import { LayerChecks, LayerProblem, LayerStatus, LayerStatusBadge } from './layer-status';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
-import { defaultWorkspaceFormat } from './workspace-format';
+import { workspaceFormat } from './workspace-format';
 import { Icon } from './ui/icon';
 
 export type StepKey = 'workspace' | 'hierarchy' | 'layers' | 'firms' | 'forms' | 'invitations' | 'finish';
@@ -78,6 +79,7 @@ export const roleLabels: Record<string, string> = {
   host: { class: 'block h-full overflow-auto max-md:scroll-pt-16 max-md:scroll-pb-16' }
 })
 export class SetupWizard implements OnInit {
+  protected readonly msg = translate;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly destroy = inject(DestroyRef);
@@ -92,7 +94,7 @@ export class SetupWizard implements OnInit {
   private readonly watches = new Map<string, Subscription>();
   readonly finished = output<void>();
   readonly openLayers = output<void>();
-  readonly dateTime = (value: string) => defaultWorkspaceFormat.dateTime(new Date(value));
+  readonly dateTime = (value: string) => workspaceFormat.dateTime(new Date(value));
   readonly steps = steps;
   readonly roleLabels = roleLabels;
   readonly roles = Object.keys(roleLabels);
@@ -178,11 +180,11 @@ export class SetupWizard implements OnInit {
   }
 
   statusLabel(key: StepKey): string {
-    return { done: 'Done', skipped: 'Skipped', todo: 'To do' }[this.status(key)];
+    return { done: translate('Done'), skipped: translate('Skipped'), todo: translate('To do') }[this.status(key)];
   }
 
   load(): void {
-    this.setupLoad.set({ kind: 'loading', heading: 'Loading setup' });
+    this.setupLoad.set({ kind: 'loading', heading: translate('Loading setup') });
     this.http.get<SetupState>(this.base + '/setup').pipe(takeUntilDestroyed(this.destroy)).subscribe({
       next: state => {
         this.apply(state);
@@ -193,7 +195,7 @@ export class SetupWizard implements OnInit {
       error: error => {
         const detail = this.failureMessage(error);
         this.setupLoad.set(error.status === 403 ?
-          { kind: 'forbidden', detail } : { kind: 'error', heading: 'Could not load setup', detail });
+          { kind: 'forbidden', detail } : { kind: 'error', heading: translate('Could not load setup'), detail });
       }
     });
   }
@@ -242,7 +244,7 @@ export class SetupWizard implements OnInit {
     }));
     this.run(this.http.post<SetupState>(this.base + '/setup/hierarchy', { preset: this.presetSlug(), levels }), state => {
       this.apply(state);
-      this.next('Hierarchy saved.');
+      this.next(translate('Hierarchy saved.'));
     });
   }
 
@@ -276,7 +278,7 @@ export class SetupWizard implements OnInit {
   uploadLayer(layer: SetupLayer, input: HTMLInputElement): void {
     const file = input.files?.[0];
     if (!file) {
-      this.setLayerMessage(layer, 'Choose a file first.');
+      this.setLayerMessage(layer, translate('Choose a file first.'));
       input.focus();
       return;
     }
@@ -312,7 +314,7 @@ export class SetupWizard implements OnInit {
         if (preview.blocked) throw new HttpErrorResponse({ status: 409, error: { error: preview.blocked } });
         if (preview.brokenGrants.length) {
           throw new HttpErrorResponse({ status: 409, error: {
-            error: 'Publishing would remove role grants. Review it on the Layers screen.' } });
+            error: translate('Publishing would remove role grants. Review it on the Layers screen.') } });
         }
         return this.http.post(url + '/publish', { days: preview.days, grantConfirmation: '' });
       })
@@ -329,11 +331,11 @@ export class SetupWizard implements OnInit {
   }
 
   refreshLayers(): void {
-    this.layerRefresh.set({ kind: 'loading', heading: 'Refreshing the layer list' });
+    this.layerRefresh.set({ kind: 'loading', heading: translate('Refreshing the layer list') });
     this.http.get<SetupState>(this.base + '/setup').pipe(takeUntilDestroyed(this.destroy)).subscribe({
       next: state => { this.apply(state); this.layerRefresh.set({ kind: 'ready' }); },
       error: error => this.layerRefresh.set({
-        kind: 'error', heading: 'Could not refresh the layer list', detail: this.failureMessage(error)
+        kind: 'error', heading: translate('Could not refresh the layer list'), detail: this.failureMessage(error)
       })
     });
   }
@@ -364,11 +366,11 @@ export class SetupWizard implements OnInit {
   // Starter forms
 
   loadPack(): void {
-    this.packLoad.set({ kind: 'loading', heading: 'Loading starter forms' });
+    this.packLoad.set({ kind: 'loading', heading: translate('Loading starter forms') });
     this.http.get<StarterPack>(this.base + '/starter-pack').pipe(takeUntilDestroyed(this.destroy))
       .subscribe({
         next: pack => { this.pack.set(pack); this.packLoad.set({ kind: 'ready' }); },
-        error: error => this.packLoad.set({ kind: 'error', heading: 'Could not load starter forms', detail: this.failureMessage(error) })
+        error: error => this.packLoad.set({ kind: 'error', heading: translate('Could not load starter forms'), detail: this.failureMessage(error) })
       });
   }
 
@@ -376,25 +378,25 @@ export class SetupWizard implements OnInit {
     this.run(this.http.post<StarterPack>(this.base + '/starter-pack', {}), pack => {
       this.pack.set(pack);
       const kept = pack.forms.filter(form => form.status === 'present').length;
-      this.notice.set('The starter forms are on.' +
+      this.notice.set(translate('The starter forms are on.') +
         (kept ? ' Forms this workspace already had are left as they are.' : ''));
     });
   }
 
   packUse(form: PackForm): string {
     if (form.steps.length) return 'Filled in at ' + form.steps.map(step => workflowStepLabels[step] ?? step).join(' and ');
-    if (form.form === 'manual-fire-report') return 'Records a fire reported by another source and makes an alert';
-    return 'Kept on its own, not on a workflow step';
+    if (form.form === 'manual-fire-report') return translate('Records a fire reported by another source and makes an alert');
+    return translate('Kept on its own, not on a workflow step');
   }
 
   packStatus(form: PackForm): string {
-    return { added: 'Added', present: 'In this workspace', missing: 'Not added' }[form.status];
+    return { added: translate('Added'), present: translate('In this workspace'), missing: translate('Not added') }[form.status];
   }
 
   // Invitations
 
   loadInvitations(): void {
-    if (!this.units().length) this.invitationsLoad.set({ kind: 'loading', heading: 'Loading invitations and units' });
+    if (!this.units().length) this.invitationsLoad.set({ kind: 'loading', heading: translate('Loading invitations and units') });
     forkJoin({
       list: this.http.get<{ invitations: Invitation[] }>(this.base + '/invitations'),
       scope: this.units().length ? of({ units: this.units() }) : this.http.get<{ units: Unit[] }>(this.base + '/setup/units')
@@ -405,7 +407,7 @@ export class SetupWizard implements OnInit {
         this.invitationsLoad.set({ kind: 'ready' });
       },
       error: error => this.invitationsLoad.set({
-        kind: 'error', heading: 'Could not load invitations', detail: this.failureMessage(error), keepContent: !!this.units().length
+        kind: 'error', heading: translate('Could not load invitations'), detail: this.failureMessage(error), keepContent: !!this.units().length
       })
     });
   }
@@ -427,14 +429,14 @@ export class SetupWizard implements OnInit {
     const body = { email: String(data.get('email') ?? '').trim(), role: this.inviteRole(), unitPath: this.inviteUnit() };
     this.run(this.http.post(this.base + '/invitations', body), () => {
       (form.querySelector('[name=email]') as HTMLInputElement).value = '';
-      this.notice.set('Invitation saved.');
+      this.notice.set(translate('Invitation saved.'));
       this.loadInvitations();
     });
   }
 
   revoke(item: Invitation): void {
     this.run(this.http.delete<{ invitations: Invitation[] }>(this.base + '/invitations/' + encodeURIComponent(item.id)),
-      list => { this.invitations.set(list.invitations); this.notice.set('Invitation revoked.'); });
+      list => { this.invitations.set(list.invitations); this.notice.set(translate('Invitation revoked.')); });
   }
 
   // Steps
@@ -513,6 +515,6 @@ export class SetupWizard implements OnInit {
 
   private failureMessage(error: HttpErrorResponse): string {
     if (error.status === 401) this.auth.sessionEnded();
-    return typeof error.error?.error === 'string' ? error.error.error : 'The setup request failed. Try again.';
+    return typeof error.error?.error === 'string' ? error.error.error : translate('The setup request failed. Try again.');
   }
 }

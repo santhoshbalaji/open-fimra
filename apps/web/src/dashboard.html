@@ -1,10 +1,10 @@
-<section class="mx-auto grid max-w-7xl min-w-0 content-start gap-4 p-4 sm:p-6 lg:p-8" aria-label="Control-room dashboard">
-  <fimra-page-header title="Control-room dashboard" [scope]="'Jurisdiction: ' + scope()">
+<section class="mx-auto grid max-w-7xl min-w-0 content-start gap-4 p-4 sm:p-6 lg:p-8" [attr.aria-label]=" msg('Control-room dashboard') ">
+  <fimra-page-header [title]=" msg('Control-room dashboard') " [scope]="'Jurisdiction: ' + scope()">
     <p pageFreshness class="mt-1 text-body text-text-secondary">
       @if (lastUpdate(); as updated) {
-        Last successful update <time [attr.datetime]="updated.toISOString()">{{ format.dateTime(updated) }}</time>
+        {{ msg('Last successful update') }} <time [attr.datetime]="updated.toISOString()">{{ format.dateTime(updated) }}</time>
       } @else {
-        Last successful update pending
+        {{ msg('Last successful update pending') }}
       }
     </p>
   </fimra-page-header>
@@ -34,8 +34,8 @@
     @if (summary(); as data) {
       @if (lastUpdate()) {
         <div class="grid min-w-0 gap-4">
-          <section class="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Dashboard totals">
-            <fimra-stat-tile label="Detections today" [value]="todayTotal()" scope="Since midnight, India Standard Time" />
+          <section class="grid grid-cols-2 gap-3 lg:grid-cols-5" [attr.aria-label]=" msg('Dashboard totals') ">
+            <fimra-stat-tile [label]=" msg('Detections today') " [value]="todayTotal()" scope="Since midnight, India Standard Time" />
             @for (tile of alertTiles; track tile.key) {
               <fimra-stat-tile [label]="alertGroupLabels[tile.group]" [value]="tile.group === 'overdue' ? (data.backlogOverdue ?? data.overdue) : data[tile.key]"
                 [scope]="tile.group === 'overdue' ? 'All assigned units · Any observation date' : ('Alerts observed · ' + period())"
@@ -48,17 +48,17 @@
 
           <section hlmCard aria-labelledby="classes-title">
             <hlm-card-header>
-              <h2 hlmCardTitle id="classes-title">Detections by forest class</h2>
+              <h2 hlmCardTitle id="classes-title">{{ msg('Detections by forest class') }}</h2>
             </hlm-card-header>
             <div hlmCardContent class="grid min-w-0 gap-4">
               @if (!detectionTotal() || coverage()) {
                 <div class="rounded-control border border-divider bg-background p-3 text-body">
-                  @if (!detectionTotal()) { <p class="font-semibold">Zero detections recorded in this window</p> }
+                  @if (!detectionTotal()) { <p class="font-semibold">{{ msg('Zero detections recorded in this window') }}</p> }
                   @if (coverage(); as detail) { <p class="text-text-secondary">{{ detail }}</p> }
                 </div>
               }
               @if (!canManageFeeds()) {
-                <p class="text-label text-text-secondary">Counts reflect the observations recorded so far.</p>
+                <p class="text-label text-text-secondary">{{ msg('Counts reflect the observations recorded so far.') }}</p>
               }
               @let showChart = !!detectionTotal() && !filters.lowBandwidth();
               <div class="grid min-w-0 items-start gap-4" [class.md:grid-cols-2]="showChart">
@@ -68,23 +68,23 @@
                   }
                 }
                 <table hlmTable class="w-full table-fixed whitespace-normal">
-                  <caption class="sr-only">Detection counts. {{ scope() }}</caption>
+                  <caption class="sr-only">{{ msg('Detection counts. {0}', [scope()]) }}</caption>
                   <thead hlmTHead><tr hlmTr>
-                    <th hlmTh scope="col">Forest class</th>
-                    <th hlmTh scope="col" class="text-end whitespace-normal">Selected period</th>
-                    <th hlmTh scope="col" class="text-end whitespace-normal">Today<span class="sr-only">, since midnight in India Standard Time</span></th>
+                    <th hlmTh scope="col">{{ msg('Forest class') }}</th>
+                    <th hlmTh scope="col" class="text-end whitespace-normal">{{ msg('Selected period') }}</th>
+                    <th hlmTh scope="col" class="text-end whitespace-normal">{{ msg('Today') }}<span class="sr-only">{{ msg(', since midnight in India Standard Time') }}</span></th>
                   </tr></thead>
                   <tbody hlmTBody>
                     @for (row of detectionRows(); track row.id) {
                       <tr hlmTr>
-                        <th hlmTh scope="row" class="font-normal whitespace-normal wrap-anywhere">{{ row.label }}</th>
+                        <th hlmTh scope="row" class="font-normal whitespace-normal wrap-anywhere">{{ msg(row.label) }}</th>
                         <td hlmTd class="text-end tabular-nums">{{ format.number(row.count) }}</td>
                         <td hlmTd class="text-end tabular-nums">{{ format.number(row.today) }}</td>
                       </tr>
                     }
                   </tbody>
                   <tfoot hlmTFoot><tr hlmTr>
-                    <th hlmTh scope="row" class="whitespace-normal">Total detections</th>
+                    <th hlmTh scope="row" class="whitespace-normal">{{ msg('Total detections') }}</th>
                     <td hlmTd class="text-end font-semibold tabular-nums">{{ format.number(detectionTotal()) }}</td>
                     <td hlmTd class="text-end font-semibold tabular-nums">{{ format.number(todayTotal()) }}</td>
                   </tr></tfoot>
@@ -96,8 +96,8 @@
           @if (canManageFeeds() && (data.feedHealth || data.feedHealthUnavailable)) {
             <section hlmCard aria-labelledby="feeds-title">
               <hlm-card-header>
-                <h2 hlmCardTitle id="feeds-title" #feedHeading tabindex="-1">Feed health</h2>
-                <p hlmCardDescription>Live satellite feeds for {{ workspaceName() }} · Current status</p>
+                <h2 hlmCardTitle id="feeds-title" #feedHeading tabindex="-1">{{ msg('Feed health') }}</h2>
+                <p hlmCardDescription>{{ msg('Live satellite feeds for {0} · Current status', [workspaceName()]) }}</p>
               </hlm-card-header>
               <div hlmCardContent>
                 <fimra-state-region [state]="feedState()" (retry)="retry()">
@@ -108,12 +108,12 @@
                           <p class="font-medium">{{ sourceLabel(feed.source) }} · {{ feed.product }}</p>
                           <p class="text-body text-text-secondary">
                             @if (feed.latestObservationAt; as observed) {
-                              Latest observation <time [attr.datetime]="observed">{{ feedDate(observed) }}</time>
-                            } @else { No observations received }
+                              {{ msg('Latest observation') }} <time [attr.datetime]="observed">{{ feedDate(observed) }}</time>
+                            } @else { {{ msg('No observations received') }} }
                             <span aria-hidden="true"> · </span>
                             @if (feed.lastSuccessAt; as success) {
-                              Last successful poll <time [attr.datetime]="success">{{ feedDate(success) }}</time>
-                            } @else { No successful poll yet }
+                              {{ msg('Last successful poll') }} <time [attr.datetime]="success">{{ feedDate(success) }}</time>
+                            } @else { {{ msg('No successful poll yet') }} }
                           </p>
                         </div>
                         <fimra-status-badge class="mx-0!" [icon]="feed.status" [label]="feedLabels[feed.status]" />
@@ -127,8 +127,8 @@
 
           <section hlmCard aria-labelledby="outcomes-title">
             <hlm-card-header>
-              <h2 hlmCardTitle id="outcomes-title">Recorded fire outcomes</h2>
-              <p hlmCardDescription>Alerts currently marked controlled or extinguished</p>
+              <h2 hlmCardTitle id="outcomes-title">{{ msg('Recorded fire outcomes') }}</h2>
+              <p hlmCardDescription>{{ msg('Alerts currently marked controlled or extinguished') }}</p>
             </hlm-card-header>
             <div hlmCardContent class="grid gap-3 sm:grid-cols-2">
               @for (step of outcomeSteps; track step) {
@@ -141,8 +141,8 @@
 
           <section hlmCard aria-labelledby="routed-title">
             <hlm-card-header>
-              <h2 hlmCardTitle id="routed-title">Routed alerts</h2>
-              <p hlmCardDescription>All alerts by queue and current step</p>
+              <h2 hlmCardTitle id="routed-title">{{ msg('Routed alerts') }}</h2>
+              <p hlmCardDescription>{{ msg('All alerts by queue and current step') }}</p>
             </hlm-card-header>
             <div hlmCardContent class="grid gap-4">
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -153,7 +153,7 @@
                 }
               </div>
               @if (otherSteps().length) {
-                <h3 class="font-semibold">Other current steps</h3>
+                <h3 class="font-semibold">{{ msg('Other current steps') }}</h3>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   @for (step of otherSteps(); track step) {
                     <fimra-stat-tile [label]="stepLabel(step)" [value]="data.steps[step]" [scope]="period()"
@@ -166,16 +166,16 @@
 
           <section hlmCard aria-labelledby="response-title">
             <hlm-card-header>
-              <h2 hlmCardTitle id="response-title">Response times</h2>
-              <p hlmCardDescription>From routing to first reaching each step</p>
+              <h2 hlmCardTitle id="response-title">{{ msg('Response times') }}</h2>
+              <p hlmCardDescription>{{ msg('From routing to first reaching each step') }}</p>
             </hlm-card-header>
             <div hlmCardContent class="grid grid-cols-1 gap-3 lg:grid-cols-3">
               @for (step of milestones; track step.key) {
                 <section class="grid grid-cols-2 gap-2" [attr.aria-labelledby]="'response-' + step.key">
-                  <h3 class="col-span-2 font-semibold" [id]="'response-' + step.key">{{ step.label }}</h3>
-                  <fimra-stat-tile label="Median" [value]="duration(data.responseSeconds[step.key]?.median)"
+                  <h3 class="col-span-2 font-semibold" [id]="'response-' + step.key">{{ msg(step.label) }}</h3>
+                  <fimra-stat-tile [label]=" msg('Median') " [value]="duration(data.responseSeconds[step.key]?.median)"
                     [scope]="period()" />
-                  <fimra-stat-tile label="90th percentile" [value]="duration(data.responseSeconds[step.key]?.p90)"
+                  <fimra-stat-tile [label]=" msg('90th percentile') " [value]="duration(data.responseSeconds[step.key]?.p90)"
                     [scope]="period()" />
                 </section>
               }

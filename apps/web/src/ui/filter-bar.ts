@@ -1,3 +1,4 @@
+import { translate } from '../language';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
 import {
@@ -7,7 +8,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { map } from 'rxjs';
-import { defaultWorkspaceFormat } from '../workspace-format';
+import { workspaceFormat } from '../workspace-format';
 import { Icon } from './icon';
 import { LiveStatus } from './live-status';
 import { SidePanel } from './side-panel';
@@ -19,6 +20,7 @@ export interface ActiveFilter {
 
 @Directive({ selector: 'ng-template[fimraFilterControls]' })
 export class FilterControls {
+  protected readonly msg = translate;
   readonly template = inject(TemplateRef);
 }
 
@@ -37,14 +39,14 @@ export class FilterControls {
             <button #edit type="button" hlmBtn variant="outline" aria-haspopup="dialog"
               [attr.aria-expanded]="panel.open()" [attr.aria-description]="filters().length ? activeLabel() : null"
               (click)="panel.show(edit, summary)">
-              Filters
+              {{ msg('Filters') }}
               @if (filters().length) { <span class="filter-count" aria-hidden="true">{{ filters().length }}</span> }
             </button>
-            <fimra-side-panel #panel="fimraSidePanel" heading="Filters" [sheetOnly]="true">
+            <fimra-side-panel #panel="fimraSidePanel" [heading]=" msg('Filters') " [sheetOnly]="true">
               @if (panel.open()) {
                 <div class="filter-bar-controls filter-sheet-controls">
                   <ng-container [ngTemplateOutlet]="controls.template" />
-                  <button type="button" hlmBtn variant="outline" class="justify-self-start" (click)="panel.close()">Done</button>
+                  <button type="button" hlmBtn variant="outline" class="justify-self-start" (click)="panel.close()">{{ msg('Done') }}</button>
                 </div>
               }
             </fimra-side-panel>
@@ -58,24 +60,25 @@ export class FilterControls {
         [class.mt-2]="controls() && filters().length"
         class="flex flex-wrap items-center gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-focus">
         @if (filters().length) {
-          <ul role="list" aria-label="Active filters" class="flex min-w-0 flex-wrap gap-2">
+          <ul role="list" [attr.aria-label]=" msg('Active filters') " class="flex min-w-0 flex-wrap gap-2">
             @for (filter of filters(); track filter.id) {
               <li class="min-w-0">
                 <button #chip type="button" class="filter-bar-chip" (click)="removeFilter(filter.id, $index, summary)">
-                  <span class="sr-only">Remove filter </span>
+                  <span class="sr-only">{{ msg('Remove filter') }} </span>
                   <span class="min-w-0 wrap-anywhere">{{ filter.label }}</span>
                   <svg fimraIcon="circle-x" aria-hidden="true" class="size-4 shrink-0"></svg>
                 </button>
               </li>
             }
           </ul>
-          <button type="button" hlmBtn variant="ghost" (click)="focusEditor(summary); clearAll.emit()">Clear all filters</button>
+          <button type="button" hlmBtn variant="ghost" (click)="focusEditor(summary); clearAll.emit()">{{ msg('Clear all filters') }}</button>
         }
       </div>
     </div>
   `
 })
 export class FilterBar {
+  protected readonly msg = translate;
   readonly filters = input.required<readonly ActiveFilter[]>();
   readonly remove = output<string>();
   readonly clearAll = output<void>();
@@ -90,8 +93,8 @@ export class FilterBar {
 
   protected readonly activeLabel = computed(() => {
     const count = this.filters().length;
-    if (!count) return 'No active filters';
-    return count === 1 ? '1 active filter' : `${defaultWorkspaceFormat.number(count)} active filters`;
+    if (!count) return translate('No active filters');
+    return count === 1 ? translate('1 active filter') : translate('{0} active filters', [workspaceFormat.number(count)]);
   });
   protected readonly announcement = computed(() =>
     [this.activeLabel(), ...this.filters().map(filter => filter.label)].join('. '));

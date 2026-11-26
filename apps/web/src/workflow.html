@@ -1,52 +1,52 @@
 <fimra-state-region [state]="historyState()" (retry)="reload()">
   @if (history(); as data) {
     @if (data.moves.length) {
-      <h3>Next step</h3>
+      <h3>{{ msg('Next step') }}</h3>
       <div class="workflow-moves">
         @for (action of steps(); track action.step; let first = $first) {
           <button #stepButton hlmBtn type="button" [variant]="first ? 'primary' : 'outline'"
             [attr.aria-expanded]="move()?.step === action.step" [disabled]="busy() || loading() || loadError()"
-            (click)="choose(action, stepButton)">{{ action.label }}</button>
+            (click)="choose(action, stepButton)">{{ action.label === 'Acknowledged' ? msg('Acknowledge alert') : msg(action.label) }}</button>
         }
         @if (outcomes().length) {
           <button #closeButton hlmBtn type="button" variant="outline" [hlmDropdownMenuTrigger]="menu"
-            [disabled]="busy() || loading() || loadError()">Close {{ subject() }}…</button>
+            [disabled]="busy() || loading() || loadError()">{{ msg('Close {0}…', [subject()]) }}</button>
           <ng-template #menu><hlm-dropdown-menu>
             @for (action of outcomes(); track action.step) {
-              <button hlmDropdownMenuItem (triggered)="choose(action, closeButton)">{{ action.label }}</button>
+              <button hlmDropdownMenuItem (triggered)="choose(action, closeButton)">{{ action.label === 'Acknowledged' ? msg('Acknowledge alert') : msg(action.label) }}</button>
             }
           </hlm-dropdown-menu></ng-template>
         }
       </div>
     } @else if (!data.mergedInto) {
-      <p class="text-text-secondary">No next step available.</p>
+      <p class="text-text-secondary">{{ msg('No next step available.') }}</p>
     }
     @if (move(); as action) {
       <form class="workflow-step grid gap-2 rounded-control border border-border p-3 my-3"
         (keydown.escape)="cancel($event)" (submit)="$event.preventDefault(); save(note.value, reason.value, submit)">
-        <h3 #formTitle tabindex="-1">{{ action.terminal ? 'Close ' + subject() : 'Record step' }} · {{ action.label }}</h3>
+        <h3 #formTitle tabindex="-1">{{ action.terminal ? msg('Close ') + subject() : msg('Record step') }} · {{ msg(action.label) }}</h3>
         @if (pendingReport(); as report) {
-          <p>Submit the required report before recording this step.</p>
-          <button type="button" hlmBtn class="justify-self-start" (click)="reportNeeded.emit(report)">Open required report</button>
+          <p>{{ msg('Submit the required report before recording this step.') }}</p>
+          <button type="button" hlmBtn class="justify-self-start" (click)="reportNeeded.emit(report)">{{ msg('Open required report') }}</button>
         }
         <div [hidden]="!!pendingReport()">
           @if (subject() === 'incident') {
             <div class="mb-3 grid gap-2">
-              <h4 class="font-semibold">Effect on member alerts</h4>
+              <h4 class="font-semibold">{{ msg('Effect on member alerts') }}</h4>
               <fimra-live-status [message]="previewNotice()" />
               @if (preview(); as impact) {
                 @if (impact === 'error') {
-                  <button hlmBtn variant="outline" type="button" class="justify-self-start" (click)="retryPreview()">Retry preview</button>
+                  <button hlmBtn variant="outline" type="button" class="justify-self-start" (click)="retryPreview()">{{ msg('Retry preview') }}</button>
                 } @else {
-                  <p class="text-label text-text-secondary">Results can change if another update is saved first.</p>
+                  <p class="text-label text-text-secondary">{{ msg('Results can change if another update is saved first.') }}</p>
                   <ul role="list" class="grid gap-2">
                     @for (alert of impact.alerts; track alert.alertId) {
                       <li class="border-s-2 border-divider ps-2 wrap-anywhere">
-                        <strong>Alert #{{ alert.alertId }}</strong>
+                        <strong>{{ msg('Alert #{0}', [alert.alertId]) }}</strong>
                         @if (alert.reason === 'transition_allowed') {
-                          <p>Will move from {{ alert.fromLabel }} to {{ action.label }}.</p>
+                          <p>{{ msg('Will move from {0} to {1}.', [msg(alert.fromLabel), msg(action.label)]) }}</p>
                         } @else {
-                          <p>Will stay at {{ alert.fromLabel }}. {{ unchangedReasons[alert.reason] }}</p>
+                          <p>{{ msg('Will stay at {0}. {1}', [alert.fromLabel, unchangedReasons[alert.reason]]) }}</p>
                         }
                       </li>
                     }
@@ -55,46 +55,46 @@
               }
             </div>
           }
-          <hlm-field><label hlmFieldLabel for="step-note">Note (optional)</label>
+          <hlm-field><label hlmFieldLabel for="step-note">{{ msg('Note (optional)') }}</label>
             <textarea hlmTextarea id="step-note" #note rows="2" maxlength="2000"></textarea>
           </hlm-field>
           @if (action.location_required) {
-            <p>Your browser will ask you to share your location.</p>
+            <p>{{ msg('Your browser will ask you to share your location.') }}</p>
             @if (action.can_override) {
-              <label hlmFieldLabel><hlm-checkbox aria-label="Enter a reason instead" [checked]="exception()"
-                (checkedChange)="exception.set($event)" /> Enter a reason instead</label>
+              <label hlmFieldLabel><hlm-checkbox [attr.aria-label]=" msg('Enter a reason instead') " [checked]="exception()"
+                (checkedChange)="exception.set($event)" /> {{ msg('Enter a reason instead') }}</label>
             }
           }
-          <div [hidden]="!exception()"><hlm-field><label hlmFieldLabel for="location-reason">Reason for the location exception</label>
+          <div [hidden]="!exception()"><hlm-field><label hlmFieldLabel for="location-reason">{{ msg('Reason for the location exception') }}</label>
             <textarea hlmTextarea id="location-reason" #reason rows="2" [required]="exception()" maxlength="2000"></textarea>
           </hlm-field></div>
           <button #submit hlmBtn type="submit" [busy]="busy()"
             [disabled]="loading() || loadError() || (subject() === 'incident' && (!preview() || preview() === 'error'))">
-            {{ action.terminal ? 'Review' : 'Save' }} {{ action.label }}
+            {{ action.terminal ? msg('Review') : msg('Save') }} {{ msg(action.label) }}
           </button>
         </div>
-        <button hlmBtn variant="ghost" class="justify-self-start" type="button" [disabled]="busy()" (click)="cancel()">Cancel</button>
+        <button hlmBtn variant="ghost" class="justify-self-start" type="button" [disabled]="busy()" (click)="cancel()">{{ msg('Cancel') }}</button>
       </form>
     }
   }
   <div #resultTarget tabindex="-1" class="rounded-control focus-visible:outline-2 focus-visible:outline-ring">
     <fimra-live-status [message]="result()" />
     @if (receipt(); as impact) {
-      <h4 class="mt-2 font-semibold">Member alert results</h4>
-      <p>{{ impact.alertsMoved }} {{ impact.alertsMoved === 1 ? 'alert moved' : 'alerts moved' }}.</p>
+      <h4 class="mt-2 font-semibold">{{ msg('Member alert results') }}</h4>
+      <p>{{ impact.alertsMoved }} {{ impact.alertsMoved === 1 ? msg('alert moved') : msg('alerts moved') }}.</p>
       <ul role="list" class="mt-2 grid gap-2">
         @for (alert of impact.alerts; track alert.alertId) {
           <li class="border-s-2 border-divider ps-2 wrap-anywhere">
             @if (alert.reason === 'transition_allowed') {
-              <strong>Alert #{{ alert.alertId }}</strong>
-              <p>Moved from {{ alert.fromLabel }} with the incident.</p>
+              <strong>{{ msg('Alert #{0}', [alert.alertId]) }}</strong>
+              <p>{{ msg('Moved from {0} with the incident.', [alert.fromLabel]) }}</p>
             } @else {
               @if (alertLink(); as link) {
-                <a class="font-semibold text-action underline" [routerLink]="link(alert.alertId)">Open alert #{{ alert.alertId }}</a>
+                <a class="font-semibold text-action underline" [routerLink]="link(alert.alertId)">{{ msg('Open alert #{0}', [alert.alertId]) }}</a>
               } @else {
-                <strong>Alert #{{ alert.alertId }}</strong>
+                <strong>{{ msg('Alert #{0}', [alert.alertId]) }}</strong>
               }
-              <p>Stayed at {{ alert.fromLabel }}. {{ unchangedReasons[alert.reason] }}</p>
+              <p>{{ msg('Stayed at {0}. {1}', [alert.fromLabel, unchangedReasons[alert.reason]]) }}</p>
             }
           </li>
         }
@@ -104,7 +104,7 @@
 </fimra-state-region>
 @if (subject() === 'alert' && history()) {
   <section aria-labelledby="alert-timeline" class="mt-3 grid gap-2 border-t border-divider pt-3">
-    <h3 id="alert-timeline">Timeline</h3>
+    <h3 id="alert-timeline">{{ msg('Timeline') }}</h3>
     <fimra-timeline [events]="timeline()" [now]="nowDate()" allActivityLabel="Show full history" emptyLabel="No activity yet." />
   </section>
 }

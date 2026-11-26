@@ -1,3 +1,4 @@
+import { language, translate } from '../language';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { EMPTY, expand, filter, map, take } from 'rxjs';
@@ -16,7 +17,7 @@ import { SidePanel } from '../ui/side-panel';
 import { type DataState } from '../ui/state-region';
 import { workspacePhone } from '../ui/workspace-breakpoint';
 import { StatusBadge } from '../ui/status-badge';
-import { defaultWorkspaceFormat } from '../workspace-format';
+import { workspaceFormat } from '../workspace-format';
 import { WorkspaceService } from '../workspace';
 import { decisionLabels as statuses, type Decision, type Submission, type SubmissionRow, type WorkspaceForm } from './form-api';
 import { textIn } from './form-text';
@@ -36,26 +37,26 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
   host: { class: 'report-workspace', '[class.has-report]': 'panel()?.open()' },
   encapsulation: ViewEncapsulation.None,
   template: `
-    <div #queue tabindex="-1" class="report-queue" role="region" aria-label="Field report queue">
+    <div #queue tabindex="-1" class="report-queue" role="region" [attr.aria-label]=" msg('Field report queue') ">
       <fimra-filter-bar [filters]="activeFilters()" (remove)="removeFilter($event)" (clearAll)="clearFilters()">
         <ng-template fimraFilterControls>
           <fimra-filter-fields [forReports]="true" />
-          <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-decision">Report status</label>
+          <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-decision">{{ msg('Report status') }}</label>
             <hlm-select [value]="decision() || 'all'" (valueChange)="setFilter('decision', $event)">
-              <hlm-select-trigger buttonId="report-decision">{{ decision() ? statuses[decision() || 'pending'] : 'All statuses' }}</hlm-select-trigger>
+              <hlm-select-trigger buttonId="report-decision">{{ decision() ? msg(statuses[decision() || 'pending']) : msg('All statuses') }}</hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
-                <hlm-select-item value="all">All statuses</hlm-select-item>
+                <hlm-select-item value="all">{{ msg('All statuses') }}</hlm-select-item>
                 <hlm-select-item value="pending">{{ statuses.pending }}</hlm-select-item>
-                <hlm-select-item value="returned">Returned</hlm-select-item>
-                <hlm-select-item value="approved">Approved</hlm-select-item>
+                <hlm-select-item value="returned">{{ msg('Returned') }}</hlm-select-item>
+                <hlm-select-item value="approved">{{ msg('Approved') }}</hlm-select-item>
               </hlm-select-content>
             </hlm-select>
           </hlm-field>
-          <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-form">Form</label>
+          <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-form">{{ msg('Form') }}</label>
             <hlm-select [value]="form() || 'all'" (valueChange)="setFilter('form', $event === 'all' ? null : $event)">
               <hlm-select-trigger buttonId="report-form">{{ formLabel() }}</hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
-                <hlm-select-item value="all">All forms</hlm-select-item>
+                <hlm-select-item value="all">{{ msg('All forms') }}</hlm-select-item>
                 @for (f of forms(); track f.form) { <hlm-select-item [value]="f.form">{{ formTitle(f) }}</hlm-select-item> }
               </hlm-select-content>
             </hlm-select>
@@ -65,7 +66,7 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
       <ng-template #reportCell let-row>
         <button #report hlmBtn variant="link" class="report-open" type="button"
           [attr.data-report-id]="row.id" [attr.aria-expanded]="selectedId() === row.id" (click)="open(row, report)">
-          {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}, received {{ received(row) }}</span>
+          {{ title(row) }} <span class="sr-only">{{ msg('for alert #{0}, received {1}', [row.alert_id, received(row)]) }}</span>
         </button>
         <p>{{ place(row) }}</p>
       </ng-template>
@@ -75,15 +76,15 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
       </ng-template>
       <ng-template #phoneActions let-row>
         <button #report hlmBtn variant="outline" type="button"
-          [attr.data-report-id]="row.id" [attr.aria-expanded]="selectedId() === row.id" (click)="open(row, report)">Open {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}</span></button>
+          [attr.data-report-id]="row.id" [attr.aria-expanded]="selectedId() === row.id" (click)="open(row, report)">{{ msg('Open {0}', [title(row)]) }} <span class="sr-only">{{ msg('for alert #{0}', [row.alert_id]) }}</span></button>
       </ng-template>
-      <fimra-data-table caption="Field reports" [columns]="columns()" [rowKey]="rowKey" [rowLabel]="rowLabel"
+      <fimra-data-table [caption]=" msg('Field reports') " [columns]="columns()" [rowKey]="rowKey" [rowLabel]="rowLabel"
         [page]="page()" [state]="state()" [phoneCards]="true" [rowActions]="phoneCards() ? phoneActions : undefined"
         [hiddenColumns]="hiddenColumns()" (hiddenColumnsChange)="setColumns($event)"
         (pageRequest)="setPosition($event)" (retry)="reload()" />
-      @if (state().kind === 'ready' && !page().rows.length) { <p>No reports on this page.</p> }
+      @if (state().kind === 'ready' && !page().rows.length) { <p>{{ msg('No reports on this page.') }}</p> }
     </div>
-    <fimra-side-panel class="report-panel" [heading]="view()?.title() || 'Field report'"
+    <fimra-side-panel class="report-panel" [heading]="view()?.title() || msg('Field report')"
       [scrollDock]="true" [fullHeight]="true" (closed)="closeReview()">
       @if (panel()?.open() && selectedId(); as id) {
         <fimra-submission-view [workspaceUrl]="endpoint()" [submissionId]="id" [showTitle]="false"
@@ -94,6 +95,7 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
   `
 })
 export class Submissions {
+  protected readonly msg = translate;
   readonly endpoint = input.required<string>();
   readonly now = input.required<number>();
   readonly filtersChanged = output<ReportFilters>();
@@ -113,8 +115,8 @@ export class Submissions {
   protected readonly reviewerRole = computed(() => {
     const roles = this.workspace.roles();
     const labels = [
-      roles.some(role => role.role === 'state_admin') ? 'State administrator' : '',
-      roles.some(role => role.role === 'division_officer') ? 'Division officer' : ''
+      roles.some(role => role.role === 'state_admin') ? translate('State administrator') : '',
+      roles.some(role => role.role === 'division_officer') ? translate('Division officer') : ''
     ];
     return labels.filter(Boolean).join(', ');
   });
@@ -131,7 +133,7 @@ export class Submissions {
   protected readonly form = computed(() => this.navigation.query().get('form') ?? '');
   protected readonly formLabel = computed(() => {
     const found = this.forms().find(f => f.form === this.form());
-    return found ? this.formTitle(found) : this.form() || 'All forms';
+    return found ? this.formTitle(found) : this.form() || translate('All forms');
   });
   protected readonly hiddenColumns = computed<ReadonlySet<string>>(() =>
     new Set(this.navigation.query().get('reportColumns')?.split(',') ?? []));
@@ -161,10 +163,10 @@ export class Submissions {
   private readonly reportCell = viewChild<TemplateRef<{ $implicit: SubmissionRow }>>('reportCell');
   private readonly statusCell = viewChild<TemplateRef<{ $implicit: SubmissionRow }>>('statusCell');
   protected readonly columns = computed<readonly TableColumn<SubmissionRow>[]>(() => [
-    { id: 'report', label: 'Report and place', value: row => this.title(row), rowHeading: true, cell: this.reportCell() },
-    { id: 'status', label: 'Status', value: row => this.status(row), cell: this.statusCell() },
-    { id: 'sender', label: 'Sender', value: row => row.submitted_by },
-    { id: 'received', label: 'Received', value: row => this.received(row), sortable: true },
+    { id: 'report', label: translate('Report and place'), value: row => this.title(row), rowHeading: true, cell: this.reportCell() },
+    { id: 'status', label: translate('Status'), value: row => this.status(row), cell: this.statusCell() },
+    { id: 'sender', label: translate('Sender'), value: row => row.submitted_by },
+    { id: 'received', label: translate('Received'), value: row => this.received(row), sortable: true },
     { id: 'alert', label: 'Alert', value: row => `#${row.alert_id} · ${row.alert_step_label}` }
   ]);
   protected readonly rowKey = (row: SubmissionRow) => row.id;
@@ -247,7 +249,7 @@ export class Submissions {
       if (observed) {
         this.state.set({
           kind: 'stale', heading: 'Refreshing field reports',
-          observedAt: { dateTime: observed.toISOString(), label: defaultWorkspaceFormat.dateTime(observed) }
+          observedAt: { dateTime: observed.toISOString(), label: untracked(() => workspaceFormat.dateTime(observed)) }
         });
       } else if (key !== lastRequest || untracked(this.state).kind === 'error') {
         this.state.set({ kind: 'loading', heading: 'Loading field reports' });
@@ -258,7 +260,7 @@ export class Submissions {
           loadedAt = page.items.length ? new Date() : null;
           this.page.set({ rows: page.items, nextCursor: page.nextCursor ?? null, position });
           this.state.set(page.items.length || cursor ? { kind: 'ready' } :
-            { kind: 'empty', heading: 'No field reports match', detail: 'Change the filters to see more reports.' });
+            { kind: 'empty', heading: translate('No field reports match'), detail: translate('Change the filters to see more reports.') });
         },
         error: (error: HttpErrorResponse) => {
           const lostAccess = error.status === 401 || error.status === 403;
@@ -268,7 +270,7 @@ export class Submissions {
           }
           if (error.status === 401) this.auth.sessionEnded();
           this.state.set(error.status === 403 ? { kind: 'forbidden' } :
-            { kind: 'error', heading: 'Field reports could not load', keepContent: !!observed && !lostAccess });
+            { kind: 'error', heading: translate('Field reports could not load'), keepContent: !!observed && !lostAccess });
         }
       });
       onCleanup(() => request.unsubscribe());
@@ -277,16 +279,16 @@ export class Submissions {
 
   protected formTitle(form: WorkspaceForm): string {
     const newest = [...form.versions].reverse().find(v => v.status === 'published');
-    return textIn(newest?.title, 'en') || form.form;
+    return textIn(newest?.title, language()) || form.form;
   }
 
   protected title(row: SubmissionRow): string {
-    const title = textIn(row.title, 'en') || row.form;
-    return title === row.step_label ? title : title + ' · ' + row.step_label;
+    const title = textIn(row.title, language()) || row.form;
+    return title === row.step_label ? title : title + ' · ' + translate(row.step_label);
   }
 
   protected place(row: SubmissionRow): string {
-    return [row.beat_name, row.range_name, row.division_name].filter(Boolean).join(' · ') || 'Unknown place';
+    return [row.beat_name, row.range_name, row.division_name].filter(Boolean).join(' · ') || translate('Unknown place');
   }
 
   protected status(row: SubmissionRow): string {
@@ -294,7 +296,7 @@ export class Submissions {
   }
 
   protected received(row: SubmissionRow): string {
-    return defaultWorkspaceFormat.dateTime(new Date(row.received_time));
+    return workspaceFormat.dateTime(new Date(row.received_time));
   }
 
   protected setFilter(key: string, value: string | null | undefined): void {

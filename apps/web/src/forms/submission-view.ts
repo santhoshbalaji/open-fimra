@@ -1,3 +1,4 @@
+import { language, translate } from '../language';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { RouterLink } from '@angular/router';
@@ -15,7 +16,7 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { StateRegion, type DataState } from '../ui/state-region';
 import { Timeline, type TimelineEvent } from '../ui/timeline';
 import { StatusBadge } from '../ui/status-badge';
-import { defaultWorkspaceFormat } from '../workspace-format';
+import { workspaceFormat } from '../workspace-format';
 import { decisionLabels, serverProblems, type FormVersion, type Submission } from './form-api';
 import { textIn } from './form-text';
 import { FormPresentation } from './form-presentation';
@@ -43,20 +44,20 @@ import { FormPresentation } from './form-presentation';
             </div>
           </div>
           <dl class="submission-facts">
-            <div><dt>Submitted by</dt><dd>{{ s.submittedBy }}</dd></div>
-            <div><dt>Related alert</dt><dd>
+            <div><dt>{{ msg('Submitted by') }}</dt><dd>{{ s.submittedBy }}</dd></div>
+            <div><dt>{{ msg('Related alert') }}</dt><dd>
               @if (navigation) {
-                <a class="report-alert-link" [routerLink]="navigation.href('/monitor/alerts', { alert: s.alertId })">Alert #{{ s.alertId }}</a>
-              } @else { Alert #{{ s.alertId }} }
+                <a class="report-alert-link" [routerLink]="navigation.href('/monitor/alerts', { alert: s.alertId })">{{ msg('Alert #{0}', [s.alertId]) }}</a>
+              } @else { {{ msg('Alert #{0}', [s.alertId]) }} }
             </dd></div>
             @if (stage() && stage() !== title()) {
-              <div><dt>Stage</dt><dd>{{ stage() }}</dd></div>
+              <div><dt>{{ msg('Stage') }}</dt><dd>{{ stage() }}</dd></div>
             }
-            <div><dt>Received</dt><dd><time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time></dd></div>
+            <div><dt>{{ msg('Received') }}</dt><dd><time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time></dd></div>
             @if (s.canApprove && reviewerRole()) {
-              <div><dt>Your review role</dt><dd>{{ reviewerRole() }}</dd></div>
+              <div><dt>{{ msg('Your review role') }}</dt><dd>{{ reviewerRole() }}</dd></div>
             }
-            <div class="submission-meta"><dt class="sr-only">Form version</dt><dd>Version {{ s.version }}</dd></div>
+            <div class="submission-meta"><dt class="sr-only">{{ msg('Form version') }}</dt><dd>{{ msg('Version {0}', [s.version]) }}</dd></div>
           </dl>
         </header>
 
@@ -68,40 +69,40 @@ import { FormPresentation } from './form-presentation';
             }
           </fimra-state-region>
 
-          <section aria-label="Report timeline" class="grid gap-2 border-t border-divider pt-3">
-            <h3 class="font-semibold">Timeline</h3>
+          <section [attr.aria-label]=" msg('Report timeline') " class="grid gap-2 border-t border-divider pt-3">
+            <h3 class="font-semibold">{{ msg('Timeline') }}</h3>
             <fimra-timeline [events]="timeline()" [now]="nowDate()" />
           </section>
         </div>
 
         @if (!s.approval && s.canApprove && definition()) {
-          <section class="approval bg-card" aria-label="Review actions">
+          <section class="approval bg-card" [attr.aria-label]=" msg('Review actions') ">
             @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
             @if (returning()) {
               <form novalidate (submit)="$event.preventDefault(); decide('returned', note.value)">
                 <hlm-field>
-                  <label hlmFieldLabel for="return-note">Why is the report returned?</label>
+                  <label hlmFieldLabel for="return-note">{{ msg('Why is the report returned?') }}</label>
                   <textarea #note hlmTextarea id="return-note" maxlength="2000" required [readOnly]="busy()" [forceInvalid]="!!noteError()"
                     (input)="noteError.set('')"></textarea>
-                  <p hlmFieldDescription id="return-hint">The alert will need a new report at this step.</p>
+                  <p hlmFieldDescription id="return-hint">{{ msg('The alert will need a new report at this step.') }}</p>
                   @if (noteError()) { <hlm-field-error id="return-error" forceShow>{{ noteError() }}</hlm-field-error> }
                 </hlm-field>
                 <div class="form-actions">
-                  <button hlmBtn type="submit" [busy]="busy()">Return the report</button>
-                  <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelReturn()">Cancel</button>
+                  <button hlmBtn type="submit" [busy]="busy()">{{ msg('Return the report') }}</button>
+                  <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelReturn()">{{ msg('Cancel') }}</button>
                 </div>
               </form>
             } @else {
               <div class="form-actions">
-                <button #approve hlmBtn type="button" [busy]="busy()" (click)="approveReport(approve)">Approve</button>
-                <button #returnTrigger hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="startReturn()">Return with a note</button>
+                <button #approve hlmBtn type="button" [busy]="busy()" (click)="approveReport(approve)">{{ msg('Approve') }}</button>
+                <button #returnTrigger hlmBtn type="button" variant="outline" [disabled]="busy()" (click)="startReturn()">{{ msg('Return with a note') }}</button>
               </div>
             }
           </section>
         } @else if (s.approval && nextPendingId()) {
           <div class="approval bg-card">
             @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
-            <button hlmBtn type="button" variant="outline" class="justify-self-start" (click)="next.emit()">Next pending report</button>
+            <button hlmBtn type="button" variant="outline" class="justify-self-start" (click)="next.emit()">{{ msg('Next pending report') }}</button>
           </div>
         } @else if (message()) {
           <p role="alert" class="report-refused">{{ message() }}</p>
@@ -111,6 +112,7 @@ import { FormPresentation } from './form-presentation';
   `
 })
 export class SubmissionView {
+  protected readonly msg = translate;
   readonly workspaceUrl = input.required<string>();
   readonly submissionId = input.required<string>();
   readonly showTitle = input(true);
@@ -141,7 +143,7 @@ export class SubmissionView {
   private readonly decisionResult = viewChild<ElementRef<HTMLElement>>('decisionResult');
   protected readonly definition = signal<FormVersion['definition'] | null>(null);
   protected readonly formState = signal<DataState>({ kind: 'loading', heading: 'Loading the form version' });
-  readonly title = computed(() => textIn(this.definition()?.['title'], 'en') || this.submission()?.form);
+  readonly title = computed(() => textIn(this.definition()?.['title'], language()) || this.submission()?.form);
   protected readonly place = signal('Unknown place');
   protected readonly nowDate = computed(() => new Date(this.now() ?? Date.now()));
   protected readonly timeline = computed<TimelineEvent[]>(() => {
@@ -190,13 +192,13 @@ export class SubmissionView {
     });
     effect(onCleanup => {
       const id = this.alertId();
-      this.place.set('Unknown place');
+      this.place.set(translate('Unknown place'));
       if (!id) return;
       const request = this.http.get<AlertRow>(this.workspaceUrl() + '/alerts/' + id).subscribe({
         next: alert => {
           const names = placesOf(alert, []).map(place => place.name || place.code).filter(Boolean);
           this.place.set(names.join(' · ') ||
-            [alert.beat_name, alert.range_name, alert.division_name].filter(Boolean).join(' · ') || 'Unknown place');
+            [alert.beat_name, alert.range_name, alert.division_name].filter(Boolean).join(' · ') || translate('Unknown place'));
         },
         error: (error: HttpErrorResponse) => { if (error.status === 401) this.auth.sessionEnded(); }
       });
@@ -246,7 +248,7 @@ export class SubmissionView {
   }
 
   time(value: string): string {
-    return defaultWorkspaceFormat.dateTime(new Date(value));
+    return workspaceFormat.dateTime(new Date(value));
   }
 
   async approveReport(trigger: HTMLButtonElement): Promise<void> {
