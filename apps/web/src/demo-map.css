@@ -1,5 +1,139 @@
-/* MapLibre's own styles load with the map, not in the first download. */
+/* MapLibre's styles and the workspace map load with the route. */
 @import 'maplibre-gl/dist/maplibre-gl.css';
 
-/* After MapLibre's rules, which set the map container to position: relative. */
+fimra-demo-map { display: flex; flex-direction: column; height: 100%; background: var(--map-canvas); }
+.workspace-panes { display: flex; flex: 1; min-height: 0; position: relative; }
+.map-pane { position: relative; flex: 1; min-height: 0; min-width: 0; }
 .map-canvas { position: absolute; inset: 0; }
+
+.map-actions, .map-key, .map-message, .filter-card {
+  background: var(--map-control-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-panel);
+}
+.map-actions { display: grid; position: absolute; inset: 16px 16px auto auto; padding: 4px; }
+.map-actions button { display: grid; place-items: center; }
+.map-canvas .maplibregl-canvas:focus-visible {
+  outline: 2px solid var(--map-control-focus);
+  outline-offset: -3px;
+}
+.fire-controls {
+  position: absolute;
+  inset: 16px auto auto 16px;
+  max-width: min(324px, calc(100% - 84px));
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  pointer-events: none;
+}
+.fire-controls > * { pointer-events: auto; }
+.fire-controls fimra-state-region { font-size: var(--text-label); }
+.fire-controls fimra-state-region [tabindex="-1"] > div:first-child { padding: 6px 8px; gap: 4px 8px; }
+.filter-card { gap: 4px; padding: 8px; min-width: min(196px, 100%); }
+.map-message { padding: 8px 12px; }
+
+.map-legend {
+  position: absolute;
+  inset: auto auto 16px 16px;
+  max-width: calc(100% - 32px);
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.map-key { padding: 4px 8px; font-size: var(--text-label); line-height: 1.45; }
+.map-key ul { display: flex; flex-wrap: wrap; column-gap: 8px; }
+.map-key li, .layer-options li { display: flex; align-items: center; gap: 4px; }
+.map-age, .map-symbol, .map-swatch { display: inline-block; flex: none; }
+.map-age { width: 12px; height: 9px; border: 1px solid var(--map-age-outline); border-radius: 3px; }
+.map-symbol { width: 12px; height: 12px; border-radius: 50%; background: var(--map-age-1); border: 1px solid var(--map-age-outline); }
+.map-symbol.near_edge {
+  background: transparent;
+  border: 2px solid var(--map-age-1);
+  outline: 1px solid var(--map-age-outline);
+  outline-offset: -1px;
+}
+.map-symbol.outside, .map-symbol.fixed_heat_source { background: var(--map-neutral-mark); }
+.map-symbol.outside { width: 6px; height: 6px; }
+.map-symbol.fixed_heat_source { border-radius: 0; width: 10px; height: 10px; }
+
+.map-swatch.line, .map-swatch.forest, .map-swatch.land, .map-swatch.label { width: 23px; }
+.map-swatch.forest, .map-swatch.land, .map-swatch.exclusions {
+  border: 1px solid var(--color-text-secondary);
+  height: 10px;
+}
+.map-swatch.land { background: var(--map-land); }
+.map-swatch.forest { background: color-mix(in srgb, var(--map-forest) calc(var(--map-forest-opacity) * 100%), var(--map-land)); }
+.map-swatch.exclusions { width: 10px; background: color-mix(in srgb, var(--map-neutral-mark) calc(var(--map-exclusion-opacity) * 100%), var(--map-land)); }
+.map-swatch.incident {
+  width: 9px;
+  height: 9px;
+  margin-inline: 2px;
+  rotate: 45deg;
+  background: var(--map-selection);
+  border: 1px solid var(--map-age-outline);
+}
+.map-swatch.member, .map-swatch.selection { width: 14px; height: 14px; border: 2px solid var(--map-selection); border-radius: 50%; }
+.map-swatch.selection { box-shadow: inset 0 0 0 1px var(--map-age-outline); }
+
+.layers-panel {
+  position: absolute;
+  z-index: 1;
+  inset: 16px 64px auto auto;
+  width: min(330px, calc(100% - 80px));
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.layer-options { display: grid; gap: 12px; }
+.layer-options fieldset, .layer-options section { min-inline-size: 0; border-top: 1px solid var(--color-border); }
+.layer-options legend, .layer-options h3 { font-weight: 600; }
+.layer-options label { overflow-wrap: anywhere; display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; }
+.layer-options input { accent-color: var(--color-brand); }
+.layer-options ul, .layer-options p { margin-block: 4px; }
+.layer-options li { min-height: 20px; gap: 8px; }
+.layer-options small { color: var(--color-text-secondary); font-size: var(--text-label); }
+
+.detail-card {
+  width: clamp(272px, 24vw, 360px);
+  background: var(--color-card);
+  border-left: 1px solid var(--color-border);
+  padding: 0 16px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-block: 8px;
+  background: var(--color-card);
+}
+.detail-heading h2 { font-size: var(--text-title); font-weight: 600; }
+.detail-heading p, .map-detail-block dt { color: var(--color-text-secondary); font-size: var(--text-label); }
+.map-detail-block { display: grid; gap: 6px; margin-bottom: 12px; border-top: 1px solid var(--color-border); padding-block: 8px; }
+.map-detail-block h3 { font-weight: 600; }
+.map-detail-block dl { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 4px 8px; }
+.map-detail-block dd { overflow-wrap: anywhere; }
+.map-detail-block a { justify-self: start; }
+
+@media (max-width: 840px) {
+  .workspace-panes { flex-direction: column; }
+  .show-queue:not(.show-details) .map-pane { visibility: hidden; }
+  .detail-card {
+    flex: 0 1 40%;
+    width: 100%;
+    min-height: 0;
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    scroll-padding-top: 64px;
+  }
+  .map-actions { inset: 8px 8px auto auto; }
+  .fire-controls { inset: 8px auto auto 8px; }
+  .map-legend { inset: auto auto 8px 8px; max-width: calc(100% - 16px); }
+}

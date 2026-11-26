@@ -13,6 +13,7 @@ type Queue = keyof typeof queueLabels;
 export interface AlertRow extends Detection {
   id: string;
   detection_id: string;
+  incident_id?: string | null;
   status: string;
   step_label: string;
   step_time: string;

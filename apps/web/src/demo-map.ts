@@ -4,52 +4,80 @@ import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
-import { interfaceColours, mapColours } from './token-values';
+import { mapColours } from './token-values';
+import { RouterLink } from '@angular/router';
 import { AfterViewInit, Component, ViewEncapsulation, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, EMPTY, exhaustMap, forkJoin, timer } from 'rxjs';
+import { catchError, EMPTY, exhaustMap, expand, forkJoin, reduce, timer } from 'rxjs';
 import { EmptyState } from './ui/empty-state';
 import { StatusBadge } from './ui/status-badge';
-import { GeoJSONSource, Map as LibreMap, setWorkerUrl } from 'maplibre-gl';
+import { SidePanel } from './ui/side-panel';
+import { StateRegion, type DataState } from './ui/state-region';
+import { GeoJSONSource, Map as LibreMap, setWorkerUrl, type VectorTileSource } from 'maplibre-gl';
+import type { FeatureCollection, Point } from 'geojson';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
 import { AlertQueue, AlertRow, alertRowLabel, queueLabels } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
+import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, mapRequest, placesOf, readDetection, relativeAge, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
 import { ExportDialog } from './export-dialog';
 import type { IncidentFocus, IncidentRow } from './incidents';
 import { AlertReports } from './forms/alert-reports';
 import { ShellNavigation, recordId } from './shell-navigation';
 import { ShellListScroll } from './shell-list-scroll';
-import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
+import { exclusionOpacity, referenceGroups, type MapLayerGroup, type WorkspaceMap } from './map-style';
 import { ThemeService, type Theme } from './theme';
 import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
-import { type DataState, StateRegion } from './ui/state-region';
+import { restoreOverlayFocus } from './ui/overlay-focus';
+
+const detectionGroup: MapLayerGroup = { id: 'detections', label: 'Fire detections', minZoom: 0 };
+const incidentGroup: MapLayerGroup = {
+  id: 'reported-incidents', label: 'Reported incidents', minZoom: 0, swatch: { kind: 'incident' }
+};
+type TileSource = 'reference' | 'detections';
+
+function pointCollection(points: [number, number][]): FeatureCollection<Point> {
+  return {
+    type: 'FeatureCollection',
+    features: points.map(coordinates => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates } }))
+  };
+}
 
 @Component({
   selector: 'fimra-demo-map',
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, StateRegion],
+  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, Workflow, EmptyState, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, SidePanel, StateRegion, RouterLink],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
 export class DemoMap implements AfterViewInit, OnDestroy {
-  private readonly navigation = inject(ShellNavigation);
+  readonly navigation = inject(ShellNavigation);
   readonly linkedMessage = signal('');
   private readonly alertId = computed(() => recordId(this.navigation.query().get('alert')));
   private readonly detectionId = computed(() => recordId(this.navigation.query().get('detection')));
   private readonly incidentId = computed(() => this.navigation.path() === '/monitor/map' ? recordId(this.navigation.query().get('incident')) : '');
   private readonly geography = signal<{ endpoint: string; info: WorkspaceMap } | null>(null);
-  readonly boundaries = computed(() => boundaryKey(this.geography()?.info.levels ?? [], this.appearance.theme())
-    .filter(row => !this.filters.lowBandwidth() || row.depth === 0));
   readonly workspace = inject(WorkspaceService);
   readonly classes = classes;
   readonly forestClasses = Object.keys(classes) as ForestClass[];
-  readonly ageLabels = ageLabels;
+  readonly shortClasses = shortClasses;
+  readonly keyClasses = computed(() => {
+    const forestClass = this.filters.forestClass();
+    return forestClass ? [forestClass] : this.forestClasses;
+  });
+  readonly keyAges = computed(() => {
+    if (!this.keyClasses().some(cls => cls === 'inside' || cls === 'near_edge')) return [];
+    return ageLabels.slice(0, this.hours() <= 6 ? 1 : this.hours() <= 24 ? 2 : this.hours() <= 72 ? 3 : 4)
+      .map((label, i) => ({
+        colour: 'var(--map-age-' + (i + 1) + ')',
+        label: i === 3 && this.hours() > 168 ? '3 days or more' : label,
+        short: ['<6h', '6–24h', '1–3d', this.hours() > 168 ? '3d+' : '3–7d'][i]
+      }));
+  });
   readonly reasons = triageReasons;
   readonly confidenceLabel = confidenceLabel;
   readonly sourceLabel = sourceLabel;
@@ -61,28 +89,71 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     return { first, firstName: first ? named(first) : 'Unknown place', rest: rest.map(named).join(' · '), all: [first, ...rest].filter(Boolean) };
   }
   readonly error = signal('');
-  readonly geographyError = signal('');
-  readonly referenceError = signal('');
-  readonly boundary = computed(() => this.geography()?.info.boundary);
-  readonly tileError = signal('');
-  readonly mapDataState = computed<DataState>(() => {
-    const [heading, ...otherErrors] = [this.tileError(), this.referenceError(), this.geographyError()].filter(Boolean);
-    return heading ? { kind: 'error', heading, detail: otherErrors.join(' ') } : { kind: 'ready' };
-  });
+  private readonly geographyError = signal(false);
+  private readonly referenceError = signal(false);
+  private readonly tileError = signal(false);
+  private readonly incidentError = signal(false);
   private readonly geographyRetries = signal(0);
+  private readonly incidentRetries = signal(0);
+  private readonly detectionsDrawn = signal(false);
+  private readonly incidentPoints = signal<[number, number][]>([]);
+  readonly boundary = computed(() => this.geography()?.info.boundary);
   readonly ready = signal(false);
-  readonly legend = signal(false);
+  readonly zoomLevel = signal(0);
+  private readonly layerChoices = signal<Record<string, boolean>>({});
+  readonly reference = computed(() => {
+    const geography = this.geography();
+    return geography ? referenceGroups(geography.info, this.appearance.theme()) : [];
+  });
+  readonly exclusionOpacity = exclusionOpacity;
+  readonly operational = [detectionGroup, incidentGroup];
+  readonly showDetections = computed(() => !!this.workspace.current() && this.layerEnabled(detectionGroup));
+  readonly showIncidents = computed(() => !!this.workspace.current() && this.layerEnabled(incidentGroup));
+  readonly visibleLegend = computed(() =>
+    [...this.reference(), incidentGroup].filter(group => this.layerEnabled(group) && this.zoomLevel() >= group.minZoom)
+  );
+  readonly mapDataState = computed<DataState>(() => {
+    const missing = [
+      this.tileError() && this.showDetections() ? 'Fire detection tiles' : '',
+      this.referenceError() && this.reference().some(group => this.layerEnabled(group) && this.zoomLevel() >= group.minZoom)
+        ? (this.filters.lowBandwidth() ? 'Workspace outline tiles' : 'Reference tiles (boundaries, forest and known heat source areas)') : '',
+      this.geographyError() ? 'Workspace boundary and layer information' : '',
+      this.incidentError() && this.showIncidents() ? 'Reported incidents' : ''
+    ].filter(Boolean);
+    if (missing.length) {
+      const detail = missing.join('. ') + '. You can still use the alert queue.';
+      return { kind: 'error', heading: 'Some map data is missing', detail };
+    }
+    if (!this.showDetections() || this.error()) return { kind: 'ready' };
+    if (!this.detectionsDrawn()) return { kind: 'loading', heading: 'Loading fire detections' };
+    return this.visible().length ? { kind: 'ready' } :
+      { kind: 'empty', heading: 'No detections in view', detail: 'Pan the map or change the filters.' };
+  });
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
   readonly alertRowLabel = alertRowLabel;
   readonly hours = this.queue.hours;
   readonly mobileQueue = computed(() => this.navigation.path() === '/monitor/alerts');
-  private readonly incidentFocus = signal<IncidentFocus | null>(null);
+  readonly incidentFocus = signal<IncidentFocus | null>(null);
   readonly filters = inject(DashboardFilters);
   readonly visible = signal<Detection[]>([]);
+  readonly detectionChoices = computed(() => {
+    const point = this.selected();
+    const rows = this.visible();
+    return point && !rows.some(row => String(row.id) === String(point.id)) ? [point, ...rows] : rows;
+  });
   readonly selected = this.queue.selected;
+  private readonly selectionCoordinates = computed(() => {
+    const selected = this.selected();
+    if (!selected) return null;
+    // Use the current tile geometry when available. Its precision depends on zoom.
+    const point = this.visible().find(row => String(row.id) === String(selected.id)) ?? selected;
+    return point.longitude != null && point.latitude != null
+      ? [point.longitude, point.latitude] as [number, number] : null;
+  }, { equal: (a, b) => a?.[0] === b?.[0] && a?.[1] === b?.[1] });
   readonly now = this.queue.now;
   readonly relativeAge = relativeAge;
+  readonly detectionAge = detectionAge;
   readonly stepDate = Date.parse;
   readonly localTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'long' });
   private readonly container = viewChild.required<ElementRef<HTMLDivElement>>('canvas');
@@ -109,6 +180,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private fittedWorkspace?: string;
   private referenceIds: string[] = [];
   private referenceUrl?: string;
+  private readonly referenceTileUrl = computed(() => {
+    const geography = this.geography();
+    return geography ? geography.endpoint + '/tiles/reference/{z}/{x}/{y}.mvt?v=' +
+      encodeURIComponent(geography.info.version) + (this.filters.lowBandwidth() ? '&outline=1' : '') : undefined;
+  });
   private appliedTheme?: Theme;
   private appliedUrl: string | null = null;
   private timer?: ReturnType<typeof setInterval>;
@@ -118,17 +194,17 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const endpoint = this.exportEndpoint();
       this.geographyRetries();
       if (untracked(this.geography)?.endpoint !== endpoint) this.geography.set(null);
-      this.geographyError.set('');
+      this.geographyError.set(false);
       if (!endpoint) return;
       const request = timer(0, 60_000).pipe(exhaustMap(() =>
         this.http.get<WorkspaceMap>(endpoint).pipe(catchError(err => {
           if (err.status === 401) this.auth.sessionEnded();
           else if (err.status === 403) this.workspace.deny();
-          else this.geographyError.set('Could not load the workspace boundary and map hierarchy.');
+          else this.geographyError.set(true);
           return EMPTY;
         }))
       )).subscribe(info => {
-        this.geographyError.set('');
+        this.geographyError.set(false);
         const current = this.geography();
         if (!current || current.info.version !== info.version ||
             JSON.stringify(current.info.levels) !== JSON.stringify(info.levels) ||
@@ -152,11 +228,9 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       this.fittedWorkspace = geography.endpoint;
     });
     effect(() => {
-      const geography = this.geography();
-      const low = this.filters.lowBandwidth();
       const theme = this.appearance.theme();
-      if (!this.ready() || !this.map) return;
-      this.updateReference(this.map, geography, theme, low);
+      const groups = this.reference();
+      if (this.ready() && this.map) untracked(() => this.updateReference(this.map!, groups, theme));
     });
     effect(() => {
       const theme = this.appearance.theme();
@@ -164,12 +238,35 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       if (this.ready() && this.map) untracked(() => this.updateLayers(this.map!, theme, url));
     });
     effect(() => {
+      const url = this.referenceTileUrl();
+      const groups = this.reference();
+      const referenceVisible = groups.map(group => [group, this.layerEnabled(group)] as const);
+      const detections = this.showDetections();
+      const incidents = this.showIncidents();
+      if (!this.ready() || !this.map) return;
+      for (const [group, visible] of referenceVisible) {
+        for (const layer of group.layers) this.setVisibility(layer.id, visible);
+      }
+      this.setVisibility('detections', detections);
+      this.setVisibility('selected-detection', detections);
+      this.setVisibility('selected-detection-edge', detections);
+      this.setVisibility('reported-incidents', incidents);
+      const source = this.map.getSource<VectorTileSource>('reference');
+      if (source && url && url !== this.referenceUrl) {
+        // Keep the layers and their choices while switching to the smaller outline tiles.
+        this.referenceUrl = url;
+        this.referenceError.set(false);
+        source.setTiles([url]);
+      }
+    });
+    effect(() => {
+      const coordinates = this.selectionCoordinates();
+      if (this.ready()) this.map?.getSource<GeoJSONSource>('selection')?.setData(pointCollection(coordinates ? [coordinates] : []));
+    });
+    effect(() => {
       const id = String(this.selected()?.id ?? '');
       const map = this.map;
       if (!this.ready() || !map) return;
-      if (map.getLayer('selected-detection')) {
-        map.setFilter('selected-detection', ['==', ['to-string', ['get', 'id']], id]);
-      }
       if (id !== this.selectedId) {
         if (id && (!this.selectedId || this.movedInDetails)) {
           this.previousView = { center: map.getCenter().toArray(), zoom: map.getZoom() };
@@ -179,8 +276,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         }
         this.selectedId = id;
         this.movedInDetails = false;
+        this.centerSelection();
       }
-      this.centerSelection();
     });
     effect(() => this.detailTitle()?.nativeElement.focus({ preventScroll: true }));
     effect(onCleanup => {
@@ -239,43 +336,82 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         const padding = Math.min(80, this.container().nativeElement.clientWidth * 0.1);
         this.map.fitBounds([[west, south], [east, north]], { padding, maxZoom: 13, duration: 0 });
       }
-      this.map.getSource<GeoJSONSource>('incident-members')?.setData({
-        type: 'FeatureCollection',
-        features: (focus?.points ?? []).map(coordinates => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates } }))
+      this.map.getSource<GeoJSONSource>('incident-members')?.setData(pointCollection(focus?.points ?? []));
+    });
+    effect(onCleanup => {
+      const endpoint = this.exportEndpoint();
+      const params = { ...this.filters.params(), limit: 200 };
+      const enabled = this.showIncidents();
+      this.incidentRetries();
+      this.incidentPoints.set([]);
+      this.incidentError.set(false);
+      if (!enabled || !endpoint) return;
+      type Page = { items: IncidentRow[]; nextCursor?: string };
+      const page = (cursor?: string) => this.http.get<Page>(endpoint + '/incidents', {
+        params: cursor ? { ...params, cursor } : params
       });
+      const request = timer(0, 60_000).pipe(exhaustMap(() => page().pipe(
+        expand(result => result.nextCursor ? page(result.nextCursor) : EMPTY),
+        reduce((points, result) => {
+          for (const item of result.items) {
+            const [west, south, east, north] = item.bounds;
+            points.push([(west + east) / 2, (south + north) / 2]);
+          }
+          return points;
+        }, [] as [number, number][]),
+        catchError(err => {
+          if (err.status === 401) this.auth.sessionEnded();
+          else this.incidentError.set(true);
+          return EMPTY;
+        })
+      ))).subscribe(points => {
+        this.incidentPoints.set(points);
+        this.incidentError.set(false);
+      });
+      onCleanup(() => request.unsubscribe());
     });
     effect(() => {
-      const row = this.queue.linked();
-      if (!this.ready() || !this.map) return;
-      const source = this.map.getSource<GeoJSONSource>('linked-alert');
-      if (!source) return;
-      source.setData({
-        type: 'FeatureCollection',
-        features: row ? [{
-          type: 'Feature', properties: {},
-          geometry: { type: 'Point', coordinates: [row.longitude, row.latitude] }
-        }] : []
-      });
+      const points = this.incidentPoints();
+      if (this.ready()) this.map?.getSource<GeoJSONSource>('reported-incidents')?.setData(pointCollection(points));
     });
   }
 
-  private updateReference(map: LibreMap, geography: { endpoint: string; info: WorkspaceMap } | null,
-    theme: Theme, low: boolean, retry = false): void {
+  layerEnabled(group: MapLayerGroup): boolean {
+    if (group.optional && this.filters.lowBandwidth()) return false;
+    return this.layerChoices()[group.id] ?? (group.id !== incidentGroup.id);
+  }
+
+  toggleLayer(group: MapLayerGroup, enabled: boolean): void {
+    this.layerChoices.update(choices => ({ ...choices, [group.id]: enabled }));
+    if (group.id === detectionGroup.id && !enabled) {
+      this.detectionsDrawn.set(false);
+      this.visible.set([]);
+    }
+  }
+
+  private setVisibility(id: string, visible: boolean): void {
+    const map = this.map;
+    if (!map?.getLayer(id)) return;
+    const visibility = visible ? 'visible' : 'none';
+    if (map.getLayoutProperty(id, 'visibility') !== visibility) map.setLayoutProperty(id, 'visibility', visibility);
+  }
+
+  private updateReference(map: LibreMap, groups: ReturnType<typeof referenceGroups>, theme: Theme, retry = false): void {
     for (const id of this.referenceIds) map.removeLayer(id);
     this.referenceIds = [];
-    const url = geography ? geography.endpoint + '/tiles/reference/{z}/{x}/{y}.mvt?v=' +
-      encodeURIComponent(geography.info.version) + (low ? '&outline=1' : '') : undefined;
+    const url = this.referenceTileUrl();
     if (retry || this.referenceUrl !== url) {
-      this.referenceError.set('');
+      this.referenceError.set(false);
       if (map.getSource('reference')) map.removeSource('reference');
       if (url) map.addSource('reference', { type: 'vector', tiles: [url] });
       this.referenceUrl = url;
     }
     map.setPaintProperty('background', 'background-color', mapColours[theme].canvas);
-    if (geography) {
-      const before = map.getLayer('detections') ? 'detections' : 'incident-members';
-      for (const layer of referenceLayers(geography.info, theme, low)) {
-        map.addLayer(layer, before);
+    for (const group of groups) {
+      for (const layer of group.layers) {
+        map.addLayer({
+          ...layer, layout: { ...layer.layout, visibility: this.layerEnabled(group) ? 'visible' : 'none' }
+        } as typeof layer, 'selected-detection-edge');
         this.referenceIds.push(layer.id);
       }
     }
@@ -283,28 +419,25 @@ export class DemoMap implements AfterViewInit, OnDestroy {
 
   private updateLayers(map: LibreMap, theme: Theme, url: string | null): void {
     const changed = theme !== this.appliedTheme;
-    if (changed && map.getLayer('incident-members')) {
-      map.setPaintProperty('incident-members', 'circle-stroke-color', interfaceColours[theme].action);
-    }
-    if (changed && map.getLayer('linked-alert')) {
-      map.setPaintProperty('linked-alert', 'circle-color', interfaceColours[theme].action);
-      map.setPaintProperty('linked-alert', 'circle-stroke-color', interfaceColours[theme].action);
-    }
-    if (changed && map.getLayer('selected-detection')) {
+    if (changed) {
+      map.setPaintProperty('selected-detection-edge', 'circle-stroke-color', mapColours[theme].ageOutline);
       map.setPaintProperty('selected-detection', 'circle-stroke-color', mapColours[theme].selection);
+      map.setPaintProperty('incident-members', 'circle-stroke-color', mapColours[theme].selection);
+      map.setLayoutProperty('reported-incidents', 'icon-image', this.incidentIcon(map, theme));
     }
     this.appliedTheme = theme;
     if (url !== this.appliedUrl) {
       this.removeDetections(map);
       this.visible.set([]);
-      this.tileError.set('');
+      this.tileError.set(false);
+      this.detectionsDrawn.set(false);
       this.appliedUrl = url;
     }
     if (!url) return;
     const source = map.getSource('detections');
     if (!source || changed) {
       for (const cls of this.forestClasses) {
-        for (const age of this.ageLabels.keys()) {
+        for (const age of ageLabels.keys()) {
           const name = iconName(cls, age, theme);
           if (!map.hasImage(name)) map.addImage(name, symbolImage(cls, age, theme), { pixelRatio: 2 });
         }
@@ -313,21 +446,22 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     const layer = detectionLayer(theme);
     if (!source) {
       map.addSource('detections', { type: 'vector', tiles: [url] });
-      map.addLayer(layer);
-      map.addLayer({ id: 'selected-detection', type: 'circle', source: 'detections', 'source-layer': 'detections',
-        filter: ['==', ['to-string', ['get', 'id']], String(this.selected()?.id ?? '')],
-        paint: { 'circle-radius': 10, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': mapColours[theme].selection }
-      });
-      for (const id of ['incident-members', 'linked-alert']) if (map.getLayer(id)) map.moveLayer(id);
+      layer.layout!.visibility = this.showDetections() ? 'visible' : 'none';
+      map.addLayer(layer, 'reported-incidents');
     } else if (changed) {
       map.setLayoutProperty(layer.id, 'icon-image', layer.layout!['icon-image']);
     }
   }
 
   private removeDetections(map: LibreMap): void {
-    if (map.getLayer('selected-detection')) map.removeLayer('selected-detection');
     if (map.getLayer('detections')) map.removeLayer('detections');
     if (map.getSource('detections')) map.removeSource('detections');
+  }
+
+  private incidentIcon(map: LibreMap, theme: Theme): string {
+    const name = 'reported-incident-' + theme;
+    if (!map.hasImage(name)) map.addImage(name, symbolImage('incident', 0, theme), { pixelRatio: 2 });
+    return name;
   }
 
   ngAfterViewInit(): void {
@@ -356,43 +490,48 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       });
       this.resize.observe(this.container().nativeElement);
       map.getCanvas().setAttribute('aria-label', 'Workspace map. Use arrow keys to pan and plus or minus to zoom.');
+      map.on('zoom', () => this.zoomLevel.set(map.getZoom()));
       map.on('error', event => {
-        if ('sourceId' in event && (event.sourceId === 'detections' || event.sourceId === 'reference')) {
-          const status = tileErrorStatus(event.error);
-          if (status === 401) this.auth.sessionEnded();
-          else if (status === 403) this.workspace.deny();
-          else if (event.sourceId === 'reference') this.referenceError.set(this.filters.lowBandwidth()
-            ? 'Could not load the workspace outline layer.'
-            : 'Could not load reference layers (boundaries, forest and exclusions).');
-          else this.tileError.set('Could not load the fire detections layer.');
-        } else this.error.set('The map display encountered an error. Reload to try again.');
+        const source = 'sourceId' in event ? event.sourceId : undefined;
+        if (source === 'detections' || source === 'reference') this.tileFailed(source, event.error);
+        else this.error.set('The map display encountered an error. Reload to try again.');
       });
       map.on('click', event => {
-        if (!map.getLayer('detections')) return;
+        if (!this.showDetections() || !map.getLayer('detections')) return;
         const [feature] = map.queryRenderedFeatures(event.point, { layers: ['detections'] });
-        if (feature) {
-          this.selectionTrigger = map.getCanvas();
-          this.openDetection(String(readDetection(feature).id));
-        }
+        if (!feature) return;
+        const point = readDetection(feature);
+        const id = String(point.id);
+        if (!this.visible().some(row => String(row.id) === id)) this.visible.update(rows => [point, ...rows]);
+        this.selectionTrigger = map.getCanvas();
+        this.openDetection(id);
       });
       map.on('idle', () => {
-        if (!map.getLayer('detections')) return;
+        if (!this.showDetections() || !map.getLayer('detections')) return;
         const points = new Map<string, Detection>();
         for (const feature of map.queryRenderedFeatures({ layers: ['detections'] })) {
           const point = readDetection(feature);
           points.set(String(point.id), point);
         }
         this.visible.set([...points.values()].sort((a, b) => b.observed_at - a.observed_at));
+        this.detectionsDrawn.set(true);
       });
       map.once('load', () => {
-        map.addSource('linked-alert', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addSource('incident-members', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ id: 'incident-members', type: 'circle', source: 'incident-members',
-          paint: { 'circle-radius': 13, 'circle-opacity': 0, 'circle-stroke-width': 2, 'circle-stroke-color': interfaceColours[this.appearance.theme()].action }
+        const theme = this.appearance.theme();
+        map.addSource('selection', { type: 'geojson', data: pointCollection([]) });
+        map.addSource('incident-members', { type: 'geojson', data: pointCollection([]) });
+        map.addSource('reported-incidents', { type: 'geojson', data: pointCollection([]) });
+        map.addLayer({ id: 'selected-detection-edge', type: 'circle', source: 'selection',
+          paint: { 'circle-radius': 11, 'circle-opacity': 0, 'circle-stroke-width': 5, 'circle-stroke-color': mapColours[theme].ageOutline }
         });
-        map.addLayer({ id: 'linked-alert', type: 'circle', source: 'linked-alert',
-          paint: { 'circle-radius': 9, 'circle-color': interfaceColours[this.appearance.theme()].action, 'circle-opacity': 0.2,
-            'circle-stroke-width': 3, 'circle-stroke-color': interfaceColours[this.appearance.theme()].action }
+        map.addLayer({ id: 'selected-detection', type: 'circle', source: 'selection',
+          paint: { 'circle-radius': 12, 'circle-opacity': 0, 'circle-stroke-width': 3, 'circle-stroke-color': mapColours[theme].selection }
+        });
+        map.addLayer({ id: 'reported-incidents', type: 'symbol', source: 'reported-incidents',
+          layout: { 'icon-image': this.incidentIcon(map, theme), 'icon-offset': [9, -9], 'icon-overlap': 'always', visibility: 'none' }
+        });
+        map.addLayer({ id: 'incident-members', type: 'circle', source: 'incident-members',
+          paint: { 'circle-radius': 19, 'circle-opacity': 0, 'circle-stroke-width': 2, 'circle-stroke-color': mapColours[theme].selection }
         });
         this.ready.set(true);
         this.timer = setInterval(() => this.refreshDetections(), 60_000);
@@ -402,21 +541,31 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     }
   }
 
+  private tileFailed(source: TileSource, error: { message: string; status?: number }): void {
+    const status = tileErrorStatus(error);
+    if (status === 401) this.auth.sessionEnded();
+    else if (status === 403) this.workspace.deny();
+    else if (source === 'reference') this.referenceError.set(true);
+    else this.tileError.set(true);
+  }
+
   retryMapData(): void {
     if (this.geographyError()) this.geographyRetries.update(count => count + 1);
     if (this.referenceError() && this.map) {
       // Recreate the source so failed tiles are requested from scratch.
-      this.updateReference(this.map, this.geography(), this.appearance.theme(), this.filters.lowBandwidth(), true);
+      this.updateReference(this.map, this.reference(), this.appearance.theme(), true);
     }
     if (this.tileError()) this.refreshDetections();
+    if (this.incidentError()) this.incidentRetries.update(count => count + 1);
   }
 
   private refreshDetections(): void {
     const map = this.map;
-    if (!map?.getSource('detections')) return;
+    if (!this.showDetections() || !map?.getSource('detections')) return;
     if (this.tileError()) {
       this.removeDetections(map);
-      this.tileError.set('');
+      this.tileError.set(false);
+      this.detectionsDrawn.set(false);
       this.updateLayers(map, this.appearance.theme(), this.url());
     } else map.refreshTiles('detections');
   }
@@ -450,8 +599,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   closeDetails(): void {
     this.navigation.update({ alert: null, detection: null });
     requestAnimationFrame(() => {
-      const target = this.selectionTrigger?.isConnected ? this.selectionTrigger : this.map?.getCanvas();
-      target?.focus();
+      restoreOverlayFocus(this.selectionTrigger ?? document.getElementById('detection-picker'), this.map?.getCanvas());
     });
   }
 

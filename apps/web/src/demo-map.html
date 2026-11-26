@@ -10,13 +10,13 @@
   @if (workspace.current()) {
     <hlm-field class="filter-card">
       <label hlmFieldLabel for="detection-picker">Detections in view</label>
-      <hlm-select [value]="selected()?.id?.toString()" [disabled]="!visible().length && !selected()"
+      <hlm-select [value]="selected()?.id?.toString()" [disabled]="!showDetections() || !detectionChoices().length"
         (valueChange)="choose($event || '')">
-        <hlm-select-trigger buttonId="detection-picker" size="sm">{{ selected() ? 'Detection #' + selected()!.id : visible().length ? 'Select a detection' : 'None in view' }}</hlm-select-trigger>
+        <hlm-select-trigger buttonId="detection-picker" size="sm">{{ !showDetections() ? 'Layer hidden' : selected() ? 'Detection #' + selected()!.id : 'Select a detection' }}</hlm-select-trigger>
         <hlm-select-content *hlmSelectPortal>
           @if (selected()) { <hlm-select-item value="">Clear selection</hlm-select-item> }
-          @for (point of visible(); track point.id) {
-            <hlm-select-item [value]="point.id.toString()">{{ classes[point.forest_class] }} · {{ point.beat_name || 'Unknown beat' }} · {{ relativeAge(point.observed_at, now()) }} · #{{ point.id }}</hlm-select-item>
+          @for (point of detectionChoices(); track point.id) {
+            <hlm-select-item [value]="point.id.toString()">{{ classes[point.forest_class] }} · {{ places(point).firstName }} · {{ detectionAge(point.observed_at, now()) }} · #{{ point.id }}</hlm-select-item>
           }
         </hlm-select-content>
       </hlm-select>
@@ -24,66 +24,158 @@
   }
   <fimra-state-region [state]="mapDataState()" (retry)="retryMapData()" />
   @if (workspace.message() || linkedMessage() || error()) {
-    <p class="map-message" role="status">{{ workspace.message() }} {{ linkedMessage() }} {{ error() }}</p>
+    <p class="map-message" role="status">{{ workspace.message() || linkedMessage() || error() }}</p>
   }
 </div>
-<section class="map-key" aria-label="Map key">
-  <button hlmBtn variant="ghost" (click)="legend.set(!legend())" [attr.aria-expanded]="legend()" aria-controls="map-key-items">
-    <svg fimraIcon="layers"></svg> Map key
-  </button>
-  <div id="map-key-items" class="key-groups" [hidden]="!legend()">
-    @if (workspace.current()) {
-      <div><h2>Detection age</h2><ul>
-        @for (label of ageLabels; track label; let i = $index) {
-          <li><i class="age-swatch" [style.background]="'var(--color-fire-age-' + (i+1) + ')'"></i>{{ label }}</li>
+@if (workspace.current()) {
+  <div class="map-legend">
+    <button #layersButton type="button" hlmBtn variant="outline" (click)="layersPanel.show(layersButton)"
+      [attr.aria-expanded]="layersPanel.open()">
+      <svg fimraIcon="layers" aria-hidden="true"></svg> Layers and legend
+    </button>
+    @if (showDetections() || showIncidents() || incidentFocus()) {
+      <section class="map-key" aria-label="Map legend">
+        @if (showDetections()) {
+          @let ages = keyAges();
+          @if (ages.length) {
+            <ul aria-label="Detection age">
+              @for (age of ages; track age.label) {
+                <li><i class="map-age" [style.background]="age.colour" aria-hidden="true"></i><span class="sr-only">{{ age.label }}</span><span aria-hidden="true">{{ age.short }}</span></li>
+              }
+            </ul>
+          }
+          <ul aria-label="Forest class">
+            @for (cls of keyClasses(); track cls) {
+              <li><i class="map-symbol" [class]="cls" aria-hidden="true"></i><span class="sr-only">{{ classes[cls] }}</span><span aria-hidden="true">{{ shortClasses[cls] }}</span></li>
+            }
+          </ul>
         }
-      </ul>
-      <h2>Forest class</h2><ul>
-        @for (cls of forestClasses; track cls) {
-          <li><i class="key-symbol" [class]="cls"></i>{{ classes[cls] }}</li>
+        @if (showIncidents() || incidentFocus()) {
+          <ul aria-label="Incidents">
+            @if (showIncidents()) { <li><i class="map-swatch incident" aria-hidden="true"></i> Reported incident</li> }
+            @if (incidentFocus()) { <li><i class="map-swatch member" aria-hidden="true"></i> Incident member</li> }
+          </ul>
         }
-      </ul></div>
+      </section>
     }
-    @if (boundaries().length) { <div><h2>Reference layers</h2><ul>
-    @for (item of boundaries(); track item.id) {
-      <li><i class="key-line" [style.border-color]="item.color" [style.opacity]="item.opacity" [style.border-top-style]="item.depth ? 'dashed' : 'solid'" [style.border-top-width.px]="item.width"></i>{{ item.labels.en }}</li>
-    }
-    @if (!filters.lowBandwidth()) { <li><i class="key-forest"></i>Forest</li>
-    <li><i class="key-kiln"></i>Exclusions</li> }
-    </ul></div> }
   </div>
-</section>
+  <fimra-side-panel #layersPanel="fimraSidePanel" class="layers-panel" heading="Layers and legend">
+    <div class="layer-options" [style.--map-exclusion-opacity]="exclusionOpacity">
+      <fieldset>
+        <legend>Operational layers</legend>
+        @for (layer of operational; track layer.id) {
+          <label><input type="checkbox" [checked]="layerEnabled(layer)"
+            (change)="toggleLayer(layer, $any($event.target).checked)" /> {{ layer.label }}</label>
+        }
+      </fieldset>
+      @if (reference().length) {
+        <fieldset>
+          <legend>Reference layers</legend>
+          @if (filters.lowBandwidth()) { <p>Low bandwidth hides optional geography.</p> }
+          @for (layer of reference(); track layer.id) {
+            <label><input type="checkbox" [checked]="layerEnabled(layer)"
+              [disabled]="layer.optional && filters.lowBandwidth()"
+              (change)="toggleLayer(layer, $any($event.target).checked)" />
+              <span>{{ layer.label }}
+                @if (layerEnabled(layer) && zoomLevel() < layer.minZoom) { <small>Zoom in to see</small> }
+              </span>
+            </label>
+          }
+        </fieldset>
+      }
+      <section aria-labelledby="visible-layer-key">
+        <h3 id="visible-layer-key">Legend at this zoom</h3>
+        @if (showDetections()) {
+          @if (keyAges().length) {
+            <ul aria-label="Detection age">
+              @for (age of keyAges(); track age.label) {
+                <li><i class="map-age" [style.background]="age.colour" aria-hidden="true"></i>{{ age.label }}</li>
+              }
+            </ul>
+          }
+          <ul aria-label="Forest class">
+            @for (cls of keyClasses(); track cls) {
+              <li><i class="map-symbol" [class]="cls" aria-hidden="true"></i>{{ classes[cls] }}
+                @if (cls === 'outside' || cls === 'fixed_heat_source') { <small>(neutral)</small> }
+              </li>
+            }
+          </ul>
+        }
+        <ul aria-label="Visible layers">
+          @for (layer of visibleLegend(); track layer.id) {
+            @if (layer.swatch; as swatch) {
+              <li>
+                @if (swatch.kind === 'line') {
+                  <i class="map-swatch line" [style.border-color]="swatch.color" [style.opacity]="swatch.opacity"
+                    [style.border-top-style]="swatch.dashed ? 'dashed' : 'solid'" [style.border-top-width.px]="swatch.width" aria-hidden="true"></i>
+                } @else {
+                  <i class="map-swatch" [class]="swatch.kind" aria-hidden="true">{{ swatch.kind === 'label' ? 'Aa' : '' }}</i>
+                }
+                {{ layer.label }}
+              </li>
+            }
+          }
+          @if (incidentFocus()) { <li><i class="map-swatch member" aria-hidden="true"></i>Incident members</li> }
+          @if (showDetections() && selected()) { <li><i class="map-swatch selection" aria-hidden="true"></i>Selected detection</li> }
+        </ul>
+        @if (showIncidents()) { <p>Incident markers are placed near the centre of their linked alerts.</p> }
+        @if (!showDetections() && !visibleLegend().length && !incidentFocus()) {
+          <p>No layers are visible at this zoom.</p>
+        }
+      </section>
+    </div>
+  </fimra-side-panel>
+}
 </section>
 @if (selected(); as point) {
-  <section tabindex="-1" class="detail-card" aria-labelledby="detail-title" (keydown.escape)="closeDetails()">
-    <div class="detail-heading"><h2 id="detail-title" #detailTitle tabindex="-1">Detection details</h2>
-      <button hlmBtn variant="ghost" (click)="closeDetails()" aria-label="Close detection details">Close</button></div>
-    <p>{{ localTime.format(point.observed_at * 1000) }} · {{ relativeAge(point.observed_at, now()) }}</p>
-    @if (queue.pinned(); as alert) {
-      <div class="step-meta" aria-label="Current step">
-        <fimra-status-badge icon="step" [label]="alert.step_label" />
-        <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
-        @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+  @let alert = queue.pinned();
+  <section tabindex="-1" class="detail-card" aria-labelledby="detail-title"
+    (keydown.escape)="$event.stopPropagation(); closeDetails()">
+    <div class="detail-heading">
+      <div>
+        <p>{{ workspace.current()?.name }}</p>
+        <h2 id="detail-title" #detailTitle tabindex="-1">{{ alert ? 'Alert #' + alert.id : 'Detection #' + point.id }}</h2>
       </div>
-      @defer (on immediate) {
-        <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
-          (changed)="queue.refresh()" />
-      }
-      @defer (on immediate) {
-        <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="queue.refresh()" />
-      }
-    }
-    <dl>
-      <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
-      @for (place of places(point).all; track place.label; let first = $first) {
-        <dt>{{ place.label }}</dt><dd>{{ place.name || place.code || 'Unknown' }} @if (first && place.name && place.code) { ({{ place.code }}) }</dd>
-      }
-      <dt>Source</dt><dd>{{ sourceLabel(point.source) }}</dd>
-      <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
-      <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
-      <dt>Confidence</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>
-    </dl>
-    @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
+      <button type="button" hlmBtn variant="ghost" (click)="closeDetails()" aria-label="Close map details">Close</button>
+    </div>
+    <section class="map-detail-block" aria-labelledby="observation-heading">
+      <h3 id="observation-heading">{{ point.source === 'manual' ? 'Reported observation' : 'Detected observation' }}</h3>
+      <p>Detection #{{ point.id }} · {{ localTime.format(point.observed_at * 1000) }} · {{ detectionAge(point.observed_at, now()) }}</p>
+      <dl>
+        <dt>Forest class</dt><dd>{{ classes[point.forest_class] }}</dd>
+        @for (place of places(point).all; track place.label; let first = $first) {
+          <dt>{{ place.label }}</dt><dd>{{ place.name || place.code || 'Unknown' }} @if (first && place.name && place.code) { ({{ place.code }}) }</dd>
+        }
+        <dt>Source</dt><dd>{{ sourceLabel(point.source) }}</dd>
+        <dt>Product</dt><dd>{{ point.product || 'Unknown' }}</dd>
+        <dt>Fire radiative power</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + ' megawatts' : 'Unknown' }}</dd>
+        <dt>Confidence</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>
+      </dl>
+      @if (point.triage) { <p class="triage"><strong>Needs review</strong> · {{ reasons[point.triage] }}</p> }
+    </section>
+    <section class="map-detail-block" aria-labelledby="alert-detail-heading">
+      <h3 id="alert-detail-heading">Routed alert</h3>
+      @if (alert) {
+        <div class="step-meta" aria-label="Current step">
+          <fimra-status-badge icon="step" [label]="alert.step_label" />
+          <time [attr.datetime]="alert.step_time">{{ localTime.format(stepDate(alert.step_time)) }}</time>
+          @if (alert.overdue) { <fimra-status-badge icon="overdue" label="Overdue" /> }
+        </div>
+        @defer (on immediate) {
+          <fimra-workflow [url]="queue.endpoint() + '/' + alert.id" [stepTime]="alert.step_time"
+            (changed)="queue.refresh()" />
+        }
+        @defer (on immediate) {
+          <fimra-alert-reports [workspaceUrl]="exportEndpoint()!" [alert]="alert" [stepTime]="alert.step_time" (changed)="queue.refresh()" />
+        }
+      } @else { <p>No alert available for this detection.</p> }
+    </section>
+    <section class="map-detail-block" aria-labelledby="incident-detail-heading">
+      <h3 id="incident-detail-heading">Linked incident</h3>
+      @if (alert?.incident_id; as incident) {
+        <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/incidents', { incident })">Open incident #{{ incident }}</a>
+      } @else { <p>No incident available for this detection.</p> }
+    </section>
   </section>
 }
 @if (workspace.current()) {

@@ -1,6 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ageColours, mapColours } from './token-values';
+import { exclusionOpacity } from './map-style';
+import { ageColours, forestOpacity, interfaceColours, mapColours } from './token-values';
 import { confidenceLabel, detectionLayer, mapRequest, placesOf, readDetection, sourceLabel, symbolStyle, tileErrorStatus, tileUrl } from './detections';
+
+function rgb(color: string): number[] {
+  return color.slice(1).match(/../g)!.map(channel => parseInt(channel, 16) / 255);
+}
+
+function mix(a: number[], b: number[], alpha: number): number[] {
+  return a.map((channel, i) => channel * (1 - alpha) + b[i] * alpha);
+}
+
+function contrast(a: number[], b: number[]): number {
+  const luminance = (channels: number[]) => channels.map(channel => channel <= 0.04045
+    ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, channel, i) => sum + channel * [0.2126, 0.7152, 0.0722][i], 0);
+  const [dark, light] = [luminance(a), luminance(b)].sort((x, y) => x - y);
+  return (light + 0.05) / (dark + 0.05);
+}
 
 describe('Detection symbols', () => {
   it.each(['light', 'dark'] as const)('uses the %s palette and distinct class shapes', theme => {
@@ -11,6 +28,21 @@ describe('Detection symbols', () => {
       expect(symbolStyle('outside', age, theme)).toEqual({ shape: 'circle', radius: 3, color: mapColours[theme].neutralMark });
     }
     expect(detectionLayer(theme).layout?.['symbol-sort-key']).toEqual(['get', 'observed_at']);
+  });
+  it.each(['light', 'dark'] as const)('keeps every mark and selection visible on %s map surfaces', theme => {
+    const { canvas, land, forest, neutralMark, ageOutline, selection } = mapColours[theme];
+    const surfaces = [
+      rgb(canvas), rgb(land), mix(rgb(land), rgb(forest), forestOpacity),
+      mix(rgb(canvas), rgb(forest), forestOpacity), rgb(interfaceColours[theme].selected)
+    ];
+    for (const surface of [...surfaces, ...surfaces.map(base => mix(base, rgb(neutralMark), exclusionOpacity))]) {
+      for (const fill of [...ageColours[theme], neutralMark, selection]) {
+        // The stroke is continuous even when an age fill blends with the background.
+        expect(Math.max(contrast(rgb(fill), surface), contrast(rgb(ageOutline), surface))).toBeGreaterThanOrEqual(3);
+      }
+      expect(contrast(rgb(ageOutline), surface)).toBeGreaterThanOrEqual(3);
+    }
+    expect(contrast(rgb(selection), rgb(land))).toBeGreaterThanOrEqual(3);
   });
 });
 

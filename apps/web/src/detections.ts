@@ -8,6 +8,9 @@ export const classes = {
   outside: 'Outside forest', fixed_heat_source: 'Suspected fixed heat source'
 };
 export type ForestClass = keyof typeof classes;
+export const shortClasses: Record<ForestClass, string> = {
+  inside: 'Inside', near_edge: 'Edge', outside: 'Outside', fixed_heat_source: 'Fixed heat'
+};
 export { ageLabels } from './token-values';
 export const triageReasons: Record<string, string> = {
   no_unit: 'No mapped unit covers this point.',
@@ -56,7 +59,7 @@ export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'
   return rows.map(({ slug, label }) => ({ label, name: places[slug]?.name ?? '', code: places[slug]?.code ?? '' }));
 }
 
-const sourceNames: Record<string, string> = { firms: 'NASA FIRMS' };
+const sourceNames: Record<string, string> = { firms: 'NASA FIRMS', manual: 'Manual fire report' };
 
 /** A readable name for a detection source code. */
 export function sourceLabel(value: string | null | undefined): string {
@@ -114,27 +117,39 @@ export function iconName(cls: ForestClass, age: number, theme: Theme): string {
   return ['fire', theme, cls, age].join('-');
 }
 
-export function symbolImage(cls: ForestClass, age: number, theme: Theme): ImageData {
+export function symbolImage(cls: ForestClass | 'incident', age: number, theme: Theme): ImageData {
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 32;
+  canvas.width = canvas.height = 40;
   const ctx = canvas.getContext('2d')!;
   ctx.scale(2, 2);
-  const { shape, radius, color } = symbolStyle(cls, age, theme);
+  const { shape, radius, color } = cls === 'incident'
+    ? { shape: 'diamond', radius: 6, color: mapColours[theme].selection }
+    : symbolStyle(cls, age, theme);
+  const centre = canvas.width / 4;
   ctx.beginPath();
-  if (shape === 'square') ctx.rect(8 - radius, 8 - radius, radius * 2, radius * 2);
-  else ctx.arc(8, 8, radius, 0, Math.PI * 2);
+  if (shape === 'square') ctx.rect(centre - radius, centre - radius, radius * 2, radius * 2);
+  else if (shape === 'diamond') {
+    ctx.moveTo(centre, centre - radius);
+    ctx.lineTo(centre + radius, centre);
+    ctx.lineTo(centre, centre + radius);
+    ctx.lineTo(centre - radius, centre);
+    ctx.closePath();
+  } else ctx.arc(centre, centre, radius, 0, Math.PI * 2);
+  ctx.lineJoin = 'round';
   ctx.strokeStyle = mapColours[theme].ageOutline;
-  ctx.lineWidth = shape === 'ring' ? 4 : 2;
-  ctx.stroke();
-  if (shape === 'ring') {
+  if (shape !== 'ring') {
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else {
+    ctx.lineWidth = 5;
+    ctx.stroke();
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     ctx.stroke();
-  } else {
-    ctx.fillStyle = color;
-    ctx.fill();
   }
-  return ctx.getImageData(0, 0, 32, 32);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
 export function detectionLayer(theme: Theme): SymbolLayerSpecification {
@@ -144,6 +159,18 @@ export function detectionLayer(theme: Theme): SymbolLayerSpecification {
     layout: { 'icon-image': image, 'icon-overlap': 'always', 'symbol-z-order': 'source',
       'symbol-sort-key': ['get', 'observed_at'] }
   };
+}
+
+/** Observation age to the minute, short enough to fit in the map picker. */
+export function detectionAge(seconds: number, now: number): string {
+  const minutes = Math.max(0, Math.floor((now / 1000 - seconds) / 60));
+  if (!minutes) return 'Just now';
+  const parts = [
+    [Math.floor(minutes / 1440), 'd'],
+    [Math.floor(minutes / 60) % 24, 'h'],
+    [minutes % 60, 'm']
+  ];
+  return parts.filter(([value]) => value).map(([value, unit]) => `${value}${unit}`).join(' ') + ' ago';
 }
 
 export function relativeAge(seconds: number, now: number): string {
