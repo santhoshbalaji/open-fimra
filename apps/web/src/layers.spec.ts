@@ -1,7 +1,9 @@
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, TestBed } from '@angular/core/testing';
+import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
@@ -16,182 +18,193 @@ const ready = {
   versionId: version, status: 'ready', role: 'hierarchy', unitCount: 24,
   featureCount: 0, sourceCrs: 'EPSG:4326', problems: []
 };
-const defaultPreview = { days: 30, scanned: 11, blocked: '', brokenGrants: [], grantConfirmation: '', changes: {} };
+const previous = {
+  versionId: 'prior-version', layerSlug: 'beats', layerName: 'Beats', version: 1, depth: 4,
+  sourceFile: 'older-beats.geojson', status: 'published', hasImport: false, blocksPublish: false
+};
+const latest = { ...previous, versionId: version, version: 2, sourceFile: 'beats.geojson', status: 'ready', hasImport: true };
+const row = {
+  slug: 'beats', name: 'Beats', role: 'hierarchy', hierarchy: 'territorial', depth: 4,
+  published: previous, draft: latest, previous: [], lastChangedAt: '2026-11-25T10:30:00Z'
+};
+const catalog = {
+  layers: [row], hierarchies: [{ slug: 'territorial', name: 'Territorial', levels: [{ depth: 4, name: 'Beat' }] }],
+  uploads: [latest]
+};
+const defaultPreview = {
+  days: 30, scanned: 11, blocked: '', brokenGrants: [], grantConfirmation: '', changes: {},
+  previous: [{ layerName: 'Beats', version: 1 }]
+};
 
 describe('Layers', () => {
   let fixture: ComponentFixture<Layers>;
   let http: HttpTestingController;
 
-  // Dialogs and select lists open in an overlay outside the component, so search the whole page.
   const button = (label: string): HTMLButtonElement | undefined =>
     [...document.querySelectorAll('button')].find(element => element.textContent.trim() === label);
   const text = () => document.body.textContent as string;
-  function choose(trigger: string, option: string): void {
-    (document.getElementById(trigger) as HTMLButtonElement).click();
-    fixture.detectChanges();
-    const item = [...document.querySelectorAll<HTMLElement>('hlm-select-item')].find(element => element.textContent.trim() === option);
-    if (!item) throw new Error('No option ' + option);
-    item.click();
-    fixture.detectChanges();
-  }
 
   beforeEach(() => {
     stubLayoutApis();
     vi.useFakeTimers();
-    TestBed.configureTestingModule({ imports: [Layers], providers: [
-      provideHttpClient(), provideHttpClientTesting(),
+    TestBed.configureTestingModule({ imports: [Layers], deferBlockBehavior: DeferBlockBehavior.Manual, providers: [
+      provideHttpClient(), provideHttpClientTesting(), provideSpartanHlm(),
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } },
-      { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo' }) } },
+      { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }) } },
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test' } }
     ] });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     fixture = TestBed.createComponent(Layers);
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
-    http.expectOne(root).flush({
-      layers: [{ slug: 'beats', name: 'Beats', role: 'hierarchy', hierarchy: 'territorial', depth: 4 }],
-      hierarchies: [{ slug: 'territorial', name: 'Territorial', levels: [{ depth: 4, name: 'Beat' }] }],
-      uploads: [{ versionId: version, layerName: 'Beats', version: 2, sourceFile: 'beats.geojson', status: 'ready' }]
-    });
+    http.expectOne(root).flush(catalog);
     fixture.detectChanges();
   });
 
   afterEach(() => {
     fixture.destroy();
     http.verify();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
-  function openDraft(draft: object): void {
-    choose('upload-choice', 'Beats · Version 2 · Ready for review');
+  function openDraft(draft: object = ready): void {
+    button('Review draft')!.click();
+    fixture.detectChanges();
     vi.advanceTimersByTime(0);
     http.expectOne(detail).flush(draft);
-    if (draft === ready || (draft as typeof ready).status === 'ready') {
-      http.expectOne(root).flush({ layers: [], hierarchies: [], uploads: [] });
-    }
     fixture.detectChanges();
   }
 
-  function runPreview(data: object): void {
+  function runPreview(data: object = defaultPreview): void {
     const preview = fixture.nativeElement.querySelector('.window-form') as HTMLFormElement;
     preview.dispatchEvent(new Event('submit', { cancelable: true }));
     http.expectOne(detail + '/preview?days=30').flush(data);
     fixture.detectChanges();
   }
 
-  it('submits the selected hierarchy mapping and polls for review', () => {
-    const uploadForm = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    choose('layer-choice', 'Beats (beats)');
-    expect(document.getElementById('layer-choice')?.textContent).toContain('Beats (beats)');
-    expect(text()).toContain('Hierarchy boundaries');
+  it('shows published and draft versions, status, last change and next action in the catalog', () => {
+    const row = fixture.nativeElement.querySelector('table tbody tr') as HTMLElement;
+    expect([...row.querySelectorAll('th, td')].map(cell => cell.textContent.trim())).toEqual([
+      'Beats', 'Hierarchy boundaries', 'Version 1', 'Version 2', 'Checks passed', expect.stringContaining('25 Nov 2026'), 'Review draft'
+    ]);
+    expect(row.querySelector('fimra-layer-status svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(row.querySelector('time')?.dateTime).toBe('2026-11-25T10:30:00Z');
+  });
+
+  it('uploads a replacement with the selected layer and resumes its check after closing', () => {
+    openDraft();
+    button('Upload new version')!.click();
+    fixture.detectChanges();
+    const uploadForm = fixture.nativeElement.querySelector('.upload-form') as HTMLFormElement;
     (uploadForm.querySelector('[name=nameField]') as HTMLInputElement).value = 'label';
     (uploadForm.querySelector('[name=parentCodeField]') as HTMLInputElement).value = 'parent';
     uploadForm.dispatchEvent(new Event('submit', { cancelable: true }));
     const post = http.expectOne({ url: root, method: 'POST' });
-    expect(post.request.body.get('role')).toBe('hierarchy');
     expect(post.request.body.get('layerSlug')).toBe('beats');
     expect(post.request.body.get('hierarchy')).toBe('territorial');
     expect(JSON.parse(post.request.body.get('settings'))).toEqual({ depth: 4, nameField: 'label', parentCodeField: 'parent' });
-    post.flush({ ...ready, status: 'pending' }, { status: 202, statusText: 'Accepted' });
-    http.expectOne(root).flush({ layers: [], hierarchies: [], uploads: [] });
+    post.flush({ ...ready, status: 'pending' });
+    const pending = { ...latest, status: 'pending' };
+    http.expectOne(root).flush({ ...catalog, layers: [{ ...row, draft: pending }], uploads: [pending] });
     fixture.detectChanges();
-    expect(text()).toContain('Importing');
-    expect(button('Publish layer')).toBeUndefined();
-    vi.advanceTimersByTime(1000);
+    expect(text()).toContain('The file is being checked.');
+    button('Close')!.click();
+    fixture.detectChanges();
+    button('View progress')!.click();
+    fixture.detectChanges();
+    vi.advanceTimersByTime(0);
     http.expectOne(detail).flush(ready);
-    http.expectOne(root).flush({ layers: [], hierarchies: [], uploads: [] });
+    http.expectOne(root).flush(catalog);
     fixture.detectChanges();
-    expect(text()).toContain('Ready for review');
+    expect(button('Run preview')).toBeDefined();
   });
 
-  it('shows blocking review problems and disallows publishing after preview', () => {
-    openDraft({ ...ready, problems: [{ kind: 'overlap', featureRef: 'feature:3', message: 'These beats overlap.', blocksPublish: true }] });
-    runPreview({ ...defaultPreview, blocked: 'Fix the blocking problems.' });
-    expect(text()).toContain('These beats overlap.');
-    const row = fixture.nativeElement.querySelector('.problems tbody tr') as HTMLElement;
-    expect(row.dataset['blocking']).toBe('true');
-    expect(row.textContent).toContain('Blocks publishing');
-    expect(row.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
-    expect(text()).toContain('1 problem blocks publishing.');
-    expect(text()).toContain('Fix the blocking problems.');
-    expect(button('Publish layer')).toBeUndefined();
+  it('links each blocker to its reason and repair guidance and offers a replacement', () => {
+    openDraft({ ...ready, problems: [
+      { kind: 'missing_code', featureRef: 'feature:3', message: 'This unit has no code.', blocksPublish: true },
+      { kind: 'missing_name', featureRef: 'feature:7', message: 'This unit has no name.', blocksPublish: true }
+    ] });
+    const links = [...document.querySelectorAll<HTMLAnchorElement>('fimra-field-error-summary a')];
+    expect(links).toHaveLength(2);
+    for (const [index, label] of ['code', 'name'].entries()) {
+      links[index].click();
+      const detail = document.getElementById(links[index].hash.slice(1));
+      expect(document.activeElement).toBe(detail);
+      expect(detail?.textContent).toContain('This unit has no ' + label);
+      expect(detail?.textContent).toContain('Fill in the ' + label);
+    }
+    expect(button('Run preview')).toBeUndefined();
+    button('Replace file')!.click();
+    fixture.detectChanges();
+    expect(document.activeElement?.id).toBe('layer-file');
   });
 
-  it('requires preview and explicit grant removal, then shows replay progress', () => {
-    openDraft(ready);
-    expect(button('Publish layer')).toBeUndefined();
+  it('confirms the scoped replacement and returns focus to Publish when canceled', async () => {
+    openDraft();
+    runPreview();
+    const publish = button('Publish layer')!;
+    publish.focus();
+    publish.click();
+    TestBed.tick();
+    const dialog = document.querySelector('[role=alertdialog]')!;
+    expect(dialog.textContent).toContain('Publish version 2?');
+    expect(dialog.textContent).toContain('Demo State · Territorial · Beat');
+    expect(dialog.textContent).toContain('replace Beats version 1 in this scope');
+    expect(document.activeElement).toBe(button('Cancel'));
+    button('Cancel')!.click();
+    await vi.advanceTimersByTimeAsync(300);
+    TestBed.tick();
+    expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    expect(document.activeElement).toBe(publish);
+    http.expectNone(detail + '/publish');
+  });
+
+  it('requires approval for lost grants and shows publication, previous version and replay result', async () => {
+    openDraft();
     runPreview({
       ...defaultPreview,
-      changes: { reassigned: { count: 1, items: [{
-        detectionId: '42', observedAt: '2026-11-20T00:00:00Z', oldClass: 'inside', newClass: 'inside',
-        oldBeats: ['territorial/ds.b01'], newBeats: ['territorial/ds.b02'], oldTriage: null, newTriage: null
-      }] } },
       brokenGrants: [{ userId: '1', username: 'beat.guard', unitPath: 'ds.b01', role: 'field_staff' }],
       grantConfirmation: 'preview-confirmation'
     });
-    expect(text()).toContain('territorial/ds.b01 → territorial/ds.b02');
     expect(text()).toContain('beat.guard');
-    const counts = [...fixture.nativeElement.querySelectorAll('.preview-counts > div') as NodeListOf<HTMLElement>]
-      .map(card => [card.querySelector('dt')?.textContent, card.querySelector('dd')?.textContent?.trim()]);
-    expect(counts).toContainEqual(['Beat or class changed', '1']);
-    button('Publish layer')?.click();
+    button('Publish layer')!.click();
     fixture.detectChanges();
-    const dialog = document.querySelector('[role=alertdialog]') as HTMLElement;
-    expect(dialog.textContent).toContain('Confirm publication');
-    expect(button('Confirm and publish')?.disabled).toBe(true);
-    (dialog.querySelector('[role=checkbox]') as HTMLElement).click();
+    expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    document.querySelector<HTMLElement>('[role=checkbox]')!.click();
     fixture.detectChanges();
-    button('Confirm and publish')?.click();
+    button('Publish layer')!.click();
+    TestBed.tick();
+    expect(text()).toContain('The grant you reviewed will be removed.');
+    button('Confirm and publish')!.click();
+    await vi.advanceTimersByTimeAsync(300);
+    TestBed.tick();
     const publish = http.expectOne({ url: detail + '/publish', method: 'POST' });
     expect(publish.request.body).toEqual({ days: 30, grantConfirmation: 'preview-confirmation' });
-    publish.flush({}, { status: 202, statusText: 'Accepted' });
-    vi.advanceTimersByTime(0);
-    http.expectOne(detail).flush({ ...ready, status: 'published', rematch: { status: 'running', processed: 5 } });
+    publish.flush({ status: 'published' }, { status: 202, statusText: 'Accepted' });
+    const published = { ...latest, status: 'published' };
+    http.expectOne(root).flush({
+      ...catalog, layers: [{ ...row, draft: null, published, previous: [{ ...previous, status: 'retired' }] }],
+      uploads: [published]
+    });
     fixture.detectChanges();
-    expect(text()).toContain('5 checked so far.');
+    expect(text()).toContain('Checking past detections is queued.');
     vi.advanceTimersByTime(1000);
     http.expectOne(detail).flush({ ...ready, status: 'published', rematch: { status: 'completed', processed: 11, alertsCreated: 1 } });
-    http.expectOne(root).flush({ layers: [], hierarchies: [], uploads: [] });
     fixture.detectChanges();
-    expect(text()).toContain('Re-match complete. 11 detections checked.');
+    expect(text()).toContain('11 detections checked.');
+    expect(text()).toContain('Previous in this scope');
+    expect(text()).toContain('Beats version 1');
   });
 
-  it('closes the confirmation without publishing', () => {
-    openDraft(ready);
-    runPreview(defaultPreview);
-    button('Publish layer')?.click();
-    fixture.detectChanges();
-    expect(document.querySelector('[role=alertdialog]')).not.toBeNull();
-    button('Cancel')?.click();
-    fixture.detectChanges();
-    expect(fixture.componentInstance.confirming()).toBe(false);
-    expect(button('Publish layer')).toBeDefined();
-  });
-
-  it('asks for a hierarchy and level before uploading a new hierarchy layer', () => {
-    choose('layer-role', 'Hierarchy boundaries');
-    const uploadForm = fixture.nativeElement.querySelector('form') as HTMLFormElement;
-    uploadForm.dispatchEvent(new Event('submit', { cancelable: true }));
-    fixture.detectChanges();
-    expect(text()).toContain('Choose a hierarchy.');
-    expect(text()).toContain('Choose a level.');
-    expect(document.getElementById('layer-hierarchy')?.getAttribute('aria-invalid')).toBe('true');
-    choose('layer-hierarchy', 'Territorial');
-    choose('layer-depth', 'Beat');
-    expect(text()).not.toContain('Choose a level.');
-    (uploadForm.querySelector('[name=layerName]') as HTMLInputElement).value = 'Beats';
-    (uploadForm.querySelector('[name=layerSlug]') as HTMLInputElement).value = 'beats-new';
-    uploadForm.dispatchEvent(new Event('submit', { cancelable: true }));
-    const post = http.expectOne({ url: root, method: 'POST' });
-    expect(post.request.body.get('hierarchy')).toBe('territorial');
-    expect(JSON.parse(post.request.body.get('settings'))).toEqual({ depth: 4 });
-  });
-
-  it('requires a fresh preview after a publish conflict', () => {
-    openDraft(ready);
-    runPreview(defaultPreview);
-    button('Publish layer')?.click();
-    fixture.detectChanges();
-    button('Confirm and publish')?.click();
+  it('requires a fresh preview after a publish conflict', async () => {
+    openDraft();
+    runPreview();
+    button('Publish layer')!.click();
+    TestBed.tick();
+    button('Confirm and publish')!.click();
+    await vi.advanceTimersByTimeAsync(300);
+    TestBed.tick();
     http.expectOne(detail + '/publish').flush({ error: 'Grants changed. Run the preview again.' },
       { status: 409, statusText: 'Conflict' });
     fixture.detectChanges();

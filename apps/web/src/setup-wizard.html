@@ -129,7 +129,9 @@
                       <h4 [id]="'review-' + layer.key" tabindex="-1" class="rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-ring">
                         {{ layer.name }}@if (!layer.required) { <small class="font-normal text-muted-foreground"> (optional)</small> }
                       </h4>
-                      <fimra-status-badge class="layer-state mx-0! justify-self-start" [icon]="layerIcon(layer)" [label]="layerStatus(layer)" />
+                      <fimra-layer-status class="layer-state justify-self-start" [status]="drafts()[layer.key]?.status ?? layer.latest?.status"
+                        [alreadyPublished]="layer.published" [blocked]="!!blocking(layer).length" readyLabel="Ready to publish"
+                        [readFailed]="!!(checkErrors()[layer.key] || layerMessages()[layer.key])" />
                     </div>
                   </div>
                   @if (checkErrors()[layer.key]; as detail) {
@@ -141,47 +143,28 @@
                       <p hlmAlertDescription>{{ message }}</p>
                     </div>
                   }
-                  @if (layerFailed(layer) || blocking(layer).length) {
-                    <p [id]="'repair-' + layer.key" class="font-medium text-danger">
-                      Correct these problems in the source file, then choose and upload a replacement.
-                    </p>
-                  }
-                  <div>
-                    @if (locked) {
-                      <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4 shrink-0"></svg>Publish the levels above first.</p>
-                    } @else {
-                      <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                        <label class="sr-only" [for]="'file-' + layer.key">File for {{ layer.name }}</label>
-                        <input hlmInput #file type="file" [id]="'file-' + layer.key" accept=".gpkg,.zip,.geojson,.kml,.kmz"
-                          class="h-auto min-w-0 flex-1 py-1.5 file:me-3 file:rounded-control file:bg-secondary file:px-3 file:text-secondary-foreground sm:w-64 sm:flex-none"
-                          [attr.aria-describedby]="layerFailed(layer) || blocking(layer).length ? 'repair-' + layer.key : null"
-                          [disabled]="updatingLayers()">
-                        <button hlmBtn variant="outline" type="button" [disabled]="updatingLayers()" (click)="uploadLayer(layer, file)">
-                          {{ layerFailed(layer) || blocking(layer).length ? 'Upload replacement' : 'Upload' }}
-                        </button>
-                        @if (canPublish(layer)) {
-                          <button hlmBtn type="button" [disabled]="updatingLayers()" (click)="publishLayer(layer)">Publish</button>
-                        }
-                      </div>
-                    }
-                  </div>
-                  @if (blocking(layer); as problems) {
-                    @if (problems.length) {
-                      <div class="grid gap-2 rounded-control border border-border border-s-4 border-s-danger px-3 py-2">
-                        <ul class="grid gap-1 [overflow-wrap:anywhere]">
-                          @for (problem of problems; track $index) {
-                            <li class="flex flex-wrap items-baseline gap-x-2">
-                              <span hlmBadge variant="destructive">Blocks publishing</span>
-                              @if (problem.featureRef) { <small class="text-muted-foreground">{{ problem.featureRef }}</small> } {{ problem.message }}</li>
+                  <fimra-layer-checks [idPrefix]="layer.key" [problems]="drafts()[layer.key]?.problems ?? []"
+                    [failed]="layerFailed(layer)" [summary]="false">
+                    <div layerRepairAction>
+                      @if (locked) {
+                        <p class="flex items-center gap-2 text-muted-foreground"><svg fimraIcon="lock" aria-hidden="true" class="size-4 shrink-0"></svg>Publish the levels above first.</p>
+                      } @else {
+                        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                          <label class="sr-only" [for]="'file-' + layer.key">File for {{ layer.name }}</label>
+                          <input hlmInput #file type="file" [id]="'file-' + layer.key" accept=".gpkg,.zip,.geojson,.kml,.kmz"
+                            class="h-auto min-w-0 flex-1 py-1.5 file:me-3 file:rounded-control file:bg-secondary file:px-3 file:text-secondary-foreground sm:w-64 sm:flex-none"
+                            [attr.aria-describedby]="layerFailed(layer) || blocking(layer).length ? layer.key + '-repair' : null"
+                            [disabled]="updatingLayers()">
+                          <button hlmBtn variant="outline" type="button" [disabled]="updatingLayers()" (click)="uploadLayer(layer, file)">
+                            {{ layerFailed(layer) || blocking(layer).length ? 'Upload replacement' : 'Upload' }}
+                          </button>
+                          @if (canPublish(layer)) {
+                            <button hlmBtn type="button" [disabled]="updatingLayers()" (click)="publishLayer(layer)">Publish</button>
                           }
-                        </ul>
-                      </div>
-                    }
-                  }
-                  @if (reviewCount(layer)) {
-                    <p class="flex items-center gap-2 text-sm text-muted-foreground"><svg fimraIcon="info" aria-hidden="true" class="size-4 shrink-0"></svg>
-                      {{ reviewCount(layer) }} {{ reviewCount(layer) === 1 ? 'item' : 'items' }} to review that do not block publishing.</p>
-                  }
+                        </div>
+                      }
+                    </div>
+                  </fimra-layer-checks>
                 </li>
               }
             </ul>

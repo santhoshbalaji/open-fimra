@@ -458,3 +458,9 @@ INCIDENT_SHOTS ?= $(HOME)/open-fimra-screenshots/u7
 incident-walkthrough: web-build ## Check incident triage, role visibility and accessibility against the seeded development stack
 	SHOTS="$(INCIDENT_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh incident-walkthrough.mjs
+
+LAYER_SHOTS ?= $(HOME)/open-fimra-screenshots/u14
+.PHONY: layers-walkthrough
+layers-walkthrough: web-build ## Review and publish synthetic layers in Chromium on an isolated, seeded stack with a geo worker
+	SHOTS="$(LAYER_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh layers-walkthrough.mjs

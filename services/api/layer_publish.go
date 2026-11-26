@@ -203,9 +203,24 @@ func (a api) layerPreview(w http.ResponseWriter, r *http.Request) {
 		a.layerPublishError(w, err)
 		return
 	}
+	// A legacy hierarchy layer can have supplied this level under a different layer name.
+	var previous json.RawMessage
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(jsonb_agg(jsonb_build_object('layerName', l.name, 'version', v.version)
+			ORDER BY l.name, v.version), '[]'::jsonb)
+		FROM layer_versions v JOIN layers l ON l.id = v.layer_id
+		WHERE (v.layer_id = $1 AND v.status = 'published') OR v.id IN (
+			SELECT u.layer_version_id FROM units u
+			WHERE u.hierarchy_id = $2 AND u.depth = $3 AND u.valid_to IS NULL
+		)
+	`, draft.layerID, draft.hierarchyID, draft.depth).Scan(&previous)
+	if err != nil {
+		a.layerPublishError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"days": days, "scanned": scanned, "changes": changes, "blocked": draft.blocked,
-		"brokenGrants": grants, "grantConfirmation": grantConfirmation(version, grants),
+		"brokenGrants": grants, "grantConfirmation": grantConfirmation(version, grants), "previous": previous,
 	})
 }
 

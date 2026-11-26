@@ -1,0 +1,6 @@
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+fimra-layer-preview-map .maplibregl-canvas:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus);
+  outline-offset: calc(-1 * var(--focus-width));
+}
