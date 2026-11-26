@@ -210,7 +210,7 @@ async function checkSidebarMatrix() {
 
 try {
   for (const [username, extra, start, heading] of [
-    ['state.admin', ['Layers', 'Form templates', 'Setup', 'Duty roster'], '/', 'Map'],
+    ['state.admin', ['Layers', 'Form templates', 'Setup', 'Duty roster', 'Incident response'], '/', 'Map'],
     ['division.officer', ['Form templates'], '/reports/field?decision=approved', 'Field reports'],
     ['beat.guard', [], '/monitor/map?unitPath=ds.c2', 'Map'],
     ['no.role', [], '/settings/layers', 'Restricted access']
@@ -250,6 +250,9 @@ try {
         await nav.getByRole('link', { name: 'Duty roster', exact: true }).click();
         await expect(page.getByRole('heading', { level: 1, name: 'Duty roster' })).toBeFocused();
         await expect(page.getByRole('heading', { name: 'Schedule a shift' })).toBeVisible();
+        await nav.getByRole('link', { name: 'Incident response', exact: true }).click();
+        await expect(page.getByRole('heading', { level: 1, name: 'Incident response' })).toBeFocused();
+        await expect(page.getByRole('heading', { name: 'Season response targets' })).toBeVisible();
       }
       if (username !== 'state.admin') {
         await page.goto(WEB + '/settings/layers');
@@ -260,7 +263,7 @@ try {
         await page.keyboard.press('Control+k');
         const dialog = page.getByRole('dialog', { name: 'Search destinations' });
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup|Duty roster/ })).toHaveCount(0);
+        await expect(dialog.getByRole('button', { name: /Form templates|Layers|Setup|Duty roster|Incident response/ })).toHaveCount(0);
         await dialog.getByRole('textbox').fill('reports');
         await page.keyboard.press('ArrowDown');
         await page.keyboard.press('Enter');
