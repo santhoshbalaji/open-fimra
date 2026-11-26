@@ -72,7 +72,7 @@ func formViews(versionID int64, tree *formTree, columns []formschema.Column) ([]
 	main := "f" + id
 	views := []formView{{Name: main, SQL: "CREATE VIEW form_views." + pgx.Identifier{main}.Sanitize() + " AS\nSELECT " +
 		submissionViewColumns + columnList(byRepeat[""], "s.answers") +
-		"\nFROM submissions s WHERE s.form_version_id = " + id}}
+		"\nFROM submissions s WHERE s.alert_id IS NOT NULL AND s.form_version_id = " + id}}
 
 	for _, key := range repeats {
 		n := tree.byKey[key]
@@ -102,7 +102,7 @@ func formViews(versionID int64, tree *formTree, columns []formschema.Column) ([]
 		views = append(views, formView{RepeatKey: key, Name: name, SQL: "CREATE VIEW form_views." + pgx.Identifier{name}.Sanitize() + " AS\nSELECT " +
 			"s.id AS _submission_id, s.alert_id AS _alert_id, s.workspace_id AS _workspace_id, s.received_at AS _received_at,\n    " +
 			"concat_ws('.', " + strings.Join(ordinals, ", ") + ") AS _entry, " + parent + " AS _parent_entry" +
-			columnList(byRepeat[key], source) + from.String() + "\nWHERE s.form_version_id = " + id})
+			columnList(byRepeat[key], source) + from.String() + "\nWHERE s.alert_id IS NOT NULL AND s.form_version_id = " + id})
 	}
 	return views, nil
 }

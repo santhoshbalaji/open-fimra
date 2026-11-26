@@ -178,14 +178,21 @@ func checkAlertTriage(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefix
 		return w.Body.Bytes()
 	}
 	var id, edge, receiver, outside string
+	// The same workspace also has historical reference fixtures. Select the
+	// alerts from the replay that the queue's time window can show.
 	err = testTx.QueryRow(ctx, `
+WITH replay AS (
+    SELECT a.id, a.queue FROM alerts a
+    JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at)
+    WHERE a.workspace_id = $1 AND d.source = $5
+)
 SELECT
-  (SELECT a.id::text FROM alerts a WHERE a.workspace_id = $1 AND a.queue = 'triage'
-       AND EXISTS (SELECT FROM alert_roles($2, $3, a.id) WHERE officer) LIMIT 1),
-  (SELECT id::text FROM alerts WHERE workspace_id = $1 AND queue = 'edge_review' LIMIT 1),
+  (SELECT a.id::text FROM replay a WHERE a.queue = 'triage'
+       AND EXISTS (SELECT FROM alert_roles($2, $3, a.id) WHERE officer) ORDER BY a.id LIMIT 1),
+  (SELECT id::text FROM replay WHERE queue = 'edge_review' ORDER BY id LIMIT 1),
   (SELECT id::text FROM units WHERE hierarchy_id = $4 AND current_path = 'ds.c1.d1.r1.b01'),
   (SELECT id::text FROM units WHERE hierarchy_id = $4 AND current_path = 'ds.c2.d3.r5.b14')`,
-		prefix+"01", prefix+"a2", slug, prefix+"10").Scan(&id, &edge, &receiver, &outside)
+		prefix+"01", prefix+"a2", slug, prefix+"10", source).Scan(&id, &edge, &receiver, &outside)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,8 +273,9 @@ FROM audit_log WHERE action='alert.assign' AND target_id=$1 AND actor_id=$2`,
 	}
 	var old string
 	if err := testTx.QueryRow(ctx, `
-SELECT id::text FROM alerts WHERE workspace_id = $1 AND observed_at < now() - interval '30 days'
-ORDER BY observed_at LIMIT 1`, prefix+"01").Scan(&old); err != nil {
+SELECT a.id::text FROM alerts a JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.observed_at)
+WHERE a.workspace_id = $1 AND d.source = $2 AND a.observed_at < now() - interval '30 days'
+ORDER BY a.observed_at, a.id LIMIT 1`, prefix+"01", source+"_old").Scan(&old); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testTx.Exec(ctx, `

@@ -189,6 +189,14 @@ func (a api) recordSubmission(ctx context.Context, tx pgx.Tx, user string, alert
 		return false, err
 	}
 
+	var standalone bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM operations_forms WHERE form_key = $1 AND kind <> 'patrol')`, in.Form).Scan(&standalone); err != nil {
+		return false, err
+	}
+	if standalone {
+		return false, problem(http.StatusUnprocessableEntity, "This form is filled in on an operations record.")
+	}
+
 	var workspaceID, source string
 	var versionID, formID, templateID int64
 	err := tx.QueryRow(ctx, `SELECT a.workspace_id::text, v.id, f.id, v.source, i.template_id
@@ -263,7 +271,7 @@ func earlierSubmission(ctx context.Context, tx pgx.Tx, id, hash, user string, al
 	}
 	var same bool
 	var found int64
-	err := tx.QueryRow(ctx, `SELECT request_hash = $2 AND user_id = $3, alert_id FROM submissions WHERE id = $1`,
+	err := tx.QueryRow(ctx, `SELECT request_hash = $2 AND user_id = $3, COALESCE(alert_id, 0) FROM submissions WHERE id = $1`,
 		id, hash, user).Scan(&same, &found)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
@@ -281,13 +289,7 @@ func earlierSubmission(ctx context.Context, tx pgx.Tx, id, hash, user string, al
 // newAnswerCheck reads what the checks need from an alert: its facts for
 // alert values, the files uploaded for it and the server's clock.
 func newAnswerCheck(ctx context.Context, tx pgx.Tx, tree *formTree, stage int, alert int64) (*answerCheck, error) {
-	check := &answerCheck{tree: tree, stage: stage, attachments: map[string]storedAttachment{},
-		measure: func(geometry json.RawMessage) (float64, error) {
-			var size float64
-			err := tx.QueryRow(ctx, `SELECT CASE WHEN GeometryType(g) = 'POLYGON' THEN ST_Area(g::geography) / 10000
-    ELSE ST_Length(g::geography) / 1000 END FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1::text), 4326) AS g) x`, string(geometry)).Scan(&size)
-			return size, err
-		}}
+	check := makeAnswerCheck(ctx, tx, tree, stage)
 	facts := &check.alert
 	err := tx.QueryRow(ctx, `SELECT a.id, a.observed_at, a.created_at, ST_X(d.geom), ST_Y(d.geom),
     COALESCE((SELECT u.name FROM units u WHERE u.hierarchy_id = a.hierarchy_id AND u.path = a.unit_path
@@ -299,20 +301,35 @@ FROM alerts a JOIN detections d ON (d.id, d.observed_at) = (a.detection_id, a.ob
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT id::text, content_type, file_name, size_bytes FROM attachments WHERE alert_id = $1`, alert)
+	return check, loadAnswerAttachments(ctx, tx, check, alert, nil)
+}
+
+func makeAnswerCheck(ctx context.Context, tx pgx.Tx, tree *formTree, stage int) *answerCheck {
+	return &answerCheck{tree: tree, stage: stage, attachments: map[string]storedAttachment{},
+		measure: func(geometry json.RawMessage) (float64, error) {
+			var size float64
+			err := tx.QueryRow(ctx, `SELECT CASE WHEN GeometryType(g) = 'POLYGON' THEN ST_Area(g::geography) / 10000
+    ELSE ST_Length(g::geography) / 1000 END FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1::text), 4326) AS g) x`, string(geometry)).Scan(&size)
+			return size, err
+		}}
+}
+
+func loadAnswerAttachments(ctx context.Context, tx pgx.Tx, check *answerCheck, alert int64, record *string) error {
+	rows, err := tx.Query(ctx, `SELECT id::text, content_type, file_name, size_bytes FROM attachments
+WHERE alert_id = $1 OR operations_record_id = $2`, alert, record)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id string
 		var file storedAttachment
 		if err := rows.Scan(&id, &file.ContentType, &file.FileName, &file.SizeBytes); err != nil {
-			return nil, err
+			return err
 		}
 		check.attachments[id] = file
 	}
-	return check, rows.Err()
+	return rows.Err()
 }
 
 // storedSubmission is a checked submission, ready to save.
@@ -321,6 +338,8 @@ type storedSubmission struct {
 	versionID, templateID int64
 	alert                 int64
 	step, user, hash      string
+	operationsRecord      *string
+	completesRecord       bool
 	answers               map[string]any
 	used                  map[string][]string
 }
@@ -337,10 +356,11 @@ func storeSubmission(ctx context.Context, tx pgx.Tx, in submissionRequest, s sto
 	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO submissions (id, workspace_id, form_version_id, alert_id, incident_id, template_id, step, user_id,
-    device_time, location, answers, request_hash)
-SELECT $1, $2, $3, $4, (SELECT incident_id FROM incident_members WHERE alert_id = $4), $5, $6, $7,
-    $8, CASE WHEN $9::float8 IS NOT NULL THEN ST_SetSRID(ST_Point($9, $10), 4326) END, $11, $12`,
-		in.ID, s.workspaceID, s.versionID, s.alert, s.templateID, s.step, s.user, in.DeviceTime, lon, lat, answerJSON, s.hash); err != nil {
+    device_time, location, answers, request_hash, operations_record_id, completes_record)
+SELECT $1, $2, $3, NULLIF($4, 0), COALESCE((SELECT incident_id FROM incident_members WHERE alert_id = $4),
+    (SELECT incident_id FROM operations_records WHERE id = $13)), NULLIF($5::bigint, 0), NULLIF($6::text, ''), $7,
+    $8, CASE WHEN $9::float8 IS NOT NULL THEN ST_SetSRID(ST_Point($9, $10), 4326) END, $11, $12, $13, $14`,
+		in.ID, s.workspaceID, s.versionID, s.alert, s.templateID, s.step, s.user, in.DeviceTime, lon, lat, answerJSON, s.hash, s.operationsRecord, s.completesRecord); err != nil {
 		return err
 	}
 	for field, ids := range s.used {
@@ -352,20 +372,29 @@ SELECT $1, unnest($2::uuid[]), $3 ON CONFLICT DO NOTHING`, in.ID, ids, field); e
 	return nil
 }
 
-// submissionAccess finds a submission the caller can see through its alert,
-// and whether the caller is a supervising officer on that alert.
-func submissionAccess(ctx context.Context, tx pgx.Tx, subject, slug, id string) (user string, officer bool, mine bool, err error) {
+// submissionAccess authorizes the full submission. The operations record
+// endpoint serves approved summaries independently of this path.
+func submissionAccess(ctx context.Context, tx pgx.Tx, subject, slug, id string) (user string, officer bool, record *string, err error) {
 	if !uuidPattern.MatchString(id) {
-		return "", false, false, problem(http.StatusNotFound, "Submission not found.")
+		return "", false, nil, problem(http.StatusNotFound, "Submission not found.")
 	}
-	err = tx.QueryRow(ctx, `SELECT min(r.user_id::text), bool_or(r.officer), bool_or(r.user_id = s.user_id)
+	var kind *string
+	err = tx.QueryRow(ctx, `SELECT min(r.user_id::text), bool_or(r.officer), s.operations_record_id::text, o.kind
 FROM submissions s JOIN workspaces w ON w.id = s.workspace_id AND w.slug = $2
-CROSS JOIN LATERAL alert_roles($3, $2, s.alert_id) r
-WHERE s.id = $1::uuid GROUP BY s.id`, id, slug, subject).Scan(&user, &officer, &mine)
+LEFT JOIN operations_records o ON o.id = s.operations_record_id
+CROSS JOIN LATERAL (
+    SELECT user_id, officer FROM alert_roles($3, $2, s.alert_id) WHERE s.alert_id IS NOT NULL
+    UNION ALL
+    SELECT user_id, officer FROM operations_roles($3, $2, o.id) WHERE full_access
+) r
+WHERE s.id = $1::uuid GROUP BY s.id, o.kind`, id, slug, subject).Scan(&user, &officer, &record, &kind)
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = problem(http.StatusNotFound, "Submission not found.")
+		return "", false, nil, problem(http.StatusNotFound, "Submission not found.")
 	}
-	return user, officer, mine, err
+	if err == nil && kind != nil && isReferral(*kind) {
+		err = auditOperations(ctx, tx, subject, *record, "referral.read", nil, &id)
+	}
+	return user, officer, record, err
 }
 
 func (a api) submission(w http.ResponseWriter, r *http.Request) {
@@ -399,6 +428,7 @@ type approvalRequest struct {
 // returned with a note. A submission has one decision, which never changes.
 // Repeating the same decision returns it again.
 func (a api) approve(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	subject := ctx.Value(identityKey{}).(identity).Subject
@@ -421,12 +451,17 @@ func (a api) approve(w http.ResponseWriter, r *http.Request) {
 	}
 	var result json.RawMessage
 	err := pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
-		user, officer, _, err := submissionAccess(ctx, tx, subject, chi.URLParam(r, "slug"), id)
+		user, officer, record, err := submissionAccess(ctx, tx, subject, chi.URLParam(r, "slug"), id)
 		if err != nil {
 			return err
 		}
 		if !officer {
-			return problem(http.StatusForbidden, "Only a supervising officer on this alert can approve or return a submission.")
+			return problem(http.StatusForbidden, "Only a supervising officer can approve or return this submission.")
+		}
+		if record != nil {
+			if err := lockOperationsRecord(ctx, tx, *record); err != nil {
+				return err
+			}
 		}
 		var inserted bool
 		err = tx.QueryRow(ctx, `WITH added AS (

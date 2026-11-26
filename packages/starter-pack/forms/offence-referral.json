@@ -1,0 +1,72 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "offence-referral",
+  "version": 1,
+  "title": {
+    "en": "Offence referral",
+    "hi": "वन अपराध की जाँच हेतु संदर्भ"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Offence referral",
+        "hi": "वन अपराध की जाँच हेतु संदर्भ"
+      },
+      "items": [
+        {
+          "key": "case_reference",
+          "type": "text",
+          "label": {
+            "en": "Enforcement case number",
+            "hi": "वन अपराध प्रकरण संख्या"
+          },
+          "required": true,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "evidence_reference",
+          "type": "text",
+          "label": {
+            "en": "Evidence register reference",
+            "hi": "साक्ष्य रजिस्टर का संदर्भ"
+          },
+          "required": false,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "enquiry_reference",
+          "type": "text",
+          "label": {
+            "en": "Enquiry reference",
+            "hi": "जाँच का संदर्भ"
+          },
+          "required": false,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "public_summary",
+          "type": "text",
+          "label": {
+            "en": "Summary for approval",
+            "hi": "अनुमोदन हेतु सारांश"
+          },
+          "required": true,
+          "maxLength": 500,
+          "hint": {
+            "en": "This text is shared after approval. Leave out names, case numbers and other references.",
+            "hi": "अनुमोदन के बाद यह पाठ साझा होगा। इसमें नाम, प्रकरण संख्या या अन्य संदर्भ न लिखें।"
+          }
+        }
+      ]
+    }
+  ]
+}

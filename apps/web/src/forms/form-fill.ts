@@ -99,6 +99,8 @@ export class FormFill {
   readonly step = input.required<string>();
   /** The alert, when filling in. It gives the alert values and where files upload. */
   readonly alert = input<AlertRow | null>(null);
+  readonly operationsRecord = input<string>();
+  readonly completesRecord = input(false);
   /** Earlier answers to keep. */
   readonly initial = input<Obj>({});
   /** The form file, when the caller has it already. */
@@ -147,7 +149,11 @@ export class FormFill {
     const stages = this.file()?.['stages'] as Obj[] | undefined;
     return tree?.hasStages && stages ? textIn(stages[this.stage()]?.['title'], this.language()) : '';
   });
-  readonly alertKey = computed(() => this.alert()?.id);
+  private readonly contextPath = computed(() => {
+    const record = this.operationsRecord();
+    const alert = this.alert()?.id;
+    return record ? '/operations-records/' + record : alert ? '/alerts/' + alert : '';
+  });
   readonly session = computed(() => {
     const tree = this.tree();
     if (!tree) return null;
@@ -471,13 +477,13 @@ export class FormFill {
 
   /** Uploads a file for the alert and returns its attachment ID. */
   private async upload(file: Blob, name: string): Promise<string | null> {
-    const alert = this.alertKey();
-    if (!alert) return null;
+    const context = this.contextPath();
+    if (!context) return null;
     const id = crypto.randomUUID();
     this.uploading.set(name);
     this.serverMessage.set('');
     try {
-      await firstValueFrom(this.http.put(this.workspaceUrl() + '/alerts/' + alert + '/attachments/' + id, file,
+      await firstValueFrom(this.http.put(this.workspaceUrl() + context + '/attachments/' + id, file,
         { params: { name: name.slice(0, 200) || 'file' }, headers: { 'Content-Type': file.type || 'application/octet-stream' } }));
       const preview = imageTypes.includes(file.type) ? URL.createObjectURL(file) : undefined;
       this.uploads.update(all => ({ ...all, [id]: { contentType: file.type, fileName: name, sizeBytes: file.size, preview } }));
@@ -525,8 +531,8 @@ export class FormFill {
 
   async submit(): Promise<void> {
     const session = this.session();
-    const alert = this.alertKey();
-    if (!session || !alert || this.busy() || this.uploading() || this.saved()) return;
+    const context = this.contextPath();
+    if (!session || !context || this.busy() || this.uploading() || this.saved()) return;
     this.tried.set(true);
     this.refused.set(false);
     this.serverMessage.set('');
@@ -535,7 +541,8 @@ export class FormFill {
       this.focusFeedback();
       return;
     }
-    const body = { form: this.form(), version: this.version(), step: this.step(), values: session.answers };
+    const body = { form: this.form(), version: this.version(), step: this.step(), values: session.answers,
+      ...(this.operationsRecord() ? { completesRecord: this.completesRecord() } : {}) };
     const sent = JSON.stringify(body);
     // A retry of the same answers keeps its ID, so the server can tell it is the same report.
     if (sent !== this.lastSent) {
@@ -545,7 +552,7 @@ export class FormFill {
     this.lastSent = sent;
     this.busy.set(true);
     try {
-      const saved = await firstValueFrom(this.http.post<Submission>(this.workspaceUrl() + '/alerts/' + alert + '/submissions',
+      const saved = await firstValueFrom(this.http.post<Submission>(this.workspaceUrl() + context + '/submissions',
         { id: this.submissionId, ...body, deviceTime: this.deviceTime }));
       if (this.lifetime.destroyed) return;
       this.saved.set(saved);

@@ -73,9 +73,41 @@ func attachmentFileName(raw string) (string, bool) {
 const attachmentJSON = `jsonb_build_object('id', a.id, 'alertId', a.alert_id::text, 'sha256', a.sha256,
     'sizeBytes', a.size_bytes, 'contentType', a.content_type, 'fileName', a.file_name, 'uploadedAt', a.uploaded_at)`
 
+// attachmentContext makes the alert and standalone record routes use the
+// same upload store, size and type checks, and retry rules.
+func attachmentContext(r *http.Request) (alert *int64, record *string, err error) {
+	if id := chi.URLParam(r, "record"); id != "" {
+		if !uuidPattern.MatchString(id) {
+			return nil, nil, problem(http.StatusBadRequest, "Invalid record ID.")
+		}
+		return nil, &id, nil
+	}
+	id, err := alertRoute(r)
+	return &id, nil, err
+}
+
+func attachmentUploadAccess(ctx context.Context, tx pgx.Tx, subject, slug string, alert *int64, record *string) (user, workspace string, err error) {
+	if record != nil {
+		access, err := fullOperationsAccess(ctx, tx, subject, slug, *record)
+		if err != nil {
+			return "", "", err
+		}
+		if isReferral(access.kind) || !access.canWrite() {
+			return "", "", problem(http.StatusForbidden, "Attachments are unavailable for this record or role.")
+		}
+		return access.user, access.workspace, nil
+	}
+	user, err = alertUser(ctx, tx, subject, slug, *alert)
+	if err == nil {
+		err = tx.QueryRow(ctx, `SELECT workspace_id::text FROM alerts WHERE id = $1`, alert).Scan(&workspace)
+	}
+	return user, workspace, err
+}
+
 // uploadAttachment stores one file for an alert: PUT with the file as the
 // body, its media type in Content-Type and its name in ?name=.
 func (a api) uploadAttachment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	// A phone on a weak signal may need longer than the server's usual limit.
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Minute))
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
@@ -87,9 +119,9 @@ func (a api) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 	subject := ctx.Value(identityKey{}).(identity).Subject
 	slug := chi.URLParam(r, "slug")
 	attachmentID := chi.URLParam(r, "attachment")
-	alert, err := alertRoute(r)
+	alert, record, err := attachmentContext(r)
 	if err != nil || !uuidPattern.MatchString(attachmentID) {
-		writeError(w, http.StatusBadRequest, "Use an alert ID and a new attachment ID in UUID form, in small letters.")
+		writeError(w, http.StatusBadRequest, "Use a valid record or alert ID and a new attachment ID in UUID form, in small letters.")
 		return
 	}
 	name, ok := attachmentFileName(r.URL.Query().Get("name"))
@@ -106,7 +138,7 @@ func (a api) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 	// Check access before reading the body, so a caller who cannot see the
 	// alert cannot fill the disk.
 	err = pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
-		_, err := alertUser(ctx, tx, subject, slug, alert)
+		_, _, err := attachmentUploadAccess(ctx, tx, subject, slug, alert, record)
 		return err
 	})
 	if err != nil {
@@ -152,7 +184,7 @@ func (a api) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 	var result json.RawMessage
 	status := http.StatusCreated
 	err = pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
-		user, err := alertUser(ctx, tx, subject, slug, alert)
+		user, workspace, err := attachmentUploadAccess(ctx, tx, subject, slug, alert, record)
 		if err != nil {
 			return err
 		}
@@ -160,8 +192,9 @@ func (a api) uploadAttachment(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var same bool
-		err = tx.QueryRow(ctx, `SELECT sha256 = $2 AND alert_id = $3 AND uploaded_by = $4 AND file_name = $5 AND content_type = $6
-FROM attachments WHERE id = $1`, attachmentID, sum, alert, user, name, mediaType).Scan(&same)
+		err = tx.QueryRow(ctx, `SELECT sha256 = $2 AND alert_id IS NOT DISTINCT FROM $3::bigint
+AND uploaded_by = $4 AND file_name = $5 AND content_type = $6 AND operations_record_id IS NOT DISTINCT FROM $7::uuid
+FROM attachments WHERE id = $1`, attachmentID, sum, alert, user, name, mediaType, record).Scan(&same)
 		switch {
 		case err == nil && !same:
 			return problem(http.StatusConflict, "This attachment ID already belongs to another file. Attachments are never replaced.")
@@ -171,14 +204,14 @@ FROM attachments WHERE id = $1`, attachmentID, sum, alert, user, name, mediaType
 			if err := a.attachments.store.Put(ctx, attachmentKeyFor(sum), spool.Name(), size, mediaType); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO attachments (id, workspace_id, alert_id, sha256, size_bytes, content_type, file_name, uploaded_by)
-SELECT $1, a.workspace_id, a.id, $3, $4, $5, $6, $7 FROM alerts a WHERE a.id = $2`,
-				attachmentID, alert, sum, size, mediaType, name, user); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO attachments (id, workspace_id, alert_id, sha256, size_bytes, content_type, file_name, uploaded_by, operations_record_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+				attachmentID, workspace, alert, sum, size, mediaType, name, user, record); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
 SELECT workspace_id, 'user', $2, 'attachment.upload', 'attachment', id::text,
-       jsonb_build_object('alertId', alert_id, 'sha256', sha256, 'sizeBytes', size_bytes)
+       jsonb_strip_nulls(jsonb_build_object('alertId', alert_id, 'recordId', operations_record_id, 'sha256', sha256, 'sizeBytes', size_bytes))
 FROM attachments WHERE id = $1`, attachmentID, subject); err != nil {
 				return err
 			}
@@ -201,7 +234,7 @@ func (a api) attachmentReceipt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	alert, err := alertRoute(r)
+	alert, record, err := attachmentContext(r)
 	id := chi.URLParam(r, "attachment")
 	if err != nil || !uuidPattern.MatchString(id) {
 		writeError(w, http.StatusBadRequest, "Provide a valid alert and attachment ID.")
@@ -209,9 +242,11 @@ func (a api) attachmentReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 	var result json.RawMessage
 	err = a.reader.QueryRow(ctx, `SELECT `+attachmentJSON+`
-FROM attachments a WHERE a.id = $1 AND a.alert_id = $2
-AND EXISTS (SELECT FROM alert_roles($3, $4, a.alert_id) WHERE user_id = a.uploaded_by)`,
-		id, alert, r.Context().Value(identityKey{}).(identity).Subject, chi.URLParam(r, "slug")).Scan(&result)
+FROM attachments a WHERE a.id = $1 AND a.alert_id IS NOT DISTINCT FROM $2::bigint
+  AND a.operations_record_id IS NOT DISTINCT FROM $5::uuid
+  AND (EXISTS (SELECT FROM alert_roles($3, $4, a.alert_id) WHERE user_id = a.uploaded_by)
+       OR EXISTS (SELECT FROM operations_roles($3, $4, a.operations_record_id) WHERE full_access AND user_id = a.uploaded_by))`,
+		id, alert, r.Context().Value(identityKey{}).(identity).Subject, chi.URLParam(r, "slug"), record).Scan(&result)
 	if err != nil {
 		a.writeProblem(w, err, "Attachment not found.", "Could not check the attachment")
 		return
@@ -241,12 +276,13 @@ func (a api) downloadAttachment(w http.ResponseWriter, r *http.Request) {
 	err := pgx.BeginFunc(ctx, a.reader, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `SELECT a.sha256, a.content_type, a.file_name, a.size_bytes
 FROM attachments a JOIN workspaces w ON w.id = a.workspace_id AND w.slug = $2
-WHERE a.id = $1 AND EXISTS (SELECT FROM alert_roles($3, $2, a.alert_id))`, id, chi.URLParam(r, "slug"), subject).Scan(&sum, &contentType, &name, &size)
+WHERE a.id = $1 AND (EXISTS (SELECT FROM alert_roles($3, $2, a.alert_id))
+  OR EXISTS (SELECT FROM operations_roles($3, $2, a.operations_record_id) WHERE full_access))`, id, chi.URLParam(r, "slug"), subject).Scan(&sum, &contentType, &name, &size)
 		if err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
-SELECT workspace_id, 'user', $2, 'attachment.download', 'attachment', id::text, jsonb_build_object('alertId', alert_id)
+SELECT workspace_id, 'user', $2, 'attachment.download', 'attachment', id::text, jsonb_strip_nulls(jsonb_build_object('alertId', alert_id, 'recordId', operations_record_id))
 FROM attachments WHERE id = $1`, id, subject)
 		return err
 	})

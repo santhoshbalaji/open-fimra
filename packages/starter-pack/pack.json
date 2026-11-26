@@ -4,6 +4,14 @@
     { "form": "first-report", "steps": ["first_report"] },
     { "form": "final-report", "steps": ["final_report"] },
     { "form": "manual-fire-report", "steps": [] },
-    { "form": "patrol-log", "steps": [] }
+    { "form": "patrol-log", "steps": [] },
+    { "form": "offence-referral", "steps": [] },
+    { "form": "relief-referral", "steps": [] },
+    { "form": "preparedness-work", "steps": [] },
+    { "form": "fire-training", "steps": [] },
+    { "form": "readiness-check", "steps": [] },
+    { "form": "prescribed-burn-authorisation", "steps": [] },
+    { "form": "prescribed-burn-completion", "steps": [] },
+    { "form": "after-action-finding", "steps": [] }
   ]
 }

@@ -37,7 +37,7 @@ import { FormPresentation } from './form-presentation';
         <header class="submission-header">
           @if (showTitle()) { <h3>{{ title() }}</h3> }
           <div class="submission-context">
-            <p class="font-medium wrap-anywhere">{{ place() }}</p>
+            @if (s.alertId) { <p class="font-medium wrap-anywhere">{{ place() }}</p> }
             <div #decisionResult tabindex="-1" class="flex flex-wrap items-center gap-2">
               <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
                 [label]="labels[s.approval?.decision ?? 'pending']" />
@@ -45,11 +45,11 @@ import { FormPresentation } from './form-presentation';
           </div>
           <dl class="submission-facts">
             <div><dt>{{ msg('Submitted by') }}</dt><dd>{{ s.submittedBy }}</dd></div>
-            <div><dt>{{ msg('Related alert') }}</dt><dd>
+            @if (s.alertId) { <div><dt>{{ msg('Related alert') }}</dt><dd>
               @if (navigation) {
                 <a class="report-alert-link" [routerLink]="navigation.href('/monitor/alerts', { alert: s.alertId })">{{ msg('Alert #{0}', [s.alertId]) }}</a>
               } @else { {{ msg('Alert #{0}', [s.alertId]) }} }
-            </dd></div>
+            </dd></div> }
             @if (stage() && stage() !== title()) {
               <div><dt>{{ msg('Stage') }}</dt><dd>{{ stage() }}</dd></div>
             }
@@ -84,7 +84,7 @@ import { FormPresentation } from './form-presentation';
                   <label hlmFieldLabel for="return-note">{{ msg('Why is the report returned?') }}</label>
                   <textarea #note hlmTextarea id="return-note" maxlength="2000" required [readOnly]="busy()" [forceInvalid]="!!noteError()"
                     (input)="noteError.set('')"></textarea>
-                  <p hlmFieldDescription id="return-hint">{{ msg('The alert will need a new report at this step.') }}</p>
+                  @if (s.alertId) { <p hlmFieldDescription id="return-hint">{{ msg('The alert will need a new report at this step.') }}</p> }
                   @if (noteError()) { <hlm-field-error id="return-error" forceShow>{{ noteError() }}</hlm-field-error> }
                 </hlm-field>
                 <div class="form-actions">
@@ -258,7 +258,9 @@ export class SubmissionView {
     try {
       const confirmed = await this.confirmation.open({
         heading: 'Approve this report?',
-        detail: 'This decision cannot be changed later.',
+        detail: ['offence-referral', 'relief-referral'].includes(report.form)
+          ? 'Approving shares the summary with staff who can see the case. Check it for names and references.'
+          : 'This decision cannot be changed later.',
         confirmLabel: 'Approve report',
         trigger
       });

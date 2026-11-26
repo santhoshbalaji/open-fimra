@@ -1,0 +1,64 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "prescribed-burn-authorisation",
+  "version": 1,
+  "title": {
+    "en": "Prescribed burn authorisation",
+    "hi": "नियोजित दहन की अनुमति"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Prescribed burn authorisation",
+        "hi": "नियोजित दहन की अनुमति"
+      },
+      "items": [
+        {
+          "key": "authorisation_reference",
+          "type": "text",
+          "label": {
+            "en": "Authorisation reference",
+            "hi": "अनुमति का संदर्भ"
+          },
+          "required": true,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "site",
+          "type": "text",
+          "label": {
+            "en": "Authorised site",
+            "hi": "अनुमोदित स्थल"
+          },
+          "required": true,
+          "maxLength": 500
+        },
+        {
+          "key": "window_start",
+          "type": "date",
+          "label": {
+            "en": "First authorised date",
+            "hi": "अनुमति की पहली तिथि"
+          },
+          "required": true
+        },
+        {
+          "key": "window_end",
+          "type": "date",
+          "label": {
+            "en": "Last authorised date",
+            "hi": "अनुमति की अंतिम तिथि"
+          },
+          "required": true
+        }
+      ]
+    }
+  ]
+}

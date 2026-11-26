@@ -1,0 +1,65 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "preparedness-work",
+  "version": 1,
+  "title": {
+    "en": "Preparedness work",
+    "hi": "पूर्व तैयारी का कार्य"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Preparedness work",
+        "hi": "पूर्व तैयारी का कार्य"
+      },
+      "items": [
+        {
+          "key": "work",
+          "type": "text",
+          "label": {
+            "en": "Work and site",
+            "hi": "कार्य और स्थल"
+          },
+          "required": true,
+          "maxLength": 500
+        },
+        {
+          "key": "work_reference",
+          "type": "text",
+          "label": {
+            "en": "Work plan reference",
+            "hi": "कार्य योजना का संदर्भ"
+          },
+          "required": false,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "target_date",
+          "type": "date",
+          "label": {
+            "en": "Target date",
+            "hi": "लक्ष्य तिथि"
+          },
+          "required": true
+        },
+        {
+          "key": "result",
+          "type": "text",
+          "label": {
+            "en": "Work done",
+            "hi": "किया गया कार्य"
+          },
+          "required": false,
+          "maxLength": 500
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "fire-training",
+  "version": 1,
+  "title": {
+    "en": "Fire training",
+    "hi": "वनाग्नि प्रशिक्षण"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Fire training",
+        "hi": "वनाग्नि प्रशिक्षण"
+      },
+      "items": [
+        {
+          "key": "exercise",
+          "type": "text",
+          "label": {
+            "en": "Training or exercise",
+            "hi": "प्रशिक्षण या अभ्यास"
+          },
+          "required": true,
+          "maxLength": 500
+        },
+        {
+          "key": "training_date",
+          "type": "date",
+          "label": {
+            "en": "Training date",
+            "hi": "प्रशिक्षण की तिथि"
+          },
+          "required": true
+        },
+        {
+          "key": "participants",
+          "type": "number",
+          "label": {
+            "en": "Participants present",
+            "hi": "उपस्थित प्रतिभागी"
+          },
+          "required": false,
+          "decimals": 0,
+          "min": 1,
+          "max": 10000
+        },
+        {
+          "key": "result",
+          "type": "text",
+          "label": {
+            "en": "What the crew practised",
+            "hi": "दल ने क्या अभ्यास किया"
+          },
+          "required": false,
+          "maxLength": 500
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "relief-referral",
+  "version": 1,
+  "title": {
+    "en": "Relief referral",
+    "hi": "राहत हेतु संदर्भ"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Relief referral",
+        "hi": "राहत हेतु संदर्भ"
+      },
+      "items": [
+        {
+          "key": "case_reference",
+          "type": "text",
+          "label": {
+            "en": "Relief case number",
+            "hi": "राहत प्रकरण संख्या"
+          },
+          "required": true,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "beneficiary_reference",
+          "type": "text",
+          "label": {
+            "en": "Beneficiary register reference",
+            "hi": "लाभार्थी रजिस्टर का संदर्भ"
+          },
+          "required": false,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "payment_reference",
+          "type": "text",
+          "label": {
+            "en": "Payment register reference",
+            "hi": "भुगतान रजिस्टर का संदर्भ"
+          },
+          "required": false,
+          "maxLength": 120,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"
+        },
+        {
+          "key": "public_summary",
+          "type": "text",
+          "label": {
+            "en": "Summary for approval",
+            "hi": "अनुमोदन हेतु सारांश"
+          },
+          "required": true,
+          "maxLength": 500,
+          "hint": {
+            "en": "This text is shared after approval. Leave out names, case numbers and other references.",
+            "hi": "अनुमोदन के बाद यह पाठ साझा होगा। इसमें नाम, प्रकरण संख्या या अन्य संदर्भ न लिखें।"
+          }
+        }
+      ]
+    }
+  ]
+}

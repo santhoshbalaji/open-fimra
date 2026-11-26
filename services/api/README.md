@@ -552,13 +552,58 @@ The phone makes the `id`, a UUID in small letters, so it can retry safely. The s
 
 The server checks the values against the form version (form format, sections 8 to 13): types, required questions, `requireWhen`, conditions, text lengths and patterns, number limits and decimal places, dates in the future, choices and cascading lists, the number of choices, files and entries in repeating groups, and GeoJSON shapes. Photos, signatures and files must be attachments uploaded for the same alert; photos and signatures must be images, and files must match `accept` and `maxSizeMegabytes`. Problems come back with 422 in `problems`, one plain-English sentence each. Answers to hidden questions and later stages are not kept. The server works out calculated fields and fills in values from the alert itself, ignoring what was sent for them.
 
-`GET /api/v1/workspaces/{slug}/alerts/{id}/submissions` lists an alert's submissions and `GET /api/v1/workspaces/{slug}/submissions/{id}` returns one. Anyone who can see the alert can read and submit, using the same grants and queue rules as the alert queue. Others get 404. Both answers add `canApprove`, which is true for a supervising officer on the alert.
+`GET /api/v1/workspaces/{slug}/alerts/{id}/submissions` lists an alert's submissions and `GET /api/v1/workspaces/{slug}/submissions/{id}` returns one. For an alert submission, anyone who can see the alert can read and submit, using the same grants and queue rules as the alert queue. Others get 404. Both answers add `canApprove`, which is true for a supervising officer on the alert.
 
 `GET /api/v1/workspaces/{slug}/submissions` lists the submissions you can see, newest first by the time the server received them. It accepts the alert queue's `hours`, `queue`, `status` (the alert's current step), `class`, `unitPath`, `limit` and `cursor`. The time window is when the report arrived. Add `form` for one form, `decision` for `pending`, `approved` or `returned`, and `alert` for one alert's reports whatever their age. A page has `items`, `counts` by decision for every matching report and, when there is another page, `nextCursor`. Each row names the form and version, the report's step and its label, the alert with its current step, forest class and places, who sent it and when, the decision, and `can_approve`. A caller without a role in the workspace gets 403.
 
 ### Approvals
 
 A supervising officer on the alert (a division officer at division level or above, or a state administrator) posts `{"decision": "approved"}` or `{"decision": "returned", "note": "Recount the teams."}` to `/api/v1/workspaces/{slug}/submissions/{id}/approval`. A returned submission needs a note. Each submission has one decision, which never changes: repeating it returns the same answer, and a different decision gets 409. A field user gets 403. The decision records who, when and why.
+
+### Referrals and preparedness
+
+Open **Reports → Referrals and preparedness** to make a record and fill in
+its first entry. An officer can choose a staff member whose permanent role
+covers the record's unit. Otherwise the person creating it is the owner.
+Each after-action record follows one corrective action and its owner.
+A completion is itself a submission. It counts when an officer approves it.
+If returned, the owner can submit a corrected entry. A prescribed burn takes
+an authorisation entry and a separate completion entry.
+
+Offence and relief referrals always link to an incident. A referral keeps
+its own status after the incident is closed. Only staff with a permanent
+role covering the referral's unit and a grant for its kind can see its
+private entries or add follow-up entries. Review also requires a supervising
+officer role. The latest approved entry supplies the summary visible to
+other staff who can see the incident. Pending and returned summaries
+remain private. Check the summary for names and reference IDs before
+approving it. Use the reference fields for external case, evidence,
+enquiry, beneficiary and payment IDs. Keep the source records in their
+own systems.
+
+These paths are relative to `/api/v1/workspaces/{slug}`.
+
+| Request | Use |
+|---|---|
+| `GET /operations-records` | List accessible records. Use `incident` for one case or `cursor` for the next page. |
+| `GET /operations-records/options` | Find scoped units with the optional `search` parameter. Give `unit` for its forms and available owners, or `record` for the latest published forms for that record. |
+| `POST /operations-records` | Create a record with a client-generated UUID `id`, a `kind`, and a `unit` ID as a string. The `owner` is an optional user UUID. Referrals also require `incidentId` as a string. |
+| `GET /operations-records/{record}` | Get the record and its newest entries, or just its approved summary and case link. Ask for older entries with `before` set to the last displayed submission UUID. |
+| `POST /operations-records/{record}/submissions` | Submit `id`, `form`, `version` and `values`, with optional `deviceTime` and `completesRecord`. Read and review entries through the standard submission endpoints. |
+| `PUT /operations-records/{record}/alerts/{alert}` | Link a burn with an approved authorisation to an alert under its unit. The officer can then record the alert's Controlled burn outcome through its workflow. |
+| `PUT /operations-records/{record}/attachments/{attachment}` | Upload a file for a standalone record. Use the same file rules as an alert upload. The matching GET returns the uploader's receipt and the standard attachment endpoint serves the file. Referrals accept external references. |
+| `PUT` or `DELETE /referral-grants` | A root administrator grants or revokes access with `kind` (`offence` or `relief`), `unit` (the unit ID as a string), and `user` (the staff UUID). Unit options provide IDs for this request. The grant covers descendants of the chosen unit within its hierarchy. |
+
+Record kinds are `offence`, `relief`, `preparedness`, `training`,
+`readiness`, `burn`, `after-action` and `patrol`. Standalone entries and
+their attachments use an operations record as their scope. Field-report
+exports, flat alert form views and situation reports use alert submissions.
+Restricted reads, grant changes, approvals and alert links are audited.
+
+Run `make demo-operations-records` on the fictional demo workspace. It adds
+an offence referral on a closed case, an authorised burn linked to an
+alert with the Controlled burn outcome, and an after-action finding with an
+owner. The demo division officer has the offence grant.
 
 ### Attachments
 
