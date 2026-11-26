@@ -117,6 +117,7 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	authed.Get("/api/v1/workspaces/{slug}/situation-reports/{id}", a.situationReportStatus)
 	authed.Get("/api/v1/workspaces/{slug}/situation-reports/{id}/file", a.situationReportFile)
 	authed.Get("/api/v1/workspaces/{slug}/layer-imports/{version}/preview", a.layerPreview)
+	authed.Get("/api/v1/workspaces/{slug}/layer-imports/{version}/map", a.layerPreviewMap)
 	authed.Post("/api/v1/workspaces/{slug}/layer-imports/{version}/publish", a.layerPublish)
 	authed.Get("/api/v1/workspaces/{slug}/exports", a.listExports)
 	authed.Post("/api/v1/workspaces/{slug}/exports", a.createExport)

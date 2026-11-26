@@ -3,7 +3,6 @@ import { DOCUMENT, DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, ElementRef, Injector, OnInit, afterNextRender, computed, inject, output, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
-import { HlmBadge } from '@spartan-ng/helm/badge';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -19,6 +18,7 @@ import { EmptyState } from './ui/empty-state';
 import { FieldError, FieldErrorSummary } from './ui/field-error-summary';
 import { LiveStatus } from './ui/live-status';
 import { DataState, StateRegion } from './ui/state-region';
+import { LayerChecks, LayerProblem, LayerStatus, LayerStatusBadge } from './layer-status';
 import { StatusBadge } from './ui/status-badge';
 import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
@@ -28,7 +28,7 @@ type Labels = Record<string, string>;
 interface Level { depth: number; slug: string; labels: Labels; units: number }
 interface PresetLevel { slug: string; labels: Labels }
 interface Preset { slug: string; name: string; levels: PresetLevel[] }
-interface Upload { versionId: string; version: number; status: 'pending' | 'ready' | 'failed' | 'published' | 'retired' }
+interface Upload { versionId: string; version: number; status: LayerStatus }
 export interface SetupLayer {
   key: string; slug: string; name: string; role: 'hierarchy' | 'forest' | 'exclusion';
   depth?: number; required: boolean; published: boolean; latest: Upload | null;
@@ -40,8 +40,7 @@ export interface SetupState {
   levels: Level[]; layers: SetupLayer[]; steps: Partial<Record<StepKey | 'mode', { status: 'done' | 'skipped'; updatedAt: string }>>;
   firms: Firms; emailEnabled: boolean; finishedAt: string | null; presets: Preset[];
 }
-interface Problem { kind: string; featureRef: string | null; message: string; blocksPublish: boolean }
-interface Draft { versionId: string; status: Upload['status']; unitCount: number; featureCount: number; problems: Problem[] }
+interface Draft { versionId: string; status: Upload['status']; unitCount: number; featureCount: number; problems: LayerProblem[] }
 interface Preview { days: number; blocked: string; grantConfirmation: string; brokenGrants: unknown[] }
 interface Invitation { id: string; email: string; role: string; unitPath: string; unitName: string; expiresAt: string; emailStatus: string }
 interface Unit { depth: number; code: string; name: string; path: string }
@@ -69,14 +68,10 @@ export const roleLabels: Record<string, string> = {
   state_admin: 'State administrator', division_officer: 'Division officer', field_staff: 'Field staff'
 };
 
-const uploadLabels: Record<Upload['status'], string> = {
-  pending: 'Importing', ready: 'Ready to publish', failed: 'Import failed', published: 'Published', retired: 'Retired'
-};
-
 /** The guided first-run wizard (PLAN.md section 7) for a root administrator. */
 @Component({
   selector: 'fimra-setup-wizard',
-  imports: [DatePipe, NgTemplateOutlet, EmptyState, FieldErrorSummary, LiveStatus, StateRegion, StatusBadge, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmTableImports, Icon],
+  imports: [DatePipe, NgTemplateOutlet, EmptyState, FieldErrorSummary, LiveStatus, StateRegion, StatusBadge, LayerChecks, LayerStatusBadge, HlmAlertImports, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, HlmSelectImports, HlmTableImports, Icon],
   templateUrl: './setup-wizard.html',
   styleUrl: './setup-wizard.css',
   host: { class: 'block h-full overflow-auto max-md:scroll-pt-16 max-md:scroll-pb-16' }
@@ -101,7 +96,6 @@ export class SetupWizard implements OnInit {
   readonly steps = steps;
   readonly roleLabels = roleLabels;
   readonly roles = Object.keys(roleLabels);
-  readonly uploadLabels = uploadLabels;
   readonly state = signal<SetupState | null>(null);
   readonly step = signal<StepKey>('workspace');
   readonly setupLoad = signal<DataState>({ kind: 'loading', heading: 'Loading setup' });
@@ -255,21 +249,6 @@ export class SetupWizard implements OnInit {
 
   // Layers
 
-  layerStatus(layer: SetupLayer): string {
-    if (this.blocking(layer).length) return (layer.published ? 'Published. New upload: ' : '') + 'Needs a corrected file';
-    if (layer.published && (!layer.latest || layer.latest.status === 'published')) return 'Published';
-    const draft = this.drafts()[layer.key];
-    const status = draft?.status ?? layer.latest?.status;
-    if (!status) return layer.published ? 'Published' : 'Not uploaded';
-    return (layer.published ? 'Published. New upload: ' : '') + uploadLabels[status];
-  }
-
-  layerIcon(layer: SetupLayer): 'step' | 'complete' | 'overdue' {
-    if (this.layerFailed(layer) || this.blocking(layer).length || this.checkErrors()[layer.key] ||
-        this.layerMessages()[layer.key]) return 'overdue';
-    return layer.published && (!layer.latest || layer.latest.status === 'published') ? 'complete' : 'step';
-  }
-
   layerFailed(layer: SetupLayer): boolean {
     return (this.drafts()[layer.key]?.status ?? layer.latest?.status) === 'failed';
   }
@@ -286,12 +265,8 @@ export class SetupWizard implements OnInit {
     }
   }
 
-  blocking(layer: SetupLayer): Problem[] {
+  blocking(layer: SetupLayer): LayerProblem[] {
     return this.drafts()[layer.key]?.problems.filter(problem => problem.blocksPublish) ?? [];
-  }
-
-  reviewCount(layer: SetupLayer): number {
-    return this.drafts()[layer.key]?.problems.filter(problem => !problem.blocksPublish).length ?? 0;
   }
 
   canPublish(layer: SetupLayer): boolean {

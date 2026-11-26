@@ -35,7 +35,11 @@ type testPreview struct {
 	Blocked           string
 	BrokenGrants      []brokenGrant
 	GrantConfirmation string
-	Changes           map[string]struct {
+	Previous          []struct {
+		LayerName string
+		Version   int
+	}
+	Changes map[string]struct {
 		Count int
 		Items []previewChange
 	}
@@ -252,12 +256,32 @@ func TestLayerPublishIntegration(t *testing.T) {
 	version := draft.VersionID.String()
 	checkImportedDraft(t, ctx, pool, draft, "hierarchy")
 	get(draftPath+"/preview", guard, http.StatusForbidden, nil)
+	get(draftPath+"/map", guard, http.StatusForbidden, nil)
+	get("/api/v1/workspaces/demo/layer-imports/"+version+"/map", admin, http.StatusNotFound, nil)
+	var previewMap struct {
+		Boundary json.RawMessage
+		Data     struct {
+			Type     string
+			Features []json.RawMessage
+		}
+		Truncated bool
+	}
+	get(draftPath+"/map", admin, http.StatusOK, &previewMap)
+	if len(previewMap.Boundary) == 0 || previewMap.Data.Type != "FeatureCollection" ||
+		len(previewMap.Data.Features) != int(draft.UnitCount) || previewMap.Truncated {
+		t.Fatalf("expected map with the checked draft units, got %d features, type %q, truncated %t",
+			len(previewMap.Data.Features), previewMap.Data.Type, previewMap.Truncated)
+	}
 	publish(draftPath, guard, "", http.StatusForbidden, nil)
 	var preview testPreview
 	get(draftPath+"/preview", admin, http.StatusOK, &preview)
 	if preview.Blocked != "" || len(preview.BrokenGrants) != 0 || preview.Changes["reassigned"].Count != 2 ||
 		preview.Changes["triage"].Count != 1 {
 		t.Fatalf("unexpected beat preview: %+v, import problems: %+v", preview, draft.Problems)
+	}
+	if len(preview.Previous) != 1 || preview.Previous[0].LayerName != "Territorial units" ||
+		preview.Previous[0].Version != 1 {
+		t.Fatalf("preview lost the previous version: %+v", preview.Previous)
 	}
 	reassigned := preview.Changes["reassigned"].Items
 	index := slices.IndexFunc(reassigned, func(change previewChange) bool { return change.DetectionID == detection })
@@ -278,6 +302,7 @@ func TestLayerPublishIntegration(t *testing.T) {
 		t.Fatalf("preview changed the original match: %d, %v", matchesBefore, err)
 	}
 	publish(draftPath, admin, "", http.StatusAccepted, nil)
+	get(draftPath+"/map", admin, http.StatusNotFound, nil)
 	replay := waitForReplay(draftPath)
 	if replay.Processed != int64(preview.Scanned) || replay.MatchesWritten != replay.Processed || replay.AlertsCreated != 0 {
 		t.Fatalf("unexpected replay progress: %+v", replay)
