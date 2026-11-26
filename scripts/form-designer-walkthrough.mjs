@@ -8,6 +8,7 @@
 // Environment: WEB (web app address), API (core API address), ISSUER (sign-in
 // issuer) and SHOTS (output folder).
 import { chromium } from 'playwright';
+import AxeBuilder from '@axe-core/playwright';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -36,6 +37,25 @@ async function get(path, username) {
   const response = await fetch(API + '/api/v1/workspaces/demo' + path, { headers: { Authorization: 'Bearer ' + await token(username) } });
   check(response.ok, `GET ${path} returned HTTP ${response.status}`);
   return response.json();
+}
+
+async function checkPresentation(page, selector, name, evidence) {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.locator(`html[data-theme="${theme}"]`).waitFor({ state: 'attached' });
+      await evidence.scrollIntoViewIfNeeded();
+      const label = `${name}-${viewport.width}-${theme}`;
+      const result = await new AxeBuilder({ page }).include(selector).analyze();
+      const violations = result.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
+      check(!violations.length, label + ': ' + JSON.stringify(violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) }))));
+      console.log(label + ' has zero serious or critical axe violations');
+      await save(page, label);
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
 }
 
 const browser = await chromium.launch();
@@ -76,6 +96,9 @@ try {
   // Drag and drop: a number field from the palette into the new section.
   const source = page.locator('#form-palette').getByRole('button', { name: 'Number', exact: true });
   const target = page.locator('#form-list-1');
+  // Keyboard focus can scroll the palette under the sticky workspace header.
+  await source.evaluate(element => element.scrollIntoView({ block: 'center' }));
+  await source.hover();
   const from = await source.boundingBox();
   const to = await target.boundingBox();
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -93,7 +116,8 @@ try {
   await save(page, 'designer-extending-national-template');
 
   await page.getByRole('button', { name: 'Preview' }).click();
-  await save(page, 'preview');
+  const previewRule = page.getByText('Shown when Likely cause is Lightning.');
+  await checkPresentation(page, 'fimra-form-designer', 'preview', previewRule);
   await page.getByRole('button', { name: 'Design' }).click();
 
   await page.getByRole('button', { name: 'Save as draft' }).click();
@@ -124,7 +148,28 @@ try {
   check(state.status === 'published' && state.extends?.form === 'national-fire-report' && state.extends?.version === 1,
     'the state form is not published from the template: ' + JSON.stringify(state));
   check(state.template.locked.includes('basics') && state.template.locked.includes('crew_size'), 'the state form lost the national locks');
-  console.log('The state extended the national template and published it; the earlier report still shows with national-fire-report version 1.');
+  // Publish a changed version of the same form. Its rule would hide the
+  // crew answer on the earlier report if the viewer used the latest version.
+  const national = await get('/forms/national-fire-report/versions/1', 'state.admin');
+  const newer = structuredClone(national.definition);
+  newer.version = 2;
+  newer.title.en = 'Updated national report';
+  const crew = newer.sections[1].items[1].items[0];
+  crew.showWhen.value = 'people';
+  const added = await fetch(API + '/api/v1/workspaces/demo/forms', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + await token('state.admin'), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level: 'national', definition: newer, template: national.template })
+  });
+  check(added.status === 201, 'the new version did not publish: ' + await added.text());
+
+  await page.goto(WEB + '/reports/field?workspace=demo&report=' + submission);
+  const presentation = page.locator('fimra-submission-view fimra-form-presentation');
+  await presentation.getByRole('heading', { name: 'National report', exact: true }).waitFor();
+  const originalAnswer = presentation.getByText('4 people', { exact: true });
+  check(await presentation.getByText('Updated national report').count() === 0, 'the earlier report shows the newer form title');
+  await checkPresentation(page, 'fimra-submission-view', 'historical-report', originalAnswer);
+  console.log('The earlier report shows the crew size using version 1 after version 2 changed its visibility rule.');
 } catch (error) {
   await save(page, 'failure');
   console.error(await page.locator('.designer-problems').textContent().catch(() => ''));

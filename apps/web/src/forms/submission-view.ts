@@ -3,16 +3,16 @@ import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, ElementRef, Injector, afterNextRender, effect, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth';
 import { ConfirmDialog } from '../ui/confirm-dialog';
+import { StateRegion, type DataState } from '../ui/state-region';
 import { StatusBadge } from '../ui/status-badge';
-import { decisionLabels, serverProblems, type Submission } from './form-api';
-import { FormFill } from './form-fill';
-
-const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+import { defaultWorkspaceFormat } from '../workspace-format';
+import { decisionLabels, serverProblems, type FormVersion, type Submission } from './form-api';
+import { FormPresentation } from './form-presentation';
 
 /**
  * One field report, shown with the form version it was filled in on, and the
@@ -21,7 +21,7 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
  */
 @Component({
   selector: 'fimra-submission-view',
-  imports: [HlmButtonImports, HlmFieldImports, HlmSkeletonImports, HlmTextareaImports, StatusBadge, FormFill],
+  imports: [HlmButtonImports, HlmFieldImports, HlmSkeletonImports, HlmTextareaImports, StatusBadge, StateRegion, FormPresentation],
   host: { class: 'submission-view' },
   template: `
     @if (submission(); as s) {
@@ -58,8 +58,12 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
         }
         @if (message()) { <p role="alert">{{ message() }}</p> }
       </section>
-      <fimra-form-fill [workspaceUrl]="workspaceUrl()" [form]="s.form" [version]="s.version" [step]="s.step"
-        [alertId]="s.alertId" [initial]="s.values" [readonly]="true" />
+      <fimra-state-region [state]="formState()" (retry)="retryForm()">
+        @if (definition(); as form) {
+          <fimra-form-presentation mode="historical" [definition]="form" [step]="s.step"
+            [values]="s.values" [workspaceUrl]="workspaceUrl()" />
+        }
+      </fimra-state-region>
     } @else if (message()) {
       <p role="status">{{ message() }}</p>
     } @else {
@@ -83,6 +87,13 @@ export class SubmissionView {
   private confirming = false;
   private readonly injector = inject(Injector);
   private readonly decisionResult = viewChild<ElementRef<HTMLElement>>('decisionResult');
+  protected readonly definition = signal<FormVersion['definition'] | null>(null);
+  protected readonly formState = signal<DataState>({ kind: 'loading', heading: 'Loading the form version' });
+  private readonly formAttempt = signal(0);
+  private readonly formUrl = computed(() => {
+    const report = this.submission();
+    return report ? this.workspaceUrl() + '/forms/' + encodeURIComponent(report.form) + '/versions/' + report.version : null;
+  });
 
   constructor() {
     effect(onCleanup => {
@@ -99,10 +110,34 @@ export class SubmissionView {
       });
       onCleanup(() => request.unsubscribe());
     });
+    effect(onCleanup => {
+      const url = this.formUrl();
+      this.formAttempt();
+      this.definition.set(null);
+      this.formState.set({ kind: 'loading', heading: 'Loading the form version' });
+      if (!url) return;
+      const request = this.http.get<FormVersion>(url).subscribe({
+        next: version => {
+          this.definition.set(version.definition);
+          this.formState.set({ kind: 'ready' });
+        },
+        error: (error: HttpErrorResponse) => {
+          if (error.status === 401) this.auth.sessionEnded();
+          this.formState.set(error.status === 403 || error.status === 404
+            ? { kind: 'forbidden', heading: 'This form version is unavailable' }
+            : { kind: 'error', heading: 'The form version could not load' });
+        }
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+  }
+
+  protected retryForm(): void {
+    this.formAttempt.update(attempt => attempt + 1);
   }
 
   time(value: string): string {
-    return when.format(new Date(value));
+    return defaultWorkspaceFormat.dateTime(new Date(value));
   }
 
   async approveReport(trigger: HTMLButtonElement): Promise<void> {

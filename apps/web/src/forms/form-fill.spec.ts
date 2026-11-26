@@ -36,7 +36,7 @@ describe('Form renderer', () => {
   });
   afterEach(() => { http.verify(); vi.unstubAllGlobals(); });
 
-  function render(options: { definition?: object; step?: string; initial?: object; readonly?: boolean } = {}) {
+  function render(options: { definition?: object; step?: string; initial?: object } = {}) {
     const fixture = TestBed.createComponent(FormFill);
     const set = (name: string, value: unknown) => fixture.componentRef.setInput(name, value);
     set('workspaceUrl', workspace);
@@ -46,7 +46,6 @@ describe('Form renderer', () => {
     set('definition', options.definition ?? firstReport);
     set('alert', alert);
     set('initial', options.initial ?? {});
-    set('readonly', options.readonly ?? false);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const buttons = () => Array.from(el.querySelectorAll<HTMLButtonElement>('button'));
@@ -193,22 +192,6 @@ describe('Form renderer', () => {
     while (component.pages().indexOf(component.currentPage()) < component.pages().length - 1) press('Next');
     fixture.detectChanges();
     expect(el.querySelector('#field-reached_at')!.tagName).toBe('INPUT');
-  });
-
-  it('shows a sent report without inputs, with its photos', () => {
-    const { el } = render({ readonly: true, initial: { ...complete, total_staff: 6, observed_at: '2026-03-15T06:00:00Z' } });
-    const previews = http.match(request => request.url.startsWith(workspace + '/attachments/'));
-    expect(previews.map(r => r.request.url.split('/').pop()).sort()).toEqual([photo, signature]);
-    previews.forEach(r => r.flush(new Blob(['x'])));
-    expect(el.querySelector('input, textarea, select')).toBeNull();
-    expect(el.textContent).toContain('Under control');
-    expect(el.textContent).toContain('Download photo 1');
-    expect(el.textContent).toContain('Demo Team A');
-    // The server's calculations and alert values show as they were kept.
-    expect(el.querySelector('#field-total_staff')!.textContent).toBe('6 people');
-    expect(el.querySelector('#field-observed_at')!.textContent).not.toBe('No answer');
-    expect(el.textContent).toContain('Download signature');
-    expect(el.querySelector('button[type=submit]')).toBeNull();
   });
 });
 

@@ -83,6 +83,45 @@ describe('Report and approval', () => {
     expect(document.activeElement).toBe(el.querySelector('.approval [tabindex="-1"]'));
   });
 
+  it('requests version 1 and uses its rules after version 2 changes the form', () => {
+    const original = {
+      formatVersion: 1, id: 'first-report', version: 1, title: { en: 'Original report' },
+      sections: [{ key: 'fire', title: { en: 'Fire' }, items: [
+        { key: 'cause', type: 'text', label: { en: 'Cause' } },
+        { key: 'crew', type: 'number', label: { en: 'Crew size' }, unit: 'people',
+          showWhen: { op: 'equals', field: 'cause', value: 'lightning' } }
+      ] }]
+    };
+    const latest = structuredClone(original);
+    latest.version = 2;
+    latest.title.en = 'Updated report';
+    latest.sections[0].items[1].showWhen!.value = 'other';
+    const fixture = TestBed.createComponent(SubmissionView);
+    fixture.componentRef.setInput('workspaceUrl', workspace);
+    fixture.componentRef.setInput('submissionId', 'demo-newer-report');
+    fixture.detectChanges();
+    http.expectOne(workspace + '/submissions/demo-newer-report').flush({
+      ...report, id: 'demo-newer-report', version: 2, values: { cause: 'lightning' }
+    });
+    fixture.detectChanges();
+    http.expectOne(workspace + '/forms/first-report/versions/2').flush({ definition: latest });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Updated report');
+    expect(el.textContent).not.toContain('Crew size');
+
+    fixture.componentRef.setInput('submissionId', report.id);
+    fixture.detectChanges();
+    http.expectOne(workspace + '/submissions/' + report.id).flush({ ...report, values: { cause: 'lightning', crew: 4 } });
+    fixture.detectChanges();
+    http.expectOne(workspace + '/forms/first-report/versions/1').flush({ definition: original });
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Original report');
+    expect(el.textContent).toContain('Crew size');
+    expect(el.textContent).toContain('4 people');
+    expect(el.textContent).not.toContain('Updated report');
+  });
+
   it('needs a note to return a report', async () => {
     const { el, fixture, button } = render(report);
     button('Return with a note')!.click();

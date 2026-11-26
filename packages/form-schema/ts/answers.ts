@@ -36,6 +36,8 @@ export interface StoredAttachment {
 export interface AnswerContext {
   /** The workflow step being filled in. A form with stages needs it. */
   step?: string;
+  /** Evaluate visibility using the immutable answers already accepted by the server. */
+  historical?: boolean;
   alert?: AlertFacts;
   /** The current time. Defaults to now. */
   now?: Date;
@@ -271,6 +273,10 @@ export class AnswerSession {
       return;
     }
     this.root = this.newScope(null, null, '', values as Obj);
+    if (context.historical) {
+      this.answers = this.problems.length ? null : values as Obj;
+      return;
+    }
     if (this.problems.length > 0) {
       this.answers = null;
       return;
@@ -334,8 +340,6 @@ export class AnswerSession {
       } else if (!members.includes(n)) {
         if (n.repeat) this.add(sc, `Field "${key}" belongs inside the repeating group "${n.repeat.key}".`);
         else this.add(sc, `Field "${key}" is not inside a repeating group.`);
-      } else if (n.kind === 'calculated' || n.kind === 'alert-value') {
-        // The server works these out itself and ignores what was sent.
       } else if (value === null || value === undefined) {
         // A null answer is the same as no answer.
       } else if (n.kind === 'repeat') {
@@ -354,7 +358,9 @@ export class AnswerSession {
           list.push(this.newScope(n, sc, where, entry as Obj));
           sc.entries.set(key, list);
         });
-      } else {
+      } else if (this.context.historical) {
+        sc.clean.set(key, value);
+      } else if (n.kind !== 'calculated' && n.kind !== 'alert-value') {
         const [clean, ok] = this.checkValue(sc, n, value);
         if (ok) sc.clean.set(key, clean);
       }
@@ -559,7 +565,9 @@ export class AnswerSession {
     holder.busy.add(key);
     let result: { value: unknown; ok: boolean } = { value: undefined, ok: false };
     if (this.visibleNode(n, holder)) {
-      if (n.kind === 'calculated') {
+      if (this.context.historical) {
+        if (holder.clean.has(key)) result = { value: holder.clean.get(key), ok: true };
+      } else if (n.kind === 'calculated') {
         const [f, ok] = this.calculate(n.node['calculate'] as Obj, holder);
         if (ok && Number.isFinite(f)) {
           const d = num(n.node, 'decimals');

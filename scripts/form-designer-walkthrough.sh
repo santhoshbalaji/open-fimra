@@ -66,13 +66,14 @@ for _ in $(seq 120); do
 done
 curl -sf "http://$API_ADDR/healthz" > /dev/null || { cat "$work/api.log"; exit 1; }
 
-mkdir -p "$SHOTS" "$HOME/.cache/open-fimra-walkthrough"
-cp scripts/form-designer-walkthrough.mjs "$HOME/.cache/open-fimra-walkthrough/form-designer.mjs"
+mkdir -p "$SHOTS" "$work/browser"
+cp scripts/form-designer-walkthrough.mjs "$work/browser/form-designer.mjs"
+axe_version=$(node -p 'require("./apps/web/package.json").devDependencies["@axe-core/playwright"]')
 if ! docker run --rm --network host --init \
-  -v "$HOME/.cache/open-fimra-walkthrough:/work" -v "$SHOTS:/shots" \
+  -v "$work/browser:/work" -v "$SHOTS:/shots" \
   -e WEB="http://127.0.0.1:$web_port" -e API="http://$API_ADDR" -e ISSUER="$ISSUER" -e SHOTS=/shots \
-  -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-  "$PLAYWRIGHT_IMAGE" bash -c 'cd /work && { [ -d node_modules/playwright ] || npm install --no-save --silent playwright@1.63.0; } && node form-designer.mjs'
+  -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -e AXE_VERSION="$axe_version" \
+  "$PLAYWRIGHT_IMAGE" bash -c 'cd /work && npm install --no-save --silent playwright@1.63.0 "@axe-core/playwright@$AXE_VERSION" && node form-designer.mjs'
 then
   tail -n 40 "$work/api.log"
   exit 1

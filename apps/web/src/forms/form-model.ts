@@ -364,24 +364,28 @@ const opWords: Record<string, string> = {
 };
 
 /** A condition in plain English, such as "Likely cause is Lightning". */
-export function describeCondition(form: FormDefinition, condition: Condition | undefined): string {
+export function describeCondition(form: FormDefinition, condition: Condition | undefined, language = 'en'): string {
   if (!condition) return '';
   const field = (key?: string) => fieldsOf(form).find(f => f.key === key);
+  const name = (item: FormItem | undefined, key?: string) => textOf(item?.label, language) || key || 'the question';
   switch (condition.op) {
     case 'answered':
-      return (field(condition.field) ? nodeName(field(condition.field)!) : condition.field) + ' is answered';
+      return name(field(condition.field), condition.field) + ' is answered';
     case 'all':
     case 'any': {
-      const parts = (condition.conditions ?? []).map(c => describeCondition(form, c));
+      const parts = (condition.conditions ?? []).map(c => {
+        const part = describeCondition(form, c, language);
+        return c.op === 'all' || c.op === 'any' ? '(' + part + ')' : part;
+      });
       return parts.join(condition.op === 'all' ? ' and ' : ' or ');
     }
     case 'not':
-      return 'not (' + describeCondition(form, condition.condition) + ')';
+      return 'not (' + describeCondition(form, condition.condition, language) + ')';
     default: {
       const target = field(condition.field);
       const choice = target ? choicesOf(form, target).find(c => c.key === condition.value) : undefined;
-      const value = choice ? textOf(choice.label) : String(condition.value);
-      return (target ? nodeName(target) : condition.field) + ' ' + (opWords[condition.op] ?? condition.op) + ' ' + value;
+      const value = choice ? textOf(choice.label, language) : String(condition.value);
+      return name(target, condition.field) + ' ' + (opWords[condition.op] ?? condition.op) + ' ' + value;
     }
   }
 }
