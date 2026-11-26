@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundaryKey, referenceLayers, type WorkspaceMap } from './map-style';
+import { referenceGroups, type WorkspaceMap } from './map-style';
 
 const info: WorkspaceMap = {
   version: 'test', boundary: [80, 20, 81, 21],
@@ -9,17 +9,16 @@ const info: WorkspaceMap = {
 };
 
 describe('Workspace reference layers', () => {
-  it.each(['light', 'dark'] as const)('uses workspace labels and depth in %s mode', theme => {
-    const rows = boundaryKey(info.levels, theme);
-    expect(rows.map(row => row.labels.en)).toEqual(['Region', 'District', 'Sub-district']);
-    expect(rows[0].width).toBeGreaterThan(rows[1].width);
-    expect(rows[1].width).toBeGreaterThan(rows[2].width);
-    const layers = referenceLayers(info, theme, false);
-    expect(layers.filter(layer => layer.type === 'symbol')).toMatchObject([
-      { id: 'label-territorial-2', minzoom: 11, 'source-layer': 'units' }
-    ]);
-    expect(referenceLayers(info, theme, true)).toMatchObject([
-      { id: 'unit-territorial-0', type: 'line', source: 'reference' }
-    ]);
+  it.each(['light', 'dark'] as const)('matches the %s legend to the rendered layers', theme => {
+    const groups = referenceGroups(info, theme);
+    expect(groups.filter(group => !group.optional).map(group => group.label)).toEqual(['Region boundaries']);
+    const unitGroups = groups.filter(group => group.swatch?.kind === 'line');
+    expect(unitGroups.map(group => group.label)).toEqual(['Sub-district boundaries', 'District boundaries', 'Region boundaries']);
+    for (const group of unitGroups) {
+      expect(group.layers[0]).toMatchObject({ type: 'line', minzoom: group.minZoom, source: 'reference' });
+    }
+    expect(groups.find(group => group.id === 'label-territorial-2')).toMatchObject({
+      label: 'Sub-district names', minZoom: 11, layers: [{ type: 'symbol', minzoom: 11, 'source-layer': 'units' }]
+    });
   });
 });

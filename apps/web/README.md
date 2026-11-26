@@ -4,16 +4,16 @@ Sign in with your department account to open your first assigned workspace. The 
 
 **Monitor** contains **Map**, **Alerts** and **Incidents**. **Reports** contains **Field reports** and **Situation report**. The shell also links to **Dashboard** and the **Settings** screens your role can use. On a phone, open **Menu** to switch destinations. Use **Search** or Ctrl+K (Command+K on a Mac) to find a destination by name. Links keep the selected workspace and filters. Refresh keeps the current view, and Back restores the previous view and its list position.
 
-The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. The map key explains the age colours and forest shapes.
+The map starts with the past seven days and refreshes every minute. Use the time slider to choose a window from one to 720 hours. Choose a forest class or enter a unit path such as `ds.c1.d1` to narrow the view. All classes are selected at first. **Layers and legend** lets you show and hide map layers. The small key stays on the map and the full legend follows the layers and zoom.
 
-Click a point or use the **Detections in view** menu to open its details. Times use your local time zone. Press Escape to close the details and return to the menu. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit workspace to map** to return to the workspace boundary.
+Click a point or use the **Detections in view** menu to select it in both views. The detail panel shows the observation, any alert you may see and its linked incident. Times use your local time zone. Press Escape to close the details and return to where you opened them. Use the arrow keys on the map to pan, plus and minus to zoom, and **Fit workspace to map** to return to the workspace boundary.
 
 
-The alert queue sits beside the map on large screens. On a phone, open **Alerts** from **Menu** to see the queue. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
+If some tiles fail, the map names the missing data and offers **Retry**. The alert queue still works. The alert queue sits beside the map on large screens. On a phone, open **Alerts** from **Menu** to see the queue. Both use the same time window. Queue counts cover all matching pages. Choose a detection in the table to centre the map and open its details. Selecting a map point shows its row if you have access to its alert. Both views refresh every minute.
 
 Choose **Dashboard** to see detections by forest class, routed alerts by queue and step, and times to acknowledgment, arrival and control. The map, queue and dashboard keep the same filters when you switch views. Today's detections start at midnight in India. A root grant also shows each feed's health.
 
-The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. The map shows only the top-level reference outline, and the dashboard skips the chart. The browser remembers your choice when storage is available.
+The chart has a matching data table. **Low bandwidth** keeps the numbers, table and detection points. The map keeps the top-level reference outline and hides optional geography. The dashboard skips the chart. The browser remembers your choice when storage is available.
 
 ## Incidents
 

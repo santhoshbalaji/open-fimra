@@ -35,11 +35,11 @@ for _ in $(seq 60); do
 done
 curl -sf "http://$API_ADDR/healthz" >/dev/null || { cat "$work/api.log"; exit 1; }
 mkdir "$work/test"
-cp scripts/shell-walkthrough.mjs "$work/test/"
+cp scripts/{shell,map}-walkthrough.mjs "$work/test/"
 axe_version=$(node -p 'require("./apps/web/package.json").devDependencies["@axe-core/playwright"]')
 docker run --rm --network host --init \
   -v "$work/test:/work" -v "$shots:/shots" -w /work \
   -e WEB="http://127.0.0.1:$web_port" -e API="http://$API_ADDR" -e SHOTS=/shots \
   -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -e AXE_VERSION="$axe_version" \
   mcr.microsoft.com/playwright:v1.63.0-noble bash -c \
-    'npm install --no-save --silent playwright@1.63.0 "@axe-core/playwright@$AXE_VERSION" && node shell-walkthrough.mjs'
+    'npm install --no-save --silent playwright@1.63.0 "@axe-core/playwright@$AXE_VERSION" && node shell-walkthrough.mjs && node map-walkthrough.mjs'

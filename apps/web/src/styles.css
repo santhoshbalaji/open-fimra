@@ -43,21 +43,6 @@ button .chevron { width: 14px; }
 .welcome h1, .welcome h2 { font-size: var(--text-title); font-weight: 600; }
 .welcome p { max-width: 48ch; }
 .welcome-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
-.map-actions { display: grid; position: absolute; top: 16px; right: 16px; padding: 4px; }
-.map-actions button { display: grid; place-items: center; border-radius: var(--radius-control); }
-.map-key { position: absolute; left: 16px; bottom: 16px; padding: 4px; }
-.map-key button { font-weight: 600; }
-.map-key ul { padding: 4px 8px; }
-.map-key li { display: flex; align-items: center; gap: 8px; line-height: 1.5; font-size: var(--text-label); }
-.key-line { width: 23px; border-top-style: solid; border-color: var(--color-text-secondary); }
-.key-forest { border: 1px solid var(--color-text-secondary); width: 23px; height: 10px; background: color-mix(in srgb, var(--map-forest) calc(var(--map-forest-opacity) * 100%), var(--map-land)); }
-.key-kiln { width: 10px; height: 10px; margin-inline: 6.5px; background: var(--color-neutral-mark); border: 2px solid var(--color-text); }
-.map-message { position: absolute; top: 16px; left: 16px; max-width: 65%; padding: 12px; }
-.fire-controls { position: absolute; left: 16px; top: 16px; max-width: calc(100% - 84px); display: grid; gap: 6px; }
-.fire-controls .map-message { position: static; max-width: fit-content; padding: 8px 12px; }
-.key-groups:not([hidden]) { display: flex; align-items: flex-start; flex-wrap: wrap; }
-.map-key { max-width: calc(100% - 32px); max-height: calc(50% - 32px); overflow: auto; }
-.map-key h2 { font-size: var(--text-label); font-weight: 600; padding: 3px 12px 0; }
 .age-swatch { width: 17px; height: 8px; border-radius: 3px; }
 .key-symbol { width: 12px; height: 12px; margin-inline: 2.5px; border-radius: 50%; background: var(--color-neutral-mark); }
 .key-symbol.near_edge { background: transparent; border: 2.5px solid var(--color-neutral-mark); }
@@ -82,21 +67,11 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 .filter-fields label, .filter-card label { font-size: var(--text-label); min-height: 20px; }
 .filter-toggle { display: none; }
 
-fimra-demo-map { display: flex; flex-direction: column; height: 100%; background: var(--color-map-background); }
-.workspace-panes { display: flex; flex: 1; min-height: 0; position: relative; }
-.map-pane { position: relative; flex: 1; min-height: 0; min-width: 0; }
-.map-actions, .map-key, .map-message, .filter-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: var(--shadow-panel); }
-.filter-card { gap: 4px; padding: 8px; }
-.key-groups { padding: 0 4px 8px; }
-.alert-panel, .detail-card { background: var(--color-card); border-left: 1px solid var(--color-border); padding: 16px; overflow: auto; overscroll-behavior: contain; }
-.alert-panel { width: clamp(316px, 30vw, 460px); }
-.detail-card { width: clamp(272px, 24vw, 360px); }
-.queue-heading, .detail-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-.queue-heading h2, .detail-heading h2 { font-weight: 600; font-size: var(--text-title); }
-.detail-card > p, .step-meta time, .alert-table small, .detail-card dt, .step-timeline small, .step-timeline time { color: var(--color-text-secondary); font-size: var(--text-label); }
-.detail-card > p { margin-block: 4px 12px; }
-.detail-card dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; border-top: 1px solid var(--color-border); padding-top: 12px; }
-.detail-card dd, .step-timeline li { overflow-wrap: anywhere; }
+.alert-panel { width: clamp(316px, 30vw, 460px); background: var(--color-card); border-left: 1px solid var(--color-border); padding: 16px; overflow: auto; overscroll-behavior: contain; }
+.queue-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.queue-heading h2 { font-weight: 600; font-size: var(--text-title); }
+.step-meta time, .alert-table small, .step-timeline small, .step-timeline time { color: var(--color-text-secondary); font-size: var(--text-label); }
+.step-timeline li { overflow-wrap: anywhere; }
 .queue-tabs { margin: 12px 0; padding-bottom: 8px; border-bottom: 1px solid var(--color-border); gap: 4px; }
 .queue-tabs [aria-pressed=true] { background: var(--color-brand-soft); color: var(--color-brand); }
 .queue-tabs span { font-variant-numeric: tabular-nums; }
@@ -143,16 +118,8 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
   .filter-fields { display: none; }
   .filters-open .filter-fields { display: flex; width: 100%; padding: 8px; }
   .view-switch { width: fit-content; }
-  .workspace-panes { flex-direction: column; }
   .alert-panel { display: none; }
-  .show-queue .map-pane { visibility: hidden; }
-  .show-queue .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }
-  .show-details .map-pane, .show-details .alert-panel { display: none; }
-  .detail-card { flex: 1; width: 100%; border-left: 0; }
-  .fire-controls, .map-actions { top: 8px; }
-  .fire-controls, .map-key { left: 8px; }
-  .map-actions { right: 8px; }
-  .map-key { bottom: 8px; }
+  .show-queue:not(.show-details) .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }
 }
 /* Printing shows the open screen's content only, such as a situation report.
    It comes last so that it wins over the screen rules above. */
