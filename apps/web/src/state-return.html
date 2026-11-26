@@ -1,0 +1,93 @@
+<section class="mx-auto grid max-w-6xl min-w-0 gap-5 p-4 sm:p-6 lg:p-8">
+  <h1 class="text-2xl font-semibold">{{ msg('State return') }}</h1>
+  @if (failure()) { <p role="alert">{{ msg(failure()) }}</p> }
+  @if (notice()) { <p role="status">{{ msg(notice()) }}</p> }
+  @if (history(); as data) {
+    @if (data.authority; as authority) {
+      <p>{{ msg('Producing authority') }} · {{ authority.stateCode }} ({{ authority.unitCodeSystem }})</p>
+      <form class="flex flex-wrap items-end gap-3" (ngSubmit)="requestPreview()">
+        <label>{{ msg('From date') }}
+          <input type="date" name="from" required [ngModel]="from" (ngModelChange)="chooseDates($event, to)" [disabled]="busy()" />
+        </label>
+        <label>{{ msg('To date') }}
+          <input type="date" name="to" required [ngModel]="to" (ngModelChange)="chooseDates(from, $event)" [disabled]="busy()" />
+        </label>
+        <button hlmBtn type="submit" [disabled]="busy() || !from || !to || from > to">{{ msg('Preview state return') }}</button>
+      </form>
+      @if (preview(); as result) {
+        @let incident = result.documents.incident;
+        @let preparedness = result.documents.preparedness.preparedness;
+        <section class="grid gap-3 rounded-card border border-border p-4">
+          <h2 class="text-lg font-semibold">{{ msg('Validation result') }}</h2>
+          <p>{{ msg('Revision {0}', [number(incident.revision)]) }} · {{ msg('Reporting cutoff') }} {{ incident.window.cutoff }} ({{ incident.window.timeZone }})</p>
+          <p>{{ msg('Incident figures') }} · {{ msg(resultLabel[incident.coverage.status]) }} ·
+            {{ msg('{0} of {1} unit days approved', [number(incident.coverage.reported), number(incident.coverage.expected)]) }}</p>
+          <p>{{ msg('Preparedness and grants') }} · {{ msg(resultLabel[preparedness.status]) }} ·
+            {{ msg('Approved records') }} {{ number(preparedness.approvedRecords) }}</p>
+          @if (incident.totals; as totals) {
+            <dl class="grid gap-2 sm:grid-cols-2">
+              <div><dt>{{ msg('Source detections') }}</dt><dd>{{ number(totals.detections.records) }}</dd></div>
+              <div><dt>{{ msg('Deduplicated detections') }}</dt><dd>{{ number(totals.detections.deduplicated) }}</dd></div>
+              <div><dt>{{ msg('Routed alerts') }}</dt><dd>{{ number(totals.alerts.routed) }}</dd></div>
+              <div><dt>{{ msg('New confirmed fires') }}</dt><dd>{{ number(totals.incidents.new) }}</dd></div>
+              <div><dt>{{ msg('Active confirmed fires') }}</dt><dd>{{ number(totals.incidents.active) }}</dd></div>
+              <div><dt>{{ msg('Approved hectares') }}</dt><dd>{{ totals.area.hectares === null ? msg('Not reported') : number(totals.area.hectares) }}</dd></div>
+            </dl>
+          }
+          <details>
+            <summary>{{ msg('Reporting unit coverage') }}</summary>
+            <table class="w-full">
+              <thead><tr><th scope="col">{{ msg('Reporting unit') }}</th><th scope="col">{{ msg('Reporting day') }}</th>
+                <th scope="col">{{ msg('Report status') }}</th></tr></thead>
+              <tbody>
+                @for (unit of incident.coverage.units; track unit.day + '/' + unit.code) {
+                  <tr><th scope="row">{{ unit.code }}</th><td>{{ unit.day }}</td><td>{{ msg(resultLabel[unit.status]) }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </details>
+          <details>
+            <summary>{{ msg('Preview JSON figures') }}</summary>
+            <pre class="max-h-96 overflow-auto">{{ { coverage: incident.coverage, totals: incident.totals, preparedness: preparedness } | json }}</pre>
+          </details>
+          <div><button hlmBtn type="button" [disabled]="busy()" (click)="sign()">
+            {{ msg(incident.revision > 1 ? 'Approve and sign correction' : 'Approve and sign') }}
+          </button></div>
+        </section>
+      }
+      <section class="grid gap-3">
+        <h2 class="text-lg font-semibold">{{ msg('Revision history') }}</h2>
+        @for (item of data.items; track item.id) {
+          <article class="grid gap-2 rounded-card border border-border p-4">
+            <h3 class="font-semibold">{{ item.from }} – {{ item.to }} · {{ msg('Revision {0}', [number(item.revision)]) }} ·
+              {{ msg(item.current ? 'Current revision' : 'Superseded') }}</h3>
+            @for (receipt of item.receipts; track receipt.kind) {
+              <div class="grid gap-2">
+                <p>{{ msg(kindLabel[receipt.kind]) }} · {{ msg(resultLabel[receipt.status]) }} ·
+                  <time [attr.datetime]="receipt.validatedAt">{{ dateTime(receipt.validatedAt) }}</time></p>
+                <details><summary>{{ msg('Validation receipt') }}</summary>
+                  <dl class="break-all">
+                    <dt>{{ msg('Signing key ID') }}</dt><dd>{{ receipt.keyId }}</dd>
+                    <dt>{{ msg('SHA-256 digest') }}</dt><dd class="break-all">{{ receipt.sha256 }}</dd>
+                  </dl>
+                </details>
+                <div class="flex flex-wrap gap-2">
+                  <button hlmBtn variant="outline" type="button" [disabled]="busy()" (click)="download(item, receipt.kind)">{{ msg('Download signed JSON') }}</button>
+                  <button hlmBtn variant="outline" type="button" (click)="receiptFile(item, receipt)">{{ msg('Download receipt') }}</button>
+                </div>
+              </div>
+            }
+          </article>
+        } @empty { <p>{{ msg('No state returns have been signed.') }}</p> }
+      </section>
+    } @else {
+      <form class="grid gap-3" (ngSubmit)="configure()">
+        <h2 class="text-lg font-semibold">{{ msg('Producing authority') }}</h2>
+        <p>{{ msg('Use the state code and unit code system agreed for the exchange. These codes are fixed after setup.') }}</p>
+        <label>{{ msg('State code') }} <input name="stateCode" [(ngModel)]="stateCode" required maxlength="32" /></label>
+        <label>{{ msg('Unit code system') }} <input name="unitCodeSystem" [(ngModel)]="unitCodeSystem" required maxlength="32" /></label>
+        <div><button hlmBtn type="submit" [disabled]="busy() || !stateCode || !unitCodeSystem">{{ msg('Configure authority and signing key') }}</button></div>
+      </form>
+    }
+  } @else if (!failure()) { <p role="status">{{ msg('Loading') }}</p> }
+</section>

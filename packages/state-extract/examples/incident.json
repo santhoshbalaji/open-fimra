@@ -1,0 +1,92 @@
+{
+  "keyId": "bdd9deac505d2185102befaac25aa10b",
+  "signature": "PouDQLYuRABW04x2dBYGaZ288LPSzaoizTlHUrtcv1NJBFtfgPGm/xfoo/Yd9hi99DAh47WvtJ//Y6QzZZynCQ==",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "incident",
+    "source": "approved_daily_returns_and_assessments",
+    "id": "9bed94e2-b93b-4fb7-a192-179084fdd045",
+    "revision": 1,
+    "supersedes": null,
+    "authority": {
+      "stateCode": "XS-DEMO",
+      "unitCodeSystem": "demo-forest-units",
+      "approverRole": "state_admin"
+    },
+    "window": {
+      "from": "2026-03-08",
+      "to": "2026-03-08",
+      "seasonFrom": "2026-03-01",
+      "seasonTo": "2026-05-31",
+      "timeZone": "Asia/Kolkata",
+      "cutoff": "18:00",
+      "startsAt": "2026-03-07T12:30:00Z",
+      "endsAt": "2026-03-08T12:30:00Z"
+    },
+    "generatedAt": "2026-03-09T00:00:00Z",
+    "coverage": {
+      "expected": 2,
+      "reported": 1,
+      "status": "incomplete",
+      "units": [
+        {
+          "code": "D1",
+          "day": "2026-03-08",
+          "boundaryVersion": "c8d2243b-db36-4ee1-a3d8-500993c93a0d",
+          "status": "zero",
+          "overlappingDetectionRecords": 0
+        },
+        {
+          "code": "D2",
+          "day": "2026-03-08",
+          "boundaryVersion": "c8d2243b-db36-4ee1-a3d8-500993c93a0d",
+          "status": "not_reported",
+          "overlappingDetectionRecords": null
+        }
+      ]
+    },
+    "totals": {
+      "detections": {
+        "deduplicated": 0,
+        "records": 0
+      },
+      "alerts": {
+        "awaiting_at_cutoff": 0,
+        "awaiting_verification": 0,
+        "controlled_burn": 0,
+        "duplicate": 0,
+        "false_alarm": 0,
+        "fire_seen": 0,
+        "no_fire_found": 0,
+        "non_forest": 0,
+        "not_reachable": 0,
+        "outside_jurisdiction": 0,
+        "routed": 0,
+        "unsafe": 0
+      },
+      "incidents": {
+        "active": 0,
+        "closed": 0,
+        "closure_backlog": 0,
+        "controlled": 0,
+        "extinguished": 0,
+        "new": 0
+      },
+      "operations": {
+        "assistance_received": 0,
+        "assistance_requested": 0,
+        "overdue_alerts": 0,
+        "overdue_cases": 0
+      },
+      "response": {},
+      "area": {
+        "status": "not_reported",
+        "expected": 0,
+        "reported": 0,
+        "hectares": null,
+        "breakdowns": {},
+        "impacts": {}
+      }
+    }
+  }
+}

@@ -154,12 +154,16 @@ func saveSecret(ctx context.Context, tx pgx.Tx, c *settingsCipher, workspaceID, 
 	if err != nil {
 		return err
 	}
+	hint := ""
+	if name != stateSigningSecret {
+		hint = secretHint(value)
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO workspace_settings_secrets (workspace_id, name, key_id, nonce, ciphertext, hint, set_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (workspace_id, name) DO UPDATE SET key_id = EXCLUDED.key_id, nonce = EXCLUDED.nonce,
 			ciphertext = EXCLUDED.ciphertext, hint = EXCLUDED.hint, set_at = now(), set_by = EXCLUDED.set_by
-	`, workspaceID, name, sealed.KeyID, sealed.Nonce, sealed.Ciphertext, secretHint(value), actor)
+	`, workspaceID, name, sealed.KeyID, sealed.Nonce, sealed.Ciphertext, hint, actor)
 	if err != nil {
 		return fmt.Errorf("save the %s secret: %w", name, err)
 	}

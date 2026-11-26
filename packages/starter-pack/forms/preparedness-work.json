@@ -58,7 +58,10 @@
           },
           "required": false,
           "maxLength": 500
-        }
+        },
+        {"key": "target_quantity", "type": "number", "label": {"en": "Target number of work items", "hi": "कार्य मदों की लक्षित संख्या"}, "min": 0, "max": 10000000, "decimals": 0},
+        {"key": "work_done_quantity", "type": "number", "label": {"en": "Number of work items completed", "hi": "पूरी की गई कार्य मदों की संख्या"}, "min": 0, "max": 10000000, "decimals": 0},
+        {"key": "expenditure_inr", "type": "number", "label": {"en": "Expenditure in rupees", "hi": "रुपयों में खर्च"}, "min": 0, "max": 1000000000000, "decimals": 2}
       ]
     }
   ]

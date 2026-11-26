@@ -793,6 +793,32 @@ A department can change the form, but it must keep a date and time called `repor
 
 Manual detections appear in the detection tiles, counts and exports with the source `manual`. They have no ingest run, so feed health ignores them. A re-match after publishing a layer keeps each one to the workspace it was recorded in.
 
+## State-approved aggregate extracts
+
+A root workspace administrator can preview and sign an exchange window under
+**Reports → State return**. See the [version 1 exchange guide](../../packages/state-extract/README.md)
+for the schema, coverage and counting rules, examples, and key rotation.
+
+Use the following endpoints on `/api/v1/workspaces/{slug}/state-extracts`.
+
+| Request | Result |
+| --- | --- |
+| GET | Producing authority, signed revisions, current flags and validation receipts. |
+| POST with `action: "preview"`, `from` and `to` | Validates the proposed documents and returns a digest for approval. Dates are inclusive closing dates from a single season. |
+| POST with `action: "approve"`, the same dates and the preview `digest` | Signs and saves the incident and companion files and their receipts. A changed preview or overlapping window returns 409. Reuse the exact window to issue a correction. |
+| POST `/settings` with `action: "configure"`, `stateCode` and `unitCodeSystem` | Sets the authority's fixed codes and generates its signing key. Encrypted workspace settings must be enabled. |
+| POST `/settings` with `action: "rotate"` | Generates a new signing key and keeps all public keys for verification. |
+| GET `/{id}/incident` or `/{id}/preparedness` | Downloads the selected signed JSON file. |
+| GET `/keys/{keyId}` | Returns the state code, key ID and base64 Ed25519 public key. |
+| POST `/validate` with the signed JSON | Checks the schema, coverage and signature against a trusted workspace key and issues a receipt. |
+
+Approval, validation, download and key creation are audited. Files, receipts
+and links to older revisions are kept in the export history. Existing form
+versions stay available. In a workspace using an older starter form, publish
+an updated form version with the optional state allocation or preparedness
+quantity fields from the starter pack. Assign it to the applicable step or
+use it for the operations record.
+
 ## File exports
 
 Any user with a role in a workspace can export what they can see on the map or in the alert queue. The geo worker writes the file. Run it with `make geo-worker-up`.
