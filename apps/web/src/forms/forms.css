@@ -46,8 +46,10 @@
 .shape-drawing circle { fill: var(--color-brand); }
 .signature-pad canvas { width: 100%; max-width: 480px; aspect-ratio: 3 / 1; touch-action: none; color: var(--color-text);
   background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-card); }
-.approval { border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 12px 0; display: grid; gap: 8px; }
-.approval h4 { font-weight: 600; }
+.approval {
+  position: sticky; inset-block-end: 0; z-index: 1;
+  border-top: 1px solid var(--color-border); padding-top: 8px; display: grid; gap: 8px;
+}
 .approval-note { overflow-wrap: anywhere; }
 .approval form { display: grid; gap: 8px; }
 fimra-alert-reports { display: block; margin: 16px 0; }
@@ -66,17 +68,36 @@ fimra-alert-reports h3 { font-weight: 600; margin: 12px 0 8px; }
 .report-queue { display: grid; min-width: 0; gap: 16px; }
 .report-open { padding-inline: 0; height: auto; min-height: 44px; white-space: normal; text-align: start; }
 .submission-view > fimra-state-region > div > div,
-.submission-header, .submission-facts, .report-history { display: grid; gap: 12px; }
-.submission-header { padding-bottom: 12px; border-bottom: 1px solid var(--color-border); }
+.submission-evidence, .report-history { display: grid; gap: 12px; }
+.submission-header { display: grid; gap: 6px; }
 .submission-header h3 { font-size: var(--text-title); font-weight: 600; overflow-wrap: anywhere; }
-.submission-facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.submission-context, .submission-facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.submission-context { justify-content: space-between; align-items: center; }
+.submission-facts { color: var(--color-text-secondary); font-size: var(--text-label); }
+.submission-facts > div { display: inline-flex; flex-wrap: wrap; gap: 0 4px; }
 .submission-facts dt { font-weight: 600; }
 .submission-facts dd { overflow-wrap: anywhere; }
-.submission-facts .submission-meta { display: block; }
-.submission-facts [data-slot="badge"] {
-  background-color: var(--color-card);
-  color: var(--color-text);
-  transition: none;
+.submission-evidence { container-type: inline-size; }
+.presentation-compact { gap: 8px; }
+.presentation-compact > details { padding: 8px 12px; }
+.presentation-language-inline { display: flex; align-items: center; gap: 8px; }
+@container (min-width: 37rem) {
+  .presentation-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .presentation-compact > :not(details) { grid-column: 1 / -1; }
+}
+@media (width >= 48rem) {
+  .report-panel > section:has(.submission-evidence) { display: flex; flex-direction: column; }
+  .report-panel .submission-view,
+  .report-panel .submission-view > fimra-state-region,
+  .report-panel .submission-view > fimra-state-region > div,
+  .report-panel .submission-view > fimra-state-region > div > div {
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .report-panel .submission-evidence {
+    align-content: start; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  }
+  .report-panel .submission-header, .report-panel .approval { flex-shrink: 0; }
+  .report-panel .approval { position: static; }
 }
 .report-alert-link { color: var(--color-action); text-decoration: underline; text-underline-offset: 3px; }
 .approval-note { white-space: pre-wrap; }

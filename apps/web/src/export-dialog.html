@@ -27,27 +27,51 @@
         <label hlmLabel><hlm-radio [value]="false" aria-label="All queues you can see"><hlm-radio-indicator /></hlm-radio> All queues you can see</label>
       </hlm-radio-group></fieldset>
     }
-    <hlm-field><label hlmFieldLabel for="export-format">File format</label>
-      <hlm-select [value]="format()" (valueChange)="$event && format.set($event)">
-        <hlm-select-trigger buttonId="export-format" class="w-full"><span class="truncate">{{ formatLabels[format()] }}</span></hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal>
-          @for (item of formats; track item[0]) { <hlm-select-item [value]="item[0]">{{ item[1] }}</hlm-select-item> }
-        </hlm-select-content>
-      </hlm-select>
-    </hlm-field>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <hlm-field><label hlmFieldLabel for="export-format">File format</label>
+        <select hlmInput id="export-format" #fileFormat class="w-full" [value]="format()"
+          (change)="format.set($any(fileFormat.value))">
+          <optgroup label="Spreadsheets">
+            <option value="xlsx">{{ formatLabels.xlsx }}</option>
+            <option value="csv_lonlat">{{ formatLabels.csv_lonlat }}</option>
+          </optgroup>
+          <optgroup label="For GIS">
+            @for (key of gisFormats; track key) { <option [value]="key" [selected]="format() === key">{{ formatLabels[key] }}</option> }
+          </optgroup>
+        </select>
+      </hlm-field>
+      @if (kind() === 'submissions') {
+        <hlm-field><label hlmFieldLabel for="export-decision">Report decisions</label>
+          <select hlmInput id="export-decision" #reportDecision class="w-full" [value]="exportDecision()"
+            (change)="exportDecision.set(reportDecision.value)">
+            <option value="">All decisions</option>
+            <option value="pending">{{ decisions['pending'] }}</option>
+            <option value="approved">{{ decisions['approved'] }}</option>
+            <option value="returned">{{ decisions['returned'] }}</option>
+          </select>
+          @if (decision(); as listDecision) {
+            <p hlmFieldDescription>List filter: {{ decisions[listDecision] }}</p>
+          }
+        </hlm-field>
+      }
+    </div>
     <section id="export-summary" aria-labelledby="export-review-title" class="grid gap-2 rounded-control border border-border bg-muted p-3">
       <h3 id="export-review-title" class="font-semibold">Review export</h3>
       <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         @for (row of summary(); track row[0]) {
           <dt class="font-medium">{{ row[0] }}</dt><dd class="wrap-anywhere">{{ row[1] }}</dd>
         }
+        <dt class="font-medium">Matching rows</dt><dd><span role="status">{{ countLabel() }}</span></dd>
         <dt class="font-medium">Access</dt><dd class="wrap-anywhere">{{ jobs.jurisdiction() }}</dd>
       </dl>
+      @if (countFailed()) {
+        <button hlmBtn type="button" variant="outline" class="justify-self-start" (click)="retryCount()">Retry count</button>
+      }
     </section>
     @if (error()) { <p class="text-danger" role="alert">{{ error() }}</p> }
     <div class="export-actions">
       <button hlmBtn variant="outline" type="button" class="secondary" (click)="closed.emit()">Close</button>
-      <button hlmBtn type="submit" [busy]="busy()" [attr.aria-label]="'Prepare export as ' + formatLabels[format()]"
+      <button hlmBtn type="submit" [busy]="busy()" [disabled]="count() === null" [attr.aria-label]="'Prepare export as ' + formatLabels[format()]"
         aria-describedby="export-summary">Prepare export</button>
     </div>
   </form>

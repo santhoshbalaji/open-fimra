@@ -60,13 +60,15 @@ describe('Report and approval', () => {
     const header = el.querySelector('.submission-header')!;
     expect(header.querySelector('h3')!.textContent).toBe('First report');
     expect(header.querySelector('p')!.textContent).toBe('Beat 01 · Demo Range');
-    expect(header.querySelector('p.submission-meta')!.textContent).toBe('Version 1');
-    expect(Array.from(header.querySelectorAll('dt'), term => term.textContent)).toEqual(['Sender', 'Related alert', 'Received']);
+    expect(header.querySelector('.submission-meta dd')!.textContent).toBe('Version 1');
+    expect(Array.from(header.querySelectorAll('dt'), term => term.textContent)).toEqual(['Submitted by', 'Related alert', 'Received', 'Form version']);
     expect(header.querySelector('dd')!.textContent).toBe('Demo Beat Guard');
     expect(header.querySelector('a')!.getAttribute('href')).toBe('/monitor/alerts?alert=7');
     expect(header.querySelector('fimra-status-badge')!.textContent?.trim()).toBe('Awaiting review');
     const answers = el.querySelector('fimra-form-presentation')!;
     expect(answers.textContent).toContain('Under control');
+    expect(answers.textContent).not.toContain('Draft for the Demo State starter pack');
+    expect(el.querySelectorAll('h3')).toHaveLength(2);
     expect(header.compareDocumentPosition(answers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(answers.compareDocumentPosition(button('Approve')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const approve = button('Approve')!;

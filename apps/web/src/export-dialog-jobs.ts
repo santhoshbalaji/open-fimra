@@ -8,14 +8,14 @@ import { WorkspaceService } from './workspace';
 import { defaultWorkspaceFormat } from './workspace-format';
 
 export const exportFormats = {
-  gpkg: 'GeoPackage (recommended)',
+  xlsx: 'Excel workbook',
+  csv_lonlat: 'CSV (zipped)',
+  gpkg: 'GeoPackage',
   shapefile: 'Shapefile (zipped)',
   kml: 'KML (KMZ)',
   geojson: 'GeoJSON (zipped)',
   flatgeobuf: 'FlatGeobuf (zipped)',
-  csv_wkt: 'CSV with the point as well-known text (WKT, zipped)',
-  csv_lonlat: 'CSV with longitude and latitude columns (zipped)',
-  xlsx: 'Excel workbook'
+  csv_wkt: 'CSV with well-known text (WKT, zipped)'
 };
 export type ExportFormat = keyof typeof exportFormats;
 export type ExportKind = 'alerts' | 'detections' | 'submissions';
@@ -58,16 +58,16 @@ export function exportRequestFromJob(job: ExportStatus): ExportRequest {
 const format = defaultWorkspaceFormat;
 export const exportDate = (iso: string) => format.dateTime(new Date(iso));
 export const exportPeriod = (hours: number) => 'Past ' + format.duration(hours * 3600);
-const decisions: Record<string, string> = { pending: 'Waiting for a decision', approved: 'Approved', returned: 'Returned' };
+export const decisions: Record<string, string> = { pending: 'Waiting for a decision', approved: 'Approved', returned: 'Returned' };
 const queues: Record<string, string> = { unit: 'Unit', edge_review: 'Edge review', triage: 'Triage' };
 
-export function exportReview(request: ExportRequest, queueLabel?: string, formLabel?: string): [string, string][] {
+export function exportReview(request: ExportRequest, queueLabel?: string, formLabel?: string, unitLabel?: string): [string, string][] {
   const rows: [string, string][] = [
     ['Dataset', datasets[request.kind]],
     [request.kind === 'submissions' ? 'Received' : 'Observed', exportPeriod(request.hours)],
     ['Forest class', request.forestClasses.length === allClasses.length ? 'All forest classes' :
       request.forestClasses.map(value => classes[value]).join(', ')],
-    ['Unit filter', request.unitPath ? 'Units under ' + request.unitPath : 'All units you can see']
+    ['Unit filter', request.unitPath ? unitLabel || 'Units under ' + request.unitPath : 'All units you can see']
   ];
   if (request.kind === 'alerts' || request.queue) rows.push(['Queue', request.queue ?
     queueLabel || queues[request.queue] || request.queue : 'All queues you can see']);

@@ -54,7 +54,9 @@ describe('Situation report', () => {
       { provide: WorkspaceService, useValue: { current: signal({ slug: 'demo', name: 'Demo State' }), deny } },
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } }] });
   });
-  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); deny.mockReset(); });
+  afterEach(() => { TestBed.resetTestingModule(); vi.restoreAllMocks(); vi.useRealTimers(); deny.mockReset(); });
+
+  const reportRequest = (http: HttpTestingController) => http.expectOne(r => r.url.endsWith('/situation-report'));
 
   function open() {
     const fixture = TestBed.createComponent(SituationReportView);
@@ -91,26 +93,22 @@ describe('Situation report', () => {
 
     http.expectOne(url).flush({ units });
     fixture.detectChanges();
-    expect(page.querySelector('#report-unit')?.textContent).toContain('Hill Division (Division)');
-    expect(page.querySelector('#report-unit')?.closest('[hidden]')).toBeNull();
-    expect(submit.disabled).toBe(false);
+    const automatic = reportRequest(http);
+    expect(automatic.request.params.get('unitPath')).toBe('ds.c1.d1');
+    automatic.flush(report);
     http.verify();
   });
 
-  it('starts with the highest unit and today, then shows the report with its numbers and map', async () => {
+  it('opens today’s report for the highest unit with its numbers and map', async () => {
     const { fixture, http, page } = open();
-    expect(page.querySelector('#report-unit')?.textContent).toContain('Hill Division (Division)');
-    expect(page.querySelector('form')?.getAttribute('aria-describedby')).toBe('report-scope');
-    expect(page.querySelector('#report-scope')?.textContent?.replace(/\s+/g, ' ')).toMatch(/Demo State.*India Standard Time/);
-    const shown = fixture.componentInstance.show();
-    const request = http.expectOne(r => r.url.endsWith('/situation-report'));
+    const request = reportRequest(http);
     expect(request.request.params.get('unitPath')).toBe('ds.c1.d1');
     expect(request.request.params.get('snapshot')).toBe('1');
     expect(request.request.params.get('hierarchy')).toBe('territorial');
     expect(request.request.params.get('from')).toBe(indiaToday());
     expect(request.request.params.has('to')).toBe(false);
     request.flush(report);
-    await shown;
+    await fixture.whenStable();
     fixture.detectChanges();
     const text = page.textContent?.replace(/\s+/g, ' ') ?? '';
     expect(text).toContain('Hill Division (Division) · Demo State');
@@ -118,6 +116,11 @@ describe('Situation report', () => {
     expect(text).toContain('India Standard Time');
     expect(page.querySelector('form')).toBeNull();
     expect(page.querySelectorAll('h1')).toHaveLength(1);
+    expect(page.querySelector('h2')?.textContent).toBe('Map');
+    const regions = [...page.querySelectorAll('[role=region]')].map(el => el.getAttribute('aria-label'));
+    expect(regions).toContain('Response times table');
+    expect(regions).toContain('Overdue alerts table');
+    expect(new Set(regions).size).toBe(regions.length);
     expect(document.activeElement).toBe(page.querySelector('#report-title'));
     expect(page.querySelector('caption')?.textContent).toContain('Markers shown on the map');
     expect([...page.querySelectorAll('#report-map-title ~ div tbody tr')].map(row =>
@@ -143,7 +146,7 @@ describe('Situation report', () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
     ([...page.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Print'))?.click();
     expect(print).toHaveBeenCalled();
-    ([...page.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Edit scope'))?.click();
+    ([...page.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Change unit or date'))?.click();
     fixture.detectChanges();
     expect(page.querySelector('form')).not.toBeNull();
     expect(document.activeElement).toBe(page.querySelector('#report-unit'));
@@ -153,6 +156,9 @@ describe('Situation report', () => {
   it('sends a date range or past hours', async () => {
     const { fixture, http } = open();
     const view = fixture.componentInstance;
+    reportRequest(http).flush(report);
+    await fixture.whenStable();
+    view.edit();
     view.pickKind('range');
     view.from.set('2026-03-09');
     view.to.set('2026-03-15');
@@ -176,10 +182,9 @@ describe('Situation report', () => {
 
   it('shows a refusal for a unit outside the area without leaving the workspace', async () => {
     const { fixture, http, page } = open();
-    const shown = fixture.componentInstance.show();
-    http.expectOne(r => r.url.endsWith('/situation-report'))
+    reportRequest(http)
       .flush({ error: 'You can report only on units in your own area.' }, { status: 403, statusText: 'Forbidden' });
-    await shown;
+    await fixture.whenStable();
     fixture.detectChanges();
     expect(page.querySelector('[role=alert]')?.textContent).toContain('You can report only on units in your own area.');
     expect(deny).not.toHaveBeenCalled();
@@ -188,12 +193,11 @@ describe('Situation report', () => {
   it('uses one PDF button to prepare, retry and download the saved report', async () => {
     const { fixture, http, page } = open();
     const view = fixture.componentInstance;
-    const shown = view.show();
-    http.expectOne(r => r.url.endsWith('/situation-report')).flush(report);
-    await shown;
+    reportRequest(http).flush(report);
+    await fixture.whenStable();
     fixture.detectChanges();
     vi.useFakeTimers();
-    const button = [...page.querySelectorAll('button')].find(button => button.textContent?.includes('Prepare PDF'))!;
+    const button = [...page.querySelectorAll('button')].find(button => button.textContent?.includes('Download PDF'))!;
     const postUrl = 'https://api.test/api/v1/workspaces/demo/situation-reports';
     const prepared = view.pdfAction();
     fixture.detectChanges();
@@ -220,13 +224,14 @@ describe('Situation report', () => {
       .flush({ id: 'r1', status: 'ready', pageCount: 2, fileName: 'open-fimra-demo-situation-report-2026-03-15.pdf' });
     await Promise.resolve();
     fixture.detectChanges();
-    expect(button.textContent).toContain('Download PDF (2 pages)');
+    expect(button.textContent).toContain('Downloading PDF');
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:report');
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    const downloaded = view.pdfAction();
     http.expectOne(postUrl + '/r1/file').flush(new Blob(['%PDF-']));
-    await downloaded;
-    expect(click).toHaveBeenCalled();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(click).toHaveBeenCalledOnce();
+    expect(button.textContent).toContain('Download PDF (2 pages)');
     http.verify();
   });
 });

@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { convertToParamMap, type Params } from '@angular/router';
+import { convertToParamMap, provideRouter, type Params } from '@angular/router';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../auth';
@@ -11,6 +11,7 @@ import { WEB_CONFIG } from '../config';
 import { stubLayoutApis } from '../overlay-testing';
 import { ShellNavigation } from '../shell-navigation';
 import { WorkspaceService } from '../workspace';
+import type { Submission } from './form-api';
 import { Submissions } from './submissions';
 
 const endpoint = 'https://api.test/api/v1/workspaces/demo';
@@ -38,19 +39,19 @@ describe('Field reports queue', () => {
     params = {};
     setParams({});
     TestBed.configureTestingModule({ providers: [
-      provideSpartanHlm(), provideHttpClient(), provideHttpClientTesting(),
+      provideSpartanHlm(), provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } },
-      { provide: ShellNavigation, useValue: { query, update: setParams } },
+      { provide: ShellNavigation, useValue: { query, update: setParams, href: () => '/monitor/alerts' } },
       { provide: WEB_CONFIG, useValue: { apiBaseUrl: 'https://api.test' } },
       { provide: WorkspaceService, useValue: {
         current: signal({ slug: 'demo', name: 'Demo State' }),
         jurisdictions: () => [['ds.c1.d1', 'Demo Division']],
-        allowsScope: () => true
+        allowsScope: () => true, roles: () => [{ role: 'division_officer' }]
       } }
     ] });
     http = TestBed.inject(HttpTestingController);
   });
-  afterEach(() => http.verify());
+  afterEach(() => { try { http.verify(); } finally { TestBed.resetTestingModule(); } });
 
   function render() {
     const fixture = TestBed.createComponent(Submissions);
@@ -110,6 +111,55 @@ describe('Field reports queue', () => {
     setParams({ reportColumns: null });
     fixture.detectChanges();
     expect(element.querySelector('tbody')!.textContent).toContain(row.submitted_by);
+  });
+
+  it('keeps the saved decision open and offers the next reviewable report', async () => {
+    const nextId = '5ca1ab1e-0000-4000-8000-0000000000a2';
+    const report: Submission = {
+      id, form: 'first-report', version: 1, step: 'first_report', alertId: '7', incidentId: null,
+      submittedBy: row.submitted_by, receivedAt: timestamp, deviceTime: null, values: {}, location: null,
+      approval: null, canApprove: true
+    };
+    const next = { ...row, id: nextId, can_approve: true };
+    const { fixture, button, element } = render();
+    request().flush({ items: [{ ...row, can_approve: true }, next] });
+    fixture.detectChanges();
+    element.querySelector<HTMLButtonElement>(`[data-report-id="${id}"]`)!.click();
+    fixture.detectChanges();
+    http.expectOne(endpoint + '/submissions/' + id).flush(report);
+    fixture.detectChanges();
+    http.expectOne(endpoint + '/alerts/7').flush({ beat_name: 'Demo Beat' });
+    http.expectOne(endpoint + '/forms/first-report/versions/1').flush({
+      definition: { title: { en: 'First report' }, sections: [] }
+    });
+    fixture.detectChanges();
+    expect(element.querySelector('.submission-header')?.textContent).toContain('Division officer');
+
+    button('Approve').click();
+    fixture.detectChanges();
+    [...document.querySelectorAll<HTMLButtonElement>('[role=alertdialog] button')]
+      .find(control => control.textContent.trim() === 'Approve report')!.click();
+    await fixture.whenStable();
+    http.expectOne(endpoint + '/submissions/' + id + '/approval').flush({
+      ...report, approval: { decision: 'approved', by: 'Demo Division Officer', at: timestamp, note: '' }
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    request().flush({ items: [next] });
+    fixture.detectChanges();
+    expect(params['report']).toBe(id);
+    expect(element.querySelector('.submission-header')?.textContent).toContain('Approved');
+    button('Next pending report').click();
+    fixture.detectChanges();
+    expect(params['report']).toBe(nextId);
+    http.expectOne(endpoint + '/submissions/' + nextId).flush({ ...report, id: nextId });
+    fixture.detectChanges();
+    http.expectOne(endpoint + '/alerts/7').flush({ beat_name: 'Demo Beat' });
+    http.expectOne(endpoint + '/forms/first-report/versions/1').flush({
+      definition: { title: { en: 'First report' }, sections: [] }
+    });
+    fixture.detectChanges();
+    expect(element.querySelector('.submission-header')?.textContent).toContain('Awaiting review');
   });
 
   it('offers Retry after a failed request and describes an empty result', () => {

@@ -1,34 +1,38 @@
-<article class="grid min-w-0 gap-4 wrap-anywhere">
-  <header class="grid gap-1">
-    <h3 class="text-title font-semibold" [attr.lang]="language()">{{ text(definition()['title']) }}</h3>
-    @if (text(definition()['description']); as description) {
-      <p class="text-text-secondary" [attr.lang]="language()">{{ description }}</p>
-    }
-    @if (preview()) {
-      <p class="text-label text-text-secondary">Version {{ definition()['version'] }}. Preview only.</p>
-    }
-    @if (languages().length > 1) {
-      <label class="grid w-fit gap-1 text-label font-medium">
-        Language
-        <select hlmInput class="w-auto" [value]="language()" (change)="language.set($any($event.target).value)">
-          @for (code of languages(); track code) {
-            <option [value]="code" [attr.lang]="code">{{ languageName(code) }}</option>
-          }
-        </select>
-      </label>
-    }
-  </header>
+<article class="grid min-w-0 gap-4 wrap-anywhere" [class.presentation-compact]="!showHeader()">
+  @if (showHeader() || languages().length > 1) {
+    <header class="grid gap-1">
+      @if (showHeader()) {
+        <h3 class="text-title font-semibold" [attr.lang]="language()">{{ text(definition()['title']) }}</h3>
+        @if (text(definition()['description']); as description) {
+          <p class="text-text-secondary" [attr.lang]="language()">{{ description }}</p>
+        }
+        @if (preview()) {
+          <p class="text-label text-text-secondary">Version {{ definition()['version'] }}. Preview only.</p>
+        }
+      }
+      @if (languages().length > 1) {
+        <label class="grid w-fit gap-1 text-label font-medium" [class.presentation-language-inline]="!showHeader()">
+          Language
+          <select hlmInput class="w-auto" [value]="language()" (change)="language.set($any($event.target).value)">
+            @for (code of languages(); track code) {
+              <option [value]="code" [attr.lang]="code">{{ languageName(code) }}</option>
+            }
+          </select>
+        </label>
+      }
+    </header>
+  }
 
   @for (page of pages(); track page.key) {
-    @if (page.title) { <h4 class="text-subhead font-semibold" [attr.lang]="language()">{{ page.title }}</h4> }
+    @if (page.title) {
+      <div role="heading" [attr.aria-level]="showHeader() ? 4 : 3"
+        class="text-subhead font-semibold" [attr.lang]="language()">{{ page.title }}</div>
+    }
     @for (section of page.sections; track section.key) {
       <details class="min-w-0 rounded-card border border-border bg-card p-3 sm:p-4" [open]="open(section)">
         <summary class="cursor-pointer rounded-control font-semibold focus-visible:outline-2 focus-visible:outline-ring">
-          @if (page.title) {
-            <h5 class="inline" [attr.lang]="language()">{{ name(section) }}</h5>
-          } @else {
-            <h4 class="inline" [attr.lang]="language()">{{ name(section) }}</h4>
-          }
+          <span role="heading" [attr.aria-level]="(showHeader() ? 4 : 3) + (page.title ? 1 : 0)"
+            [attr.lang]="language()">{{ name(section) }}</span>
         </summary>
         <div class="mt-3 grid gap-3">
           @if (preview() && stageName(section); as stage) {
@@ -135,10 +139,10 @@
 <ng-template #answerValue let-node let-stored="stored">
   @let coordinates = geometry(stored);
   @if (coordinates.length === 1 && coordinates[0].length === 1) {
-    <p>{{ coordinates[0][0] }} <span class="text-label text-text-secondary">(longitude, latitude)</span></p>
+    <p>{{ coordinates[0][0] }} <span class="text-label text-text-secondary">(latitude, longitude)</span></p>
   } @else if (coordinates.length) {
     <details>
-      <summary class="cursor-pointer rounded-control focus-visible:outline-2 focus-visible:outline-ring">Coordinates (longitude, latitude)</summary>
+      <summary class="cursor-pointer rounded-control focus-visible:outline-2 focus-visible:outline-ring">Coordinates (latitude, longitude)</summary>
       @for (ring of coordinates; track $index) {
         @if (coordinates.length > 1) {
           <p class="font-medium">{{ $first ? 'Outer boundary' : 'Inner boundary ' + $index }}</p>

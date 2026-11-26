@@ -63,22 +63,29 @@ describe('Export dialog and jobs', () => {
   }
 
   const body = (request: ReturnType<HttpTestingController['expectOne']>) => JSON.parse(JSON.stringify(request.request.body));
+  const preview = (kind = 'alerts', counts: Record<string, number> = { edge_review: 7 }) =>
+    http.expectOne(req => req.method === 'GET' && req.url.startsWith(endpoint.replace('/exports', '/' + kind + '?')))
+      .flush({ counts });
   const initialList = (items: ExportStatus[] = []) => http.expectOne({ method: 'GET', url: endpoint }).flush({ items });
 
   it('places the reviewed dataset, access and exact filters above the action', async () => {
     const { el, fixture, submit } = render();
     initialList();
+    preview();
+    fixture.detectChanges();
     const summary = el.querySelector('#export-summary')!;
     const prepare = el.querySelector('button[type=submit]')!;
-    for (const detail of ['Alerts', 'Past 3 days', 'Inside forest', 'Units under ds.c1.d1', 'Edge review', 'Demo Division']) {
+    for (const detail of ['Alerts', 'Past 3 days', 'Inside forest', 'Units under ds.c1.d1', 'Edge review', 'Demo Division', 'Matching rows', '7']) {
       expect(summary.textContent).toContain(detail);
     }
     expect(summary.compareDocumentPosition(prepare) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(prepare.getAttribute('aria-describedby')).toBe('export-summary');
-    expect(prepare.getAttribute('aria-label')).toBe('Prepare export as GeoPackage (recommended)');
-    el.querySelector<HTMLButtonElement>('#export-format')!.click();
-    fixture.detectChanges();
-    [...document.querySelectorAll<HTMLElement>('[role=option]')].find(option => option.textContent.includes('Shapefile'))!.click();
+    expect(prepare.getAttribute('aria-label')).toBe('Prepare export as Excel workbook');
+    const format = el.querySelector<HTMLSelectElement>('#export-format')!;
+    expect(format.value).toBe('xlsx');
+    expect(format.querySelector('optgroup[label="For GIS"] option[value="gpkg"]')).toBeTruthy();
+    format.value = 'shapefile';
+    format.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     expect(prepare.getAttribute('aria-label')).toBe('Prepare export as Shapefile (zipped)');
     submit();
@@ -94,6 +101,8 @@ describe('Export dialog and jobs', () => {
   it('reopens an export closed before the create response and downloads it when ready', async () => {
     const { el, fixture, submit } = render();
     initialList();
+    preview();
+    fixture.detectChanges();
     const closed = vi.fn(() => fixture.destroy());
     fixture.componentInstance.closed.subscribe(closed);
     submit();
@@ -114,7 +123,7 @@ describe('Export dialog and jobs', () => {
     await vi.advanceTimersByTimeAsync(2000);
     initialList([ready]);
     tray.detectChanges();
-    modal.querySelector('summary')!.click();
+    expect(modal.querySelector('details')?.open).toBe(false);
     expect(modal.textContent).toContain('Ready');
 
     const createObjectURL = vi.fn(() => 'blob:export');
@@ -156,6 +165,8 @@ describe('Export dialog and jobs', () => {
   it('explains refused and oversized exports', async () => {
     const { el, fixture, submit } = render();
     initialList();
+    preview();
+    fixture.detectChanges();
     submit();
     http.expectOne({ method: 'POST', url: endpoint }).flush({}, { status: 403, statusText: 'Forbidden' });
     await vi.waitFor(() => { fixture.detectChanges(); expect(el.querySelector('[role=alert]')?.textContent).toContain('Your role cannot export'); });
@@ -168,16 +179,29 @@ describe('Export dialog and jobs', () => {
     await vi.waitFor(() => expect(sessionEnded).toHaveBeenCalled());
   });
 
-  it('reviews the report form and decision and sends them only for that dataset', () => {
-    const { el, submit } = render({ initialKind: 'submissions', form: 'first-report', formLabel: 'First report', decision: 'approved' });
+  it('counts all report decisions and allows explicitly narrowing the export', () => {
+    const { fixture, el, submit } = render({ initialKind: 'submissions', form: 'first-report',
+      formLabel: 'First report', decision: 'pending' });
     initialList();
-    const summary = el.querySelector('#export-summary')!.textContent;
-    for (const detail of ['Field reports', 'Received', 'First report (one column per answer)', 'Approved']) {
-      expect(summary).toContain(detail);
+    const prepare = el.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    expect(prepare.disabled).toBe(true);
+    preview('submissions', { pending: 2, approved: 7, returned: 1 });
+    fixture.detectChanges();
+    const summary = el.querySelector('#export-summary')!;
+    for (const detail of ['Field reports', 'Received', 'First report (one column per answer)', 'All decisions']) {
+      expect(summary.textContent).toContain(detail);
     }
+    expect(summary.querySelector('[role=status]')?.textContent).toBe('10');
+    expect(prepare.disabled).toBe(false);
+    expect(el.textContent).toContain('List filter: Waiting for a decision');
+    const decision = el.querySelector<HTMLSelectElement>('#export-decision')!;
+    decision.value = 'approved';
+    decision.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(summary.querySelector('[role=status]')?.textContent).toBe('7');
     submit();
     const post = http.expectOne({ method: 'POST', url: endpoint });
-    expect(body(post)).toEqual({ kind: 'submissions', format: 'gpkg', hours: 72, unitPath: 'ds.c1.d1',
+    expect(body(post)).toEqual({ kind: 'submissions', format: 'xlsx', hours: 72, unitPath: 'ds.c1.d1',
       forestClasses: ['inside'], form: 'first-report', decision: 'approved' });
     post.flush({ ...pending, kind: 'submissions' });
   });

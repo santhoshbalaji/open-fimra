@@ -23,6 +23,7 @@ type Answers = Record<string, unknown>;
 export class FormPresentation {
   readonly definition = input.required<Answers>();
   readonly mode = input.required<'preview' | 'historical'>();
+  readonly showHeader = input(true);
   readonly values = input<Answers>({});
   readonly step = input<string>();
   readonly workspaceUrl = input('');
@@ -111,7 +112,9 @@ export class FormPresentation {
   }
 
   protected half(node: Node): boolean {
-    return this.layout().get(node.key)?.width === 'half';
+    const width = this.layout().get(node.key)?.width;
+    return width ? width === 'half' : !this.showHeader() && !this.attachmentKind(node) &&
+      (node.kind !== 'text' || this.widget(node) !== 'paragraph');
   }
 
   protected open(node: Node): boolean {
@@ -180,7 +183,7 @@ export class FormPresentation {
     const shape = value as Shape;
     const format = this.coordinate();
     const position = ([longitude, latitude, height]: number[]) =>
-      `${format(longitude)}, ${format(latitude)}` + (height === undefined ? '' : ` (${format(height)} m altitude)`);
+      `${format(latitude)}, ${format(longitude)}` + (height === undefined ? '' : ` (${format(height)} m altitude)`);
     switch (shape.type) {
       case 'Point': return [[position(shape.coordinates)]];
       case 'LineString': return [shape.coordinates.map(position)];

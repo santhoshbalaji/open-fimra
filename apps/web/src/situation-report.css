@@ -12,9 +12,12 @@
 .report-legend li { display: flex; align-items: center; gap: 6px; }
 .report-legend svg { flex: none; width: 18px; height: 18px; }
 
+.print-title { display: none; }
+
 @media print {
+  .print-title { display: block; }
   :host { height: auto; overflow: visible; }
-  section { padding: 0; max-width: none; }
+  .report-page, section { padding: 0; max-width: none; }
   .report-controls, .report-actions { display: none; }
   .report, .report-section { display: block; }
   .report { border: 0; padding: 0; }

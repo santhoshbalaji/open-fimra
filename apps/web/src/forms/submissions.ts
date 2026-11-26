@@ -1,6 +1,6 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
+import { EMPTY, expand, filter, map, take } from 'rxjs';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, TemplateRef, ViewEncapsulation, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -18,7 +18,7 @@ import { workspacePhone } from '../ui/workspace-breakpoint';
 import { StatusBadge } from '../ui/status-badge';
 import { defaultWorkspaceFormat } from '../workspace-format';
 import { WorkspaceService } from '../workspace';
-import { decisionLabels as statuses, type Decision, type SubmissionRow, type WorkspaceForm } from './form-api';
+import { decisionLabels as statuses, type Decision, type Submission, type SubmissionRow, type WorkspaceForm } from './form-api';
 import { textIn } from './form-text';
 import { SubmissionView } from './submission-view';
 
@@ -87,7 +87,8 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
       [scrollDock]="true" [fullHeight]="true" (closed)="closeReview()">
       @if (panel()?.open() && selectedId(); as id) {
         <fimra-submission-view [workspaceUrl]="endpoint()" [submissionId]="id" [showTitle]="false"
-          [now]="now()" (decided)="reload()" />
+          [now]="now()" [stage]="selectedStage()" [reviewerRole]="reviewerRole()" [nextPendingId]="nextPending()?.id"
+          (decided)="afterDecision($event)" (next)="openNext()" />
       }
     </fimra-side-panel>
   `
@@ -109,6 +110,14 @@ export class Submissions {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly workspace = inject(WorkspaceService);
+  protected readonly reviewerRole = computed(() => {
+    const roles = this.workspace.roles();
+    const labels = [
+      roles.some(role => role.role === 'state_admin') ? 'State administrator' : '',
+      roles.some(role => role.role === 'division_officer') ? 'Division officer' : ''
+    ];
+    return labels.filter(Boolean).join(', ');
+  });
   protected readonly phoneCards = toSignal(
     inject(BreakpointObserver).observe(workspacePhone).pipe(map(result => result.matches)), { requireSync: true });
   private readonly filters = inject(DashboardFilters);
@@ -135,6 +144,19 @@ export class Submissions {
   private readonly cursor = computed(() => this.navigation.query().get('cursor'));
   private readonly previous = computed(() => this.navigation.query().get('reportPages'));
   private readonly oldest = computed(() => this.navigation.query().get('reportSort') === 'oldest');
+
+  protected readonly selectedStage = computed(() => this.page().rows.find(row => row.id === this.selectedId())?.step_label ?? '');
+  private readonly decidedId = signal('');
+  private readonly receiptId = computed(() => this.decidedId() === this.selectedId() ? this.decidedId() : '');
+  private readonly nextOnPage = computed(() => {
+    if (!this.receiptId()) return undefined;
+    const rows = this.page().rows;
+    const current = rows.findIndex(row => row.id === this.receiptId());
+    const pending = (row: SubmissionRow) => row.id !== this.receiptId() && row.decision === 'pending' && row.can_approve;
+    return rows.slice(current + 1).find(pending) ?? rows.find(pending);
+  });
+  private readonly nextFromQueue = signal<SubmissionRow | undefined>(undefined);
+  protected readonly nextPending = computed(() => this.receiptId() ? this.nextOnPage() ?? this.nextFromQueue() : undefined);
 
   private readonly reportCell = viewChild<TemplateRef<{ $implicit: SubmissionRow }>>('reportCell');
   private readonly statusCell = viewChild<TemplateRef<{ $implicit: SubmissionRow }>>('statusCell');
@@ -171,6 +193,30 @@ export class Submissions {
         panel.show(() => trigger?.isConnected ? trigger :
           fallback.querySelector<HTMLElement>(`[data-report-id="${id}"]`), fallback);
       });
+    });
+
+    effect(onCleanup => {
+      const decided = this.receiptId();
+      const endpoint = this.endpoint();
+      this.nextFromQueue.set(undefined);
+      if (!decided || this.nextOnPage()) return;
+      const params: Record<string, string | number> = { ...this.filters.params(), decision: 'pending', limit: 20 };
+      if (this.form()) params['form'] = this.form();
+      if (this.oldest()) params['sort'] = 'oldest';
+      const load = (cursor?: string) => this.http.get<Page>(endpoint + '/submissions', {
+        params: cursor ? { ...params, cursor } : params
+      });
+      const candidate = (page: Page) => page.items.find(row => row.id !== decided && row.can_approve);
+      const request = load().pipe(
+        expand(page => !candidate(page) && page.nextCursor ? load(page.nextCursor) : EMPTY),
+        map(candidate),
+        filter(row => !!row),
+        take(1)
+      ).subscribe({
+        next: row => this.nextFromQueue.set(row),
+        error: (error: HttpErrorResponse) => { if (error.status === 401) this.auth.sessionEnded(); }
+      });
+      onCleanup(() => request.unsubscribe());
     });
 
     let lastRequest = '';
@@ -284,6 +330,18 @@ export class Submissions {
   protected closeReview(): void {
     this.trigger = null;
     if (this.selectedId()) this.navigation.update({ report: null }, { replaceUrl: true });
+  }
+
+  protected afterDecision(report: Submission): void {
+    if (report.approval) this.decidedId.set(report.id);
+    this.reload();
+  }
+
+  protected openNext(): void {
+    const next = this.nextPending();
+    if (!next) return;
+    this.trigger = null;
+    this.navigation.update({ report: next.id });
   }
 
   protected reload(): void {
