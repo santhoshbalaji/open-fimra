@@ -1,0 +1,165 @@
+<div class="shell-list">
+  <section class="shell-list-body grid gap-4" [attr.aria-label]="msg('Referrals and preparedness')">
+    @if (error()) { <p role="alert">{{ msg(error()) }}</p> }
+    @if (notice()) { <p role="status">{{ notice() }}</p> }
+
+    @if (selected()) {
+      <div><a hlmBtn variant="outline" [routerLink]="listURL()" (click)="closeDetail()">{{ msg('Back to records') }}</a></div>
+      <fimra-state-region [state]="detailState()" (retry)="reload()">
+        @if (detail(); as record) {
+          @if (record.id === selected()) {
+            <h2 class="text-lg font-semibold">{{ kindName(record.kind) }}</h2>
+            @if (record.incidentId) {
+              <a [routerLink]="navigation.href('/monitor/incidents', { incident: record.incidentId })">{{ msg('Incident #{0}', [record.incidentId]) }}</a>
+            }
+            @if (record.summary) {
+              <h3 class="mt-4 font-medium">{{ msg('Approved summary') }}</h3>
+              <p class="wrap-anywhere">{{ record.summary }}</p>
+            }
+            @if (!record.summaryOnly) {
+              <dl class="record-details">
+                <div><dt>{{ msg('Unit') }}</dt><dd>{{ record.unitPath }}</dd></div>
+                <div><dt>{{ msg('Owner') }}</dt><dd>{{ record.owner }}</dd></div>
+                <div><dt>{{ msg('Status') }}</dt><dd>{{ msg(record.completed ? 'Completed' : record.completionPending ? 'Completion awaiting review' : 'Open') }}</dd></div>
+              </dl>
+              @if (record.alerts?.length) {
+                <h3 class="font-medium">{{ msg('Linked alerts') }}</h3>
+                <ul class="mb-3">
+                  @for (id of record.alerts; track id) {
+                    <li><a [routerLink]="navigation.href('/monitor/alerts', { alert: id })">{{ msg('Alert #{0}', [id]) }}</a></li>
+                  }
+                </ul>
+              }
+              @if (record.canLink) {
+                <form class="mb-4 flex flex-wrap items-end gap-2" (submit)="$event.preventDefault(); linkAlert(alert)">
+                  <label class="grid gap-1">{{ msg('Alert ID') }}<input #alert hlmInput required inputmode="numeric" pattern="[1-9][0-9]*" /></label>
+                  <button hlmBtn type="submit" variant="outline" [disabled]="busy()">{{ msg('Link alert') }}</button>
+                </form>
+              }
+              @if (!record.completed && !record.completionPending && !editing()) {
+                <div class="flex flex-wrap gap-2">
+                  @for (form of newestForm(); track form.form) {
+                    @if (!form.completionOnly) {
+                      <button hlmBtn type="button" (click)="edit(form, false)">{{ msg('Add entry') }}</button>
+                    }
+                    @if ((form.completionOnly && record.burnAuthorised) || (record.kind !== 'burn' && !form.completionOnly)) {
+                      <button hlmBtn variant="outline" type="button" (click)="edit(form, true)">{{ msg('Record completion') }}</button>
+                    }
+                  }
+                </div>
+              }
+              @if (editing(); as edit) {
+                @defer (on immediate) {
+                  <fimra-form-fill class="mt-4" [workspaceUrl]="endpoint()" [form]="edit.form.form" [version]="edit.form.version"
+                    step="" [operationsRecord]="record.id" [completesRecord]="edit.complete"
+                    (submitted)="savedEntry($event.id)" (cancelled)="editing.set(null)" />
+                }
+              } @else {
+                <h3 class="mt-4 font-medium">{{ msg('Entries') }}</h3>
+                <ul>
+                  @for (item of (record.entries ?? []).slice(0, 50); track item.id) {
+                    <li>
+                      <button hlmBtn variant="link" type="button" [attr.aria-pressed]="entry() === item.id" (click)="viewEntry(item.id)">
+                        {{ localTitle(item.title) }} · {{ dateTime(item.receivedAt) }} · {{ msg(decisionLabels[item.decision ?? 'pending']) }}
+                      </button>
+                    </li>
+                  } @empty {
+                    <li>{{ msg('No entries yet.') }}</li>
+                  }
+                </ul>
+                <div class="flex gap-2">
+                  @if (historyBefore()) {
+                    <button hlmBtn variant="outline" type="button" (click)="historyBefore.set('')">{{ msg('Newest entries') }}</button>
+                  }
+                  @if ((record.entries?.length ?? 0) > 50) {
+                    <button hlmBtn variant="outline" type="button" (click)="historyBefore.set(record.entries![49].id)">{{ msg('Older entries') }}</button>
+                  }
+                </div>
+                @if (entry(); as id) {
+                  @defer (on immediate) {
+                    <fimra-submission-view class="mt-4 block border-t border-divider pt-4" [workspaceUrl]="endpoint()" [submissionId]="id"
+                      (decided)="reload()" />
+                  }
+                }
+              }
+            }
+          }
+        }
+      </fimra-state-region>
+    } @else if (starting()) {
+      <h2 class="text-lg font-semibold">{{ msg('New record') }}</h2>
+      <form class="flex flex-wrap items-end gap-2" (submit)="$event.preventDefault(); unitSearch.set(search.value.trim())">
+        <label class="grid gap-1">{{ msg('Find a unit') }}<input #search hlmInput maxlength="120" /></label>
+        <button hlmBtn type="submit" variant="outline">{{ msg('Search') }}</button>
+      </form>
+      <form class="grid gap-4" (submit)="$event.preventDefault(); create()">
+        <div class="record-fields">
+          <label>{{ msg('Unit') }}
+            <select class="rounded-md border border-input bg-background p-2" required [ngModel]="unit()" (ngModelChange)="pickUnit($event)" name="unit">
+              <option value="">{{ msg('Choose a unit') }}</option>
+              @for (place of unitMatches(); track place.id) { <option [value]="place.id">{{ place.name }} ({{ place.path }})</option> }
+            </select>
+          </label>
+          @if (createOptions(); as options) {
+            <label>{{ msg('Record kind') }}
+              <select class="rounded-md border border-input bg-background p-2" required [(ngModel)]="kind" name="kind">
+                <option value="">{{ msg('Choose a record kind') }}</option>
+                @for (form of options.forms; track form.form) {
+                  @if (!form.completionOnly) { <option [value]="form.kind">{{ kindName(form.kind) }}</option> }
+                }
+              </select>
+            </label>
+            <label>{{ msg('Owner') }}
+              <select class="rounded-md border border-input bg-background p-2" [(ngModel)]="owner" name="owner">
+                <option value="">{{ msg('Assign to me') }}</option>
+                @for (person of options.owners; track person.id) { <option [value]="person.id">{{ person.name }}</option> }
+              </select>
+            </label>
+            @if (referral(kind)) {
+              <label>{{ msg('Case ID') }}
+                <input hlmInput required inputmode="numeric" pattern="[1-9][0-9]*" [(ngModel)]="caseInput" name="case" />
+              </label>
+            }
+          }
+        </div>
+        @if (createOptions()?.forms?.length === 0) { <p>{{ msg('No record forms are available for this unit.') }}</p> }
+        <div class="flex flex-wrap gap-2">
+          <button hlmBtn type="submit" [disabled]="!kind || !unit() || busy()">{{ msg('Create record') }}</button>
+          <button hlmBtn variant="outline" type="button" (click)="starting.set(false)">{{ msg('Cancel') }}</button>
+        </div>
+      </form>
+    } @else {
+      <div class="flex flex-wrap items-center gap-2">
+        <button hlmBtn type="button" (click)="openCreate()">{{ msg('New record') }}</button>
+        @if (incident()) {
+          <span>{{ msg('Incident #{0}', [incident()]) }}</span>
+          <a hlmBtn variant="outline" [routerLink]="navigation.href('/reports/operations', { operationCase: null })">{{ msg('All records') }}</a>
+        }
+      </div>
+      <fimra-state-region [state]="pageState()" (retry)="reload()">
+        @if (page(); as list) {
+          <ul class="record-list">
+            @for (record of list.items; track record.id) {
+              <li class="rounded-md border border-divider p-3">
+                <a class="font-semibold" [routerLink]="listURL(record.id)">{{ kindName(record.kind) }}</a>
+                @if (record.summary) { <p class="wrap-anywhere">{{ record.summary }}</p> }
+                @if (!record.summaryOnly) { <p>{{ record.unitPath }} · {{ record.owner }} · {{ msg(record.completed ? 'Completed' : 'Open') }}</p> }
+                @if (record.incidentId) { <p>{{ msg('Incident #{0}', [record.incidentId]) }}</p> }
+              </li>
+            } @empty {
+              <li>{{ msg('No records found.') }}</li>
+            }
+          </ul>
+          <div class="mt-3 flex gap-2">
+            @if (cursorTrail().length > 1) {
+              <button hlmBtn variant="outline" type="button" (click)="previousPage()">{{ msg('Previous') }}</button>
+            }
+            @if (list.nextCursor; as next) {
+              <button hlmBtn variant="outline" type="button" (click)="nextPage(next)">{{ msg('Next') }}</button>
+            }
+          </div>
+        }
+      </fimra-state-region>
+    }
+  </section>
+</div>

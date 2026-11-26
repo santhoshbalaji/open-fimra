@@ -594,6 +594,17 @@ func publishFormVersion(ctx context.Context, tx pgx.Tx, id int64, source, userID
 	if err != nil {
 		return err
 	}
+	var kind *string
+	if err := tx.QueryRow(ctx, `SELECT (SELECT o.kind FROM form_versions v
+JOIN forms f ON f.id = v.form_id JOIN operations_forms o USING (form_key)
+WHERE v.id = $1 AND o.kind <> 'patrol')`, id).Scan(&kind); err != nil {
+		return err
+	}
+	if kind != nil {
+		if err := checkOperationsForm(*kind, tree); err != nil {
+			return err
+		}
+	}
 	views, err := formViews(id, tree, columns)
 	if err != nil {
 		return err
@@ -723,6 +734,13 @@ WHERE f.workspace_id = $1 AND f.form_key = $2 FOR UPDATE OF f`, access.workspace
 			_, err = tx.Exec(ctx, `INSERT INTO audit_log (workspace_id, actor_kind, actor_id, action, target_type, target_id, details)
 VALUES ($1, 'user', $2, 'form.unassign', 'form', $3, jsonb_build_object('step', $4::text))`, access.workspaceID, subject, key, step)
 			return err
+		}
+		var standalone bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT FROM operations_forms WHERE form_key = $1 AND kind <> 'patrol')`, key).Scan(&standalone); err != nil {
+			return err
+		}
+		if standalone {
+			return problem(http.StatusUnprocessableEntity, "This form is filled in on an operations record.")
 		}
 		var versionID int64
 		var published bool

@@ -14,13 +14,20 @@ The forms use the [form format](../form-schema/SPEC.md). They are made up for th
 | First report | [forms/first-report.json](forms/first-report.json) | First report | The team, once the fire is out |
 | Final report | [forms/final-report.json](forms/final-report.json) | Final report | The team, with the range officer's signature, before an officer verifies the alert |
 | Manual fire report | [forms/manual-fire-report.json](forms/manual-fire-report.json) | No step: saving it makes an alert at New | Anyone who takes a report of a fire from another source |
-| Patrol log | [forms/patrol-log.json](forms/patrol-log.json) | No step | A patrol, whether or not it found a fire |
+| Patrol log | [forms/patrol-log.json](forms/patrol-log.json) | Optional record | A patrol, whether or not it found a fire |
+| Offence referral | [forms/offence-referral.json](forms/offence-referral.json) | Case referral | Staff with the scoped offence grant |
+| Relief referral | [forms/relief-referral.json](forms/relief-referral.json) | Case referral | Staff with the scoped relief grant |
+| Preparedness work | [forms/preparedness-work.json](forms/preparedness-work.json) | Standalone record | The person responsible for the work |
+| Fire training | [forms/fire-training.json](forms/fire-training.json) | Standalone record | The person running the training |
+| Readiness check | [forms/readiness-check.json](forms/readiness-check.json) | Standalone record | The person checking the crew or equipment |
+| Prescribed burn | [Authorisation](forms/prescribed-burn-authorisation.json) and [completion](forms/prescribed-burn-completion.json) | Standalone record | The officer or crew responsible for the planned burn |
+| After-action finding | [forms/after-action-finding.json](forms/after-action-finding.json) | One record per corrective action | The officer recording the finding and the person who owns the action |
 
 [pack.json](pack.json) lists the forms in order with the workflow steps each one is assigned to. A form with stages is assigned at the step of each stage.
 
 The manual fire report makes a detection at `fire_location`, observed at `reported_at`, which is matched and routed like a satellite detection. It has no photos, because photos are uploaded for an alert and this report makes the alert. See [manual fire reports](../../services/api/README.md#manual-fire-reports).
 
-The patrol log is published but not on a workflow step. The server takes submissions only for alerts so far, and PLAN.md section 13 keeps patrol registers as an optional module rather than core. A patrol that finds a fire records it with the manual fire report.
+The patrol log is optional. A patrol that finds a fire can open a case with the manual fire report. The new referral and preparedness forms have no workflow step. See [referrals and preparedness](../../services/api/README.md#referrals-and-preparedness).
 
 ## Switching it on
 

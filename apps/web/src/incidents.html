@@ -63,6 +63,8 @@
                 (saved)="changed()" />
               <a hlmBtn variant="outline" class="justify-self-start"
                 [routerLink]="navigation.href('/monitor/map', { incident: row.id })">{{ msg('Show incident on map') }}</a>
+              <a hlmBtn variant="outline" class="justify-self-start"
+                [routerLink]="navigation.href('/reports/operations', { operationCase: row.id })">{{ msg('Case referrals') }}</a>
             </section>
 
             <section aria-labelledby="member-alerts" class="grid min-w-0 gap-2 border-t border-divider pt-4">

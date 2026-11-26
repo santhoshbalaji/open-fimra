@@ -30,6 +30,8 @@ func runCommand(ctx context.Context, cfg config, args []string) error {
 		return backfillCommand(ctx, cfg, args)
 	case "demo-incident-response":
 		return incidentResponseDemo(ctx, cfg)
+	case "demo-operations-records":
+		return operationsRecordsDemo(ctx, cfg)
 	case "feed-health":
 		return feedHealthCommand(ctx, cfg, args)
 	case "rotate-settings-key":

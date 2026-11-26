@@ -1,0 +1,45 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "prescribed-burn-completion",
+  "version": 1,
+  "title": {
+    "en": "Prescribed burn completion",
+    "hi": "नियोजित दहन की पूर्णता"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Prescribed burn completion",
+        "hi": "नियोजित दहन की पूर्णता"
+      },
+      "items": [
+        {
+          "key": "finished_on",
+          "type": "date",
+          "label": {
+            "en": "Date finished",
+            "hi": "पूर्ण होने की तिथि"
+          },
+          "required": true,
+          "notInFuture": true
+        },
+        {
+          "key": "result",
+          "type": "text",
+          "label": {
+            "en": "Work done and site condition",
+            "hi": "किया गया कार्य और स्थल की दशा"
+          },
+          "required": true,
+          "maxLength": 500
+        }
+      ]
+    }
+  ]
+}

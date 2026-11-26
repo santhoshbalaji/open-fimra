@@ -65,7 +65,7 @@ func (p starterPackRun) enable(t *testing.T) {
 		bytes.Contains(raw, []byte("null")) {
 		t.Fatalf("a form with no steps lists them as an empty list: %s", raw)
 	}
-	if before.Enabled || len(before.Forms) != 5 {
+	if before.Enabled || len(before.Forms) != 13 {
 		t.Fatalf("a fresh workspace has no starter forms: %+v", before)
 	}
 	for _, f := range before.Forms {
@@ -79,6 +79,8 @@ func (p starterPackRun) enable(t *testing.T) {
 	want := map[string][]string{
 		"control-room-dispatch": {"reached_site", "team_sent"}, "first-report": {"first_report"},
 		"final-report": {"final_report"}, "manual-fire-report": {}, "patrol-log": {},
+		"offence-referral": {}, "relief-referral": {}, "preparedness-work": {}, "fire-training": {}, "readiness-check": {},
+		"prescribed-burn-authorisation": {}, "prescribed-burn-completion": {}, "after-action-finding": {},
 	}
 	if !on.Enabled || len(on.Forms) != len(want) {
 		t.Fatalf("the starter pack must be on: %+v", on)

@@ -15,7 +15,9 @@ var defaultSteps = []string{"new", "acknowledged", "team_sent", "reached_site", 
 
 func TestFormsAreValid(t *testing.T) {
 	list := Forms()
-	want := []string{"control-room-dispatch", "first-report", "final-report", ManualFireReport, "patrol-log"}
+	want := []string{"control-room-dispatch", "first-report", "final-report", ManualFireReport, "patrol-log",
+		"offence-referral", "relief-referral", "preparedness-work", "fire-training", "readiness-check",
+		"prescribed-burn-authorisation", "prescribed-burn-completion", "after-action-finding"}
 	var keys []string
 	for _, f := range list {
 		keys = append(keys, f.Key)

@@ -1,0 +1,55 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "readiness-check",
+  "version": 1,
+  "title": {
+    "en": "Readiness check",
+    "hi": "तत्परता की जाँच"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "Readiness check",
+        "hi": "तत्परता की जाँच"
+      },
+      "items": [
+        {
+          "key": "check",
+          "type": "text",
+          "label": {
+            "en": "Crew or equipment checked",
+            "hi": "जाँचा गया दल या उपकरण"
+          },
+          "required": true,
+          "maxLength": 500
+        },
+        {
+          "key": "checked_on",
+          "type": "date",
+          "label": {
+            "en": "Check date",
+            "hi": "जाँच की तिथि"
+          },
+          "required": true,
+          "notInFuture": true
+        },
+        {
+          "key": "result",
+          "type": "text",
+          "label": {
+            "en": "Readiness and gaps",
+            "hi": "तत्परता और कमियाँ"
+          },
+          "required": true,
+          "maxLength": 500
+        }
+      ]
+    }
+  ]
+}

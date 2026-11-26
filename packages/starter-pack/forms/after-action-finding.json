@@ -1,0 +1,64 @@
+{
+  "$schema": "../../form-schema/form.schema.json",
+  "formatVersion": 1,
+  "id": "after-action-finding",
+  "version": 1,
+  "title": {
+    "en": "After-action finding",
+    "hi": "कार्रवाई के बाद की समीक्षा का निष्कर्ष"
+  },
+  "languages": [
+    "en",
+    "hi"
+  ],
+  "sections": [
+    {
+      "key": "details",
+      "title": {
+        "en": "After-action finding",
+        "hi": "कार्रवाई के बाद की समीक्षा का निष्कर्ष"
+      },
+      "items": [
+        {
+          "key": "finding",
+          "type": "text",
+          "label": {
+            "en": "Finding",
+            "hi": "निष्कर्ष"
+          },
+          "required": true,
+          "maxLength": 500
+        },
+        {
+          "key": "action",
+          "type": "text",
+          "label": {
+            "en": "Corrective action",
+            "hi": "सुधारात्मक कार्रवाई"
+          },
+          "required": true,
+          "maxLength": 500
+        },
+        {
+          "key": "target_date",
+          "type": "date",
+          "label": {
+            "en": "Target date",
+            "hi": "लक्ष्य तिथि"
+          },
+          "required": true
+        },
+        {
+          "key": "result",
+          "type": "text",
+          "label": {
+            "en": "Completion notes",
+            "hi": "पूर्णता की टिप्पणियाँ"
+          },
+          "required": false,
+          "maxLength": 500
+        }
+      ]
+    }
+  ]
+}
