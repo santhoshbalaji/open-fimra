@@ -1,4 +1,4 @@
-import { Directive, input, signal } from '@angular/core';
+import { booleanAttribute, DestroyRef, Directive, ElementRef, inject, input, signal } from '@angular/core';
 import { BrnButton } from '@spartan-ng/brain/button';
 import { classes } from '@spartan-ng/helm/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -42,7 +42,12 @@ export type ButtonVariants = VariantProps<typeof buttonVariants>;
 	selector: 'button[hlmBtn], a[hlmBtn]',
 	exportAs: 'hlmBtn',
 	hostDirectives: [{ directive: BrnButton, inputs: ['disabled'] }],
-	host: { 'data-slot': 'button' },
+	host: {
+		'data-slot': 'button',
+		'[attr.data-busy]': 'busy() ? "" : null',
+		'[attr.aria-busy]': 'busy() || null',
+		'[attr.aria-disabled]': 'busy() || null',
+	},
 })
 export class HlmButton {
 	private readonly _config = injectBrnButtonConfig();
@@ -52,9 +57,24 @@ export class HlmButton {
 	public readonly variant = input<ButtonVariants['variant']>(this._config.variant);
 
 	public readonly size = input<ButtonVariants['size']>(this._config.size);
+	public readonly busy = input(false, { transform: booleanAttribute });
 
 	constructor() {
-		classes(() => [buttonVariants({ variant: this.variant(), size: this.size() }), this._additionalClasses()]);
+		classes(() => [
+			buttonVariants({ variant: this.variant(), size: this.size() }),
+			this.busy() && "before:size-3 before:shrink-0 before:rounded-full before:border-2 before:border-current before:border-e-transparent before:content-[''] motion-safe:before:animate-spin",
+			this._additionalClasses(),
+		]);
+
+		// Capture activation before application handlers and native form submission, keeping focus in place.
+		const element = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+		const preventBusyActivation = (event: Event) => {
+			if (!this.busy()) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+		};
+		element.addEventListener('click', preventBusyActivation, true);
+		inject(DestroyRef).onDestroy(() => element.removeEventListener('click', preventBusyActivation, true));
 	}
 
 	setClass(classes: string): void {

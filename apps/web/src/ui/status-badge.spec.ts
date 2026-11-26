@@ -13,6 +13,19 @@ describe('StatusBadge', () => {
       expect(fixture.nativeElement.textContent.trim()).toBe(state);
     });
 
+  it.each([
+    ['draft', 'Draft', 'file-pen-line'], ['published', 'Published', 'circle-check'],
+    ['validation-success', 'Validation passed', 'check'], ['pending', 'Pending', 'clock'],
+    ['failed', 'Failed', 'circle-x'], ['queued', 'Queued', 'list-ordered']
+  ])('renders the %s icon and label', (state, label, icon) => {
+    const fixture = TestBed.createComponent(StatusBadge);
+    fixture.componentRef.setInput('icon', state);
+    fixture.componentRef.setInput('label', label);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector(`svg[data-icon="${icon}"][aria-hidden=true]`)).toBeTruthy();
+    expect(fixture.nativeElement.textContent.trim()).toBe(label);
+  });
+
   it('requires a visible label', () => {
     const fixture = TestBed.createComponent(StatusBadge);
     expect(() => fixture.componentRef.setInput('label', '  ')).toThrow('visible label');

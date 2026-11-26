@@ -1,7 +1,5 @@
 import type { BooleanInput } from '@angular/cdk/coercion';
 import { booleanAttribute, ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
-import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideX } from '@ng-icons/lucide';
 import { BrnDialogRef } from '@spartan-ng/brain/dialog';
 import { BrnSheet } from '@spartan-ng/brain/sheet';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -12,8 +10,7 @@ import { HlmSheetClose } from './hlm-sheet-close';
 @Component({
 	selector: 'hlm-sheet-content',
 	exportAs: 'hlmSheetContent',
-	imports: [HlmButton, HlmSheetClose, NgIcon],
-	providers: [provideIcons({ lucideX })],
+	imports: [HlmButton, HlmSheetClose],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	host: {
 		'data-slot': 'sheet-content',
@@ -21,14 +18,12 @@ import { HlmSheetClose } from './hlm-sheet-close';
 		'[attr.data-state]': 'state()',
 	},
 	template: `
-		<ng-content />
-
 		@if (showCloseButton()) {
-			<button hlmBtn variant="ghost" size="icon-sm" class="absolute end-4 top-4" hlmSheetClose>
-				<span class="sr-only">{{ closeLabel() }}</span>
-				<ng-icon name="lucideX" />
-			</button>
+			<div class="sticky top-0 z-10 flex justify-end bg-popover px-4 pt-2">
+				<button type="button" hlmBtn variant="ghost" hlmSheetClose>{{ closeLabel() }}</button>
+			</div>
 		}
+		<ng-content />
 	`,
 })
 export class HlmSheetContent {
@@ -42,7 +37,7 @@ export class HlmSheetContent {
 
 	constructor() {
 		classes(() => [
-			'bg-popover text-popover-foreground fixed flex flex-col gap-4 bg-clip-padding text-sm shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm',
+			'bg-popover text-popover-foreground fixed flex max-h-dvh flex-col gap-2 overflow-y-auto overscroll-contain scroll-pt-12 bg-clip-padding text-sm shadow-lg transition duration-200 ease-in-out data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm',
 			'data-open:animate-in data-closed:animate-out',
 			'data-[side=top]:data-closed:slide-out-to-top data-[side=top]:data-open:slide-in-from-top',
 			'data-[side=bottom]:data-closed:slide-out-to-bottom data-[side=bottom]:data-open:slide-in-from-bottom',

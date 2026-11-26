@@ -12,7 +12,8 @@ main { flex: 1; min-height: 0; }
 .logo { width: clamp(120px, 15vw, 174px); height: auto; }
 .workspace { padding-left: 16px; border-left: 1px solid var(--color-border); font-size: var(--text-subhead); }
 button:not([role=checkbox], [role=switch]) { cursor: pointer; min-height: var(--target-web); min-width: var(--target-web); }
-button:disabled { cursor: wait; opacity: .55; }
+button:disabled { cursor: default; opacity: .55; }
+button[data-busy]:not(:disabled) { cursor: wait; }
 button:not([data-slot], [role]):focus-visible, canvas:focus-visible { outline: 3px solid var(--color-brand); outline-offset: -3px; }
 button:not([data-slot], [role]):hover, button[aria-expanded=true].user-trigger { background: var(--color-brand-soft); }
 button svg { width: 18px; height: 18px; flex: none; }
