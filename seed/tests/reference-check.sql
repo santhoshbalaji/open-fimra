@@ -45,6 +45,12 @@ BEGIN
           WHERE a.depth = 5 AND b.depth = 5 AND ST_Overlaps(a.geom, b.geom)) = 1,
     'exactly one pair of beats overlaps';
 
+  ASSERT NOT EXISTS (SELECT FROM units a JOIN units b ON a.hierarchy_id = b.hierarchy_id AND a.id < b.id
+                     JOIN hierarchies h ON h.id = a.hierarchy_id
+                     WHERE h.workspace_id = ws AND h.slug = 'territorial' AND a.depth = 4 AND b.depth = 4
+                       AND a.valid_to IS NULL AND b.valid_to IS NULL AND ST_Overlaps(a.geom, b.geom)),
+    'the beat overlap does not overlap published sections';
+
   ASSERT (SELECT count(*) FROM units u JOIN hierarchies h ON h.id = u.hierarchy_id
           WHERE h.workspace_id = ws AND h.slug = 'territorial' AND u.depth = 5
             AND u.valid_to IS NULL AND nlevel(u.path) = 6) = 16,

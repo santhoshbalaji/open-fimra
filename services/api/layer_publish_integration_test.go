@@ -185,25 +185,36 @@ func TestLayerPublishIntegration(t *testing.T) {
 	get(endpoint, admin, http.StatusOK, new(json.RawMessage))
 	get(endpoint, guard, http.StatusForbidden, nil)
 
-	// An optional section layer covers just one part of one range. Its gaps
-	// are intentional, and replacing it at the same path keeps its beat.
-	var section json.RawMessage
+	// Publish the complete optional section layer with the current paths.
+	// Its gaps are intentional, and existing beats keep their parents.
+	var section, partialSection json.RawMessage
 	if err := pool.QueryRow(ctx, `
-		SELECT jsonb_build_object('type', 'FeatureCollection', 'features', jsonb_build_array(
-			jsonb_build_object('type', 'Feature', 'geometry', ST_AsGeoJSON(geom, 9)::jsonb,
-				'properties', jsonb_build_object('code', code, 'name', name, 'parent_code', 'R8'))))
-		FROM units WHERE hierarchy_id = $1 AND depth = 4 AND code = 'S01' AND current_path IS NOT NULL
-	`, prefix+"10").Scan(&section); err != nil {
+		WITH features AS (
+			SELECT s.code, jsonb_build_object('type', 'Feature', 'geometry', ST_AsGeoJSON(s.geom, 9)::jsonb,
+				'properties', jsonb_build_object('code', s.code, 'name', s.name, 'parent_code', p.code)) AS feature
+			FROM units s JOIN units p ON p.hierarchy_id = s.hierarchy_id AND p.current_path = subpath(s.path, 0, -1)
+			WHERE s.hierarchy_id = $1 AND s.depth = 4 AND s.current_path IS NOT NULL
+		)
+		SELECT jsonb_build_object('type', 'FeatureCollection', 'features', jsonb_agg(feature ORDER BY code)),
+		       jsonb_build_object('type', 'FeatureCollection', 'features', jsonb_agg(feature) FILTER (WHERE code = 'S01'))
+		FROM features
+	`, prefix+"10").Scan(&section, &partialSection); err != nil {
 		t.Fatal(err)
 	}
-	sectionPath, sectionDraft := upload("sections", "Sections", "hierarchy",
-		`{"depth":4,"nameField":"name","codeField":"code","parentCodeField":"parent_code"}`, section)
+	const sectionSettings = `{"depth":4,"nameField":"name","codeField":"code","parentCodeField":"parent_code"}`
+	partialPath, _ := upload("sections", "Sections", "hierarchy", sectionSettings, partialSection)
+	var orphaned map[string]string
+	publish(partialPath, admin, "", http.StatusConflict, &orphaned)
+	if !strings.Contains(orphaned["error"], "without a parent") {
+		t.Fatalf("publishing an incomplete section layer must reject orphaned beats: %v", orphaned)
+	}
+	sectionPath, sectionDraft := upload("sections", "Sections", "hierarchy", sectionSettings, section)
 	checkImportedDraft(t, ctx, pool, sectionDraft, "hierarchy")
 	publish(sectionPath, admin, "", http.StatusAccepted, nil)
 	waitForReplay(sectionPath)
 
 	const beatSettings = `{"depth":5,"nameField":"name","codeField":"code","parentCodeField":"parent_code"}`
-	bad := publishingBeatFixture(t, false, offset)
+	bad := publishingBeatFixture(t, offset, nil)
 	badPath, draft := upload("territorial-units", "Territorial units", "hierarchy", beatSettings, bad)
 	expectReview(t, draft, "missing_code", "feature:16", "B16", true)
 	blocked := map[string]string{}
@@ -270,16 +281,16 @@ func TestLayerPublishIntegration(t *testing.T) {
 	`, source, prefix+"01").Scan(&detection, &alert); err != nil {
 		t.Fatal(err)
 	}
+	type overlayMatch struct {
+		Kind      string
+		Name      string
+		VersionID string
+	}
 	var detail struct {
-		Overlays []struct {
-			Kind      string
-			Name      string
-			VersionID string
-		} `json:"overlay_matches"`
+		Overlays []overlayMatch `json:"overlay_matches"`
 	}
 	get(base+"/alerts/"+alert, guard, http.StatusOK, &detail)
-	if len(detail.Overlays) != 1 || detail.Overlays[0].Kind != "civil_district" ||
-		detail.Overlays[0].Name != "Demo Reserve One" || detail.Overlays[0].VersionID != prefix+"31" {
+	if !slices.Contains(detail.Overlays, overlayMatch{Kind: "civil_district", Name: "Demo Reserve One", VersionID: prefix + "31"}) {
 		t.Fatalf("unexpected alert overlays: %+v", detail.Overlays)
 	}
 	history := base + "/alerts/" + alert + "/history"
@@ -297,7 +308,15 @@ func TestLayerPublishIntegration(t *testing.T) {
 		t.Fatalf("expected 3 linked detections, got %d: %v", linked, err)
 	}
 
-	beats := publishingBeatFixture(t, true, offset)
+	var parents map[string]string
+	if err := pool.QueryRow(ctx, `
+		SELECT jsonb_object_agg(b.code, p.code)
+		FROM units b JOIN units p ON p.hierarchy_id = b.hierarchy_id AND p.current_path = subpath(b.path, 0, -1)
+		WHERE b.hierarchy_id = $1 AND b.depth = 5 AND b.current_path IS NOT NULL
+	`, prefix+"10").Scan(&parents); err != nil {
+		t.Fatal(err)
+	}
+	beats := publishingBeatFixture(t, offset, parents)
 	draftPath, draft := upload("territorial-units", "Territorial units", "hierarchy", beatSettings, beats)
 	version := draft.VersionID.String()
 	checkImportedDraft(t, ctx, pool, draft, "hierarchy")
@@ -549,7 +568,8 @@ func seedPublishingWorkspace(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 	for _, update := range []struct{ sql, id string }{
 		{"UPDATE workspaces SET boundary = ST_Translate(boundary, $2, $3) WHERE id = $1", prefix + "01"},
-		{"UPDATE units SET geom = ST_Translate(geom, $2, $3) WHERE hierarchy_id = $1", prefix + "10"},
+		{`UPDATE units u SET geom = ST_Translate(geom, $2, $3) FROM hierarchies h
+		  WHERE u.hierarchy_id = h.id AND h.workspace_id = $1`, prefix + "01"},
 		{`UPDATE layer_features f SET geom = ST_Translate(geom, $2, $3)
 		  FROM layer_versions v JOIN layers l ON l.id = v.layer_id
 		  WHERE f.layer_version_id = v.id AND l.workspace_id = $1`, prefix + "01"},
@@ -592,7 +612,7 @@ func seedPublishingWorkspace(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	return offset
 }
 
-func publishingBeatFixture(t *testing.T, repair bool, offset [2]float64) []byte {
+func publishingBeatFixture(t *testing.T, offset [2]float64, parents map[string]string) []byte {
 	t.Helper()
 	type feature struct {
 		Type       string            `json:"type"`
@@ -609,14 +629,14 @@ func publishingBeatFixture(t *testing.T, repair bool, offset [2]float64) []byte 
 	if err := json.Unmarshal(readLayerFixture(t, "beats-with-sections"), &collection); err != nil {
 		t.Fatal(err)
 	}
-	if repair {
+	if parents != nil {
 		rings := map[string][][2]float64{}
 		for i, f := range collection.Features {
 			if f.Properties["code"] == "" {
 				f.Properties["code"] = fmt.Sprintf("B%02d", i+1)
 			}
 			if f.Properties["parent_code"] == "" {
-				f.Properties["parent_code"] = fmt.Sprintf("R%d", i/3+1)
+				f.Properties["parent_code"] = parents[f.Properties["code"]]
 			}
 			rings[f.Properties["code"]] = f.Geometry.Coordinates[0]
 		}

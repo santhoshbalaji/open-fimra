@@ -190,7 +190,7 @@ def build():
                 code = "S01" if n == 24 else f"S{len(units[4]) + 2:02d}"
                 parent = {"code": code, "name": "Reed Section" if n == 24 else f"Section {code[1:]}",
                           "parent": territorial_range["code"], "path": f"{territorial_range['path']}.{code.lower()}",
-                          "ring": ring}
+                          "ring": outline(c, c + 1, r, r + 1)}
                 units[4].append(parent)
             units[5].append({
                 "code": f"B{n:02d}", "name": f"Beat {n:02d}",
