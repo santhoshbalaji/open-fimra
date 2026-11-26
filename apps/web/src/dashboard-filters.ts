@@ -4,37 +4,13 @@ import { HttpClient, type HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
-import { classes, ForestClass } from './detections';
+import { classes, ForestClass } from './detection-classes';
 import type { ShellNavigation } from './shell-navigation';
 import type { ReportUnit } from './situation-report';
 import { WorkspaceService } from './workspace';
 
-const storageKey = 'fimra.lowBandwidth';
-export const defaultDashboardHours = 168;
-
-@Injectable({ providedIn: 'root' })
-export class DashboardFilters {
-  readonly hours = signal(defaultDashboardHours);
-  readonly forestClass = signal<ForestClass | ''>('');
-  readonly unitPath = signal('');
-  readonly lowBandwidth = signal(false);
-  readonly params = computed(() => {
-    const params: Record<string, string | number> = {hours: this.hours()};
-    if (this.forestClass()) params['class'] = this.forestClass();
-    if (this.unitPath()) params['unitPath'] = this.unitPath();
-    return params;
-  });
-  readonly tileClasses = computed(() => this.forestClass() || Object.keys(classes).join(','));
-
-  constructor() {
-    try { this.lowBandwidth.set(localStorage.getItem(storageKey) === 'true'); } catch { /* Storage is optional. */ }
-  }
-
-  setLowBandwidth(enabled: boolean): void {
-    this.lowBandwidth.set(enabled);
-    try { localStorage.setItem(storageKey, String(enabled)); } catch { /* Keep the session preference. */ }
-  }
-}
+import { DashboardFilters, defaultDashboardHours } from './dashboard-filter-state';
+export { DashboardFilters, defaultDashboardHours } from './dashboard-filter-state';
 
 export const filterPeriods = [
   { hours: 24, label: 'Last 24 hours' },

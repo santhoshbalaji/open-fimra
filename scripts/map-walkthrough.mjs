@@ -86,6 +86,11 @@ try {
 
     const picker = page.locator('#detection-picker');
     await expect(picker).toBeEnabled();
+    if (size === 'wall') {
+      await page.locator('.account-trigger').press('Enter');
+      await page.getByRole('menuitemcheckbox', { name: 'Wall display', exact: true }).press('Enter');
+      await expect(page.locator('fimra-root')).toHaveAttribute('data-wall-display', '');
+    }
     const layersButton = page.getByRole('button', { name: 'Layers and legend', exact: true });
     const canvas = page.locator('.maplibregl-canvas');
     const alertRows = page.locator('.alert-panel .row-open');

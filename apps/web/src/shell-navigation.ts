@@ -2,7 +2,7 @@ import { Injectable, computed, inject } from '@angular/core';
 import { NavigationEnd, Router, type NavigationBehaviorOptions, type Params } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs';
-import { classes } from './detections';
+import { classes } from './detection-classes';
 import { WorkspaceService } from './workspace';
 
 export const destinations = [

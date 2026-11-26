@@ -28,6 +28,7 @@
           "configurations": {
             "production": {
               "outputHashing": "all",
+              "optimization": { "styles": { "inlineCritical": false } },
               "budgets": [{ "type": "initial", "maximumWarning": "620kB", "maximumError": "700kB" }]
             },
             "development": { "optimization": false, "sourceMap": true, "extractLicenses": false }

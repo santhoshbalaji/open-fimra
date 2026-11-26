@@ -173,9 +173,10 @@ fimra-dashboard { display: block; height: 100%; overflow: auto; }
 .view-switch [aria-pressed=true] { color: var(--color-brand); background: var(--color-card); box-shadow: var(--shadow-panel); }
 
 .alert-panel { width: clamp(316px, 30vw, 460px); background: var(--color-card); border-left: 1px solid var(--color-border); padding: 8px var(--page-gutter); overflow: auto; overscroll-behavior: contain; }
-.queue-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.queue-heading { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .queue-heading h2 { font-weight: 600; font-size: var(--text-title); }
-.queue-freshness { display: none; }
+.queue-freshness { color: var(--color-text-secondary); font-size: var(--text-label); }
+.workspace-panes:not(.show-queue) .queue-freshness { order: 1; flex-basis: 100%; }
 .step-meta time, .alert-table small, .step-timeline small, .step-timeline time { color: var(--color-text-secondary); font-size: var(--text-label); }
 .step-timeline li { overflow-wrap: anywhere; }
 .queue-tabs { margin: 4px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-border); gap: 4px; }
@@ -226,18 +227,13 @@ fimra-workflow form hlm-field { gap: 4px; margin-bottom: 8px; }
   .alert-panel { display: none; }
   .show-queue:not(.show-details) .alert-panel { display: block; position: absolute; inset: 0; width: 100%; }
 }
-@media screen and (width >= 120rem) and (height >= 60rem) {
-  :root {
+@media screen {
+  [data-wall-display] {
     --monitor-label-size: var(--text-display);
     --monitor-label-line-height: var(--text-display--line-height);
   }
-  .shell-sidebar { font-size: var(--text-subhead); }
-  .queue-heading { flex-wrap: wrap; }
-  .queue-freshness { display: block; margin-inline-end: auto; }
-  .workspace-panes:not(.show-queue) .queue-freshness { order: 1; flex-basis: 100%; }
-  .queue-freshness,
-  .page-frame [pageFreshness],
-  fimra-demo-map :is(.map-key, .alert-scan .row-open, .scan-line, .step-meta > time, .scan-line [data-slot=badge]) {
+  [data-wall-display] .shell-sidebar { font-size: var(--text-subhead); }
+  [data-wall-display] .page-frame [pageFreshness] {
     font-size: var(--monitor-label-size);
     line-height: var(--monitor-label-line-height);
   }

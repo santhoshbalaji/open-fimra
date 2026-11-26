@@ -170,7 +170,7 @@ fimra-workflow .workflow-moves button,
 }
 
 @media (width >= 1600px) {
-  .map-key, .layer-options { font-size: max(14px, var(--text-label)); }
+  .layer-options { font-size: max(14px, var(--text-label)); }
 }
 
 .alert-filters, .alert-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -186,3 +186,12 @@ fimra-workflow .workflow-moves button,
 }
 .assignment-form, .assignment-receipt { display: grid; gap: 6px; overflow-wrap: anywhere; }
 .assignment-form label { font-weight: 500; }
+
+@media screen {
+  [data-wall-display] fimra-demo-map :is(.queue-freshness, .map-key, .alert-scan .row-open, .scan-line, .step-meta > time, .scan-line [data-slot=badge]) {
+    font-size: var(--monitor-label-size);
+    line-height: var(--monitor-label-line-height);
+    overflow-wrap: anywhere;
+  }
+  [data-wall-display] .queue-freshness { margin-inline-end: auto; }
+}
