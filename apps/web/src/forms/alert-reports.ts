@@ -7,14 +7,14 @@ import { forkJoin } from 'rxjs';
 import type { AlertRow } from '../alert-queue';
 import { AuthService } from '../auth';
 import { StatusBadge } from '../ui/status-badge';
-import { decisionLabels, type AssignedForm, type Submission } from './form-api';
+import { SidePanel } from '../ui/side-panel';
+import { defaultWorkspaceFormat } from '../workspace-format';
+import { type AssignedForm, type Submission } from './form-api';
 import { FormFill } from './form-fill';
 import { SubmissionView } from './submission-view';
 
 interface History { entries: { step: string; label: string }[]; moves: { step: string; label: string }[] }
-type Open = { kind: 'fill'; form: AssignedForm; initial: Record<string, unknown> } | { kind: 'view'; id: string; title: string };
-
-const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+interface Draft { form: AssignedForm; initial: Record<string, unknown> }
 
 /**
  * The report forms on an alert's workflow, and the reports already sent.
@@ -23,7 +23,7 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
  */
 @Component({
   selector: 'fimra-alert-reports',
-  imports: [HlmButtonImports, HlmDialogImports, HlmSkeletonImports, StatusBadge, FormFill, SubmissionView],
+  imports: [HlmButtonImports, HlmDialogImports, HlmSkeletonImports, SidePanel, StatusBadge, FormFill, SubmissionView],
   host: { class: 'alert-reports' },
   styleUrl: './forms.css',
   encapsulation: ViewEncapsulation.None,
@@ -49,8 +49,10 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
           <ul class="report-list" aria-label="Reports sent for this alert">
             @for (s of submissions(); track s.id) {
               <li>
-                <button hlmBtn variant="link" size="sm" (click)="view(s)">{{ titleOf(s.form) }}, version {{ s.version }}</button>
-                <small>{{ s.submittedBy }} · {{ time(s.receivedAt) }} · {{ s.approval ? labels[s.approval.decision] : labels.pending }}</small>
+                <button #report hlmBtn variant="link" size="sm" (click)="selected.set(s.id); review.show(report)">{{ titleOf(s.form) }}, version {{ s.version }}</button>
+                <small>{{ s.submittedBy }} · {{ time(s.receivedAt) }}</small>
+                <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
+                  [label]="s.approval?.decision === 'approved' ? 'Approved' : s.approval ? 'Returned' : 'Submitted'" />
               </li>
             }
           </ul>
@@ -59,20 +61,24 @@ const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
     } @else if (message()) {
       <p role="status">{{ message() }}</p>
     }
+    <fimra-side-panel #review="fimraSidePanel" heading="Review field report" [fullHeight]="true" (closed)="selected.set(null)">
+      @if (selected(); as id) {
+        @defer (on immediate) {
+          <fimra-submission-view [workspaceUrl]="workspaceUrl()" [submissionId]="id" (decided)="reload()" />
+        }
+      }
+    </fimra-side-panel>
     <hlm-dialog [state]="open() ? 'open' : 'closed'" (closed)="open.set(null)" aria-modal="true">
       <hlm-dialog-content *hlmDialogPortal class="report-dialog" [showCloseButton]="false">
         @if (open(); as o) {
           <div class="report-dialog-heading">
-            <h2 hlmDialogTitle>{{ o.kind === 'fill' ? 'Fill in ' + o.form.title : o.title }}</h2>
+            <h2 hlmDialogTitle>Fill in {{ o.form.title }}</h2>
             <button hlmBtn variant="ghost" size="sm" (click)="open.set(null)">Close</button>
           </div>
           @defer (on immediate) {
-            @if (o.kind === 'fill') {
-              <fimra-form-fill [workspaceUrl]="workspaceUrl()" [form]="o.form.form" [version]="o.form.version" [step]="o.form.step"
-                [alert]="alert()" [initial]="o.initial" (submitted)="sent()" (cancelled)="open.set(null)" />
-            } @else {
-              <fimra-submission-view [workspaceUrl]="workspaceUrl()" [submissionId]="o.id" (decided)="reload()" />
-            }
+            <fimra-form-fill [workspaceUrl]="workspaceUrl()" [form]="o.form.form" [version]="o.form.version" [step]="o.form.step"
+              [stepLabel]="stepLabel(o.form.step)" [currentStepLabel]="stepLabel(currentStep())"
+              [alert]="alert()" [initial]="o.initial" (submitted)="reload()" (cancelled)="open.set(null)" />
           } @placeholder {
             <hlm-skeleton class="h-24" role="status" aria-label="Loading" />
           }
@@ -94,8 +100,9 @@ export class AlertReports {
   readonly reached = signal<string[]>([]);
   private readonly stepLabels = signal<Record<string, string>>({});
   readonly message = signal('');
-  readonly open = signal<Open | null>(null);
-  readonly labels = decisionLabels;
+  readonly open = signal<Draft | null>(null);
+  protected readonly selected = signal<string | null>(null);
+  protected readonly currentStep = signal('');
   private readonly version = signal(0);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
@@ -113,6 +120,7 @@ export class AlertReports {
       }).subscribe({
         next: ({ forms, submissions, history }) => {
           this.forms.set(forms.forms);
+          this.currentStep.set(forms.step);
           this.submissions.set([...submissions].reverse());
           this.reached.set(history.entries.map(e => e.step));
           this.stepLabels.set(Object.fromEntries([...history.moves, ...history.entries].map(e => [e.step, e.label])));
@@ -141,22 +149,13 @@ export class AlertReports {
   }
 
   time(value: string): string {
-    return when.format(new Date(value));
+    return defaultWorkspaceFormat.dateTime(new Date(value));
   }
 
   fill(form: AssignedForm): void {
     // Later stages keep the answers of earlier ones, from the newest report that counts.
     const earlier = this.submissions().find(s => s.form === form.form && s.step !== form.step && s.approval?.decision !== 'returned');
-    this.open.set({ kind: 'fill', form, initial: earlier?.values ?? {} });
-  }
-
-  view(submission: Submission): void {
-    this.open.set({ kind: 'view', id: submission.id, title: this.titleOf(submission.form) });
-  }
-
-  sent(): void {
-    this.open.set(null);
-    this.reload();
+    this.open.set({ form, initial: earlier?.values ?? {} });
   }
 
   reload(): void {

@@ -7,7 +7,7 @@
 -- $1 subject, $2 workspace slug, $3 hours, $4 queue, $5 alert step, $6 forest class,
 -- $7 unit path prefix (or NULL), $8 form key, $9 decision (pending, approved,
 -- returned or ''), $10 alert ID (or NULL), $11 cursor time, $12 cursor ID,
--- $13 page size plus one.
+-- $13 page size plus one, $14 oldest first.
 WITH grants AS MATERIALIZED (
     SELECT * FROM alert_grants WHERE oidc_subject = $1 AND slug = $2
 ),
@@ -37,8 +37,11 @@ visible AS (
 page AS (
     SELECT * FROM visible
     WHERE ($9 = '' OR decision = $9)
-      AND ($11::timestamptz IS NULL OR (received_at, id) < ($11, $12::uuid))
-    ORDER BY received_at DESC, id DESC LIMIT $13
+      AND ($11::timestamptz IS NULL OR
+          CASE WHEN $14::boolean THEN (received_at, id) > ($11, $12::uuid)
+               ELSE (received_at, id) < ($11, $12::uuid) END)
+    ORDER BY CASE WHEN $14 THEN received_at END, CASE WHEN $14 THEN id END,
+             received_at DESC, id DESC LIMIT $13
 ),
 details AS (
     SELECT p.id, f.form_key AS form, v.version, v.definition->'title' AS title, p.step, st.label AS step_label,
@@ -78,4 +81,4 @@ SELECT EXISTS (SELECT 1 FROM grants),
        ),
        (SELECT COALESCE(jsonb_object_agg(decision, n), '{}') FROM
            (SELECT decision, count(*) AS n FROM visible GROUP BY decision) counts),
-       COALESCE((SELECT jsonb_agg(to_jsonb(details) ORDER BY received_time DESC, id DESC) FROM details), '[]')
+       COALESCE((SELECT jsonb_agg(to_jsonb(details) ORDER BY CASE WHEN $14 THEN received_time END, CASE WHEN $14 THEN id END, received_time DESC, id DESC) FROM details), '[]')

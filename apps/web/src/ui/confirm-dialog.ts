@@ -35,12 +35,16 @@ class ConfirmContent {
   protected readonly dialog = inject<BrnDialogRef<boolean>>(BrnDialogRef);
 }
 
+let nextConfirmation = 0;
+
 @Injectable({ providedIn: 'root' })
 export class ConfirmDialog {
   private readonly dialogs = inject(HlmDialogService);
 
   async open(options: ConfirmOptions): Promise<boolean> {
     const dialog = this.dialogs.open<boolean, ConfirmOptions>(ConfirmContent, {
+      // A confirmation can open over a sheet with a generated dialog ID.
+      id: `fimra-confirm-${++nextConfirmation}`,
       context: options,
       role: 'alertdialog',
       autoFocus: 'first-tabbable',

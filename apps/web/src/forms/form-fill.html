@@ -16,22 +16,31 @@
     }
   </header>
 
-  @if (tried() && problems().length || serverMessage() || serverProblems().length) {
-    <div id="form-problems" class="form-problems" role="alert" tabindex="-1">
-      @if (serverMessage()) { <p>{{ serverMessage() }}</p> }
-      @if (tried() && problems().length) {
-        <p>Check {{ problems().length === 1 ? 'this answer' : 'these answers' }} before sending:</p>
-      }
-      <ul>
-        @for (problem of (tried() ? problems() : []); track $index) {
-          <li><button type="button" class="problem-link" (click)="show(problem)">{{ problem.message }}</button></li>
-        }
-        @for (problem of serverProblems(); track $index) {
-          <li><button type="button" class="problem-link" (click)="show(problem)">{{ problem.message }}</button></li>
-        }
-      </ul>
+  <fimra-live-status class="sr-only" [message]="saved() ? 'Report saved.' : busy() ? 'Saving report…' : ''" />
+  @if (saved()) {
+    <div #savedResult class="form-save-result" tabindex="-1">
+      <p><fimra-status-badge icon="complete" label="Saved" /> Report submitted for {{ stepLabel() || stageTitle() || title() }}.</p>
+      @if (currentStepLabel()) { <p>Current alert step: {{ currentStepLabel() }}</p> }
+      <button hlmBtn type="button" (click)="cancelled.emit()">Done</button>
     </div>
-  }
+  } @else {
+    @if (serverMessage() || otherErrors().length) {
+      <div #feedback tabindex="-1" role="alert" class="form-problems">
+        @if (serverMessage()) {
+          <p>@if (refused()) { <strong>Report could not be saved.</strong> } {{ serverMessage() }}</p>
+        }
+        @if (otherErrors().length) {
+          <ul>
+            @for (problem of otherErrors(); track $index) { <li>{{ problem.message }}</li> }
+          </ul>
+        }
+      </div>
+    }
+    <fimra-field-error-summary id="form-problems" [errors]="fieldErrors()" heading="Check these answers before sending"
+      (fieldSelected)="showField($event)" />
+    @if (busy()) { <fimra-status-badge icon="pending" label="Saving" /> }
+    @else if (refused()) { <fimra-status-badge icon="failed" label="Refused" /> }
+    @else { <fimra-status-badge icon="draft" label="Draft" /> }
 
   <form (submit)="$event.preventDefault(); submit()" novalidate>
     @if (currentPage(); as p) {
@@ -47,13 +56,14 @@
         @if (pages().indexOf(p) < pages().length - 1) {
           <button hlmBtn type="button" (click)="goTo(pages().indexOf(p) + 1)">Next</button>
         } @else {
-          <button hlmBtn type="submit" [disabled]="busy() || !!uploading()">{{ busy() ? 'Sending…' : 'Send report' }}</button>
+          <button hlmBtn type="submit" [busy]="busy()" [disabled]="!!uploading()">Send report</button>
         }
         <button hlmBtn type="button" variant="ghost" [disabled]="busy()" (click)="cancelled.emit()">Cancel</button>
       </div>
       @if (uploading(); as name) { <p role="status">Uploading {{ name }}…</p> }
     }
   </form>
+  }
 
   <ng-template #sectionTpl let-section>
     @let collapsed = layout(section)['collapsed'] === true;
@@ -78,8 +88,10 @@
             </details>
           }
           @case ('repeat') {
+            @let id = fieldId(item, path);
+            @let issues = fieldProblems(item, path);
             <details class="form-group form-repeat" [open]="layout(item)['collapsed'] !== true">
-              <summary>{{ name(item) }}</summary>
+              <summary [id]="id" [attr.aria-describedby]="issues.length ? id + '-errors' : null">{{ name(item) }}</summary>
               @if (text(item.node['description'])) { <p class="form-hint">{{ text(item.node['description']) }}</p> }
               @for (entry of entries(item, path); track $index; let i = $index) {
                 @let inner = entryPath(path, item.key, i);
@@ -96,7 +108,11 @@
               @if (!locked(item) && canAdd(item, path)) {
                 <button hlmBtn type="button" variant="outline" size="sm" (click)="addEntry(item, path)">Add {{ text(item.node['itemLabel']) || name(item) }}</button>
               }
-              @for (problem of fieldProblems(item, path); track $index) { <small class="field-error">{{ problem.message }}</small> }
+              @if (issues.length) {
+                <div [id]="id + '-errors'">
+                  @for (problem of issues; track $index) { <p class="field-error">{{ problem.message }}</p> }
+                </div>
+              }
             </details>
           }
           @default { <ng-container *ngTemplateOutlet="fieldTpl; context: { $implicit: item, path: path }" /> }
@@ -112,7 +128,7 @@
     @let hint = text(f.node['hint']);
     @let describedBy = ((hint && !lock ? id + '-hint ' : '') + (issues.length ? id + '-errors' : '')).trim() || null;
     @let invalid = issues.length ? 'true' : null;
-    <div brnField class="form-field" [class.half]="layout(f)['width'] === 'half'" [class.invalid]="issues.length">
+    <div brnField class="form-field" [id]="id + '-container'" tabindex="-1" [class.half]="layout(f)['width'] === 'half'" [class.invalid]="issues.length">
       @if (f.kind === 'multiple-choice' || (f.kind === 'single-choice' && widget(f) !== 'dropdown')) {
         <span class="form-label" [id]="id + '-label'">{{ name(f) }}@if (required(f, path) && !lock) { <span class="required"> (required)</span> }</span>
       } @else {
@@ -121,7 +137,7 @@
       @if (hint && !lock) { <small hlmFieldDescription class="form-hint" [id]="id + '-hint'">{{ hint }}</small> }
 
       @if (lock && f.kind !== 'photo' && f.kind !== 'file' && f.kind !== 'signature') {
-        <p class="form-answer" [id]="id">{{ shown(f, path) }}</p>
+        <p class="form-answer" [id]="id" tabindex="-1" [attr.aria-describedby]="describedBy">{{ shown(f, path) }}</p>
       } @else {
         @switch (f.kind) {
           @case ('text') {
@@ -178,7 +194,7 @@
                   [attr.aria-describedby]="describedBy" [attr.aria-invalid]="invalid">
                   @for (c of choices(f, path); track c['key']) {
                     <button hlmBtn type="button" size="sm" [variant]="chosen(f, path, c['key']) ? 'primary' : 'outline'"
-                      [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="set(f, path, chosen(f, path, c['key']) ? null : c['key'])">{{ text(c['label']) }}</button>
+                      [attr.aria-describedby]="describedBy" [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="set(f, path, chosen(f, path, c['key']) ? null : c['key'])">{{ text(c['label']) }}</button>
                   }
                 </div>
               }
@@ -186,7 +202,7 @@
                 <hlm-radio-group [id]="id" tabindex="-1" [attr.aria-labelledby]="id + '-label'" [value]="value(f, path) ?? null"
                   [attr.aria-describedby]="describedBy" [attr.aria-invalid]="invalid" (valueChange)="set(f, path, $event)">
                   @for (c of choices(f, path); track c['key']) {
-                    <label hlmLabel class="choice"><hlm-radio [value]="c['key']" [attr.aria-label]="text(c['label'])"><hlm-radio-indicator /></hlm-radio> {{ text(c['label']) }}</label>
+                    <label hlmLabel class="choice"><hlm-radio [value]="c['key']" [attr.aria-describedby]="describedBy" [attr.aria-label]="text(c['label'])"><hlm-radio-indicator /></hlm-radio> {{ text(c['label']) }}</label>
                   }
                 </hlm-radio-group>
               }
@@ -199,9 +215,9 @@
               @for (c of choices(f, path); track c['key']) {
                 @if (widget(f) === 'buttons') {
                   <button hlmBtn type="button" size="sm" [variant]="chosen(f, path, c['key']) ? 'primary' : 'outline'"
-                    [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="toggle(f, path, c['key'], !chosen(f, path, c['key']))">{{ text(c['label']) }}</button>
+                    [attr.aria-describedby]="describedBy" [attr.aria-pressed]="chosen(f, path, c['key'])" (click)="toggle(f, path, c['key'], !chosen(f, path, c['key']))">{{ text(c['label']) }}</button>
                 } @else {
-                  <label hlmLabel class="choice"><hlm-checkbox [checked]="chosen(f, path, c['key'])" [attr.aria-label]="text(c['label'])"
+                  <label hlmLabel class="choice"><hlm-checkbox [checked]="chosen(f, path, c['key'])" [attr.aria-describedby]="describedBy" [attr.aria-label]="text(c['label'])"
                     (checkedChange)="toggle(f, path, c['key'], $event)" /> {{ text(c['label']) }}</label>
                 }
               }
@@ -221,7 +237,7 @@
                 <li>
                   @if (preview(fileId); as src) { <img [src]="src" [alt]="name(f) + ', ' + fileName"> }
                   <span>{{ fileLabel(fileId) }}</span>
-                  @if (!lock) { <button hlmBtn type="button" variant="ghost" size="sm" (click)="removeFile(f, path, fileId)">Remove</button> }
+                  @if (!lock) { <button hlmBtn type="button" variant="ghost" size="sm" [attr.aria-describedby]="describedBy" (click)="removeFile(f, path, fileId)">Remove</button> }
                 </li>
               } @empty {
                 @if (lock) { <li>No answer</li> }

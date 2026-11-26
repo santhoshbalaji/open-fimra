@@ -1,268 +1,271 @@
-import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Component, ElementRef, TemplateRef, ViewEncapsulation, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import { HlmButton } from '@spartan-ng/helm/button';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
-import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
-import { HlmTableImports } from '@spartan-ng/helm/table';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, ViewEncapsulation, computed, effect, inject, input, output, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import type { AlertRow } from '../alert-queue';
 import { AuthService } from '../auth';
-import { DashboardFilters } from '../dashboard-filters';
-import { classes, relativeAge } from '../detections';
-import { EmptyState } from '../ui/empty-state';
-import { StatusBadge } from '../ui/status-badge';
+import { DashboardFilters, defaultDashboardHours } from '../dashboard-filters';
+import { classes } from '../detections';
+import { FilterFields } from '../filter-fields';
 import { ShellNavigation } from '../shell-navigation';
+import { DataTable, type TableColumn, type TablePage, type TablePosition } from '../ui/data-table';
+import { FilterBar, FilterControls } from '../ui/filter-bar';
+import { SidePanel } from '../ui/side-panel';
+import { type DataState } from '../ui/state-region';
+import { workspacePhone } from '../ui/workspace-breakpoint';
+import { StatusBadge } from '../ui/status-badge';
+import { defaultWorkspaceFormat } from '../workspace-format';
 import { WorkspaceService } from '../workspace';
-import { decisionLabels, type Decision, type SubmissionRow, type WorkspaceForm } from './form-api';
+import { type Decision, type SubmissionRow, type WorkspaceForm } from './form-api';
 import { textIn } from './form-text';
 import { SubmissionView } from './submission-view';
 
-interface Page { items: SubmissionRow[]; counts: Partial<Record<Decision, number>>; nextCursor?: string }
+interface Page { items: SubmissionRow[]; nextCursor?: string }
 export type DecisionFilter = Decision | '';
-/** The list's own filters, for an export of the same reports. */
 export interface ReportFilters { form: string; decision: DecisionFilter; formLabel: string }
 
-const tabs: { value: DecisionFilter; label: string }[] = [
-  { value: 'pending', label: 'Waiting' }, { value: 'approved', label: 'Approved' },
-  { value: 'returned', label: 'Returned' }, { value: '', label: 'All' }
-];
+const statuses = { pending: 'Submitted', approved: 'Approved', returned: 'Returned' };
+const firstPage: TablePosition = { cursor: null, previousCursors: [], sort: { columnId: 'received', direction: 'descending' } };
+const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, position: firstPage };
 
-/**
- * Field reports beside the alert queue, with the same time window, forest
- * class and unit path, a form and a decision. Opening a report shows it with
- * its form version and, for supervising officers, approval.
- */
 @Component({
   selector: 'fimra-submissions',
-  imports: [HlmButtonImports, HlmFieldImports, HlmSelectImports, HlmSkeletonImports, HlmTableImports, EmptyState, StatusBadge, SubmissionView],
+  imports: [DataTable, FilterBar, FilterControls, FilterFields, HlmButton, HlmFieldImports, HlmSelectImports, SidePanel, StatusBadge, SubmissionView],
   styleUrl: './forms.css',
   encapsulation: ViewEncapsulation.None,
   template: `
-    @if (selectedId(); as id) {
-      @let row = selected();
-      <section aria-labelledby="report-title">
-        <div class="queue-heading">
-          <h3 id="report-title" tabindex="-1">{{ row ? title(row) : 'Field report' }}</h3>
-          <button hlmBtn variant="ghost" (click)="close()">All reports</button>
-        </div>
-        <fimra-submission-view #detail [workspaceUrl]="endpoint()" [submissionId]="id" (decided)="decided()" />
-        @if (detail.submission()?.alertId || row?.alert_id; as alertId) {
-          <p class="incident-summary">@if (row) { {{ place(row) }} · {{ classes[row.forest_class] }} }
-            <button hlmBtn variant="link" size="sm" (click)="showAlert(alertId)">Show alert #{{ alertId }}</button>
-          </p>
+    <div #queue tabindex="-1" class="report-queue" role="region" aria-label="Field report queue">
+      <fimra-side-panel heading="Review field report" [fullHeight]="true" (closed)="closeReview()">
+        @if (panel()?.open() && selectedId(); as id) {
+          <fimra-submission-view [workspaceUrl]="endpoint()" [submissionId]="id" (decided)="reload()" />
         }
-      </section>
-    } @else {
-      <div class="queue-tabs" role="group" aria-label="Decisions">
-        @for (tab of tabs; track tab.value) {
-          <button hlmBtn variant="ghost" [attr.aria-pressed]="decision() === tab.value" (click)="setDecision(tab.value)">{{ tab.label }}
-            @if (tab.value && page(); as p) { <span>{{ p.counts[tab.value] || 0 }}</span> }
-          </button>
-        }
-      </div>
-      @if (forms().length) {
-        <hlm-field class="report-form-filter"><label hlmFieldLabel for="report-form">Form</label>
-          <hlm-select [value]="form() || 'all'" (valueChange)="setForm($event)">
-            <hlm-select-trigger buttonId="report-form" size="sm">{{ formLabel() }}</hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal>
-              <hlm-select-item value="all">All forms</hlm-select-item>
-              @for (f of forms(); track f.form) { <hlm-select-item [value]="f.form">{{ formTitle(f) }}</hlm-select-item> }
-            </hlm-select-content>
-          </hlm-select>
-        </hlm-field>
-      }
-      @if (message()) { <p role="status">{{ message() }}</p> }
-      @if (page(); as p) {
-        @if (p.items.length) {
-          <table hlmTable class="alert-table">
-            <caption class="sr-only">Field reports</caption>
-            <thead hlmTHead><tr hlmTr><th hlmTh scope="col">Report and place</th><th hlmTh scope="col">Decision</th></tr></thead>
-            <tbody hlmTBody>
-              @for (row of p.items; track row.id) {
-                <tr hlmTr>
-                  <td hlmTd><button class="row-open" (click)="open(row)"
-                      [attr.aria-label]="title(row) + ', ' + place(row) + ', received ' + received(row)">{{ title(row) }}</button>
-                    <p>{{ place(row) }}</p>
-                    <small>{{ row.submitted_by }} · <time [attr.datetime]="row.received_time" [title]="receivedAt(row)">{{ received(row) }}</time></small>
-                    <small>Alert #{{ row.alert_id }} · {{ row.alert_step_label }}</small>
-                  </td>
-                  <td hlmTd><div class="step-meta">
-                    <fimra-status-badge [icon]="row.decision === 'approved' ? 'complete' : row.decision === 'returned' ? 'overdue' : 'step'" [label]="labels[row.decision]" />
-                  </div></td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        } @else if (!message()) {
-          <fimra-empty-state heading="No reports here" detail="Check another decision or change the filters." />
-        }
-        @if (cursor()) { <button hlmBtn variant="outline" (click)="changePage('')">Newest reports</button> }
-        @if (p.nextCursor; as next) { <button hlmBtn variant="outline" (click)="changePage(next)">Older reports</button> }
-      } @else if (!message()) {
-        <div role="status" aria-label="Loading reports" class="grid gap-2"><hlm-skeleton class="h-12" /><hlm-skeleton class="h-12" /></div>
-      }
-    }
+      </fimra-side-panel>
+      <fimra-filter-bar [filters]="activeFilters()" (remove)="removeFilter($event)" (clearAll)="clearFilters()">
+        <ng-template fimraFilterControls>
+          <fimra-filter-fields [forReports]="true" />
+          <hlm-field class="report-form-filter"><label hlmFieldLabel for="report-decision">Report status</label>
+            <hlm-select [value]="decision() || 'all'" (valueChange)="setFilter('decision', $event)">
+              <hlm-select-trigger buttonId="report-decision">{{ decision() ? statuses[decision() || 'pending'] : 'All statuses' }}</hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal>
+                <hlm-select-item value="all">All statuses</hlm-select-item>
+                <hlm-select-item value="pending">Submitted</hlm-select-item>
+                <hlm-select-item value="returned">Returned</hlm-select-item>
+                <hlm-select-item value="approved">Approved</hlm-select-item>
+              </hlm-select-content>
+            </hlm-select>
+          </hlm-field>
+          <hlm-field class="report-form-filter"><label hlmFieldLabel for="report-form">Form</label>
+            <hlm-select [value]="form() || 'all'" (valueChange)="setFilter('form', $event === 'all' ? null : $event)">
+              <hlm-select-trigger buttonId="report-form">{{ formLabel() }}</hlm-select-trigger>
+              <hlm-select-content *hlmSelectPortal>
+                <hlm-select-item value="all">All forms</hlm-select-item>
+                @for (f of forms(); track f.form) { <hlm-select-item [value]="f.form">{{ formTitle(f) }}</hlm-select-item> }
+              </hlm-select-content>
+            </hlm-select>
+          </hlm-field>
+        </ng-template>
+      </fimra-filter-bar>
+      <ng-template #reportCell let-row>
+        <button #report hlmBtn variant="link" class="report-open" type="button" (click)="open(row, report)">
+          {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}, received {{ received(row) }}</span>
+        </button>
+        <p>{{ place(row) }}</p>
+      </ng-template>
+      <ng-template #statusCell let-row>
+        <fimra-status-badge [icon]="row.decision === 'approved' ? 'complete' : row.decision === 'returned' ? 'overdue' : 'pending'"
+          [label]="status(row)" />
+      </ng-template>
+      <ng-template #phoneActions let-row>
+        <button #report hlmBtn variant="outline" type="button" (click)="open(row, report)">Open {{ title(row) }} <span class="sr-only">for alert #{{ row.alert_id }}</span></button>
+      </ng-template>
+      <fimra-data-table caption="Field reports" [columns]="columns()" [rowKey]="rowKey" [rowLabel]="rowLabel"
+        [page]="page()" [state]="state()" [phoneCards]="true" [rowActions]="phoneCards() ? phoneActions : undefined"
+        [hiddenColumns]="hiddenColumns()" (hiddenColumnsChange)="setColumns($event)"
+        (pageRequest)="setPosition($event)" (retry)="reload()" />
+      @if (state().kind === 'ready' && !page().rows.length) { <p>No reports on this page.</p> }
+    </div>
   `
 })
 export class Submissions {
-  /** The workspace's API address, ending in /api/v1/workspaces/{slug}. */
   readonly endpoint = input.required<string>();
   readonly now = input.required<number>();
-  readonly openAlert = output<AlertRow>();
-  /** The list's own filters, so an export can use them. */
   readonly filtersChanged = output<ReportFilters>();
-  readonly tabs = tabs;
-  readonly labels = decisionLabels;
-  readonly classes = classes as Record<string, string>;
-  readonly page = signal<Page | null>(null);
-  readonly cursor = signal('');
-  readonly decision = signal<DecisionFilter>('pending');
-  readonly form = signal('');
-  readonly forms = signal<WorkspaceForm[]>([]);
-  readonly message = signal('');
-  readonly selected = signal<SubmissionRow | null>(null);
-  private readonly navigation = inject(ShellNavigation, { optional: true });
-  readonly selectedId = computed(() => this.navigation ? this.navigation.query().get('report') : this.selected()?.id);
-  private readonly reload = signal(0);
+  protected readonly statuses = statuses;
+  protected readonly page = signal<TablePage<SubmissionRow>>(emptyPage);
+  protected readonly state = signal<DataState>({ kind: 'loading', heading: 'Loading field reports' });
+  protected readonly forms = signal<WorkspaceForm[]>([]);
+  protected readonly panel = viewChild(SidePanel);
+  private readonly queue = viewChild<ElementRef<HTMLElement>>('queue');
+  private readonly navigation = inject(ShellNavigation);
+  protected readonly selectedId = computed(() => this.navigation.query().get('report'));
+  private readonly attempt = signal(0);
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly workspace = inject(WorkspaceService);
+  protected readonly phoneCards = toSignal(
+    inject(BreakpointObserver).observe(workspacePhone).pipe(map(result => result.matches)), { requireSync: true });
   private readonly filters = inject(DashboardFilters);
-  private readonly receivedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  readonly formLabel = computed(() => {
-    const found = this.forms().find(f => f.form === this.form());
-    return found ? this.formTitle(found) : 'All forms';
+  private trigger: HTMLElement | null = null;
+  protected readonly decision = computed<DecisionFilter>(() => {
+    const value = this.navigation.query().get('decision');
+    if (value === 'all') return '';
+    return value === 'approved' || value === 'returned' ? value : 'pending';
   });
+  protected readonly form = computed(() => this.navigation.query().get('form') ?? '');
+  protected readonly formLabel = computed(() => {
+    const found = this.forms().find(f => f.form === this.form());
+    return found ? this.formTitle(found) : this.form() || 'All forms';
+  });
+  protected readonly hiddenColumns = computed<ReadonlySet<string>>(() =>
+    new Set(this.navigation.query().get('reportColumns')?.split(',') ?? []));
+  protected readonly activeFilters = computed(() => {
+    const filters = [];
+    if (this.decision()) filters.push({ id: 'decision', label: statuses[this.decision() || 'pending'] });
+    if (this.form()) filters.push({ id: 'form', label: this.formLabel() });
+    const hours = this.filters.hours();
+    if (hours !== defaultDashboardHours) filters.push({ id: 'hours', label: `Past ${hours} ${hours === 1 ? 'hour' : 'hours'}` });
+    const forest = this.filters.forestClass();
+    if (forest) filters.push({ id: 'class', label: classes[forest] });
+    const scope = this.filters.unitPath();
+    if (scope) filters.push({ id: 'unitPath', label: this.workspace.jurisdictions().find(([path]) => path === scope)?.[1] ?? scope });
+    return filters;
+  });
+  private readonly cursor = computed(() => this.navigation.query().get('cursor'));
+  private readonly previous = computed(() => this.navigation.query().get('reportPages'));
+  private readonly oldest = computed(() => this.navigation.query().get('reportSort') === 'oldest');
+
+  private readonly reportCell = viewChild<TemplateRef<{ $implicit: SubmissionRow }>>('reportCell');
+  private readonly statusCell = viewChild<TemplateRef<{ $implicit: SubmissionRow }>>('statusCell');
+  protected readonly columns = computed<readonly TableColumn<SubmissionRow>[]>(() => [
+    { id: 'report', label: 'Report and place', value: row => this.title(row), rowHeading: true, cell: this.reportCell() },
+    { id: 'status', label: 'Status', value: row => this.status(row), cell: this.statusCell() },
+    { id: 'sender', label: 'Sender', value: row => row.submitted_by },
+    { id: 'received', label: 'Received', value: row => this.received(row), sortable: true },
+    { id: 'alert', label: 'Alert', value: row => `#${row.alert_id} · ${row.alert_step_label}` }
+  ]);
+  protected readonly rowKey = (row: SubmissionRow) => row.id;
+  protected readonly rowLabel = (row: SubmissionRow) => `${this.title(row)} · ${this.place(row)}`;
 
   constructor() {
     effect(onCleanup => {
       const request = this.http.get<WorkspaceForm[]>(this.endpoint() + '/forms').subscribe({
         next: forms => this.forms.set(forms.filter(f => f.versions.some(v => v.status === 'published'))),
-        error: (error: HttpErrorResponse) => this.failed(error)
+        error: (error: HttpErrorResponse) => { if (error.status === 401) this.auth.sessionEnded(); }
       });
       onCleanup(() => request.unsubscribe());
     });
-    if (this.navigation) {
-      const query = this.navigation.query;
-      effect(() => {
-        const decision = query().get('decision');
-        this.decision.set(decision === 'all' ? '' : decision === 'approved' || decision === 'returned' ? decision : 'pending');
-        this.form.set(query().get('form') ?? '');
-        this.cursor.set(query().get('cursor') ?? '');
-      });
-      effect(() => {
-        const id = this.selectedId();
-        this.selected.set(this.page()?.items.find(item => item.id === id) ?? null);
-      });
-    } else {
-      effect(() => {
-        this.endpoint();
-        this.filters.params();
-        this.decision();
-        this.form();
-        this.cursor.set('');
-      });
-    }
     effect(() => this.filtersChanged.emit({ form: this.form(), decision: this.decision(), formLabel: this.formLabel() }));
+    effect(() => {
+      const panel = this.panel();
+      const fallback = this.queue()?.nativeElement;
+      const id = this.selectedId();
+      if (!panel || !fallback) return;
+      untracked(() => {
+        if (id && !panel.open()) panel.show(this.trigger ?? fallback, fallback);
+        else if (!id && panel.open()) panel.close();
+      });
+    });
+
+    let lastRequest = '';
     effect(onCleanup => {
-      const params: Record<string, string | number> = { ...this.filters.params() };
+      const endpoint = this.endpoint();
+      const cursor = this.cursor();
+      const oldest = this.oldest();
+      const previous = this.previous();
+      const position: TablePosition = {
+        cursor,
+        previousCursors: cursor ? (previous?.split('|') ?? ['']).map(page => page || null) : [],
+        sort: { columnId: 'received', direction: oldest ? 'ascending' : 'descending' }
+      };
+      const params: Record<string, string | number> = { ...this.filters.params(), limit: 20 };
       if (this.decision()) params['decision'] = this.decision();
       if (this.form()) params['form'] = this.form();
-      if (this.cursor()) params['cursor'] = this.cursor();
+      if (cursor) params['cursor'] = cursor;
+      if (oldest) params['sort'] = 'oldest';
       this.now();
-      this.reload();
-      const request = this.http.get<Page>(this.endpoint() + '/submissions', { params }).subscribe({
-        next: page => { this.page.set(page); this.message.set(''); },
-        error: (error: HttpErrorResponse) => { this.failed(error); this.message.set('Reports could not load. Trying again in a minute.'); }
+      this.attempt();
+      const key = endpoint + JSON.stringify(params);
+      if (key !== lastRequest || untracked(this.state).kind === 'error') {
+        this.state.set({ kind: 'loading', heading: 'Loading field reports' });
+      }
+      lastRequest = key;
+      const request = this.http.get<Page>(endpoint + '/submissions', { params }).subscribe({
+        next: page => {
+          this.page.set({ rows: page.items, nextCursor: page.nextCursor ?? null, position });
+          this.state.set(page.items.length || cursor ? { kind: 'ready' } :
+            { kind: 'empty', heading: 'No field reports match', detail: 'Change the filters to see more reports.' });
+        },
+        error: (error: HttpErrorResponse) => {
+          if (error.status === 401) this.auth.sessionEnded();
+          this.state.set(error.status === 403 ? { kind: 'forbidden' } :
+            { kind: 'error', heading: 'Field reports could not load' });
+        }
       });
       onCleanup(() => request.unsubscribe());
     });
   }
 
-  formTitle(form: WorkspaceForm): string {
+  protected formTitle(form: WorkspaceForm): string {
     const newest = [...form.versions].reverse().find(v => v.status === 'published');
     return textIn(newest?.title, 'en') || form.form;
   }
 
-  title(row: SubmissionRow): string {
+  protected title(row: SubmissionRow): string {
     const title = textIn(row.title, 'en') || row.form;
     return title === row.step_label ? title : title + ' · ' + row.step_label;
   }
 
-  place(row: SubmissionRow): string {
+  protected place(row: SubmissionRow): string {
     return [row.beat_name, row.range_name, row.division_name].filter(Boolean).join(' · ') || 'Unknown place';
   }
 
-  received(row: SubmissionRow): string {
-    return relativeAge(Date.parse(row.received_time) / 1000, this.now());
+  protected status(row: SubmissionRow): string {
+    return statuses[row.decision];
   }
 
-  receivedAt(row: SubmissionRow): string {
-    return this.receivedFormat.format(new Date(row.received_time));
+  protected received(row: SubmissionRow): string {
+    return defaultWorkspaceFormat.dateTime(new Date(row.received_time));
   }
 
-  setDecision(value: DecisionFilter): void {
-    if (this.navigation) {
-      this.navigation.update({ decision: value || 'all', cursor: null });
-      return;
-    }
-    this.page.set(null);
-    this.decision.set(value);
+  protected setFilter(key: string, value: string | null | undefined): void {
+    this.navigation.update({ [key]: value || null, cursor: null, reportPages: null, report: null });
   }
 
-  setForm(value: string | null | undefined): void {
-    const form = !value || value === 'all' ? '' : value;
-    if (this.navigation) {
-      this.navigation.update({ form: form || null, cursor: null });
-      return;
-    }
-    this.page.set(null);
-    this.form.set(form);
+  protected removeFilter(key: string): void {
+    this.setFilter(key, key === 'decision' ? 'all' : null);
   }
 
-  changePage(cursor: string): void {
-    if (this.navigation) {
-      this.navigation.update({ cursor: cursor || null });
-      return;
-    }
-    this.page.update(page => page && { ...page, items: [], nextCursor: undefined });
-    this.cursor.set(cursor);
+  protected clearFilters(): void {
+    this.navigation.update({ decision: 'all', form: null, hours: null, class: null, unitPath: null,
+      cursor: null, reportPages: null, report: null });
   }
 
-  open(row: SubmissionRow): void {
-    if (this.navigation) this.navigation.update({ report: row.id });
-    else {
-      this.selected.set(row);
-      queueMicrotask(() => document.getElementById('report-title')?.focus());
-    }
+  protected setPosition(position: TablePosition): void {
+    this.navigation.update({
+      cursor: position.cursor,
+      reportPages: position.cursor && position.previousCursors.length > 1 ? position.previousCursors.join('|') : null,
+      reportSort: position.sort?.direction === 'ascending' ? 'oldest' : null
+    });
   }
 
-  close(): void {
-    if (this.navigation) this.navigation.update({ report: null });
-    else this.selected.set(null);
+  protected setColumns(columns: ReadonlySet<string>): void {
+    this.navigation.update({ reportColumns: Array.from(columns).join(',') || null });
   }
 
-  decided(): void {
-    this.reload.update(n => n + 1);
+  protected open(row: SubmissionRow, trigger: HTMLElement): void {
+    this.trigger = trigger;
+    this.navigation.update({ report: row.id });
   }
 
-  async showAlert(id: string): Promise<void> {
-    if (this.navigation) {
-      this.navigation.go('/monitor/alerts', { alert: id });
-      return;
-    }
-    try {
-      this.openAlert.emit(await firstValueFrom(this.http.get<AlertRow>(this.endpoint() + '/alerts/' + id)));
-    } catch (error) {
-      this.failed(error as HttpErrorResponse);
-      this.message.set('The alert could not open.');
-    }
+  protected closeReview(): void {
+    this.trigger = null;
+    if (this.selectedId()) this.navigation.update({ report: null }, { replaceUrl: true });
   }
 
-  private failed(error: HttpErrorResponse): void {
-    if (error.status === 401) this.auth.sessionEnded();
-    else if (error.status === 403) this.workspace.deny();
+  protected reload(): void {
+    this.attempt.update(n => n + 1);
   }
 }
-

@@ -33,7 +33,6 @@
 .form-field.invalid input, .form-field.invalid textarea { border-color: var(--color-danger); }
 .form-problems { border: 1px solid var(--color-danger); border-radius: var(--radius-card); padding: 12px; }
 .form-problems ul { list-style: disc; padding-left: 20px; }
-.problem-link { text-align: left; text-decoration: underline; color: var(--color-danger); }
 .form-actions, .shape-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .form-files { display: grid; gap: 6px; }
 .form-files li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; overflow-wrap: anywhere; }
@@ -60,7 +59,30 @@ fimra-alert-reports h3 { font-weight: 600; margin: 12px 0 8px; }
 .report-dialog { max-height: calc(100dvh - 32px); overflow: auto; gap: 12px; width: min(760px, calc(100vw - 2rem)); max-width: none; }
 .report-dialog-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 .report-dialog-heading h2 { font-weight: 600; font-size: var(--text-title); }
-.report-form-filter { gap: 2px; margin-bottom: 8px; }
 @media (max-width: 640px) {
   .form-items > .form-field.half { grid-column: 1 / -1; }
 }
+.field-report-screen { max-width: 1200px; }
+.report-queue { display: grid; min-width: 0; gap: 16px; }
+.filter-fields.report-filter-fields { display: flex; }
+.report-form-filter { width: auto; margin: 0; }
+.report-open { padding-inline: 0; height: auto; min-height: 44px; white-space: normal; text-align: start; }
+.submission-view > fimra-state-region > div > div,
+.submission-header, .submission-facts, .report-history { display: grid; gap: 12px; }
+.submission-header { padding-bottom: 12px; border-bottom: 1px solid var(--color-border); }
+.submission-header h3 { font-size: var(--text-title); font-weight: 600; overflow-wrap: anywhere; }
+.submission-facts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.submission-facts dt { font-weight: 600; }
+.submission-facts dd { overflow-wrap: anywhere; }
+.submission-facts .submission-meta { display: block; }
+.submission-facts [data-slot="badge"] {
+  background-color: var(--color-card);
+  color: var(--color-text);
+  transition: none;
+}
+.report-alert-link { color: var(--color-action); text-decoration: underline; text-underline-offset: 3px; }
+.approval-note { white-space: pre-wrap; }
+.report-history li { border-inline-start: 2px solid var(--color-divider); padding-inline-start: 12px; }
+.report-refused { color: var(--color-danger); }
+.form-save-result { display: grid; justify-items: start; gap: 8px; }
+.report-list fimra-status-badge { justify-self: start; }

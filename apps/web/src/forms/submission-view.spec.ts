@@ -2,8 +2,10 @@ import { provideSpartanHlm } from '@spartan-ng/helm/utils';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../auth';
+import { ShellNavigation } from '../shell-navigation';
 import { stubLayoutApis } from '../overlay-testing';
 import type { Submission } from './form-api';
 import { SubmissionView } from './submission-view';
@@ -21,7 +23,11 @@ describe('Report and approval', () => {
   let http: HttpTestingController;
   beforeEach(() => {
     stubLayoutApis();
-    TestBed.configureTestingModule({ providers: [provideSpartanHlm(), provideHttpClient(), provideHttpClientTesting(),
+    TestBed.configureTestingModule({ providers: [provideSpartanHlm(), provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
+      { provide: ShellNavigation, useFactory: () => {
+        const router = TestBed.inject(Router);
+        return { href: (path: string, queryParams: object) => router.createUrlTree([path], { queryParams }) };
+      } },
       { provide: AuthService, useValue: { sessionEnded: vi.fn() } }] });
     http = TestBed.inject(HttpTestingController);
   });
@@ -50,9 +56,17 @@ describe('Report and approval', () => {
 
   it('lets a supervising officer approve a report once', async () => {
     const { el, fixture, button } = render(report);
-    expect(el.textContent).toContain('Version 1 · sent by Demo Beat Guard');
-    expect(el.textContent).toContain('Under control');
-    expect(el.textContent).toContain('A decision cannot be changed later.');
+    const header = el.querySelector('.submission-header')!;
+    expect(header.querySelector('h3')!.textContent).toBe('First report');
+    expect(header.querySelector('p')!.textContent).toBe('Version 1');
+    expect(Array.from(header.querySelectorAll('dt'), term => term.textContent)).toEqual(['Sender', 'Related alert', 'Decision', 'Received']);
+    expect(header.querySelector('dd')!.textContent).toBe('Demo Beat Guard');
+    expect(header.querySelector('a')!.getAttribute('href')).toBe('/monitor/alerts?alert=7');
+    expect(header.textContent).toContain('Submitted');
+    const answers = el.querySelector('fimra-form-presentation')!;
+    expect(answers.textContent).toContain('Under control');
+    expect(header.compareDocumentPosition(answers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(answers.compareDocumentPosition(button('Approve')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const approve = button('Approve')!;
     approve.focus();
     approve.click();
@@ -79,8 +93,9 @@ describe('Report and approval', () => {
     fixture.detectChanges();
     expect(el.querySelector('.approval')!.textContent).toContain('Approved');
     expect(el.querySelector('.approval')!.textContent).toContain('Demo Division Officer');
+    expect(el.querySelector('fimra-live-status')!.textContent).toBe('Report approved.');
     expect(button('Approve')).toBeUndefined();
-    expect(document.activeElement).toBe(el.querySelector('.approval [tabindex="-1"]'));
+    expect(document.activeElement).toBe(el.querySelector('.submission-header [tabindex="-1"]'));
   });
 
   it('requests version 1 and uses its rules after version 2 changes the form', () => {
@@ -130,7 +145,9 @@ describe('Report and approval', () => {
     button('Return the report')!.click();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(el.querySelector('[role=alert]')!.textContent).toContain('Say why the report is returned.');
+    expect(el.querySelector('#return-error')!.textContent).toContain('Say why the report is returned.');
+    expect(note.getAttribute('aria-describedby')).toBe('return-hint return-error');
+    expect(document.activeElement).toBe(note);
     http.expectNone(workspace + '/submissions/' + report.id + '/approval');
     note.value = '  Recount the teams.  ';
     button('Return the report')!.click();
@@ -139,14 +156,16 @@ describe('Report and approval', () => {
     post.flush({ ...report, approval: { decision: 'returned', note: 'Recount the teams.', by: 'Demo Division Officer', at: '2026-03-15T10:00:00Z' } });
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(el.querySelector('.approval-note')!.textContent).toBe('Recount the teams.');
+    expect(el.querySelector('.approval-note')!.textContent?.trim()).toBe('Recount the teams.');
+    expect(el.querySelector('fimra-live-status')!.textContent).toBe('Report returned.');
+    expect(document.activeElement).toBe(el.querySelector('.submission-header [tabindex="-1"]'));
   });
 
   it('shows field staff the decision without the buttons', () => {
     const { el, button } = render({ ...report, canApprove: false });
     expect(button('Approve')).toBeUndefined();
     expect(button('Return with a note')).toBeUndefined();
-    expect(el.textContent).toContain('Waiting for a decision from a supervising officer.');
+    expect(el.textContent).toContain('Waiting for a decision');
   });
 
   it('shows who decided first when another officer was quicker', async () => {
@@ -164,6 +183,7 @@ describe('Report and approval', () => {
     await fixture.whenStable();
     http.expectOne(workspace + '/submissions/' + report.id).flush({ ...report,
       approval: { decision: 'returned', note: 'Add the second team.', by: 'Demo State Admin', at: '2026-03-15T10:00:00Z' } });
+    await fixture.whenStable();
     fixture.detectChanges();
     expect(el.textContent).toContain('This submission already has a decision.');
     expect(el.textContent).toContain('Demo State Admin');

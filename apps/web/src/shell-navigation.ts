@@ -78,6 +78,16 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
     if (input['sort'] === 'activity-asc' || input['sort'] === 'activity-desc') params['sort'] = input['sort'];
   }
   if (path === '/reports/field') {
+    const { reportSort, reportPages, reportColumns } = input;
+    if (reportSort === 'oldest') params['reportSort'] = reportSort;
+    if (params['cursor'] && typeof reportPages === 'string' &&
+        reportPages.split('|').every((page, index) => index === 0 ? page === '' : /^[0-9T:.Z+\-,a-f]{1,128}$/.test(page))) {
+      params['reportPages'] = reportPages;
+    }
+    if (typeof reportColumns === 'string' &&
+        reportColumns.split(',').every(column => ['status', 'sender', 'received', 'alert'].includes(column))) {
+      params['reportColumns'] = reportColumns;
+    }
     if (typeof report === 'string' && submissionId(report)) params['report'] = report;
     if (decision === 'all' || decision === 'pending' || decision === 'approved' || decision === 'returned') params['decision'] = decision;
     if (typeof form === 'string' && /^[\w-]{1,128}$/.test(form)) params['form'] = form;
