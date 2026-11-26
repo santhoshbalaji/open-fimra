@@ -108,6 +108,57 @@ The [geo worker](../geo-worker/README.md#how-situation-reports-are-drawn) draws 
 
 Making a report, preparing a PDF and downloading it are recorded in the audit log as `report.view`, `report.create` and `report.download`, with the period, unit and number of alerts.
 
+## Daily situation returns
+
+Daily returns use saved situation report snapshots. A workspace administrator
+sets one reporting hierarchy, level, local time zone, cutoff and approver
+role for a season. The closing date names the day of the cutoff. Its window
+starts at the previous day's cutoff in the same time zone. A return filed
+early shows figures through its submission time.
+
+| Request | What it does |
+|---|---|
+| `POST /api/v1/workspaces/{slug}/daily-return-policy` | Configure a season using `hierarchy`, `level`, `timeZone`, `cutoff` (HH:MM), inclusive `from` and `to`, and `approver` (`state_admin` or `division_officer`). Seasons cannot overlap. |
+| `GET /api/v1/workspaces/{slug}/daily-returns` | Read coverage and daily and season figures for `day`. Use `scope` to select the descendants of a circle or another parent unit. Omit `day` for the latest configured reporting day up to today. |
+| Same GET with `unit` | Read that unit's return, permissions and revision history. Add `revision` with its ID to open an earlier revision. |
+| `POST /api/v1/workspaces/{slug}/daily-returns?day=…&unit=…` | Submit with `action=submit`, `nil`, `remarks` and `received` (the number of instances of assistance received). For a correction, set `base` to the latest revision ID. |
+| Same POST with `action=approved` or `action=returned` | Review the latest revision by ID in `base`. A return for correction requires `remarks`. |
+| Same POST with `action=pdf` | Queue a PDF of an approved revision in `base`, in English or Hindi. Poll and download using the situation report endpoints. |
+
+The producing unit's permanent grant permits submission. A separate person
+with the designated role and scope reviews it. A correction appends a new
+snapshot. The original figures, submitter and review decision stay available.
+PDF jobs expire as usual and can be prepared again from the retained revision.
+
+Sources are routed alerts, including manual intake. Outcomes come from
+per-alert dispositions and verification comes from flash reports and recorded
+outcomes. Assistance requested comes from dispatch support requests. Area uses
+one damage assessment per incident and labels approved and provisional
+figures separately. Historical forms describe the method in text. Where that
+text and the survey indicator give no reliable category, the return shows
+the area under **Method unspecified**. Response times give elapsed seconds and
+the number of measured transitions within, past or without a season target.
+An estimated time alone is shown as unmeasured.
+
+Coverage uses the unit boundary versions valid at cutoff, or the current
+versions while the cutoff is ahead. A filed nil return shows zero figures. A gap is a
+unit whose cutoff has passed without a submission. A roll-up uses the last
+approved revision when available and otherwise uses a submitted revision
+awaiting review. Source, incident and area facts follow one dispatch lead.
+The roll-up deduplicates those facts by their record IDs. Season totals count
+distinct cases and use the latest available approved area per incident, or the
+latest provisional area when no approved figure exists. Active and overdue
+counts show the selected day's position.
+
+Cutoff notifications use ordinary workspace rules. The worker records one
+approaching event and one missed event per unit and reporting day. The
+approaching window is the hour before cutoff. Recipients follow the matching
+rule and their current scope. In-app notices link to the unit and day. Email is
+available for workspaces that have email delivery set up.
+
+Run `make demo-daily-returns` with the synthetic demo loaded to see an approved
+nil return, a missing return and a corrected assessment in the state roll-up.
+
 ## Detection tiles
 
 `GET /api/v1/workspaces/{slug}/tiles/detections/{z}/{x}/{y}.mvt` takes a bearer token. It returns a Mapbox vector tile with content type `application/vnd.mapbox-vector-tile` and one layer named `detections`. An allowed request with no features returns HTTP 204. A missing or invalid token gets 401. A signed-in caller without a role in the workspace gets 403.

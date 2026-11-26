@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -66,7 +67,7 @@ WHERE n.id=$2 AND n.recipient_id=u.id AND u.oidc_subject=$1 AND n.channel='in_ap
 	var result json.RawMessage
 	err := a.reader.QueryRow(ctx, `
 WITH inbox AS MATERIALIZED (
-    SELECT n.id,n.event,n.created_at,n.read_at,w.slug AS workspace,n.alert_id
+    SELECT n.id,n.event,n.created_at,n.read_at,w.slug AS workspace,n.alert_id,n.daily_notice_id
     FROM users u JOIN notifications n ON n.recipient_id=u.id JOIN workspaces w ON w.id=n.workspace_id
     WHERE u.oidc_subject=$1 AND n.channel='in_app' AND notification_visible(n)
 ), filtered AS (
@@ -77,12 +78,14 @@ WITH inbox AS MATERIALIZED (
 )
 SELECT jsonb_build_object('unreadCount',(SELECT count(*) FROM inbox WHERE read_at IS NULL),
     'hasMore', (SELECT count(*) FROM filtered) - 50 > $2::bigint,
-    'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',page.id::text,'event',event,
+    'items',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',page.id::text,'event',page.event,
         'createdAt',page.created_at,'readAt',read_at,'workspace',workspace,'alertId',page.alert_id::text,
+        'dailyDay',d.day,'dailyUnit',d.unit_path::text,'dailyUnitName',d.unit_name,
         'forestClass',a.forest_class,'beatName',line.levels #>> '{beat,name}',
         'divisionName',line.levels #>> '{division,name}','incidentId',im.incident_id::text)
         ORDER BY ($3 = '' AND read_at IS NOT NULL),page.id DESC) FROM page
         LEFT JOIN alerts a ON a.id=page.alert_id
+        LEFT JOIN daily_return_notices d ON d.id=page.daily_notice_id
         LEFT JOIN incident_members im ON im.alert_id=page.alert_id
         LEFT JOIN hierarchies h ON h.id=a.hierarchy_id
         LEFT JOIN LATERAL (SELECT value AS levels FROM jsonb_each(a.hierarchy)
@@ -150,12 +153,13 @@ type notificationRule struct {
 }
 
 func (r notificationRule) valid() bool {
-	return slices.Contains([]string{"alert_new", "alert_overdue", "feed_open", "incident_overdue", "incident_escalated"}, r.Event) &&
+	return slices.Contains([]string{"alert_new", "alert_overdue", "feed_open", "incident_overdue", "incident_escalated", "daily_return_due", "daily_return_missing"}, r.Event) &&
 		slices.Contains([]string{"field_staff", "division_officer", "reviewers", "root"}, r.Recipients) &&
 		slices.Contains([]string{"in_app", "email", "push"}, r.Channel) &&
 		slices.Contains([]string{"", "unit", "edge_review", "triage"}, r.Queue) &&
 		slices.Contains([]string{"", "inside", "near_edge"}, r.ForestClass) &&
 		(r.Queue == "" || r.ForestClass == "") &&
+		(!strings.HasPrefix(r.Event, "daily_return_") || (r.Queue == "" && r.ForestClass == "" && r.Channel != "push")) &&
 		(r.Event != "feed_open" || (r.Recipients == "root" && r.Queue == "" && r.ForestClass == "" && r.Channel != "push"))
 }
 

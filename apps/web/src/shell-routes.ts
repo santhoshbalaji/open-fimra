@@ -102,6 +102,7 @@ export const shellRoutes: Routes = [
   destinationRoute('/monitor/incidents', () => import('./shell-incidents').then(module => module.IncidentScreen)),
   destinationRoute('/reports/field', () => import('./shell-field-reports').then(module => module.FieldReportScreen)),
   destinationRoute('/reports/operations', () => import('./operations-records').then(module => module.OperationsRecords)),
+  destinationRoute('/reports/daily', () => import('./daily-return').then(module => module.DailyReturnView)),
   destinationRoute('/reports/situation', () => import('./situation-report').then(module => module.SituationReportView)),
   destinationRoute('/dashboard', () => import('./dashboard').then(module => module.Dashboard)),
   destinationRoute('/settings/layers', () => import('./layers').then(module => module.Layers)),

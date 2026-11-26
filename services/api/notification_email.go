@@ -84,6 +84,10 @@ func notificationTitle(event string) string {
 		return "Fire alert overdue"
 	case "incident_overdue":
 		return "Incident response overdue"
+	case "daily_return_due":
+		return "Daily return due soon"
+	case "daily_return_missing":
+		return "Daily return missing"
 	case "incident_escalated":
 		return "Incident response escalated"
 	default:
@@ -166,6 +170,10 @@ func (c *smtpChannel) email(m notificationMessage) string {
 	q.Set("workspace", m.workspace)
 	if m.alertID != nil {
 		q.Set("alert", strconv.FormatInt(*m.alertID, 10))
+	} else if m.dailyDay != nil {
+		link.Path = strings.TrimRight(link.Path, "/") + "/reports/daily"
+		q.Set("day", *m.dailyDay)
+		q.Set("unit", *m.dailyUnit)
 	} else {
 		q.Set("view", "feed-health")
 	}

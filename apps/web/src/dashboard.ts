@@ -9,6 +9,7 @@ import { alertGroupLabels, queueLabels, stepLabel } from './alert-queue';
 import { AuthService } from './auth';
 import { ClassChart } from './class-chart';
 import { WEB_CONFIG } from './config';
+import { DailyCoverageLink } from './daily-return';
 import { DashboardFilters, ScopeFilters, filterPeriodLabel, setScopeFilters } from './dashboard-filters';
 import { detectionCatalog, detectionSeries } from './dashboard.series';
 import { classes, sourceLabel } from './detections';
@@ -62,7 +63,7 @@ const milestones = [
 
 @Component({
   selector: 'fimra-dashboard',
-  imports: [ClassChart, FilterBar, FilterControls, FilterFields, HlmCardImports, HlmTableImports, PageHeader, StateRegion, StatTile, StatusBadge],
+  imports: [ClassChart, DailyCoverageLink, FilterBar, FilterControls, FilterFields, HlmCardImports, HlmTableImports, PageHeader, StateRegion, StatTile, StatusBadge],
   templateUrl: './dashboard.html'
 })
 export class Dashboard {

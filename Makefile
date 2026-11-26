@@ -417,6 +417,8 @@ situation-report-test-integration: ## Make a situation report PDF as each demo u
 	install -d -m 700 "$(REPORT_CHECK_DIR)"
 	cd services/api && FIMRA_REPORT_INTEGRATION=1 FIMRA_REPORT_CHECK_DIR="$(REPORT_CHECK_DIR)" \
 		go test -run '^TestSituationReportIntegration$$' -count=1 -v .
+	cd services/api && FIMRA_REPORT_INTEGRATION=1 FIMRA_REPORT_CHECK_DIR="$(REPORT_CHECK_DIR)" \
+		go test -run '^TestDailyReturnIntegration$$' -count=1 -v .
 	$(GEO_COMPOSE) run --rm --no-deps -v "$(REPORT_CHECK_DIR):/check:ro" geo-worker python report_check.py /check
 
 # XLSForm conversion (PLAN.md section 5.4). Output goes to the ignored .xlsforms/ folder unless OUT is given.
@@ -548,3 +550,12 @@ notifications-walkthrough: web-build ## Check the inbox by keyboard and with axe
 	$(PSQL) < scripts/notifications-walkthrough.sql
 	WEB_PORT=$(WEB_PORT) SHOTS="$(NOTIFICATION_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
 	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh notifications-walkthrough.mjs
+
+.PHONY: demo-daily-returns situation-report-walkthrough
+demo-daily-returns: ## Load fictional nil and corrected returns and leave a reporting gap
+	$(PSQL) < seed/daily-returns.sql
+
+SITUATION_REPORT_SHOTS ?= $(HOME)/open-fimra-screenshots/situation-report
+situation-report-walkthrough: web-build demo-daily-returns ## Check printable reports and daily returns in Chromium
+	WEB_PORT=$(WEB_PORT) SHOTS="$(SITUATION_REPORT_SHOTS)" ISSUER="$(FIMRA_OIDC_ISSUER)" API_ADDR="$(FIMRA_HTTP_ADDR)" \
+	FIMRA_DATABASE_URL="$(FIMRA_DATABASE_URL)" scripts/shell-walkthrough.sh situation-report-walkthrough.mjs

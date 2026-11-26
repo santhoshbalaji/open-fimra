@@ -7,6 +7,7 @@ services:
       additional_contexts:
         form-schema: ../../packages/form-schema
         design-system: ../../docs/design-system
+        report-locales: ../../apps/web/public/locales
     environment:
       PGHOST: db
       PGDATABASE: ${FIMRA_DB_NAME:-fimra}

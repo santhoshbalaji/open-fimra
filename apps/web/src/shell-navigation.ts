@@ -11,6 +11,7 @@ export const destinations = [
   { path: '/monitor/incidents', name: 'Incidents', icon: 'flame', group: 'Monitor', filters: true },
   { path: '/reports/field', name: 'Field reports', icon: 'file-pen-line', group: 'Reports', filters: true },
   { path: '/reports/operations', name: 'Referrals and preparedness', icon: 'file-pen-line', group: 'Reports' },
+  { path: '/reports/daily', name: 'Daily situation return', icon: 'file-chart-column', group: 'Reports' },
   { path: '/reports/situation', name: 'Situation report', icon: 'file-chart-column', group: 'Reports' },
   { path: '/dashboard', name: 'Dashboard', icon: 'layout-dashboard', group: 'Dashboard', filters: true },
   { path: '/settings/layers', name: 'Layers', icon: 'layers', group: 'Settings', grant: 'layers' },
@@ -103,6 +104,10 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
     const { operation, operationCase } = input;
     if (typeof operation === 'string' && submissionId(operation)) params['operation'] = operation;
     if (typeof operationCase === 'string' && recordId(operationCase)) params['operationCase'] = operationCase;
+  }
+  if (path === '/reports/daily') {
+    if (typeof input['day'] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input['day'])) params['day'] = input['day'];
+    if (typeof input['unit'] === 'string' && /^[\w.]{1,2000}$/.test(input['unit'])) params['unit'] = input['unit'];
   }
   if (path === '/reports/situation') {
     for (const key of ['from', 'to']) {

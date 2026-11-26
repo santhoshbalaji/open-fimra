@@ -20,20 +20,6 @@ async function capture(page, name) {
 try {
   const context = await browser.newContext({ viewport: viewports.desktop, reducedMotion: 'reduce' });
   const page = await context.newPage();
-  await page.goto(WEB + '/reports/situation?period=hours&reportHours=168');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.locator('#username').fill('state.admin');
-  await page.locator('#password').fill('demo');
-  await page.locator('#kc-login').click();
-  const heading = page.getByRole('heading', { level: 1, name: 'Situation report' });
-  const show = page.getByRole('button', { name: 'Show report', exact: true });
-  const edit = page.getByRole('button', { name: 'Edit scope' });
-  const print = page.getByRole('button', { name: 'Print', exact: true });
-  const pdf = page.getByRole('button', { name: /PDF/ });
-  const table = page.getByRole('table', { name: 'Markers shown on the map' });
-
-  await expect(show).toBeEnabled();
-  await capture(page, 'desktop-light-scope-form');
   const reportURL = url => url.origin === API && url.pathname.endsWith('/situation-report') &&
     url.searchParams.get('snapshot') === '1';
   let report;
@@ -43,6 +29,22 @@ try {
     report = await response.json();
     await route.fulfill({ response });
   });
+  await page.goto(WEB + '/reports/situation?period=hours&reportHours=168');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.locator('#username').fill('state.admin');
+  await page.locator('#password').fill('demo');
+  await page.locator('#kc-login').click();
+  const heading = page.getByRole('heading', { level: 1, name: 'Situation report' });
+  const show = page.getByRole('button', { name: 'Show report', exact: true });
+  const edit = page.getByRole('button', { name: 'Change unit or date' });
+  const print = page.getByRole('button', { name: 'Print', exact: true });
+  const pdf = page.getByRole('button', { name: /PDF/ });
+  const table = page.getByRole('table', { name: 'Markers shown on the map' });
+
+  await expect(table).toBeVisible();
+  await edit.press('Enter');
+  await expect(show).toBeEnabled();
+  await capture(page, 'desktop-light-scope-form');
   await show.press('Enter');
   await expect(heading).toBeFocused();
   await page.unroute(reportURL);
@@ -68,7 +70,7 @@ try {
     await route.fulfill({ status: 503, json: { error: 'The PDF could not be prepared. Try again.' },
       headers: { 'Access-Control-Allow-Origin': WEB } });
   });
-  await expect(pdf).toHaveText('Prepare PDF');
+  await expect(pdf).toHaveText('Download PDF');
   await pdf.press('Enter');
   await expect(pdf).toHaveText('Preparing PDF…');
   await expect(pdf).toBeFocused();
@@ -109,6 +111,21 @@ try {
   await edit.press('Enter');
   await expect(page.locator('#report-unit')).toBeFocused();
   await expect(page.getByRole('spinbutton', { name: 'Hours before now' })).toHaveValue('168');
+
+  await page.goto(WEB + '/reports/daily?workspace=demo');
+  await expect(page.getByRole('heading', { name: 'Daily situation return', level: 1 })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Hill Division.*Nil return/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Valley Division.*Reporting gap/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Hill Division', exact: true }).click();
+  await expect(page.getByRole('row', { name: 'Satellite reports 0' })).toBeVisible();
+  const dailyDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download PDF', exact: true }).click();
+  assert.match((await dailyDownload).suggestedFilename(), /^open-fimra-.*\.pdf$/);
+  await page.getByRole('button', { name: 'River Division', exact: true }).click();
+  await expect(page.getByText('Corrected after checking the field survey.', { exact: false })).toBeVisible();
+  await page.getByLabel('Revision history').selectOption({ label: 'Revision 1 · Returned' });
+  await expect(page.getByText('Radio report from the reed beds.', { exact: false })).toBeVisible();
+  await capture(page, 'daily-return-revision-history');
 } finally {
   await browser.close();
 }
