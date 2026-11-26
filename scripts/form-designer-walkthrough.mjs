@@ -133,8 +133,9 @@ async function extendAndPublish(page, viewport, theme) {
     await checkView(page, 'properties-sheet-' + label);
   }
   const question = page.locator('#prop-text-en');
-  await question.fill('');
-  await question.blur();
+  await question.press('Control+a');
+  await question.press('Backspace');
+  await question.press('Tab');
   if (phone) {
     await page.keyboard.press('Escape');
     await sheet.waitFor({ state: 'hidden' });
@@ -252,7 +253,7 @@ try {
 
   await page.goto(WEB + '/reports/field?workspace=demo&report=' + submission);
   const presentation = page.locator('fimra-submission-view fimra-form-presentation');
-  await presentation.getByRole('heading', { name: 'National report', exact: true }).waitFor();
+  await page.getByRole('heading', { level: 2, name: 'National report', exact: true }).waitFor();
   const originalAnswer = presentation.getByText('4 people', { exact: true });
   check(await presentation.getByText('Updated national report').count() === 0, 'the earlier report shows the newer form title');
   await originalAnswer.waitFor();

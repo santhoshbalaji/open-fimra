@@ -187,9 +187,10 @@ export class SituationReportView {
   private readonly workspace = inject(WorkspaceService);
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly lifetime = inject(DestroyRef);
-  private readonly navigation = inject(ShellNavigation, { optional: true });
+  protected readonly navigation = inject(ShellNavigation, { optional: true });
   private readonly injector = inject(Injector);
   private readonly reportTitle = viewChild<ElementRef<HTMLElement>>('reportTitle');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly unitControl = viewChild<unknown, ElementRef<HTMLElement>>('unitControl', { read: ElementRef });
   private readonly unitAttempt = signal(0);
   private reportRequest = 0;
@@ -218,11 +219,11 @@ export class SituationReportView {
     if (this.pdfNeedsReport()) return 'Refresh report';
     if (this.pdfMessage()) return 'Retry PDF';
     const file = this.pdf();
-    if (file?.status !== 'ready') return 'Prepare PDF';
+    if (file?.status !== 'ready') return 'Download PDF';
     return `Download PDF (${file.pageCount} ${file.pageCount === 1 ? 'page' : 'pages'})`;
   });
   readonly pdfStatus = computed(() => this.pdfBusy() ? this.pdfLabel() :
-    this.pdf()?.status === 'ready' && !this.pdfMessage() ? 'PDF ready to download.' : '');
+    this.pdf()?.status === 'ready' && !this.pdfMessage() ? 'PDF ready. Use Download PDF to save another copy.' : '');
   readonly mapSize = mapSize;
   readonly duration = duration;
   readonly formatTime = formatTime;
@@ -296,10 +297,13 @@ export class SituationReportView {
       const request = this.http.get<{ units: ReportUnit[] }>(endpoint + '/situation-report/units').subscribe({
         next: ({ units }) => {
           this.units.set(units);
-          if (!this.navigation) this.unitKey.set(this.initialUnit(units));
           this.unitState.set(units.length
             ? { kind: 'ready', announcement: 'Units loaded' }
             : { kind: 'empty', heading: 'There are no units you can report on.' });
+          if (!this.navigation && units.length) {
+            this.unitKey.set(this.initialUnit(units));
+            void this.loadReport();
+          }
         },
         error: (error: HttpErrorResponse) => {
           if (error.status === 401) { this.auth.sessionEnded(); return; }
@@ -328,12 +332,11 @@ export class SituationReportView {
         this.to.set(params.get('to') ?? this.today);
         this.hours.set(Number(params.get('reportHours') ?? 24));
         if (!units.length) return;
-        if (params.get('show') && (!path || unit)) {
-          untracked(() => void this.loadReport());
-        } else {
+        untracked(() => {
           this.clearReport();
-          this.message.set(path && !unit ? 'Choose a unit you can report on.' : '');
-        }
+          if (!path || unit) void this.loadReport();
+          else this.message.set('Choose a unit you can report on.');
+        });
       });
     }
   }
@@ -350,13 +353,11 @@ export class SituationReportView {
   pickUnit(value: string | null | undefined): void {
     const unit = this.units().find(unit => this.key(unit) === value);
     if (!unit) return;
-    if (this.navigation) this.navigation.update({ unitPath: unit.path, hierarchy: unit.hierarchy, show: null });
-    else this.unitKey.set(this.key(unit));
+    this.unitKey.set(this.key(unit));
   }
 
   setPeriodValue(key: 'from' | 'to' | 'reportHours', value: string): void {
-    if (this.navigation) this.navigation.update({ [key]: value || null, show: null });
-    else if (key === 'reportHours') this.hours.set(+value);
+    if (key === 'reportHours') this.hours.set(+value);
     else this[key].set(value);
   }
 
@@ -370,8 +371,7 @@ export class SituationReportView {
 
   pickKind(value: string | null | undefined): void {
     if (value !== 'day' && value !== 'range' && value !== 'hours') return;
-    if (this.navigation) this.navigation.update({ period: value, show: null });
-    else this.kind.set(value);
+    this.kind.set(value);
   }
 
   private request(): Record<string, string | number> {
@@ -387,20 +387,28 @@ export class SituationReportView {
   }
 
   async show(): Promise<void> {
+    const unit = this.selectedUnit();
+    if (!unit) return;
     if (this.navigation) {
-      const unit = this.selectedUnit();
-      if (!unit) return;
+      const kind = this.kind();
+      const changes = {
+        unitPath: unit.path, hierarchy: unit.hierarchy, period: kind,
+        from: kind === 'hours' ? null : this.from(),
+        to: kind === 'range' ? this.to() : null,
+        reportHours: kind === 'hours' ? String(this.hours()) : null,
+        show: '1'
+      };
       const params = this.navigation.query();
-      if (params.get('show') === '1' && params.get('unitPath') === unit.path) await this.loadReport();
-      else this.navigation.update({ unitPath: unit.path, hierarchy: unit.hierarchy, show: '1' });
-      return;
+      if (!Object.entries(changes).every(([key, value]) => params.get(key) === value)) {
+        this.navigation.update(changes);
+        return;
+      }
     }
     await this.loadReport();
   }
 
   edit(): void {
     this.clearReport();
-    this.navigation?.update({ show: null });
     afterNextRender(() => this.unitControl()?.nativeElement.querySelector('button')?.focus(), { injector: this.injector });
   }
 
@@ -434,8 +442,10 @@ export class SituationReportView {
         afterNextRender(() => {
           if (request !== this.reportRequest) return;
           const title = this.reportTitle()?.nativeElement;
-          const pageHeading = title?.closest('main')?.querySelector<HTMLElement>('.shell-page-header h1');
-          (pageHeading ?? title)?.focus();
+          const pageHeading = this.host.nativeElement.closest('main')?.querySelector<HTMLElement>('.shell-page-header h1');
+          // The shell focuses its heading on navigation. Only restore it
+          // when a report load removed the focused form control.
+          if (document.activeElement === document.body) (pageHeading ?? title)?.focus();
         }, { injector: this.injector });
       }
     } catch (error) {
@@ -463,36 +473,49 @@ export class SituationReportView {
     const request = this.reportRequest;
     const endpoint = this.endpoint();
     const file = this.pdf();
-    const download = file?.status === 'ready' && !this.pdfMessage();
     this.pdfMessage.set('');
+    if (file?.status === 'ready') {
+      await this.downloadPdf(file, request, endpoint);
+      return;
+    }
+
+    this.sendingPdf.set(true);
     try {
-      if (download && file.fileName) {
-        this.downloading.set(true);
-        const blob = await firstValueFrom(this.http.get(endpoint + '/situation-reports/' + file.id + '/file', { responseType: 'blob' }));
-        if (request !== this.reportRequest) return;
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = file.fileName;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
-      } else {
-        this.sendingPdf.set(true);
-        const status = await firstValueFrom(this.http.post<PdfStatus>(endpoint + '/situation-reports', { snapshotId }));
-        this.track(status, request, endpoint);
-      }
+      const status = await firstValueFrom(this.http.post<PdfStatus>(endpoint + '/situation-reports', { snapshotId }));
+      this.track(status, request, endpoint);
     } catch (error) {
       if (request === this.reportRequest) this.pdfFailed(error as HttpErrorResponse);
     } finally {
+      if (request === this.reportRequest) this.sendingPdf.set(false);
+    }
+  }
+
+  private async downloadPdf(file: PdfStatus, request: number, endpoint: string): Promise<void> {
+    this.downloading.set(true);
+    try {
+      const blob = await firstValueFrom(this.http.get(endpoint + '/situation-reports/' + file.id + '/file', { responseType: 'blob' }));
+      if (request !== this.reportRequest) return;
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = file.fileName ?? 'situation-report.pdf';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
       if (request === this.reportRequest) {
-        this.sendingPdf.set(false);
-        this.downloading.set(false);
+        const response = error as HttpErrorResponse;
+        if (response.status === 401 || response.status === 404 || response.status === 410) this.pdfFailed(response);
+        else this.pdfMessage.set('The PDF could not download. Try again.');
       }
+    } finally {
+      if (request === this.reportRequest) this.downloading.set(false);
     }
   }
 
   private track(status: PdfStatus, request: number, endpoint: string): void {
     if (request !== this.reportRequest) return;
     this.pdf.set(status);
+    if (status.status === 'ready') void this.downloadPdf(status, request, endpoint);
     if (status.status === 'failed') this.pdfMessage.set('The PDF could not be drawn. Try again.');
     if (status.status === 'expired') this.pdfUnavailable();
     if (status.status !== 'pending') return;

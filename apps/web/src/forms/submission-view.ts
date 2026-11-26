@@ -35,38 +35,47 @@ import { FormPresentation } from './form-presentation';
       @if (submission(); as s) {
         <header class="submission-header">
           @if (showTitle()) { <h3>{{ title() }}</h3> }
-          <p class="text-base font-medium wrap-anywhere">{{ place() }}</p>
-          <div #decisionResult tabindex="-1" class="flex flex-wrap items-center gap-2">
-            <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
-              [label]="labels[s.approval?.decision ?? 'pending']" />
+          <div class="submission-context">
+            <p class="font-medium wrap-anywhere">{{ place() }}</p>
+            <div #decisionResult tabindex="-1" class="flex flex-wrap items-center gap-2">
+              <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
+                [label]="labels[s.approval?.decision ?? 'pending']" />
+            </div>
           </div>
-          <p class="submission-meta">Version {{ s.version }}</p>
           <dl class="submission-facts">
-            <div><dt>Sender</dt><dd>{{ s.submittedBy }}</dd></div>
+            <div><dt>Submitted by</dt><dd>{{ s.submittedBy }}</dd></div>
             <div><dt>Related alert</dt><dd>
               @if (navigation) {
                 <a class="report-alert-link" [routerLink]="navigation.href('/monitor/alerts', { alert: s.alertId })">Alert #{{ s.alertId }}</a>
               } @else { Alert #{{ s.alertId }} }
             </dd></div>
+            @if (stage() && stage() !== title()) {
+              <div><dt>Stage</dt><dd>{{ stage() }}</dd></div>
+            }
             <div><dt>Received</dt><dd><time [attr.datetime]="s.receivedAt">{{ time(s.receivedAt) }}</time></dd></div>
+            @if (s.canApprove && reviewerRole()) {
+              <div><dt>Your review role</dt><dd>{{ reviewerRole() }}</dd></div>
+            }
+            <div class="submission-meta"><dt class="sr-only">Form version</dt><dd>Version {{ s.version }}</dd></div>
           </dl>
         </header>
 
-        <fimra-state-region class="block" [state]="formState()" (retry)="retryForm()">
-          @if (definition(); as form) {
-            <fimra-form-presentation mode="historical" [definition]="form" [step]="s.step"
-              [values]="s.values" [workspaceUrl]="workspaceUrl()" />
-          }
-        </fimra-state-region>
+        <div class="submission-evidence">
+          <fimra-state-region class="block" [state]="formState()" (retry)="retryForm()">
+            @if (definition(); as form) {
+              <fimra-form-presentation mode="historical" [definition]="form" [step]="s.step"
+                [values]="s.values" [workspaceUrl]="workspaceUrl()" [showHeader]="false" />
+            }
+          </fimra-state-region>
 
-        <section aria-label="Report timeline" class="grid gap-2 border-t border-divider pt-3">
-          <h3 class="font-semibold">Timeline</h3>
-          <fimra-timeline [events]="timeline()" [now]="nowDate()" />
-        </section>
+          <section aria-label="Report timeline" class="grid gap-2 border-t border-divider pt-3">
+            <h3 class="font-semibold">Timeline</h3>
+            <fimra-timeline [events]="timeline()" [now]="nowDate()" />
+          </section>
+        </div>
 
         @if (!s.approval && s.canApprove && definition()) {
-          <section class="approval sticky bottom-0 z-1 bg-card" aria-label="Review actions">
-            <h3 class="font-semibold">Review actions</h3>
+          <section class="approval bg-card" aria-label="Review actions">
             @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
             @if (returning()) {
               <form novalidate (submit)="$event.preventDefault(); decide('returned', note.value)">
@@ -89,6 +98,11 @@ import { FormPresentation } from './form-presentation';
               </div>
             }
           </section>
+        } @else if (s.approval && nextPendingId()) {
+          <div class="approval bg-card">
+            @if (message()) { <p role="alert" class="report-refused">{{ message() }}</p> }
+            <button hlmBtn type="button" variant="outline" class="justify-self-start" (click)="next.emit()">Next pending report</button>
+          </div>
         } @else if (message()) {
           <p role="alert" class="report-refused">{{ message() }}</p>
         }
@@ -100,6 +114,10 @@ export class SubmissionView {
   readonly workspaceUrl = input.required<string>();
   readonly submissionId = input.required<string>();
   readonly showTitle = input(true);
+  readonly stage = input('');
+  readonly reviewerRole = input('');
+  readonly nextPendingId = input<string>();
+  readonly next = output<void>();
   readonly now = input<number>();
   readonly decided = output<Submission>();
   readonly submission = signal<Submission | null>(null);

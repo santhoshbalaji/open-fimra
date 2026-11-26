@@ -142,12 +142,12 @@ describe('Shared form presentation', () => {
     expect(answer('Observed at')).toMatch(/2:32|14:32/);
     expect(answer('Total')).toBe('8 kg');
     expect(answer('Power')).toBe('0 MW');
-    expect(answer('Point')).toBe('81.25, 20.5 (longitude, latitude)');
-    expect(answer('Detection position')).toBe('82, 21 (longitude, latitude)');
-    expect(answer('Walk')).toContain('81.3, 20.6');
-    expect(answer('Area')).toContain('82, 20');
+    expect(answer('Point')).toBe('20.5, 81.25 (latitude, longitude)');
+    expect(answer('Detection position')).toBe('21, 82 (latitude, longitude)');
+    expect(answer('Walk')).toContain('20.6, 81.3');
+    expect(answer('Area')).toContain('20, 82');
     expect(answer('Area')).toContain('Inner boundary 1');
-    expect(answer('Area')).toContain('81.5, 20.1');
+    expect(answer('Area')).toContain('20.1, 81.5');
     expect(el.querySelectorAll('img')).toHaveLength(2);
     expect(el.querySelector('img[alt="Officer signature, signature"]')).toBeTruthy();
     expect(el.textContent).toContain('Download file 1');
