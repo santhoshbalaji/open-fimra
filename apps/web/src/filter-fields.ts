@@ -8,23 +8,27 @@ import { DashboardFilters, ScopeFilters, filterPeriods, setScopeFilters } from '
 import { ShellNavigation } from './shell-navigation';
 import { classes, ForestClass } from './detections';
 import { FilterBar, FilterControls } from './ui/filter-bar';
+import { Icon } from './ui/icon';
 
 let nextPicker = 0;
 const unitPageSize = 20;
 
 @Component({
   selector: 'fimra-filter-fields',
-  imports: [HlmButton, HlmField, HlmFieldLabel, HlmInput, HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger, HlmSwitch],
+  imports: [HlmButton, HlmField, HlmFieldLabel, HlmInput, HlmSelect, HlmSelectContent, HlmSelectItem, HlmSelectPortal, HlmSelectTrigger, HlmSwitch, Icon],
   host: { class: 'contents' },
   template: `
     <hlm-field class="scope-filter-field">
       <label hlmFieldLabel for="filter-period">Period</label>
-      <select hlmInput id="filter-period" #period (change)="changePeriod(period.value)">
-        @for (option of periods; track option.hours) {
-          <option [value]="option.hours" [selected]="selectedPeriod() === option.hours">{{ option.label }}</option>
-        }
-        <option value="custom" [selected]="selectedPeriod() === 'custom'">Custom window</option>
-      </select>
+      <div class="scope-period-control">
+        <select hlmInput id="filter-period" #period (change)="changePeriod(period.value)">
+          @for (option of periods; track option.hours) {
+            <option [value]="option.hours" [selected]="selectedPeriod() === option.hours">{{ option.label }}</option>
+          }
+          <option value="custom" [selected]="selectedPeriod() === 'custom'">Custom window</option>
+        </select>
+        <svg fimraIcon="chevron-down" aria-hidden="true"></svg>
+      </div>
       @if (selectedPeriod() === 'custom') {
         <form class="grid gap-2" (submit)="$event.preventDefault(); applyHours(hours.valueAsNumber, period)">
           <label hlmFieldLabel for="filter-hours">Hours back from now</label>
@@ -47,10 +51,13 @@ const unitPageSize = 20;
     <hlm-field class="scope-filter-field unit-filter-field" (focusout)="leaveUnitField($event)"
       (keydown.escape)="dismissUnits($event, unitTrigger)">
       <span [id]="pickerId + '-label'" class="scope-filter-label">Unit</span>
-      <button hlmBtn variant="outline" type="button" #unitTrigger class="h-auto min-h-9 justify-start text-start whitespace-normal wrap-anywhere"
+      <button hlmBtn variant="outline" type="button" #unitTrigger class="scope-unit-trigger"
         [id]="pickerId + '-trigger'" [attr.aria-labelledby]="pickerId + '-label ' + pickerId + '-trigger'"
         [attr.aria-expanded]="unitOpen()" [attr.aria-controls]="unitOpen() ? pickerId : null"
-        (click)="toggleUnits()">{{ scope.unitLabel() }}</button>
+        (click)="toggleUnits()">
+        <span class="min-w-0 wrap-anywhere">{{ scope.unitLabel() }}</span>
+        <svg fimraIcon="chevron-down" aria-hidden="true"></svg>
+      </button>
       @if (unitOpen()) {
         <div [id]="pickerId" class="unit-filter-options rounded-control border border-border bg-popover p-3 text-popover-foreground shadow-lg">
           <label hlmFieldLabel [for]="pickerId + '-search'">Search units</label>

@@ -14,7 +14,7 @@ export interface PageHeaderSlots {
   styleUrl: './workspace-target.css',
   template: `
     <header class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-      <div class="min-w-0 flex-1 basis-64 wrap-anywhere">
+      <div class="page-heading min-w-0 flex-1 basis-64 wrap-anywhere">
         @if (headingLevel() === 1) {
           <h1 tabindex="-1" class="w-fit max-w-full text-display">{{ title() }}</h1>
         } @else {
@@ -23,7 +23,7 @@ export interface PageHeaderSlots {
         @if (scope()) { <p class="mt-1 text-body font-medium">{{ scope() }}</p> }
         <ng-content select="[pageFreshness]" />
       </div>
-      <div class="flex min-w-0 flex-wrap items-center gap-2 empty:hidden">
+      <div class="page-actions flex min-w-0 flex-wrap items-center gap-2 empty:hidden">
         <ng-content select="[pageSecondary]" />
         <ng-content select="[pagePrimary]" />
       </div>

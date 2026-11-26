@@ -24,7 +24,7 @@ let nextPanel = 0;
   template: `
     <ng-template #body><ng-content /></ng-template>
     @if (open()) {
-      @if (phone()) {
+      @if (sheetOnly() || phone()) {
         <hlm-sheet #sheet side="bottom" state="open" autoFocus="first-heading" [restoreFocus]="false"
           (closed)="finishClose()">
           <hlm-sheet-content *hlmSheetPortal [style.height]="fullHeight() ? '100dvh' : null"
@@ -51,6 +51,7 @@ let nextPanel = 0;
 })
 export class SidePanel {
   readonly heading = input.required<string>();
+  readonly sheetOnly = input(false);
   readonly closeLabel = input('Close');
   readonly fullHeight = input(false);
   readonly scrollDock = input(false);

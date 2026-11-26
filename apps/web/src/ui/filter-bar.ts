@@ -2,7 +2,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy, Component, Directive, ElementRef, TemplateRef, ViewEncapsulation, computed, contentChild, inject, input, output,
-  viewChildren
+  viewChild, viewChildren
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HlmButton } from '@spartan-ng/helm/button';
@@ -11,7 +11,6 @@ import { defaultWorkspaceFormat } from '../workspace-format';
 import { Icon } from './icon';
 import { LiveStatus } from './live-status';
 import { SidePanel } from './side-panel';
-import { workspacePhone } from './workspace-breakpoint';
 
 export interface ActiveFilter {
   id: string;
@@ -31,13 +30,17 @@ export class FilterControls {
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['./filter-bar.css'],
   template: `
-    <div class="grid gap-2">
-      <div class="min-w-0">
-        @if (controls(); as controls) {
-          @if (phone()) {
+    <div>
+      @if (controls(); as controls) {
+        <div #editor class="min-w-0">
+          @if (compact()) {
             <button #edit type="button" hlmBtn variant="outline" aria-haspopup="dialog"
-              [attr.aria-expanded]="panel.open()" (click)="panel.show(edit, summary)">Filters</button>
-            <fimra-side-panel #panel="fimraSidePanel" heading="Filters">
+              [attr.aria-expanded]="panel.open()" [attr.aria-description]="filters().length ? activeLabel() : null"
+              (click)="panel.show(edit, summary)">
+              Filters
+              @if (filters().length) { <span class="filter-count" aria-hidden="true">{{ filters().length }}</span> }
+            </button>
+            <fimra-side-panel #panel="fimraSidePanel" heading="Filters" [sheetOnly]="true">
               @if (panel.open()) {
                 <div class="filter-bar-controls filter-sheet-controls">
                   <ng-container [ngTemplateOutlet]="controls.template" />
@@ -48,12 +51,12 @@ export class FilterControls {
           } @else {
             <div class="filter-bar-controls"><ng-container [ngTemplateOutlet]="controls.template" /></div>
           }
-        }
-      </div>
+        </div>
+      }
+      <fimra-live-status class="sr-only" [message]="announcement()" />
       <div #summary tabindex="-1"
+        [class.mt-2]="controls() && filters().length"
         class="flex flex-wrap items-center gap-2 rounded-control focus-visible:outline-2 focus-visible:outline-focus">
-        <p class="text-body text-text-secondary">{{ activeLabel() }}</p>
-        <fimra-live-status class="sr-only" [message]="announcement()" />
         @if (filters().length) {
           <ul role="list" aria-label="Active filters" class="flex min-w-0 flex-wrap gap-2">
             @for (filter of filters(); track filter.id) {
@@ -66,7 +69,7 @@ export class FilterControls {
               </li>
             }
           </ul>
-          <button type="button" hlmBtn variant="ghost" (click)="summary.focus(); clearAll.emit()">Clear all filters</button>
+          <button type="button" hlmBtn variant="ghost" (click)="focusEditor(summary); clearAll.emit()">Clear all filters</button>
         }
       </div>
     </div>
@@ -78,10 +81,11 @@ export class FilterBar {
   readonly clearAll = output<void>();
 
   protected readonly controls = contentChild(FilterControls);
-  protected readonly phone = toSignal(
-    inject(BreakpointObserver).observe(workspacePhone).pipe(map(result => result.matches)),
+  protected readonly compact = toSignal(
+    inject(BreakpointObserver).observe('(width < 56rem)').pipe(map(result => result.matches)),
     { requireSync: true }
   );
+  private readonly editor = viewChild<ElementRef<HTMLElement>>('editor');
   private readonly chips = viewChildren<ElementRef<HTMLButtonElement>>('chip');
 
   protected readonly activeLabel = computed(() => {
@@ -94,8 +98,13 @@ export class FilterBar {
 
   protected removeFilter(id: string, index: number, fallback: HTMLElement) {
     const chips = this.chips();
-    const target = chips[index + 1]?.nativeElement ?? chips[index - 1]?.nativeElement ?? fallback;
-    target.focus();
+    const target = chips[index + 1]?.nativeElement ?? chips[index - 1]?.nativeElement;
+    if (target) target.focus();
+    else this.focusEditor(fallback);
     this.remove.emit(id);
+  }
+
+  protected focusEditor(fallback: HTMLElement): void {
+    (this.editor()?.nativeElement.querySelector<HTMLElement>('button, select, input') ?? fallback).focus();
   }
 }

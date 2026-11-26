@@ -86,6 +86,7 @@ export class AlertQueue {
     };
   });
   readonly page = computed(() => this.saved()?.page);
+  readonly lastUpdated = computed(() => this.saved()?.at);
   private readonly canReview = signal(false);
   readonly pinned = signal<AlertRow | null>(null);
   readonly linked = signal<AlertRow | null>(null);

@@ -16,6 +16,7 @@ import { ShellPalette } from './shell-palette';
 import { ThemeService } from './theme';
 import { LiveStatus } from './ui/live-status';
 import { Icon } from './ui/icon';
+import { restoreOverlayFocus } from './ui/overlay-focus';
 import { PageHeader, type PageHeaderSlots } from './ui/page-header';
 import { WorkspaceService } from './workspace';
 import { classes, type ForestClass } from './detections';
@@ -25,7 +26,7 @@ import { classes, type ForestClass } from './detections';
   imports: [NgTemplateOutlet, RouterLink, RouterOutlet, HlmToaster, Bootstrap, MonitorFilters, Notifications, ShellAccount, ShellDrawer, ShellPalette, Icon, LiveStatus, PageHeader, ExportTray],
   providers: [ShellNavigation],
   templateUrl: './app.html',
-  host: { '(window:keydown)': 'shortcut($event)' }
+  host: { '(window:keydown)': 'shortcut($event)', '(window:pointerdown)': 'keyboardInput = false' }
 })
 export class App implements OnInit {
   readonly workspace = inject(WorkspaceService);
@@ -38,8 +39,10 @@ export class App implements OnInit {
   private readonly filters = inject(DashboardFilters);
   private readonly authOpened = signal(false);
   private routed = false;
+  protected keyboardInput = false;
   readonly drawerRequest = signal<{ trigger: HTMLElement } | null>(null);
   readonly paletteOpen = signal(false);
+  private paletteOrigin: HTMLElement | null = null;
   readonly routeAnnouncement = signal('');
   readonly headerSlots = signal<PageHeaderSlots | null>(null);
   readonly groups = ['Monitor', 'Reports', 'Dashboard', 'Settings'] as const;
@@ -68,7 +71,7 @@ export class App implements OnInit {
       // Keep focus on a filter or paging control during an in-place update.
       if (previous && previous.toString().split(/[?#]/, 1)[0] === current.toString().split(/[?#]/, 1)[0] &&
           previous.queryParamMap.get('workspace') === current.queryParamMap.get('workspace')) return;
-      this.focusPage();
+      this.focusPage(!!previous && this.keyboardInput);
     });
     effect(() => {
       if (!this.authOpened() || !this.auth.user() || !this.workspace.loaded()) return;
@@ -96,7 +99,7 @@ export class App implements OnInit {
     void this.auth.open().finally(() => this.authOpened.set(true));
   }
 
-  focusPage(): void {
+  focusPage(keyboard = this.keyboardInput): void {
     afterNextRender(() => {
       const main = this.document.getElementById('task');
       if (!main) return;
@@ -105,7 +108,10 @@ export class App implements OnInit {
       const active = this.document.activeElement;
       const detail = active && active !== main && active !== heading &&
         (active.closest('[role="dialog"]') || (main.contains(active) && active.matches('[tabindex="-1"]')));
-      if (!detail) heading.focus({ preventScroll: true });
+      if (!detail) {
+        heading.toggleAttribute('data-keyboard-focus', keyboard);
+        heading.focus({ preventScroll: true });
+      }
       this.routeAnnouncement.set(`${heading.textContent?.trim()} page opened.`);
     }, { injector: this.injector });
   }
@@ -116,10 +122,30 @@ export class App implements OnInit {
   }
 
   shortcut(event: KeyboardEvent): void {
+    if (!['Alt', 'Control', 'Meta', 'Shift'].includes(event.key)) this.keyboardInput = true;
     if (event.defaultPrevented || event.repeat || event.altKey || !(event.ctrlKey || event.metaKey) ||
         event.key.toLowerCase() !== 'k' || !this.workspace.current()) return;
     event.preventDefault();
+    this.openPalette();
+  }
+
+  protected openPalette(trigger?: HTMLElement): void {
+    if (this.paletteOpen()) return;
+    const active = this.document.activeElement;
+    this.paletteOrigin = trigger ?? (active instanceof HTMLElement && active !== this.document.body ? active : null);
     this.paletteOpen.set(true);
+  }
+
+  protected closePalette(): void {
+    this.paletteOpen.set(false);
+    const origin = this.paletteOrigin;
+    this.paletteOrigin = null;
+    // Restore focus after the overlay is gone, unless navigation already moved it.
+    afterNextRender(() => {
+      if (!this.paletteOpen() && this.document.activeElement === this.document.body) {
+        restoreOverlayFocus(origin, this.document.querySelector<HTMLElement>('.search-trigger'));
+      }
+    }, { injector: this.injector });
   }
 
   reload(): void {

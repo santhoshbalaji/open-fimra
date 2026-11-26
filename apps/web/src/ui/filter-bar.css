@@ -14,37 +14,58 @@
   outline: var(--focus-width) solid var(--role-focus);
   outline-offset: var(--focus-offset);
 }
+.filter-count {
+  padding-inline: 0.5em;
+  border-radius: var(--radius-pill);
+  background: var(--color-selected);
+  color: var(--color-action);
+}
 
 .filter-bar-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  gap: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
   min-width: 0;
   max-width: 100%;
 }
 .filter-bar-controls .scope-filter-field {
-  width: min(12rem, 100%);
+  width: min(10.5rem, 100%);
   min-width: 0;
   gap: calc(var(--spacing) * 1);
 }
 .scope-filter-field [data-slot="field-label"], .scope-filter-label, .scope-filter-toggle {
   font-size: var(--text-label);
-  line-height: 1.25rem;
+  line-height: var(--text-label--line-height);
 }
 .scope-filter-field [data-slot="field-label"] { min-height: 0; }
-.scope-filter-field [data-slot="select-trigger"] {
+.scope-filter-field :is([data-slot="select-trigger"], .scope-unit-trigger) {
   width: 100%;
   height: auto;
   min-width: 0;
+  justify-content: space-between;
   white-space: normal;
   text-align: start;
   overflow-wrap: anywhere;
 }
+.scope-period-control { position: relative; }
+.scope-period-control select { appearance: none; height: auto; padding-inline-end: 2rem; }
+.scope-period-control svg {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0.75rem;
+  translate: 0 -50%;
+  pointer-events: none;
+}
+.scope-filter-field :is(select, [data-slot="select-trigger"], .scope-unit-trigger) {
+  border-color: var(--color-control-boundary);
+  background: var(--color-surface);
+}
+.scope-period-control svg, .scope-unit-trigger svg { width: 1rem; height: 1rem; color: var(--color-text-secondary); }
 .filter-bar-controls .scope-filter-toggle {
   width: auto;
   min-height: 2.25rem;
-  margin-block-start: 1.5rem;
+  margin-block-start: calc(var(--text-label--line-height) + var(--spacing));
   align-items: center;
 }
 .unit-filter-field { position: relative; }
@@ -74,8 +95,10 @@
 
 .filter-sheet-controls { display: grid; }
 .filter-sheet-controls .scope-filter-field { width: 100%; }
-.filter-sheet-controls .scope-filter-toggle { margin-block-start: 0; }
+.filter-sheet-controls .scope-filter-toggle { min-height: var(--target-web); margin-block-start: 0; }
 .filter-sheet-controls .unit-filter-options { position: static; min-width: 0; }
 @media (any-pointer: coarse) {
-  .filter-sheet-controls :is(input, select, button) { min-height: var(--target-web); }
+  .filter-sheet-controls :is(input:not([type=checkbox]), select, button:not([role=switch], [role=checkbox])) {
+    min-height: var(--target-web);
+  }
 }

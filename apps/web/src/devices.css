@@ -1,0 +1,13 @@
+td { overflow-wrap: anywhere; }
+
+@media (width < 40rem) {
+  section, [data-slot=card-content] { min-width: 0; }
+  [data-slot=card-header], [data-slot=card-content] { padding-inline: 0.75rem; }
+  table { table-layout: fixed; }
+  th, td { padding-inline: var(--spacing); }
+  td { white-space: normal; }
+  th:first-child { width: 37%; }
+  th:last-child { width: 29%; }
+  .phone-status { height: auto; max-width: 100%; white-space: normal; }
+  .phone-actions button { margin: var(--spacing) 0; }
+}

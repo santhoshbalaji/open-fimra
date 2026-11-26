@@ -41,7 +41,8 @@ interface Pending { device: Device; action: 'remove' | 'wipe'; area: boolean }
   imports: [NgTemplateOutlet, EmptyState, HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmDialogImports, HlmSkeleton,
     HlmTableImports, Icon],
   templateUrl: './devices.html',
-  host: { class: 'block h-full overflow-auto' }
+  styleUrl: './devices.css',
+  host: { class: 'block min-w-0' }
 })
 export class Devices implements OnInit {
   private readonly http = inject(HttpClient);

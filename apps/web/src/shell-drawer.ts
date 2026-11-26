@@ -9,7 +9,7 @@ import { SidePanel } from './ui/side-panel';
   selector: 'fimra-shell-drawer',
   imports: [NgTemplateOutlet, HlmButton, SidePanel],
   template: `
-    <fimra-side-panel heading="Destinations" (closed)="drawerClosed()">
+    <fimra-side-panel heading="Destinations" [sheetOnly]="true" (closed)="drawerClosed()">
       <div class="shell-drawer">
         <p>{{ scope() }}</p>
         <nav aria-label="Destinations">
