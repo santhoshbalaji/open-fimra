@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -83,7 +84,7 @@ func TestLayerPublishIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(newHandler(pool, newAuthenticator(provider, cfg.issuer, cfg.audience),
-		logger, devOrigins, cfg.uploadDir, jobs))
+		logger, devOrigins, cfg.uploadDir, jobs, withExports(cfg.exportDir, cfg.exportTTL)))
 	defer server.Close()
 	client := &http.Client{Timeout: 15 * time.Second}
 	admin := demoToken(t, client, provider.Endpoint().TokenURL, "state.admin")
@@ -109,7 +110,9 @@ func TestLayerPublishIntegration(t *testing.T) {
 		if err != nil || res.StatusCode != want {
 			t.Fatalf("%s %s got %d (%s), want %d: %v", method, path, res.StatusCode, data, want, err)
 		}
-		if result != nil {
+		if file, ok := result.(*[]byte); ok {
+			*file = data
+		} else if result != nil {
 			if err := json.Unmarshal(data, result); err != nil {
 				t.Fatalf("decode %s: %v", data, err)
 			}
@@ -182,7 +185,24 @@ func TestLayerPublishIntegration(t *testing.T) {
 	get(endpoint, admin, http.StatusOK, new(json.RawMessage))
 	get(endpoint, guard, http.StatusForbidden, nil)
 
-	const beatSettings = `{"depth":4,"nameField":"name","codeField":"code","parentCodeField":"parent_code"}`
+	// An optional section layer covers just one part of one range. Its gaps
+	// are intentional, and replacing it at the same path keeps its beat.
+	var section json.RawMessage
+	if err := pool.QueryRow(ctx, `
+		SELECT jsonb_build_object('type', 'FeatureCollection', 'features', jsonb_build_array(
+			jsonb_build_object('type', 'Feature', 'geometry', ST_AsGeoJSON(geom, 9)::jsonb,
+				'properties', jsonb_build_object('code', code, 'name', name, 'parent_code', 'R8'))))
+		FROM units WHERE hierarchy_id = $1 AND depth = 4 AND code = 'S01' AND current_path IS NOT NULL
+	`, prefix+"10").Scan(&section); err != nil {
+		t.Fatal(err)
+	}
+	sectionPath, sectionDraft := upload("sections", "Sections", "hierarchy",
+		`{"depth":4,"nameField":"name","codeField":"code","parentCodeField":"parent_code"}`, section)
+	checkImportedDraft(t, ctx, pool, sectionDraft, "hierarchy")
+	publish(sectionPath, admin, "", http.StatusAccepted, nil)
+	waitForReplay(sectionPath)
+
+	const beatSettings = `{"depth":5,"nameField":"name","codeField":"code","parentCodeField":"parent_code"}`
 	bad := publishingBeatFixture(t, false, offset)
 	badPath, draft := upload("territorial-units", "Territorial units", "hierarchy", beatSettings, bad)
 	expectReview(t, draft, "missing_code", "feature:16", "B16", true)
@@ -201,9 +221,19 @@ func TestLayerPublishIntegration(t *testing.T) {
 	if err := json.Unmarshal(readLayerFixture(t, "reference-detections"), &references); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC().Truncate(time.Minute)
+	overlayPath := endpoint + "/" + prefix + "31" + "/overlay"
+	markDistrict := func(token string, code int) {
+		request(http.MethodPut, overlayPath, token, "application/json",
+			strings.NewReader(`{"kind":"civil_district"}`), code, nil)
+	}
+	markDistrict(guard, http.StatusForbidden)
+	markDistrict(admin, http.StatusNoContent)
+	markDistrict(admin, http.StatusNoContent)
+
+	now := time.Now().UTC()
 	var holeLon, holeLat float64
 	var observations []firms.Observation
+	var inside firms.Observation
 	for _, f := range references.Features {
 		lon := f.Geometry.Coordinates[0] + offset[0]
 		lat := f.Geometry.Coordinates[1] + offset[1]
@@ -214,9 +244,13 @@ func TestLayerPublishIntegration(t *testing.T) {
 		default:
 			continue
 		}
-		observations = append(observations, firms.Observation{
+		observation := firms.Observation{
 			Satellite: "N", Instrument: "VIIRS", ObservedAt: now, Longitude: lon, Latitude: lat,
-		})
+		}
+		if f.Properties.ID == "inside" {
+			inside = observation
+		}
+		observations = append(observations, observation)
 	}
 	ingest := func(product string) {
 		t.Helper()
@@ -235,6 +269,18 @@ func TestLayerPublishIntegration(t *testing.T) {
 		WHERE d.source = $1 AND a.workspace_id = $2 AND a.unit_path = 'ds.c1.d1.r2.b05'
 	`, source, prefix+"01").Scan(&detection, &alert); err != nil {
 		t.Fatal(err)
+	}
+	var detail struct {
+		Overlays []struct {
+			Kind      string
+			Name      string
+			VersionID string
+		} `json:"overlay_matches"`
+	}
+	get(base+"/alerts/"+alert, guard, http.StatusOK, &detail)
+	if len(detail.Overlays) != 1 || detail.Overlays[0].Kind != "civil_district" ||
+		detail.Overlays[0].Name != "Demo Reserve One" || detail.Overlays[0].VersionID != prefix+"31" {
+		t.Fatalf("unexpected alert overlays: %+v", detail.Overlays)
 	}
 	history := base + "/alerts/" + alert + "/history"
 	request(http.MethodPost, base+"/alerts/"+alert+"/steps", guard, "application/json",
@@ -330,6 +376,14 @@ func TestLayerPublishIntegration(t *testing.T) {
 	if err != nil || !moved || !alertIntact || !datesOK || !grantsIntact || !audited {
 		t.Fatalf("publish invariants: moved=%t alert=%t dates=%t grants=%t audited=%t: %v", moved, alertIntact, datesOK, grantsIntact, audited, err)
 	}
+	var mixedBranch bool
+	err = pool.QueryRow(ctx, `
+		SELECT array_agg(path::text ORDER BY code) = ARRAY['ds.c2.d4.r8.b23', 'ds.c2.d4.r8.s01.b24']
+		FROM units WHERE hierarchy_id = $1 AND current_path IS NOT NULL AND code IN ('B23', 'B24')
+	`, prefix+"10").Scan(&mixedBranch)
+	if err != nil || !mixedBranch {
+		t.Fatalf("the published beat layer must support both paths through Range 8: %v, %v", mixedBranch, err)
+	}
 	get(base+"/alerts/"+alert, guard, http.StatusOK, nil)
 	get(history, guard, http.StatusOK, nil)
 	t.Log("first replay moved the match; the original unit alert, grant dates, and unit validity history are intact")
@@ -381,6 +435,72 @@ func TestLayerPublishIntegration(t *testing.T) {
 		t.Fatalf("expected one workflow for a newly eligible alert, got %d: %v", opened, err)
 	}
 	t.Log("forest replay created one newly eligible alert and kept the original alert after its detection was excluded")
+
+	// Add a late observation at the same location and acquisition time as the
+	// original alert, from another satellite. Both arrived under different
+	// published boundaries, and both should export the original beat and forest.
+	late := inside
+	late.Satellite = "L"
+	observations = []firms.Observation{late}
+	ingest("VIIRS_SNPP_NRT")
+	for _, kind := range []string{"detections", "alerts"} {
+		var export exportStatus
+		request(http.MethodPost, base+"/exports", admin, "application/json",
+			strings.NewReader(fmt.Sprintf(`{"kind":%q,"format":"csv_lonlat","hours":24,"forestClasses":["inside","near_edge","fixed_heat_source","outside"]}`, kind)), http.StatusAccepted, &export)
+		var ids []string
+		err := pool.QueryRow(ctx, `
+			SELECT array_agg(r.detection_id::text) FROM export_rows r
+			JOIN detections d ON (d.id, d.observed_at) = (r.detection_id, r.observed_at)
+			WHERE r.export_id = $1 AND d.source = $2 AND d.product = 'VIIRS_SNPP_NRT'
+			  AND d.satellite IN ('N', 'L') AND ST_X(d.geom) = $3 AND ST_Y(d.geom) = $4
+			  AND r.boundary_snapshot #>> '{hierarchy,territorial,beat,code}' = 'B05'
+			  AND r.boundary_snapshot->'layerVersionIds' @> jsonb_build_array($5::text, $6::text)
+			  AND NOT (r.boundary_snapshot->'layerVersionIds' ? $7)
+			  AND r.boundary_snapshot->'overlays' @> '[{"kind":"civil_district","name":"Demo Reserve One"}]'
+			  AND (r.dispatch->>'unitPath' = 'ds.c1.d1.r2.b05' OR ($8 = 'detections' AND r.dispatch IS NULL))
+		`, export.ID, source, late.Longitude, late.Latitude, prefix+"21", prefix+"31", version, kind).Scan(&ids)
+		if err != nil || len(ids) != 2 {
+			t.Fatalf("%s export must freeze both original and late observations with the old boundaries: %v, %v", kind, ids, err)
+		}
+
+		exportPath := base + "/exports/" + export.ID
+		for export.Status == "pending" {
+			select {
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for %s", exportPath)
+			case <-time.After(100 * time.Millisecond):
+				get(exportPath, admin, http.StatusOK, &export)
+			}
+		}
+		if export.Status != "ready" {
+			t.Fatalf("%s export finished as %+v", kind, export)
+		}
+		var file []byte
+		get(exportPath+"/file", admin, http.StatusOK, &file)
+		records, err := csv.NewReader(bytes.NewReader(unzipMember(t, file, ".csv"))).ReadAll()
+		if err != nil || len(records) < 3 {
+			t.Fatalf("read %s export: %v (%d records)", kind, err, len(records))
+		}
+		idIdx, beatIdx := slices.Index(records[0], "detection_id"), slices.Index(records[0], "beat_code")
+		versionIdx := slices.Index(records[0], "boundary_version_ids")
+		if idIdx < 0 || beatIdx < 0 || versionIdx < 0 {
+			t.Fatalf("%s export missing boundary columns: %v", kind, records[0])
+		}
+		found := 0
+		for _, row := range records[1:] {
+			if slices.Contains(ids, row[idIdx]) {
+				var versions []string
+				if err := json.Unmarshal([]byte(row[versionIdx]), &versions); err != nil ||
+					row[beatIdx] != "B05" || !slices.Contains(versions, prefix+"31") || slices.Contains(versions, version) {
+					t.Fatalf("incorrect boundaries for %s in %s export: %v, %v", row[idIdx], kind, row, err)
+				}
+				found++
+			}
+		}
+		if found != len(ids) {
+			t.Fatalf("%s export file contains %d of %d expected observations", kind, found, len(ids))
+		}
+	}
 }
 
 var testGrantTime = time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
@@ -486,7 +606,7 @@ func publishingBeatFixture(t *testing.T, repair bool, offset [2]float64) []byte 
 		Type     string    `json:"type"`
 		Features []feature `json:"features"`
 	}
-	if err := json.Unmarshal(readLayerFixture(t, "beats"), &collection); err != nil {
+	if err := json.Unmarshal(readLayerFixture(t, "beats-with-sections"), &collection); err != nil {
 		t.Fatal(err)
 	}
 	if repair {

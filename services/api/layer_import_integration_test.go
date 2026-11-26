@@ -36,7 +36,8 @@ func TestLayerImportIntegration(t *testing.T) {
 		t.Fatalf("load demo SQL: %v", err)
 	}
 
-	// Use a copy of the level definitions so that parents must come from drafts.
+	// Import the standard preset without sections. Every parent must come
+	// from a draft, even though the seeded hierarchy uses a section.
 	prefix := fmt.Sprintf("geo-test-%d", time.Now().UnixNano())
 	const seedHierarchy = "d0000000-0000-4000-8000-000000000010"
 	const workspaceID = "d0000000-0000-4000-8000-000000000001"
@@ -47,8 +48,8 @@ func TestLayerImportIntegration(t *testing.T) {
 			VALUES ($1, $2, 'Draft test hierarchy', 'territorial') RETURNING id
 		)
 		INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels)
-		SELECT n.id, hl.depth, hl.slug, hl.labels FROM new_hierarchy n
-		CROSS JOIN hierarchy_levels hl WHERE hl.hierarchy_id = $3 RETURNING hierarchy_id::text
+		SELECT n.id, row_number() OVER (ORDER BY hl.depth) - 1, hl.slug, hl.labels FROM new_hierarchy n
+		CROSS JOIN hierarchy_levels hl WHERE hl.hierarchy_id = $3 AND NOT hl.optional RETURNING hierarchy_id::text
 	`, workspaceID, prefix, seedHierarchy).Scan(&hierarchy); err != nil {
 		t.Fatal(err)
 	}
@@ -222,19 +223,28 @@ func TestLayerImportIntegration(t *testing.T) {
 		var expected, exact int64
 		err := pool.QueryRow(ctx, `
 			WITH reference_units AS (
-				SELECT u.*, p.code AS parent_code, p.path AS parent_path
-				FROM units u LEFT JOIN units p ON p.hierarchy_id = u.hierarchy_id
-				  AND p.depth = u.depth - 1 AND p.path @> u.path AND p.valid_to IS NULL
-				WHERE u.hierarchy_id = $1 AND u.depth = $2 AND u.valid_to IS NULL
+				SELECT u.code, u.name, u.geom,
+				       COALESCE(p.path || subpath(u.path, -1), u.path) AS path,
+				       p.code AS parent_code, p.path AS parent_path
+				FROM units u JOIN hierarchy_levels level USING (hierarchy_id, depth)
+				JOIN hierarchy_levels target ON target.hierarchy_id = $4 AND target.depth = $2 AND target.slug = level.slug
+				LEFT JOIN LATERAL (
+					SELECT parent.code, parent.path FROM units parent
+					JOIN hierarchy_levels pl ON (pl.hierarchy_id, pl.depth) = (parent.hierarchy_id, parent.depth)
+					WHERE parent.hierarchy_id = u.hierarchy_id AND parent.depth < u.depth
+					  AND parent.current_path @> u.path AND NOT pl.optional
+					ORDER BY parent.depth DESC LIMIT 1
+				) p ON true
+				WHERE u.hierarchy_id = $1 AND u.valid_to IS NULL
 			)
 			SELECT count(*), count(d.feature_number) FROM reference_units u
-			LEFT JOIN draft_units d ON d.layer_version_id = $3 AND d.depth = u.depth
+			LEFT JOIN draft_units d ON d.layer_version_id = $3 AND d.depth = $2
 			  AND d.code = u.code AND d.name = u.name AND d.path = u.path
 			  AND d.parent_code IS NOT DISTINCT FROM u.parent_code AND d.parent_path IS NOT DISTINCT FROM u.parent_path
 			  AND ST_HausdorffDistance(d.geom, u.geom) < 1e-8
 			  AND ST_Area(ST_Transform(ST_SymDifference(d.geom, u.geom), 7755)) < 0.1
 			  AND abs(d.area_m2 - ST_Area(ST_Transform(u.geom, 7755))) < 1
-		`, seedHierarchy, depth, draft.VersionID).Scan(&expected, &exact)
+		`, seedHierarchy, depth, draft.VersionID, hierarchy).Scan(&expected, &exact)
 		if err != nil || expected == 0 || draft.UnitCount != expected || exact != expected || draft.FeatureCount != 0 {
 			t.Fatalf("%s: expected %d units, found %d with matching data out of %d: %v", stem, expected, exact, draft.UnitCount, err)
 		}

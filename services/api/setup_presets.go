@@ -33,6 +33,8 @@ var hierarchyPresets = []hierarchyPreset{
 		[]presetLevel{stateLevel, circleLevel, divisionLevel, rangeLevel, beatLevel}},
 	{"circle-division-subdivision-range-section-beat", "State → Circle → Division → Sub-division → Range → Section → Beat",
 		[]presetLevel{stateLevel, circleLevel, divisionLevel, subDivisionLevel, rangeLevel, sectionLevel, beatLevel}},
+	{"circle-division-subdivision-range-beat", "State → Circle → Division → Sub-division → Range → Beat",
+		[]presetLevel{stateLevel, circleLevel, divisionLevel, subDivisionLevel, rangeLevel, beatLevel}},
 	{"circle-division-range-section-beat", "State → Circle → Division → Range → Section → Beat",
 		[]presetLevel{stateLevel, circleLevel, divisionLevel, rangeLevel, sectionLevel, beatLevel}},
 	{"circle-division-range-beat-compartment", "State → Circle → Division → Range → Beat → Compartment",

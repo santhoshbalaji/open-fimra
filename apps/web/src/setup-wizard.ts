@@ -135,14 +135,13 @@ export class SetupWizard implements OnInit {
 
   readonly stepIndex = computed(() => steps.findIndex(item => item.key === this.step()));
   readonly lockedLayers = computed(() => {
-    // A hierarchy level needs the level above it, and other layers need the
-    // whole hierarchy, because parents come from published units.
+    // Parents come from published units. A branch may skip an optional level.
     const layers = this.state()?.layers ?? [];
     const locked = new Set<string>();
     let blocked = false;
     for (const layer of layers) {
       if (blocked) locked.add(layer.key);
-      if (layer.role === 'hierarchy' && !layer.published) blocked = true;
+      if (layer.role === 'hierarchy' && layer.required && !layer.published) blocked = true;
     }
     return locked;
   });

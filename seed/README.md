@@ -9,6 +9,8 @@ Never add real forest boundaries, staff details or field reports to this folder 
 | File | Contents |
 |---|---|
 | `state.geojson`, `circles.geojson`, `divisions.geojson`, `ranges.geojson`, `beats.geojson` | A territorial hierarchy: 1 state, 2 circles, 4 divisions, 8 ranges and 24 beats, each with `code`, `name` and `parent_code`, as an agency would upload them |
+| `sections.geojson`, `beats-with-sections.geojson` | One section in Lake Division and a beat upload for the optional section preset. Beat 24 uses the section and the other beats use their ranges. |
+| `protected-areas.geojson` | The fictional Demo Tiger Reserve, with core and buffer zones |
 | `forest.geojson` | Five forest features with a legal status |
 | `exclusions.geojson` | One known heat source (a brick kiln) |
 | `reference-detections.geojson` | Eleven test detections, each with its expected class, beats, triage reason and default queue |

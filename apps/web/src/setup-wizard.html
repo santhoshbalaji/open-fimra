@@ -61,7 +61,8 @@
           }
           @case ('hierarchy') {
             <p>Choose the levels your department uses, from the state down to the smallest unit. You can change the
-              labels, including the Hindi ones. A level's identifier cannot change once it has units.</p>
+              labels, including the Hindi ones. Choose a preset with a sub-division or section if some branches use
+              those levels. You can call a section a block or round. A level's identifier cannot change once it has units.</p>
             <fieldset hlmFieldSet class="min-w-0 gap-3">
               <legend hlmFieldLegend variant="label">Preset</legend>
               <hlm-radio-group name="preset" class="gap-2" [value]="presetSlug()" (valueChange)="$event && choosePreset($event)" [disabled]="busy()">
@@ -97,7 +98,8 @@
           @case ('layers') {
             <fimra-field-error-summary heading="Layer problems to fix" [errors]="layerBlockers()" />
             <fimra-state-region [class.sr-only]="layerRefresh().kind === 'ready'" [state]="layerRefresh()" (retry)="refreshLayers()" />
-            <p>Upload one file for each level, in order from the state down, then the forest layer. Known heat sources,
+            <p>Upload each level you use, in order from the state down, then the forest layer. When a branch
+              skips a sub-division or section, use the code of its actual parent. Known heat sources,
               such as brick kilns, are optional. Each upload is checked in the background. Publish it once it has no
               blocking problems. The published state boundary becomes the workspace boundary.</p>
             <fieldset hlmFieldSet class="min-w-0 gap-3" [disabled]="updatingLayers()">

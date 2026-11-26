@@ -30,16 +30,19 @@ def error_cause(error):
 
 def read_parents(conn, job, depth):
     ref = job["import_settings"].get("parentVersionId")
-    if ref:
-        rows = conn.execute("""
-            SELECT code, path::text, ST_AsBinary(geom) AS geom
-            FROM draft_units WHERE layer_version_id = %s AND path IS NOT NULL ORDER BY path
-        """, (ref,))
-    else:
-        rows = conn.execute("""
-            SELECT code, path::text, ST_AsBinary(geom) AS geom FROM units
-            WHERE hierarchy_id = %s AND depth = %s AND valid_to IS NULL ORDER BY path
-        """, (job["hierarchy_id"], depth - 1))
+    rows = conn.execute("""
+        WITH draft AS (
+            SELECT code, path, geom, depth FROM draft_units
+            WHERE layer_version_id = %s AND path IS NOT NULL
+        )
+        SELECT code, path::text, ST_AsBinary(geom) AS geom FROM draft
+        UNION ALL
+        SELECT code, path::text, ST_AsBinary(geom) AS geom FROM units
+        WHERE hierarchy_id = %s AND valid_to IS NULL
+          AND hierarchy_parent_allowed(hierarchy_id, %s::smallint, depth)
+          AND depth NOT IN (SELECT depth FROM draft)
+        ORDER BY path
+    """, (ref, job["hierarchy_id"], depth))
     return [Parent(row["code"], row["path"], from_wkb(row["geom"])) for row in rows]
 
 
@@ -81,7 +84,12 @@ def save_import(conn, upload_dir, job, problems):
                 boundary = conn.execute("SELECT ST_AsBinary(boundary) AS geom FROM workspaces WHERE id = %s",
                                         (job["workspace_id"],)).fetchone()["geom"]
                 footprints = [("workspace", from_wkb(boundary))] if boundary else []
-            unit_topology(features, footprints, problems, area_of)
+            level = conn.execute("""
+                SELECT optional FROM hierarchy_levels WHERE hierarchy_id = %s AND depth = %s
+            """, (job["hierarchy_id"], depth)).fetchone()
+            if level is None:
+                raise ValueError("The selected hierarchy level no longer exists.")
+            unit_topology(features, footprints, problems, area_of, require_coverage=not level["optional"])
             cursor.executemany("""
                 INSERT INTO draft_units (layer_version_id, feature_number, depth, code, name, path,
                                          parent_code, parent_path, geom, area_m2)

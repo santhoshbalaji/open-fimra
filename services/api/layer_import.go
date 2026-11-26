@@ -200,8 +200,7 @@ func (a api) uploadLayer(w http.ResponseWriter, r *http.Request) {
 		referenceID := settings.ParentVersionID
 		var depth *int16
 		if settings.ParentVersionID.Valid {
-			parentDepth := *settings.Depth - 1
-			depth = &parentDepth
+			depth = settings.Depth
 		} else {
 			referenceID = settings.CoverageVersionID
 		}
@@ -212,7 +211,7 @@ func (a api) uploadLayer(w http.ResponseWriter, r *http.Request) {
 				JOIN geo_jobs j ON j.layer_version_id = v.id
 				WHERE v.id = $1 AND v.status = 'draft' AND j.status = 'ready'
 				  AND l.workspace_id = $2 AND l.role = 'hierarchy'
-				  AND ($3::uuid IS NULL OR (l.hierarchy_id = $3 AND (v.import_settings->>'depth')::smallint = $4))
+				  AND ($3::uuid IS NULL OR (l.hierarchy_id = $3 AND hierarchy_parent_allowed($3, $4, (v.import_settings->>'depth')::smallint)))
 			)
 		`, referenceID, workspaceID, hierarchyID, depth).Scan(&valid)
 		if err != nil {

@@ -16,7 +16,12 @@ WITH grants AS MATERIALIZED (
 ),
 detection_rows AS (
     SELECT m.workspace_id, m.detection_id, m.observed_at, NULL::bigint AS alert_id,
-           NULL::uuid AS submission_id, m.observed_at AS sort_time
+           NULL::uuid AS submission_id, m.observed_at AS sort_time,
+           COALESCE(m.boundary_snapshot, jsonb_build_object(
+               'hierarchy', m.hierarchy, 'layerVersionIds', m.layer_version_ids,
+               'forestClass', m.forest_class, 'forestFeatureId', m.forest_feature_id,
+               'triageReason', m.triage_reason)) AS boundary_snapshot,
+           NULL::jsonb AS dispatch
     FROM detection_matches m
     JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
     WHERE $3 = 'detections'
@@ -29,11 +34,21 @@ detection_rows AS (
               match_under_grant(m.hierarchy_unit_paths, g.hierarchy_id, g.unit_path, g.depth)
       )
 ),
+alert_snapshots AS NOT MATERIALIZED (
+    SELECT a.*, COALESCE(a.boundary_snapshot, jsonb_build_object(
+               'hierarchy', a.hierarchy, 'layerVersionIds', a.layer_version_ids,
+               'forestClass', a.forest_class, 'triageReason', a.triage_reason,
+               'forestFeatureId', (SELECT m.forest_feature_id FROM detection_matches m
+                   WHERE (m.workspace_id, m.detection_id, m.observed_at) = (a.workspace_id, a.detection_id, a.observed_at)))
+           ) AS export_boundary,
+           jsonb_build_object('queue', a.queue, 'hierarchyId', a.hierarchy_id, 'unitPath', a.unit_path) AS export_dispatch
+    FROM alerts a
+),
 alert_rows AS (
     -- Alerts keep their own routing snapshot, as in alerts.sql.
     SELECT a.workspace_id, a.detection_id, a.observed_at, a.id AS alert_id,
-           NULL::uuid AS submission_id, a.observed_at AS sort_time
-    FROM alerts a JOIN workflow_instances i ON i.alert_id = a.id
+           NULL::uuid AS submission_id, a.observed_at AS sort_time, a.export_boundary, a.export_dispatch
+    FROM alert_snapshots a JOIN workflow_instances i ON i.alert_id = a.id
     WHERE $3 = 'alerts'
       AND EXISTS (
           SELECT 1 FROM grants g WHERE g.workspace_id = a.workspace_id
@@ -58,9 +73,9 @@ submission_rows AS (
     -- A submission is seen through its alert, with the alert's rules. The time
     -- window is when the report arrived; the other filters are the alert's.
     SELECT a.workspace_id, a.detection_id, a.observed_at, a.id AS alert_id,
-           s.id AS submission_id, s.received_at AS sort_time
+           s.id AS submission_id, s.received_at AS sort_time, a.export_boundary, a.export_dispatch
     FROM submissions s
-    JOIN alerts a ON a.id = s.alert_id
+    JOIN alert_snapshots a ON a.id = s.alert_id
     JOIN workflow_instances i ON i.alert_id = a.id
     JOIN form_versions v ON v.id = s.form_version_id
     JOIN forms f ON f.id = v.form_id
@@ -115,8 +130,8 @@ created AS (
     RETURNING id, filters
 ),
 frozen AS (
-    INSERT INTO export_rows (export_id, ordinal, workspace_id, detection_id, observed_at, alert_id, submission_id)
-    SELECT c.id, p.ordinal, p.workspace_id, p.detection_id, p.observed_at, p.alert_id, p.submission_id
+    INSERT INTO export_rows (export_id, ordinal, workspace_id, detection_id, observed_at, alert_id, submission_id, boundary_snapshot, dispatch)
+    SELECT c.id, p.ordinal, p.workspace_id, p.detection_id, p.observed_at, p.alert_id, p.submission_id, p.boundary_snapshot, p.dispatch
     FROM created c CROSS JOIN permitted p
     RETURNING 1
 )

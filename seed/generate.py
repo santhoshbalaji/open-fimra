@@ -3,7 +3,7 @@
 
 Everything here is made up. "Demo State" is a fictional state drawn over open
 sea in the Bay of Bengal, so no shape can be mistaken for a real forest or
-administrative boundary. It has a five-level territorial hierarchy
+administrative boundary. It has a territorial hierarchy
 (state, circle, division, range, beat), forest and exclusion layers, and a set
 of reference detections with the result each one should get.
 
@@ -51,6 +51,8 @@ LAYERS = {
                "Forest", "forest"),
     "exclusions": ("d0000000-0000-4000-8000-000000000040", "d0000000-0000-4000-8000-000000000041",
                    "Known heat sources", "exclusion"),
+    "protected-areas": ("d0000000-0000-4000-8000-000000000060", "d0000000-0000-4000-8000-000000000061",
+                        "Protected areas", "analysis"),
 }
 
 LEVELS = [  # depth, slug, English label, Hindi label
@@ -58,7 +60,8 @@ LEVELS = [  # depth, slug, English label, Hindi label
     (1, "circle", "Circle", "वृत्त"),
     (2, "division", "Division", "प्रभाग"),
     (3, "range", "Range", "रेंज"),
-    (4, "beat", "Beat", "बीट"),
+    (4, "section", "Section", "अनुभाग"),
+    (5, "beat", "Beat", "बीट"),
 ]
 
 CIRCLE_NAMES = ["West Circle", "East Circle"]
@@ -167,20 +170,26 @@ def build():
         di, ci = ri // 2, ri // 4
         units[3].append({"code": f"R{ri + 1}", "name": f"Range {ri + 1}", "parent": f"D{di + 1}",
                          "path": f"ds.c{ci + 1}.d{di + 1}.r{ri + 1}", "ring": outline(ri, ri + 1, 0, ROWS)})
+    section = {"code": "S01", "name": "Reed Section", "parent": "R8",
+               "path": "ds.c2.d4.r8.s01", "ring": outline(7, 8, 2, 3)}
+    units[4].append(section)
     for c in range(COLS):
         for r in range(ROWS):
             n = c * ROWS + r + 1
             di, ci = c // 2, c // 4
             bulge = OVERLAP_SHIFT if (c, r) == OVERLAP_CELL else 0.0
-            units[4].append({
-                "code": f"B{n:02d}", "name": f"Beat {n:02d}", "parent": f"R{c + 1}",
-                "path": f"ds.c{ci + 1}.d{di + 1}.r{c + 1}.b{n:02d}",
+            with_section = (c, r) == (7, 2)
+            parent_path = section["path"] if with_section else f"ds.c{ci + 1}.d{di + 1}.r{c + 1}"
+            units[5].append({
+                "code": f"B{n:02d}", "name": f"Beat {n:02d}",
+                "parent": section["code"] if with_section else f"R{c + 1}",
+                "path": f"{parent_path}.b{n:02d}",
                 "ring": outline(c, c + 1, r, r + 1, bulge_east=bulge),
                 "cell": (c, r), "number": n,
             })
 
     def beat_path(c, r):
-        return units[4][c * ROWS + r]["path"]
+        return units[5][c * ROWS + r]["path"]
 
     # Forests.
     f01 = (node(2, 1)[0], (node(2, 1)[1] + node(2, 2)[1]) / 2)   # straddles beats in columns 1 and 2
@@ -260,18 +269,32 @@ def outputs():
     files = {}
 
     # Source layers, as an agency would upload them, defects included.
-    level_files = {0: "state", 1: "circles", 2: "divisions", 3: "ranges", 4: "beats"}
+    level_files = {0: "state", 1: "circles", 2: "divisions", 3: "ranges", 4: "sections", 5: "beats-with-sections"}
     for depth, stem in level_files.items():
         feats = []
         for u in units[depth]:
             props = {"code": u["code"], "name": u["name"], "parent_code": u["parent"]}
-            if depth == 4 and u["number"] == UNCODED_BEAT:
+            if depth == 5 and u["number"] == UNCODED_BEAT:
                 props["code"] = None
-            if depth == 4 and u["number"] == UNPARENTED_BEAT:
+            if depth == 5 and u["number"] == UNPARENTED_BEAT:
                 props["parent_code"] = None
             feats.append(feature(props, polygon(u["ring"])))
         files[f"{stem}.geojson"] = ("geojson", stem, feats)
 
+    # Keep the original beat upload for the standard hierarchy preset.
+    files["beats.geojson"] = ("geojson", "beats", [
+        feature({**f["properties"], "parent_code": "R8"} if f["properties"]["parent_code"] == "S01"
+                else f["properties"], f["geometry"])
+        for f in files["beats-with-sections.geojson"][2]
+    ])
+    reserve_center = cell_center(6, 0)
+    protected_areas = [
+        feature({"code": "PA01-C", "name": "Demo Tiger Reserve", "zone": "core"},
+                polygon(blob(*reserve_center, 0.019, "PA01-core"))),
+        feature({"code": "PA01-B", "name": "Demo Tiger Reserve", "zone": "buffer"},
+                polygon(blob(*reserve_center, 0.044, "PA01-buffer"), blob(*reserve_center, 0.019, "PA01-core")[::-1])),
+    ]
+    files["protected-areas.geojson"] = ("geojson", "protected-areas", protected_areas)
     files["forest.geojson"] = ("geojson", "forest", [
         feature({"code": code, "name": name, "legal_status": status}, polygon(*rings))
         for code, name, status, rings in forests])
@@ -297,8 +320,8 @@ def outputs():
         "INSERT INTO hierarchies (id, workspace_id, slug, name, kind) VALUES",
         f"  ({sql_str(HIERARCHY_ID)}, {sql_str(WORKSPACE_ID)}, 'territorial', 'Territorial', 'territorial');",
         "",
-        "INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels) VALUES",
-        ",\n".join(f"  ({sql_str(HIERARCHY_ID)}, {d}, '{s}', {sql_str(json.dumps({'en': en, 'hi': hi}, ensure_ascii=False))})"
+        "INSERT INTO hierarchy_levels (hierarchy_id, depth, slug, labels, optional) VALUES",
+        ",\n".join(f"  ({sql_str(HIERARCHY_ID)}, {d}, '{s}', {sql_str(json.dumps({'en': en, 'hi': hi}, ensure_ascii=False))}, {'true' if s == 'section' else 'false'})"
                    for d, s, en, hi in LEVELS) + ";",
         "",
         "INSERT INTO layers (id, workspace_id, slug, name, role, hierarchy_id) VALUES",
@@ -306,20 +329,21 @@ def outputs():
                    f"{sql_str(HIERARCHY_ID) if role == 'hierarchy' else 'NULL'})"
                    for slug, (lid, _, name, role) in LAYERS.items()) + ";",
         "",
-        "INSERT INTO layer_versions (id, layer_id, version, status, source_file, published_at) VALUES",
-        ",\n".join(f"  ({sql_str(vid)}, {sql_str(lid)}, 1, 'published', 'seed/demo-state', {sql_str(VALID_FROM)})"
-                   for lid, vid, _, _ in LAYERS.values()) + ";",
+        "INSERT INTO layer_versions (id, layer_id, version, status, source_file, published_at, effective_from, overlay_kind, overlay_from) VALUES",
+        ",\n".join(f"  ({sql_str(vid)}, {sql_str(lid)}, 1, 'published', 'seed/demo-state', {sql_str(VALID_FROM)}, "
+                   f"'-infinity', {'NULL, NULL' if slug != 'protected-areas' else sql_str('protected_area') + ', ' + sql_str(VALID_FROM)})"
+                   for slug, (lid, vid, _, _) in LAYERS.items()) + ";",
         "",
         "-- The source beat layer has one beat without a code. An import would send it",
         "-- to review; the demo uses the code its position implies so the demo works.",
         "INSERT INTO units (hierarchy_id, depth, code, name, path, geom, layer_version_id, valid_from) VALUES",
     ]
     rows = []
-    for depth in range(5):
+    for depth, *_ in LEVELS:
         for u in units[depth]:
             rows.append(f"  ({sql_str(HIERARCHY_ID)}, {depth}, {sql_str(u['code'])}, {sql_str(u['name'])}, "
                         f"'{u['path']}', {sql_geom(polygon(u['ring']), True)}, "
-                        f"{sql_str(LAYERS['territorial-units'][1])}, {sql_str(VALID_FROM)})")
+                        f"{sql_str(LAYERS['territorial-units'][1])}, '-infinity')")
     lines.append(",\n".join(rows) + ";")
     lines += ["", "INSERT INTO layer_features (layer_version_id, code, name, attributes, geom) VALUES"]
     rows = []
@@ -329,6 +353,10 @@ def outputs():
     for code, name, kind, rings in exclusions:
         rows.append(f"  ({sql_str(LAYERS['exclusions'][1])}, {sql_str(code)}, {sql_str(name)}, "
                     f"'{json.dumps({'kind': kind})}', {sql_geom(polygon(*rings), True)})")
+    for area in protected_areas:
+        props = area["properties"]
+        rows.append(f"  ({sql_str(LAYERS['protected-areas'][1])}, {sql_str(props['code'])}, {sql_str(props['name'])}, "
+                    f"{sql_str(json.dumps({'zone': props['zone']}))}, {sql_geom(area['geometry'], True)})")
     lines.append(",\n".join(rows) + ";")
     files["load.sql"] = ("text", None, "\n".join(lines) + "\n")
 
@@ -337,7 +365,7 @@ def outputs():
     grants = [
         ("state.admin", "state_admin", units[0][0]["path"]),
         ("division.officer", "division_officer", units[2][0]["path"]),
-        ("beat.guard", "field_staff", units[4][0]["path"]),
+        ("beat.guard", "field_staff", units[5][0]["path"]),
     ]
     users = [demo_users[username] for username, _, _ in grants]
     user_rows = [

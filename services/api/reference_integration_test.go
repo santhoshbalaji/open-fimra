@@ -42,16 +42,18 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		Boundary     [4]float64
 		Jurisdiction *[4]float64
 		Levels       []struct {
-			Depth  int
-			Slug   string
-			Labels map[string]string
+			Depth    int
+			Slug     string
+			Labels   map[string]string
+			Optional bool
 		}
 	}
 	if err := json.Unmarshal(body, &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.Boundary != [4]float64{86.195247, 16.293874, 86.686326, 16.548825} || len(info.Levels) != 5 ||
-		info.Levels[4].Depth != 4 || info.Levels[4].Slug != "beat" || info.Levels[4].Labels["en"] != "Beat" || info.Levels[4].Labels["hi"] != "बीट" {
+	if info.Boundary != [4]float64{86.195247, 16.293874, 86.686326, 16.548825} || len(info.Levels) != 6 ||
+		info.Levels[4].Slug != "section" || !info.Levels[4].Optional ||
+		info.Levels[5].Depth != 5 || info.Levels[5].Slug != "beat" || info.Levels[5].Labels["en"] != "Beat" || info.Levels[5].Labels["hi"] != "बीट" {
 		t.Fatalf("unexpected workspace geography: %s", body)
 	}
 	beat := info.Jurisdiction
@@ -78,7 +80,7 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		path   string
 		counts map[string]int
 	}{
-		{fullState, map[string]int{"units": 39, "forest": 5}},
+		{fullState, map[string]int{"units": 40, "forest": 5}},
 		{"/tiles/reference/10/757/464.mvt", map[string]int{"units": 26, "forest": 2, "exclusions": 1}},
 		{fullState + "?outline=1", map[string]int{"units": 1}},
 	} {
@@ -106,7 +108,7 @@ func testWorkspaceGeography(t *testing.T, base string, client *http.Client, toke
 		for y := 928; y <= 930; y++ {
 			body, _ := request(fmt.Sprintf("/tiles/reference/11/%d/%d.mvt", x, y), "", 200, 204)
 			for _, feature := range decodeTileLayers(t, body)["unit_labels"] {
-				if feature["depth"] != uint64(4) {
+				if feature["depth"] != uint64(info.Levels[5].Depth) {
 					continue
 				}
 				code := feature["code"].(string)

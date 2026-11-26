@@ -205,6 +205,12 @@ All layer routes require a state administrator grant at a workspace root.
   `grantConfirmation` from the preview after the administrator approves the
   list. A blocked draft or stale confirmation returns HTTP 409. The window is
   1–90 days and defaults to 30.
+- `PUT /api/v1/workspaces/{slug}/layer-imports/{versionId}/overlay` marks a
+  published feature layer with a `kind` of `protected_area`, `civil_district`,
+  `civil_block`, `civil_village`, `community` or `neighbouring_state`. The kind
+  takes effect when saved and carries over when a replacement is published.
+  Preserve an unmapped `zone` field with values `core` or `buffer` for protected
+  areas. Alerts show every covering overlay feature.
 - After HTTP 202, poll the same version's detail route. A published or retired
   upload includes `rematch` with a status and counts of detections checked,
   matches written and alerts created.
@@ -217,13 +223,16 @@ referenced parent draft before its children. A draft cannot leave current
 child paths without parents. If a legacy layer supplied multiple levels,
 the other levels keep their original source version.
 
-Ingest, preview and replay call `classify_detection()` for area, forest and
-hierarchy matching. Previews and replay skip linked copies of the same
+Ingest matches using the boundaries effective when each observation was made.
+The wizard's first boundary and forest uploads establish the starting
+boundaries for earlier observations. A new optional level added below
+an already mapped branch takes effect when published.
+Previews and replay use the current boundaries and skip linked copies of the same
 observation, as ingest does. River checks the fixed window ending at
 publication in batches and records progress with each commit. Each batch uses
 the current published layers, so overlapping jobs never restore an older
-match. A match stores the versions actually used and retains its first
-processing time.
+match. A match retains its first processing time and its observation-time
+hierarchy, layer version IDs and overlay matches.
 
 A newly eligible detection gets an alert and opens a workflow if it has no
 alert yet. Existing alerts retain their original routing, forest class,
@@ -622,11 +631,17 @@ The worker never sees the user, the grants or the filters. It is given only an e
 - Export rows cannot be changed. The request itself, with its filters, roles and row count, cannot be changed either.
 - A finished file can never record more features than the saved row count. Rows can only drop out, when their detection or alert is deleted, and the file's note says so.
 
-The values in a file, such as an alert's workflow step, are read when the file is written.
+The request freezes each row's observation-time boundaries and the alert's
+original dispatch. The export worker reads those saved values. Workflow
+steps are read when the file is written.
 
 ### Contents
 
-Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or alert, newest first. The fields are the detection ID, observation time in UTC, source, product, satellite, forest class and triage reason. Then come the code and name of every level of the main territorial hierarchy (`state_code`, `division_name` and so on), the forest feature code, fire radiative power, confidence, longitude and latitude. Alert exports add the alert ID, queue, creation time, the current workflow step with its label and time, and the incident ID. Alerts keep the class, reason and units they were routed with.
+Each file has point geometry in WGS 84 (EPSG:4326) and one row per detection or alert, newest first. The fields are the detection ID, observation time in UTC, source, product, satellite, forest class and triage reason. Then come the code and name of every level of the main territorial hierarchy (`state_code`, `division_name` and so on), the forest feature code, fire radiative power, confidence, longitude and latitude. The `boundary_version_ids` field lists the versions in force at observation
+time. If a list exceeds the Shapefile field width, read it in
+`boundary_versions.json` in the archive. Alert exports add the alert ID,
+original dispatch queue and unit path, creation time, current workflow step
+with its label and time, and incident ID.
 
 Submission exports have one row per report. The point is the detection of the report's alert. The fields start with the report ID, form, version and title, the step it was filled in at, when the server received it and when the device saved it, the decision and its time, and where the report was sent from. The alert's fields follow. With a `form` filter, every answer outside a repeating group follows as a column from the version's flat view: shapes as well-known text, lists joined by commas, and the area and length the server worked out. A column whose name clashes with another field starts with `answer_`. Repeating groups stay in the flat views. The file never names who sent or decided a report, but free-text answers are as staff typed them, and the note says so.
 
@@ -1001,7 +1016,11 @@ All except the first two need a state administrator grant at the workspace root.
 
 `GET /api/v1/me` also returns `setup`: `bootstrapAvailable`, the `unfinished` workspaces whose wizard the caller should see, and `claimedInvitations`.
 
-Layers use the [layer import endpoints](#layer-imports). The wizard names its layers after the levels, such as `territorial-beat`. Publishing the top level of the wizard's hierarchy sets the workspace boundary to the published state shape.
+Layers use the [layer import endpoints](#layer-imports). The wizard names its layers after the levels, such as `territorial-beat`. Publishing the top level of the wizard's hierarchy sets the workspace
+boundary to the published state shape. Choose a preset with a sub-division
+or section to use that level on some branches. Edit the level labels in
+the wizard. A row in the range or beat upload can name its actual parent
+code when its branch skips an optional level.
 
 ### Encrypted settings
 

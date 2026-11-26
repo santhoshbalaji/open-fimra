@@ -118,7 +118,7 @@ def hierarchy_paths(features, depth, parents, problems, area_of):
             feature.path = None
 
 
-def unit_topology(features, footprints, problems, area_of):
+def unit_topology(features, footprints, problems, area_of, *, require_coverage=True):
     if not features:
         return
     shapes = [feature.geom for feature in features]
@@ -137,6 +137,9 @@ def unit_topology(features, footprints, problems, area_of):
                     f"Unit {feature.code} overlaps unit {other.code} ({other.ref}) by {overlap:,.0f} square metres.",
                     True,
                 ))
+
+    if not require_coverage:
+        return
 
     if footprints:
         for ref, footprint in footprints:

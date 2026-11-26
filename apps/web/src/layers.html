@@ -48,6 +48,25 @@
               }
             }
           </dl>
+          @if (layer.published; as published) {
+            @if (published.overlayKind; as kind) {
+              <p>Overlay: {{ overlayKindLabels[kind] }}</p>
+            } @else if (layer.role !== 'hierarchy') {
+              <form class="max-w-md" (submit)="$event.preventDefault(); markOverlay(published, overlayKind.value)">
+                <hlm-field>
+                  <label hlmFieldLabel for="overlay-kind">Overlay kind</label>
+                  <select hlmInput id="overlay-kind" #overlayKind class="w-full" required [disabled]="busy()">
+                    <option value="">Choose an overlay kind</option>
+                    @for (kind of overlayKinds; track kind) {
+                      <option [value]="kind">{{ overlayKindLabels[kind] }}</option>
+                    }
+                  </select>
+                  <p class="text-muted-foreground">Applies to observations from now on.</p>
+                  <button hlmBtn type="submit" variant="outline" class="self-start" [disabled]="busy()">Mark as overlay</button>
+                </hlm-field>
+              </form>
+            }
+          }
           @if (versions().length > 1 && !uploading()) {
             <hlm-field class="max-w-md">
               <label hlmFieldLabel for="layer-version">Version under review</label>

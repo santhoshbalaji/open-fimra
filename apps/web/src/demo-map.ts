@@ -1,3 +1,4 @@
+import { overlayKindLabels } from './boundary-overlays';
 import { NgTemplateOutlet } from '@angular/common';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmFieldImports } from '@spartan-ng/helm/field';
@@ -81,6 +82,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }));
   });
   readonly reasons = triageReasons;
+  readonly overlayKindLabels = overlayKindLabels;
   readonly edgeReason = 'The detection is near the forest edge.';
   readonly confidenceLabel = confidenceLabel;
   readonly sourceLabel = sourceLabel;

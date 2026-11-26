@@ -15,12 +15,21 @@ WITH batch AS MATERIALIZED (
 matched AS (
     INSERT INTO detection_matches (workspace_id, detection_id, observed_at, forest_class,
                                    forest_distance_m, forest_feature_id, unit_paths, hierarchy,
-                                   hierarchy_unit_paths, triage_reason, layer_version_ids, matched_at)
+                                   hierarchy_unit_paths, triage_reason, layer_version_ids, matched_at,
+                                   beat_paths, boundary_snapshot)
     SELECT m.workspace_id, m.detection_id, m.observed_at, m.forest_class,
            m.forest_distance_m, m.forest_feature_id, m.unit_paths, m.hierarchy,
-           m.hierarchy_unit_paths, m.triage_reason, m.layer_version_ids, clock_timestamp()
+           m.hierarchy_unit_paths, m.triage_reason, m.layer_version_ids, clock_timestamp(),
+           m.beat_paths, COALESCE(existing.boundary_snapshot, historical.boundary_snapshot, '{"forestClass":"outside","layerVersionIds":[]}')
     FROM batch b
-    CROSS JOIN LATERAL classify_detection(b.workspace_id, b.id, b.observed_at, b.geom) m
+    CROSS JOIN LATERAL classify_detection_at(b.workspace_id, b.id, b.observed_at, b.geom, NULL, NULL) m
+    LEFT JOIN detection_matches existing ON (existing.workspace_id, existing.detection_id, existing.observed_at)
+        = (b.workspace_id, b.id, b.observed_at)
+    LEFT JOIN LATERAL (
+        SELECT boundary_snapshot
+        FROM classify_detection(b.workspace_id, b.id, b.observed_at, b.geom)
+        WHERE existing.boundary_snapshot IS NULL
+    ) historical ON true
     ON CONFLICT (workspace_id, detection_id, observed_at) DO UPDATE SET
         forest_class = EXCLUDED.forest_class,
         forest_distance_m = EXCLUDED.forest_distance_m,
@@ -29,15 +38,17 @@ matched AS (
         hierarchy = EXCLUDED.hierarchy,
         triage_reason = EXCLUDED.triage_reason,
         layer_version_ids = EXCLUDED.layer_version_ids,
-        hierarchy_unit_paths = EXCLUDED.hierarchy_unit_paths
+        hierarchy_unit_paths = EXCLUDED.hierarchy_unit_paths,
+        beat_paths = EXCLUDED.beat_paths,
+        boundary_snapshot = COALESCE(detection_matches.boundary_snapshot, EXCLUDED.boundary_snapshot)
     RETURNING detection_matches AS match
 ),
 routed AS (
     INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path,
-                        hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids)
+                        hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids, boundary_snapshot)
     SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*,
            (match).hierarchy_unit_paths, (match).unit_paths, (match).forest_class, (match).triage_reason,
-           (match).layer_version_ids
+           (match).layer_version_ids, (match).boundary_snapshot
     FROM matched CROSS JOIN LATERAL alert_route(match) route
     ON CONFLICT (workspace_id, detection_id) DO NOTHING
     RETURNING id
