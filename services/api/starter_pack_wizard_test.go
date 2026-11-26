@@ -118,7 +118,7 @@ func (p starterPackRun) enable(t *testing.T) {
 	}
 	p.call("state.admin", http.MethodGet, p.base+"/forms/final-report/versions/1", nil, http.StatusOK, &final)
 	final.Definition["version"] = 2
-	final.Definition["title"] = map[string]any{"en": "Final report (Demo State edition)"}
+	final.Definition["title"] = map[string]any{"en": "Final report (Demo State edition)", "hi": "अंतिम रिपोर्ट (डेमो राज्य संस्करण)"}
 	p.call("state.admin", http.MethodPost, p.base+"/forms", final.Definition, http.StatusCreated, nil)
 	changed := p.counts(t)
 	p.call("state.admin", http.MethodPost, p.base+"/starter-pack", nil, http.StatusOK, &again)
