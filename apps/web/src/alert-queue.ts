@@ -12,7 +12,7 @@ import type { DataState } from './ui/state-region';
 import { defaultWorkspaceFormat } from './workspace-format';
 
 export const queueLabels = { unit: 'My area', edge_review: 'Edge review', triage: 'Triage' };
-export const alertGroupLabels = { active: 'Active alerts', overdue: 'Overdue alerts', pending_reports: 'Pending reports' };
+export const alertGroupLabels = { active: 'Active alerts', overdue: 'Overdue alerts', pending_reports: 'Waiting for a report' };
 export const stepLabel = (key: string) => key.charAt(0).toUpperCase() + key.slice(1).replaceAll('_', ' ');
 type Queue = keyof typeof queueLabels;
 export interface AlertRow extends Detection {

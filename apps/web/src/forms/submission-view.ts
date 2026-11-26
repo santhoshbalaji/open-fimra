@@ -38,8 +38,7 @@ import { FormPresentation } from './form-presentation';
           <p class="text-base font-medium wrap-anywhere">{{ place() }}</p>
           <div #decisionResult tabindex="-1" class="flex flex-wrap items-center gap-2">
             <fimra-status-badge [icon]="s.approval?.decision === 'approved' ? 'complete' : s.approval ? 'overdue' : 'pending'"
-              [label]="s.approval ? labels[s.approval.decision] : 'Submitted'" />
-            @if (!s.approval) { <span class="submission-meta">{{ labels.pending }}</span> }
+              [label]="labels[s.approval?.decision ?? 'pending']" />
           </div>
           <p class="submission-meta">Version {{ s.version }}</p>
           <dl class="submission-facts">

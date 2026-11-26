@@ -18,7 +18,7 @@ import { workspacePhone } from '../ui/workspace-breakpoint';
 import { StatusBadge } from '../ui/status-badge';
 import { defaultWorkspaceFormat } from '../workspace-format';
 import { WorkspaceService } from '../workspace';
-import { type Decision, type SubmissionRow, type WorkspaceForm } from './form-api';
+import { decisionLabels as statuses, type Decision, type SubmissionRow, type WorkspaceForm } from './form-api';
 import { textIn } from './form-text';
 import { SubmissionView } from './submission-view';
 
@@ -26,8 +26,6 @@ interface Page { items: SubmissionRow[]; nextCursor?: string }
 export type DecisionFilter = Decision | '';
 export interface ReportFilters { form: string; decision: DecisionFilter; formLabel: string }
 
-const statuses = { pending: 'Submitted', approved: 'Approved', returned: 'Returned' };
-const filterStatuses = { ...statuses, pending: 'Awaiting review' };
 const firstPage: TablePosition = { cursor: null, previousCursors: [], sort: { columnId: 'received', direction: 'descending' } };
 const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, position: firstPage };
 
@@ -44,10 +42,10 @@ const emptyPage: TablePage<SubmissionRow> = { rows: [], nextCursor: null, positi
           <fimra-filter-fields [forReports]="true" />
           <hlm-field class="scope-filter-field"><label hlmFieldLabel for="report-decision">Report status</label>
             <hlm-select [value]="decision() || 'all'" (valueChange)="setFilter('decision', $event)">
-              <hlm-select-trigger buttonId="report-decision">{{ decision() ? filterStatuses[decision() || 'pending'] : 'All statuses' }}</hlm-select-trigger>
+              <hlm-select-trigger buttonId="report-decision">{{ decision() ? statuses[decision() || 'pending'] : 'All statuses' }}</hlm-select-trigger>
               <hlm-select-content *hlmSelectPortal>
                 <hlm-select-item value="all">All statuses</hlm-select-item>
-                <hlm-select-item value="pending">{{ filterStatuses.pending }}</hlm-select-item>
+                <hlm-select-item value="pending">{{ statuses.pending }}</hlm-select-item>
                 <hlm-select-item value="returned">Returned</hlm-select-item>
                 <hlm-select-item value="approved">Approved</hlm-select-item>
               </hlm-select-content>
@@ -98,7 +96,7 @@ export class Submissions {
   readonly endpoint = input.required<string>();
   readonly now = input.required<number>();
   readonly filtersChanged = output<ReportFilters>();
-  protected readonly filterStatuses = filterStatuses;
+  protected readonly statuses = statuses;
   protected readonly page = signal<TablePage<SubmissionRow>>(emptyPage);
   protected readonly state = signal<DataState>({ kind: 'loading', heading: 'Loading field reports' });
   protected readonly forms = signal<WorkspaceForm[]>([]);
@@ -130,7 +128,7 @@ export class Submissions {
     new Set(this.navigation.query().get('reportColumns')?.split(',') ?? []));
   protected readonly activeFilters = computed(() => {
     const filters = [];
-    if (this.decision()) filters.push({ id: 'decision', label: filterStatuses[this.decision() || 'pending'] });
+    if (this.decision()) filters.push({ id: 'decision', label: statuses[this.decision() || 'pending'] });
     if (this.form()) filters.push({ id: 'form', label: this.formLabel() });
     return [...filters, ...this.scopeFilters.active()];
   });

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { DetectionSeries } from './dashboard.series';
+import { detectionSeriesColors, type DetectionSeries } from './dashboard.series';
 import { defaultWorkspaceFormat } from './workspace-format';
 
 @Component({
@@ -15,7 +15,7 @@ import { defaultWorkspaceFormat } from './workspace-format';
           </div>
           <div class="h-3 overflow-hidden rounded-control bg-muted">
             <div class="h-full rounded-control" [style.width.%]="100 * row.count / maximum()"
-              [style.background-color]="'var(--color-chart-' + row.slot + ')'"></div>
+              [style.background-color]="'var(' + colors[row.slot - 1] + ')'"></div>
           </div>
         </li>
       }
@@ -27,6 +27,7 @@ import { defaultWorkspaceFormat } from './workspace-format';
 })
 export class ClassChart {
   readonly rows = input.required<readonly DetectionSeries[]>();
+  protected readonly colors = detectionSeriesColors;
   protected readonly total = computed(() => this.rows().reduce((total, row) => total + row.count, 0));
   protected readonly maximum = computed(() => Math.max(1, ...this.rows().map(row => row.count)));
   protected readonly number = defaultWorkspaceFormat.number;

@@ -64,7 +64,7 @@ describe('Report and approval', () => {
     expect(Array.from(header.querySelectorAll('dt'), term => term.textContent)).toEqual(['Sender', 'Related alert', 'Received']);
     expect(header.querySelector('dd')!.textContent).toBe('Demo Beat Guard');
     expect(header.querySelector('a')!.getAttribute('href')).toBe('/monitor/alerts?alert=7');
-    expect(header.textContent).toContain('Submitted');
+    expect(header.querySelector('fimra-status-badge')!.textContent?.trim()).toBe('Awaiting review');
     const answers = el.querySelector('fimra-form-presentation')!;
     expect(answers.textContent).toContain('Under control');
     expect(header.compareDocumentPosition(answers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -169,7 +169,7 @@ describe('Report and approval', () => {
     const { el, button } = render({ ...report, canApprove: false });
     expect(button('Approve')).toBeUndefined();
     expect(button('Return with a note')).toBeUndefined();
-    expect(el.textContent).toContain('Waiting for a decision');
+    expect(el.textContent).toContain('Awaiting review');
   });
 
   it('shows who decided first when another officer was quicker', async () => {

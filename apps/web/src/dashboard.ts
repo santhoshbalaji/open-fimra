@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { EMPTY, Subject, catchError, merge, switchMap, timer } from 'rxjs';
+import { EMPTY, Subject, catchError, forkJoin, map, merge, of, switchMap, timer } from 'rxjs';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmTableImports } from '@spartan-ng/helm/table';
 import { alertGroupLabels, queueLabels, stepLabel } from './alert-queue';
@@ -12,6 +12,7 @@ import { DashboardFilters, ScopeFilters, filterPeriodLabel, setScopeFilters } fr
 import { detectionCatalog, detectionSeries } from './dashboard.series';
 import { classes, sourceLabel } from './detections';
 import { FilterFields } from './filter-fields';
+import { decisionLabels } from './forms/form-api';
 import { ShellNavigation } from './shell-navigation';
 import { defaultWorkspaceFormat } from './workspace-format';
 import { WorkspaceService } from './workspace';
@@ -49,6 +50,7 @@ const alertTiles = [
   { key: 'overdue', group: 'overdue' },
   { key: 'pendingReports', group: 'pending_reports' }
 ] as const;
+const awaitingReview = 'pending';
 const outcomeSteps = ['controlled', 'extinguished'];
 const milestones = [
   { key: 'acknowledged', label: 'Acknowledged' },
@@ -71,11 +73,12 @@ export class Dashboard {
   private readonly http = inject(HttpClient);
   private readonly base = inject(WEB_CONFIG).apiBaseUrl.replace(/\/$/, '');
   private readonly reload = new Subject<void>();
-  private readonly snapshot = signal<{ data: Summary; updated: Date } | null>(null);
+  private readonly snapshot = signal<{ data: Summary; awaitingReview: number | null; updated: Date } | null>(null);
 
   readonly filters = inject(DashboardFilters);
   readonly workspaceName = computed(() => this.workspace.current()?.name);
   readonly summary = computed(() => this.snapshot()?.data);
+  readonly awaitingReviewCount = computed(() => this.snapshot()?.awaitingReview ?? null);
   readonly lastUpdate = computed(() => this.snapshot()?.updated);
   readonly state = signal<DataState>({ kind: 'loading', heading: 'Loading dashboard' });
   readonly sourceLabel = sourceLabel;
@@ -84,6 +87,7 @@ export class Dashboard {
   readonly feedLabels = feedLabels;
   readonly alertTiles = alertTiles;
   readonly alertGroupLabels = alertGroupLabels;
+  readonly awaitingReviewLabel = decisionLabels[awaitingReview];
   readonly outcomeSteps = outcomeSteps;
   readonly milestones = milestones;
   readonly stepLabel = stepLabel;
@@ -152,9 +156,20 @@ export class Dashboard {
       this.state.set({ kind: 'loading', heading: 'Loading dashboard' });
       if (!workspace) return;
 
-      const url = this.base + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug) + '/summary';
+      const url = this.base + '/api/v1/workspaces/' + encodeURIComponent(workspace.slug);
       const request = merge(timer(0, 60_000), this.reload).pipe(switchMap(() =>
-        this.http.get<Summary>(url, { params }).pipe(catchError((error: HttpErrorResponse) => {
+        forkJoin({
+          data: this.http.get<Summary>(url + '/summary', { params }),
+          awaitingReview: this.http.get<{ counts: { pending?: number } }>(url + '/submissions', {
+            params: { ...params, decision: awaitingReview, limit: 1 }
+          }).pipe(
+            map(page => page.counts.pending ?? 0),
+            catchError((error: HttpErrorResponse) => {
+              if (error.status === 401) this.auth.sessionEnded();
+              return of(null);
+            })
+          )
+        }).pipe(catchError((error: HttpErrorResponse) => {
           if (error.status === 401) this.auth.sessionEnded();
           if (error.status === 403) {
             this.snapshot.set(null);
@@ -166,8 +181,8 @@ export class Dashboard {
           }
           return EMPTY;
         }))
-      )).subscribe(data => {
-        this.snapshot.set({ data, updated: new Date() });
+      )).subscribe(result => {
+        this.snapshot.set({ ...result, updated: new Date() });
         this.state.set({ kind: 'ready' });
       });
       onCleanup(() => request.unsubscribe());
@@ -185,6 +200,12 @@ export class Dashboard {
   alertRoute(extra: { queue?: string; group?: string; status?: string }) {
     return this.router.createUrlTree(['/monitor/alerts'], {
       queryParams: { workspace: this.workspace.current()?.slug, ...this.filters.params(), queue: 'all', ...extra }
+    });
+  }
+
+  fieldReportRoute() {
+    return this.router.createUrlTree(['/reports/field'], {
+      queryParams: { workspace: this.workspace.current()?.slug, ...this.filters.params(), decision: awaitingReview }
     });
   }
 

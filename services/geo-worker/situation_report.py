@@ -468,11 +468,11 @@ def story(report):
     parts += [CondPageBreak(40 * mm), Paragraph("Field reports", HEADING),
               report_paragraph(f"Forms submitted for the period's alerts: {fields.get('submitted', 0)}. "
                             f"Approved: {fields.get('approved', 0)}. Returned: {fields.get('returned', 0)}. "
-                            f"Waiting for review: {fields.get('awaitingReview', 0)}. "
+                            f"Awaiting review: {fields.get('awaitingReview', 0)}. "
                             f"Missing: {fields.get('missing', 0)}, on "
                             f"{plural(fields.get('alertsMissing', 0), 'alert', 'alerts')}.", BODY),
               Spacer(1, 1.5 * mm),
-              table(["Form", "Submitted", "Approved", "Returned", "Waiting for review", "Missing"],
+              table(["Form", "Submitted", "Approved", "Returned", "Awaiting review", "Missing"],
                     [[f["title"], f["submitted"], f["approved"], f["returned"], f["awaitingReview"], f["missing"]]
                      for f in fields.get("forms", [])], [0.35, 0.13, 0.13, 0.13, 0.13, 0.13],
                     empty="No forms are assigned to the period's alerts.")]

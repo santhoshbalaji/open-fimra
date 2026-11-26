@@ -49,6 +49,8 @@ try {
   await expect(heading).toHaveCount(1);
   await expect(page.locator('form')).toHaveCount(0);
   await expect(page.getByText('India Standard Time', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Waiting for a report: \d+/)).toBeVisible();
+  await expect(page.getByText(/Awaiting review: \d+/)).toBeVisible();
   await expect(table).toBeVisible();
   assert.equal(await page.locator('.report-map .map-alert').count(), report.map.alertsShown);
   assert.ok(report.map.alertsShown > 0, 'The synthetic map needs alert markers');
