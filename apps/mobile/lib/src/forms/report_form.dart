@@ -715,7 +715,7 @@ class _SignatureDialogState extends State<_SignatureDialog> {
     setState(() => _saving = true);
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    canvas.drawColor(Colors.white, BlendMode.src);
+    canvas.drawColor(Colors.white, BlendMode.src); // fixed-colour: signature paper, the same in every theme
     _SignaturePainter(_ink).paint(canvas, _size);
     final picture = recorder.endRecording();
     final image = await picture.toImage(_size.width.ceil(), _size.height.ceil());
@@ -737,7 +737,7 @@ class _SignatureDialogState extends State<_SignatureDialog> {
         builder: (context, constraints) {
           _size = constraints.biggest;
           return ColoredBox(
-            color: Colors.white,
+            color: Colors.white, // fixed-colour: signature paper, the same in every theme
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onPanStart: _saving ? null : (event) => setState(() => _ink = [..._ink, event.localPosition]),
@@ -768,7 +768,7 @@ class _SignaturePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.clipRect(Offset.zero & size);
     final pen = Paint()
-      ..color = Colors.black
+      ..color = Colors.black // fixed-colour: signature ink, the same in every theme
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
     for (var index = 1; index < points.length; index++) {

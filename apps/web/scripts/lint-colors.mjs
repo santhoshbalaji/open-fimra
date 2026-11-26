@@ -36,8 +36,13 @@ const namedLiteral = new RegExp(
   'i',
 );
 
+// A line may keep a fixed colour only with a stated reason, for example a
+// captured signature that must stay black on white in every theme:
+//   canvas.drawColor(Colors.white, BlendMode.src); // fixed-colour: signature paper
+const fixedColour = /fixed-colour:\s*\S/;
+
 export function problem(file, line) {
-  if (adapters.has(file)) return undefined;
+  if (adapters.has(file) || fixedColour.test(line)) return undefined;
   if (primitive.test(line)) return 'Use a semantic or component token instead of a primitive.';
   const raw = file.endsWith('.dart') ? dartLiteral.test(line) || cssLiteral.test(line.replace(/\bColor\s*\(/g, ''))
     : cssLiteral.test(line);

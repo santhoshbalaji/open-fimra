@@ -74,6 +74,8 @@ test('the lint rejects raw colours and primitive references in feature code', ()
     assert.ok(problem('apps/mobile/lib/feature.dart', source), source);
   }
   assert.equal(problem('apps/web/src/feature.css', 'color: var(--color-focus)'), undefined);
+  assert.equal(problem('apps/mobile/lib/feature.dart', 'canvas.drawColor(Colors.white, BlendMode.src); // fixed-colour: signature paper'), undefined);
+  assert.ok(problem('apps/mobile/lib/feature.dart', 'canvas.drawColor(Colors.white, BlendMode.src); // fixed-colour:'));
   assert.equal(problem('apps/mobile/lib/feature.dart', 'Colors.transparent'), undefined);
   assert.equal(problem('apps/web/src/tokens.css', '--primitive-palette-ink: #111111'), undefined);
 });
