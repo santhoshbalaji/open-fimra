@@ -22,8 +22,8 @@
       <p class="text-text-secondary">{{ msg('No next step available.') }}</p>
     }
     @if (move(); as action) {
-      <form class="workflow-step grid gap-2 rounded-control border border-border p-3 my-3"
-        (keydown.escape)="cancel($event)" (submit)="$event.preventDefault(); save(note.value, reason.value, submit)">
+      <form #stepForm class="workflow-step grid gap-2 rounded-control border border-border p-3 my-3"
+        (keydown.escape)="cancel($event)" (submit)="$event.preventDefault(); save(stepForm, note.value, reason.value, submit)">
         <h3 #formTitle tabindex="-1">{{ action.terminal ? msg('Close ') + subject() : msg('Record step') }} · {{ msg(action.label) }}</h3>
         @if (pendingReport(); as report) {
           <p>{{ msg('Submit the required report before recording this step.') }}</p>
@@ -46,7 +46,7 @@
                         @if (alert.reason === 'transition_allowed') {
                           <p>{{ msg('Will move from {0} to {1}.', [msg(alert.fromLabel), msg(action.label)]) }}</p>
                         } @else {
-                          <p>{{ msg('Will stay at {0}. {1}', [alert.fromLabel, unchangedReasons[alert.reason]]) }}</p>
+                          <p>{{ msg('Will stay at {0}. {1}', [msg(alert.fromLabel), msg(unchangedReasons[alert.reason])]) }}</p>
                         }
                       </li>
                     }
@@ -55,9 +55,28 @@
               }
             </div>
           }
-          <hlm-field><label hlmFieldLabel for="step-note">{{ msg('Note (optional)') }}</label>
-            <textarea hlmTextarea id="step-note" #note rows="2" maxlength="2000"></textarea>
+          <hlm-field><label hlmFieldLabel for="step-note">{{ action.step === 'assigned' ? msg('Assigned team or officer') : msg('Note (optional)') }}</label>
+            <textarea hlmTextarea id="step-note" #note rows="2" maxlength="2000" [required]="action.step === 'assigned'"></textarea>
           </hlm-field>
+          @if (action.extended) {
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="grid gap-1">{{ msg('Actual time (optional)') }}
+                <input hlmInput type="datetime-local" name="actualAt" />
+              </label>
+              <label class="grid gap-1">{{ action.step === 'team_sent' ? msg('Estimated arrival') : msg('Estimated time (optional)') }}
+                <input hlmInput type="datetime-local" name="estimatedAt" [required]="action.step === 'team_sent'" />
+              </label>
+            </div>
+          }
+          @if (action.step === 'flash_update' || action.step === 'response_update') {
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="grid gap-1">{{ msg('Fire status') }}<input hlmInput name="status" required maxlength="300" /></label>
+              <label class="grid gap-1">{{ msg('Estimated extent') }}<input hlmInput name="estimatedExtent" maxlength="300" /></label>
+              <label class="grid gap-1">{{ msg('Threats') }}<input hlmInput name="threats" maxlength="300" /></label>
+              <label class="grid gap-1">{{ msg('Help needed') }}<input hlmInput name="helpNeeded" maxlength="300" /></label>
+              <label class="grid gap-1">{{ msg('Next contact') }}<input hlmInput name="nextContact" type="datetime-local" /></label>
+            </div>
+          }
           @if (action.location_required) {
             <p>{{ msg('Your browser will ask you to share your location.') }}</p>
             @if (action.can_override) {
@@ -65,8 +84,10 @@
                 (checkedChange)="exception.set($event)" /> {{ msg('Enter a reason instead') }}</label>
             }
           }
-          <div [hidden]="!exception()"><hlm-field><label hlmFieldLabel for="location-reason">{{ msg('Reason for the location exception') }}</label>
-            <textarea hlmTextarea id="location-reason" #reason rows="2" [required]="exception()" maxlength="2000"></textarea>
+          <div [hidden]="!exception() && action.step !== 'reopened'"><hlm-field><label hlmFieldLabel for="location-reason">
+            {{ action.step === 'reopened' ? msg('Reason for reopening') : msg('Reason for the location exception') }}
+          </label>
+            <textarea hlmTextarea id="location-reason" #reason rows="2" [required]="exception() || action.step === 'reopened'" maxlength="2000"></textarea>
           </hlm-field></div>
           <button #submit hlmBtn type="submit" [busy]="busy()"
             [disabled]="loading() || loadError() || (subject() === 'incident' && (!preview() || preview() === 'error'))">
@@ -87,14 +108,14 @@
           <li class="border-s-2 border-divider ps-2 wrap-anywhere">
             @if (alert.reason === 'transition_allowed') {
               <strong>{{ msg('Alert #{0}', [alert.alertId]) }}</strong>
-              <p>{{ msg('Moved from {0} with the incident.', [alert.fromLabel]) }}</p>
+              <p>{{ msg('Moved from {0} with the incident.', [msg(alert.fromLabel)]) }}</p>
             } @else {
               @if (alertLink(); as link) {
                 <a class="font-semibold text-action underline" [routerLink]="link(alert.alertId)">{{ msg('Open alert #{0}', [alert.alertId]) }}</a>
               } @else {
                 <strong>{{ msg('Alert #{0}', [alert.alertId]) }}</strong>
               }
-              <p>{{ msg('Stayed at {0}. {1}', [alert.fromLabel, unchangedReasons[alert.reason]]) }}</p>
+              <p>{{ msg('Stayed at {0}. {1}', [msg(alert.fromLabel), msg(unchangedReasons[alert.reason])]) }}</p>
             }
           </li>
         }

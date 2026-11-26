@@ -1,0 +1,57 @@
+<section class="grid max-w-4xl gap-3 p-4">
+  <h1 class="text-view font-semibold">{{ msg('Incident response') }}</h1>
+  <fimra-state-region [state]="state()" (retry)="reload()">
+    @if (settings(); as response) {
+      <form class="grid gap-4" (submit)="$event.preventDefault(); save()">
+        <fieldset [disabled]="saving()" class="grid gap-4">
+          @if (response.extended) {
+            <p>{{ msg('New cases use the extended workflow.') }}</p>
+          } @else {
+            <label>
+              <input type="checkbox" [checked]="enabling()" (change)="enabling.set($any($event.target).checked)" />
+              {{ msg('Use the extended workflow for new cases') }}
+            </label>
+          }
+          <div>
+            <h2 class="text-base font-semibold">{{ msg('Season response targets') }}</h2>
+            <p>{{ msg('Season dates use UTC. Minutes count from the previous milestone. Without a season target, the default time applies.') }}</p>
+          </div>
+          @for (target of response.targets; track $index; let i = $index) {
+            <fieldset class="grid gap-2 rounded-control border border-border p-3 sm:grid-cols-2">
+              <legend>{{ msg('Response target {0}', [i + 1]) }}</legend>
+              <label class="grid gap-1">{{ msg('Milestone') }}
+                <select class="rounded-control border border-border bg-surface p-2" [ngModel]="target.step"
+                  [ngModelOptions]="{ standalone: true }" (ngModelChange)="editTarget(i, {step: $event})">
+                  @for (step of steps; track step.step) { <option [value]="step.step">{{ msg(step.name) }}</option> }
+                </select>
+              </label>
+              <label class="grid gap-1">{{ msg('Season starts') }}
+                <input hlmInput type="date" required [ngModel]="target.from" [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="editTarget(i, {from: $event})" />
+              </label>
+              <label class="grid gap-1">{{ msg('Season ends') }}
+                <input hlmInput type="date" required [min]="target.from" [ngModel]="target.through" [ngModelOptions]="{ standalone: true }"
+                  (ngModelChange)="editTarget(i, {through: $event})" />
+              </label>
+              <label class="grid gap-1">{{ msg('Target minutes') }}
+                <input hlmInput type="number" min="1" max="10080" required [ngModel]="target.targetMinutes"
+                  [ngModelOptions]="{ standalone: true }" (ngModelChange)="editTarget(i, {targetMinutes: $event})" />
+              </label>
+              <label class="grid gap-1">{{ msg('Second escalation in minutes (optional)') }}
+                <input hlmInput type="number" [min]="(target.targetMinutes ?? 0) + 1" max="10080" [ngModel]="target.escalationMinutes"
+                  [ngModelOptions]="{ standalone: true }" (ngModelChange)="editTarget(i, {escalationMinutes: $event})" />
+              </label>
+              <button hlmBtn type="button" variant="ghost" class="self-end justify-self-start" (click)="removeTarget(i)">
+                {{ msg('Remove target') }}
+              </button>
+            </fieldset>
+          }
+          <button hlmBtn type="button" variant="outline" class="justify-self-start" [disabled]="response.targets.length >= 100"
+            (click)="addTarget()">{{ msg('Add season target') }}</button>
+        </fieldset>
+        <button hlmBtn type="submit" class="justify-self-start" [busy]="saving()">{{ msg('Save settings') }}</button>
+      </form>
+    }
+  </fimra-state-region>
+  <fimra-live-status [message]="notice()" />
+</section>

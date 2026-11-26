@@ -27,7 +27,7 @@ export function notificationURL(link: NotificationLink): URL {
 
 interface Notice {
   id: string;
-  event: 'alert_new' | 'alert_overdue' | 'feed_open';
+  event: 'alert_new' | 'alert_overdue' | 'feed_open' | 'incident_overdue' | 'incident_escalated';
   createdAt: string;
   readAt: string | null;
   workspace: string;
@@ -63,7 +63,8 @@ export class Notifications {
   readonly inbox = signal<Inbox | null>(null);
   readonly filter = signal<InboxFilter>('all');
   readonly busy = signal(false);
-  readonly labels = { alert_new: 'New fire alert', alert_overdue: 'Fire alert overdue', feed_open: 'Feed needs attention' };
+  readonly labels = { alert_new: 'New fire alert', alert_overdue: 'Fire alert overdue', feed_open: 'Feed needs attention',
+    incident_overdue: 'Incident response overdue', incident_escalated: 'Incident response escalated' };
   readonly now = signal(new Date());
   readonly count = computed(() => this.inbox()?.unreadCount ?? 0);
   readonly unreadMessage = computed(() => this.inbox() ? translate('{0} unread', [this.format.number(this.count())]) : '');

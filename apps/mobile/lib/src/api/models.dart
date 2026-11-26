@@ -310,6 +310,7 @@ class WorkflowMove {
     required this.locationRequired,
     required this.canOverride,
     required this.terminal,
+    this.extended = false,
   });
   factory WorkflowMove.fromJson(Map<String, dynamic> json) => WorkflowMove(
     step: _string(json['step']),
@@ -317,12 +318,14 @@ class WorkflowMove {
     locationRequired: json['location_required'] == true,
     canOverride: json['can_override'] == true,
     terminal: json['terminal'] == true,
+    extended: json['extended'] == true,
   );
   final String step;
   final String label;
   final bool locationRequired;
   final bool canOverride;
   final bool terminal;
+  final bool extended;
 }
 
 class HistoryEntry {
@@ -336,6 +339,10 @@ class HistoryEntry {
     this.latitude,
     this.longitude,
     this.reportPending = false,
+    this.actualAt,
+    this.estimatedAt,
+    this.syncedAt,
+    this.response,
   });
   factory HistoryEntry.fromJson(Map<String, dynamic> json) => HistoryEntry(
     step: _string(json['step']),
@@ -347,6 +354,10 @@ class HistoryEntry {
     latitude: _double(json['latitude']),
     longitude: _double(json['longitude']),
     reportPending: json['reportPending'] == true,
+    actualAt: DateTime.tryParse(_string(json['actualAt'])),
+    estimatedAt: DateTime.tryParse(_string(json['estimatedAt'])),
+    syncedAt: DateTime.tryParse(_string(json['syncedAt'])),
+    response: json['response'] as Map<String, dynamic>?,
   );
   final String step;
   final String label;
@@ -357,6 +368,10 @@ class HistoryEntry {
   final double? latitude;
   final double? longitude;
   final bool reportPending;
+  final DateTime? actualAt;
+  final DateTime? estimatedAt;
+  final DateTime? syncedAt;
+  final Map<String, dynamic>? response;
 }
 
 class AlertHistory {
@@ -391,6 +406,9 @@ class StepRequest {
     this.latitude,
     this.longitude,
     this.clientTime,
+    this.actualAt,
+    this.estimatedAt,
+    this.response,
   });
   factory StepRequest.fromJson(Map<String, dynamic> json) {
     final location = json['location'] as Map<String, dynamic>?;
@@ -398,6 +416,9 @@ class StepRequest {
       step: _string(json['step']),
       clientId: _string(json['clientId']),
       clientTime: DateTime.tryParse(_string(json['clientTime'])),
+      actualAt: DateTime.tryParse(_string(json['actualAt'])),
+      estimatedAt: DateTime.tryParse(_string(json['estimatedAt'])),
+      response: json['response'] as Map<String, dynamic>?,
       note: _string(json['note']),
       reason: _string(json['reason']),
       latitude: _double(location?['latitude']),
@@ -412,6 +433,9 @@ class StepRequest {
   final double? latitude;
   final double? longitude;
   final DateTime? clientTime;
+  final DateTime? actualAt;
+  final DateTime? estimatedAt;
+  final Map<String, dynamic>? response;
 
   Map<String, dynamic> toJson() => {
     'step': step,
@@ -420,19 +444,24 @@ class StepRequest {
     if (reason.isNotEmpty) 'reason': reason,
     if (latitude != null && longitude != null) 'location': {'latitude': latitude, 'longitude': longitude},
     if (clientTime != null) 'clientTime': clientTime!.toUtc().toIso8601String(),
+    if (actualAt != null) 'actualAt': actualAt!.toUtc().toIso8601String(),
+    if (estimatedAt != null) 'estimatedAt': estimatedAt!.toUtc().toIso8601String(),
+    if (response != null) 'response': response,
   };
 }
 
 class StepReceipt {
-  const StepReceipt({required this.id, required this.step, required this.at});
+  const StepReceipt({required this.id, required this.step, required this.at, this.syncedAt});
   factory StepReceipt.fromJson(Map<String, dynamic> json) => StepReceipt(
     id: _string(json['id']),
     step: _string(json['step']),
     at: DateTime.tryParse(_string(json['at'])) ?? DateTime.now().toUtc(),
+    syncedAt: DateTime.tryParse(_string(json['syncedAt'])),
   );
   final String id;
   final String step;
   final DateTime at;
+  final DateTime? syncedAt;
 }
 
 /// Where push messages reach this phone: a UnifiedPush endpoint and its

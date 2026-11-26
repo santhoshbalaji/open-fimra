@@ -16,6 +16,7 @@ export const destinations = [
   { path: '/settings/forms', name: 'Form templates', icon: 'list-ordered', group: 'Settings', grant: 'forms' },
   { path: '/settings/setup', name: 'Setup', icon: 'settings', group: 'Settings', grant: 'layers' },
   { path: '/settings/duty', name: 'Duty roster', icon: 'clock', group: 'Settings', grant: 'layers' },
+  { path: '/settings/incident-response', name: 'Incident response', icon: 'flame', group: 'Settings', grant: 'layers' },
   { path: '/settings/gis', name: 'GIS link', icon: 'key-round', group: 'Settings' },
   { path: '/settings/devices', name: 'Field phones', icon: 'smartphone', group: 'Settings' }
 ] as const;

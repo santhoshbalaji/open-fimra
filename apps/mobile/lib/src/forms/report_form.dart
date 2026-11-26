@@ -13,6 +13,7 @@ import '../device/device_store.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/field_language.dart';
 import '../ui/alert_detail.dart';
+import '../ui/step_time_field.dart';
 import '../ui/widgets.dart' show formatNumber;
 import 'answers.dart';
 import 'geometry_field.dart';
@@ -79,6 +80,8 @@ class _ReportFormState extends State<ReportForm> {
   String? _error;
   bool _busy = false;
   bool _tried = false;
+  DateTime? _estimatedArrival;
+  bool get _needsArrivalEstimate => widget.move?.extended == true && widget.move?.step == 'team_sent';
 
   Json _earlier(Json raw, List<FormNode> members) => {
     for (final node in members)
@@ -222,6 +225,10 @@ class _ReportFormState extends State<ReportForm> {
       }
       return;
     }
+    if (_needsArrivalEstimate && _estimatedArrival == null) {
+      setState(() => _error = fieldText(context).estimatedArrivalRequired);
+      return;
+    }
     setState(() => _busy = true);
     try {
       await _draftWrite;
@@ -231,10 +238,17 @@ class _ReportFormState extends State<ReportForm> {
       if (move != null) {
         final fix = move.locationRequired ? await widget.locate() : null;
         if (!mounted) return;
+        final reportedTime = switch (move.step) {
+          'team_sent' => answers['dispatched_at'],
+          'reached_site' => answers['reached_at'],
+          _ => null,
+        };
         step = StepRequest(
           step: move.step,
           clientId: newDeviceId(),
           clientTime: DateTime.now(),
+          actualAt: move.extended && reportedTime is String ? DateTime.tryParse(reportedTime) : null,
+          estimatedAt: _needsArrivalEstimate ? _estimatedArrival : null,
           latitude: fix?.latitude,
           longitude: fix?.longitude,
         );
@@ -332,6 +346,13 @@ class _ReportFormState extends State<ReportForm> {
                       Text(_text(page['title']), style: Theme.of(context).textTheme.titleLarge),
                     for (final key in page['sections'] as List) _node(session, _tree.byKey[key]!, [], settings),
                   ],
+              if (_needsArrivalEstimate)
+                StepTimeField(
+                  label: fieldText(context).estimatedArrival,
+                  value: _estimatedArrival,
+                  allowFuture: true,
+                  onChanged: _busy ? null : (value) => setState(() => _estimatedArrival = value),
+                ),
               if (widget.move case final move?)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),

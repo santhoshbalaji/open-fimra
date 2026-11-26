@@ -55,7 +55,8 @@ WITH due AS MATERIALIZED (
     FROM workflow_instances i
     CROSS JOIN LATERAL (SELECT id FROM step_log WHERE alert_id=i.alert_id
         AND to_step=i.current_step AND occurred_at=i.entered_at ORDER BY id DESC LIMIT 1) l
-    WHERE EXISTS (SELECT FROM workflow_transitions t WHERE t.template_id=i.template_id
+    WHERE NOT workflow_template_extended(i.template_id)
+      AND EXISTS (SELECT FROM workflow_transitions t WHERE t.template_id=i.template_id
         AND t.from_step=i.current_step AND $1 > i.entered_at+t.time_limit)
       AND NOT EXISTS (SELECT FROM notification_overdue_steps WHERE step_id=l.id)
     ORDER BY i.entered_at, i.alert_id LIMIT 500 FOR UPDATE OF i SKIP LOCKED
@@ -64,6 +65,30 @@ WITH due AS MATERIALIZED (
 )
 SELECT enqueue_alert_notifications(a, 'alert_overdue', o.step_id)
 FROM opened o JOIN due d USING (step_id) JOIN alerts a ON a.id=d.alert_id`, now)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(ctx, `
+WITH due AS MATERIALIZED (
+    SELECT i.incident_id,l.id AS step_id
+    FROM workflow_instances i JOIN incidents c ON c.id=i.incident_id AND c.merged_into IS NULL
+    CROSS JOIN LATERAL (SELECT id FROM step_log WHERE incident_id=i.incident_id
+        AND to_step=i.current_step ORDER BY id DESC LIMIT 1) l
+    WHERE workflow_template_extended(i.template_id)
+      AND EXISTS (SELECT FROM incident_response_target(c.workspace_id,i.template_id,i.current_step,i.entered_at) t
+                  WHERE t.due_at < $1 AND NOT EXISTS (SELECT FROM incident_overdue_escalations n WHERE n.step_id=l.id AND n.level=t.level))
+    ORDER BY i.entered_at,i.incident_id LIMIT 500 FOR UPDATE OF i SKIP LOCKED
+), opened AS (
+    INSERT INTO incident_overdue_escalations(step_id,level,sent_at)
+    SELECT d.step_id,t.level,$1 FROM due d JOIN workflow_instances i USING (incident_id)
+    JOIN incidents c ON c.id=i.incident_id
+    CROSS JOIN LATERAL incident_response_target(c.workspace_id,i.template_id,i.current_step,i.entered_at) t
+    WHERE t.due_at < $1
+    ON CONFLICT DO NOTHING RETURNING id,step_id,level
+)
+SELECT enqueue_alert_notifications(a,CASE o.level WHEN 1 THEN 'incident_overdue' ELSE 'incident_escalated' END,o.id)
+FROM opened o JOIN due d USING (step_id)
+JOIN incident_members m ON m.incident_id=d.incident_id JOIN alerts a ON a.id=m.alert_id`, now)
 	return err
 }
 

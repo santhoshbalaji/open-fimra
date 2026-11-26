@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { translate } from '../language';
+import { RouterLink, type UrlTree } from '@angular/router';
 import { HlmButton } from '@spartan-ng/helm/button';
 import { workspaceFormat, WorkspaceFormat } from '../workspace-format';
 
@@ -9,6 +10,7 @@ export interface TimelineEvent {
   at: Date;
   milestone?: boolean;
   detail?: string;
+  link?: UrlTree;
 }
 
 let timelineId = 0;
@@ -16,7 +18,7 @@ let timelineId = 0;
 @Component({
   selector: 'fimra-timeline',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HlmButton],
+  imports: [HlmButton, RouterLink],
   host: { class: 'block min-w-0' },
   styleUrl: './workspace-target.css',
   template: `
@@ -34,7 +36,11 @@ let timelineId = 0;
         @for (event of visibleEvents(); track event.id) {
           <li class="grid gap-1 border-s-2 py-1 ps-3 wrap-anywhere"
             [class.border-action]="event.milestone" [class.border-divider]="!event.milestone">
-            <p class="font-semibold">{{ msg(event.title) }}</p>
+            @if (event.link) {
+              <p class="font-semibold"><a class="text-action underline" [routerLink]="event.link">{{ msg(event.title) }}</a></p>
+            } @else {
+              <p class="font-semibold">{{ msg(event.title) }}</p>
+            }
             <p class="text-label text-text-secondary">
               <time [attr.datetime]="event.at.toISOString()">{{ format().dateTime(event.at) }}</time>
               <span aria-hidden="true"> · </span>{{ format().age(event.at, now()) }}

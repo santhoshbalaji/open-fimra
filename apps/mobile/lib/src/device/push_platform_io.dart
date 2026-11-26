@@ -101,6 +101,8 @@ class SystemNotifier implements AlertNotifier {
     final title = switch (notice.title) {
       'New fire alert' => language.newFireAlert,
       'Fire alert overdue' => language.overdueFireAlert,
+      'Incident response overdue' => language.incidentResponseOverdue,
+      'Incident response escalated' => language.incidentResponseEscalated,
       _ => notice.title,
     };
     await _plugin.show(

@@ -3,7 +3,7 @@ SET LOCAL TIME ZONE 'UTC';
 
 DO $$
 DECLARE
-    template bigint := (SELECT id FROM workflow_templates WHERE workspace_id IS NULL);
+    template bigint := (SELECT id FROM workflow_templates WHERE workspace_id IS NULL AND version=1);
     entered timestamptz := '2001-02-01 00:00 UTC';
 BEGIN
     IF alert_due_at(template, 'new', entered) IS DISTINCT FROM entered + interval '30 minutes' THEN

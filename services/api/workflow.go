@@ -20,30 +20,123 @@ type stepRequest struct {
 		Longitude *float64 `json:"longitude"`
 		Latitude  *float64 `json:"latitude"`
 	} `json:"location"`
-	Note       string     `json:"note"`
-	Reason     string     `json:"reason"`
-	ClientID   string     `json:"clientId"`
-	ClientTime *time.Time `json:"clientTime"`
+	Note        string        `json:"note"`
+	Reason      string        `json:"reason"`
+	ClientID    string        `json:"clientId"`
+	ClientTime  *time.Time    `json:"clientTime"`
+	ActualAt    *time.Time    `json:"actualAt"`
+	EstimatedAt *time.Time    `json:"estimatedAt"`
+	Response    *responseNote `json:"response"`
+}
+
+type responseNote struct {
+	Status          string     `json:"status"`
+	EstimatedExtent string     `json:"estimatedExtent,omitempty"`
+	Threats         string     `json:"threats,omitempty"`
+	HelpNeeded      string     `json:"helpNeeded,omitempty"`
+	NextContact     *time.Time `json:"nextContact,omitempty"`
+}
+
+func stepTimes(in stepRequest, extended bool, entered, now time.Time) (time.Time, *time.Time, error) {
+	if !extended && (in.ActualAt != nil || in.EstimatedAt != nil || in.Response != nil) {
+		return time.Time{}, nil, &stepError{422, "These details require the extended incident response workflow."}
+	}
+	if !extended {
+		if in.ClientTime == nil {
+			return now, nil, nil
+		}
+		if in.ClientTime.Before(entered) || in.ClientTime.After(now) {
+			return time.Time{}, nil, &stepError{422, "The client time must fall between the current step and now."}
+		}
+		return *in.ClientTime, nil, nil
+	}
+	actual := in.ActualAt
+	if actual == nil && (in.EstimatedAt == nil || in.Step == "team_sent") {
+		actual = in.ClientTime
+		if actual == nil {
+			actual = &now
+		}
+	}
+	event := actual
+	if event == nil {
+		event = in.EstimatedAt
+	}
+	validThrough := now.Add(clockSkew)
+	if event.IsZero() || event.After(validThrough) ||
+		(in.EstimatedAt != nil && (in.EstimatedAt.IsZero() || (in.Step != "team_sent" && in.EstimatedAt.After(validThrough)))) {
+		return time.Time{}, nil, &stepError{422, "Provide a valid event time at or before now."}
+	}
+	if in.Step == "team_sent" && (in.EstimatedAt == nil || in.EstimatedAt.Before(*event)) {
+		return time.Time{}, nil, &stepError{422, "Provide an estimated arrival at or after dispatch."}
+	}
+	// Keep the workflow clock ordered while retaining the time reported by the field team.
+	at := *event
+	if at.Before(entered) {
+		at = entered
+	}
+	if at.After(now) {
+		at = now
+	}
+	return at, actual, nil
+}
+
+func validateResponseStep(in stepRequest, required, override, near bool) error {
+	if len([]rune(in.Note)) > 2000 || len([]rune(in.Reason)) > 2000 {
+		return &stepError{422, "Give a note and reason of at most 2,000 characters each."}
+	}
+	switch {
+	case in.Step == "reopened":
+		if !override {
+			return &stepError{403, "Only a supervising officer may reopen an incident or alert."}
+		}
+		if in.Reason == "" {
+			return &stepError{422, "Give a reason for reopening."}
+		}
+	case in.Reason != "" && (!override || !required):
+		return &stepError{403, "Only a supervising officer may give a location exception for a field step."}
+	case required && !near && in.Reason == "":
+		return &stepError{422, "Record a location near the detection."}
+	}
+	if in.Step == "assigned" && strings.TrimSpace(in.Note) == "" {
+		return &stepError{422, "Name the team or officer being assigned."}
+	}
+	if in.Step == "flash_update" || in.Step == "response_update" {
+		if in.Response == nil || strings.TrimSpace(in.Response.Status) == "" {
+			return &stepError{422, "Give the fire status for this update."}
+		}
+		for _, value := range []string{in.Response.Status, in.Response.EstimatedExtent, in.Response.Threats, in.Response.HelpNeeded} {
+			if len([]rune(value)) > 300 {
+				return &stepError{422, "Give a short response update of at most 300 characters per field."}
+			}
+		}
+		if in.Response.NextContact != nil && in.Response.NextContact.IsZero() {
+			return &stepError{422, "Provide a valid time for the next contact."}
+		}
+	} else if in.Response != nil {
+		return &stepError{422, "Record a structured note on a flash or response update."}
+	}
+	return nil
 }
 
 const historySQL = `
 SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) || jsonb_build_object(
+ 'extended',workflow_template_extended((SELECT template_id FROM workflow_instances WHERE alert_id=$3)),
  'missingReports', ARRAY(SELECT f.form_key FROM alert_missing_forms($3,m.step) f)) ORDER BY terminal,label,step)
  FROM alert_moves($1,$2,$3) m),'[]'),
  'offlineMoves',COALESCE((
  SELECT jsonb_object_agg(from_step,moves) FROM (
   SELECT from_step,jsonb_agg(to_jsonb(m) - 'from_step' ORDER BY terminal,label,step) AS moves FROM (
-   SELECT t.from_step,t.to_step AS step,s.label,t.location_required,bool_or(r.officer) AS can_override,s.terminal
+   SELECT t.from_step,t.to_step AS step,s.label,t.location_required,bool_or(r.officer) AS can_override,s.terminal,workflow_template_extended(i.template_id) AS extended
    FROM workflow_instances i JOIN workflow_transitions t ON t.template_id=i.template_id
    JOIN workflow_steps s ON (s.template_id,s.slug)=(t.template_id,t.to_step)
    JOIN alert_roles($1,$2,$3) r ON r.role_slug=ANY(t.allowed_roles)
      AND (r.role_slug <> 'division_officer' OR r.officer)
-   WHERE i.alert_id=$3 GROUP BY t.from_step,t.to_step,s.label,t.location_required,s.terminal
+   WHERE i.alert_id=$3 GROUP BY t.from_step,t.to_step,s.label,t.location_required,s.terminal,i.template_id
   ) m GROUP BY from_step
  ) by_step
  ),'{}'),'entries',(
  SELECT jsonb_agg(jsonb_build_object('from',l.from_step,'step',l.to_step,'label',s.label,
-  'at',l.occurred_at,'actor',u.display_name,'note',l.note,'reason',l.override_reason,
+  'at',l.occurred_at,'actualAt',l.actual_at,'estimatedAt',l.estimated_at,'syncedAt',l.recorded_at,'response',l.response_note,'actor',u.display_name,'note',l.note,'reason',l.override_reason,
   'longitude',ST_X(l.location),'latitude',ST_Y(l.location),'reportPending',l.report_pending,
   'incidentId',(SELECT x.incident_id::text FROM step_log x WHERE x.id=l.incident_step_id)) ORDER BY l.id)
  FROM step_log l JOIN workflow_steps s ON (s.template_id,s.slug)=(l.template_id,l.to_step)
@@ -106,10 +199,11 @@ func recordStep(ctx context.Context, tx pgx.Tx, subject, slug string, id int64, 
 	var current, user string
 	var entered time.Time
 	var template int64
+	var extended bool
 	// Serialize requests for one alert, including concurrent offline retries.
-	err := tx.QueryRow(ctx, `SELECT current_step,entered_at,template_id,r.user_id::text
+	err := tx.QueryRow(ctx, `SELECT current_step,entered_at,template_id,r.user_id::text,workflow_template_extended(i.template_id)
  FROM workflow_instances i CROSS JOIN alert_roles($1,$2,$3) r
- WHERE alert_id=$3 LIMIT 1 FOR UPDATE OF i`, subject, slug, id).Scan(&current, &entered, &template, &user)
+ WHERE alert_id=$3 LIMIT 1 FOR UPDATE OF i`, subject, slug, id).Scan(&current, &entered, &template, &user, &extended)
 	if err != nil {
 		return err
 	}
@@ -122,8 +216,11 @@ func recordStep(ctx context.Context, tx pgx.Tx, subject, slug string, id int64, 
 		var same bool
 		err = tx.QueryRow(ctx, `SELECT user_id=$3 AND to_step=$4 AND note=$5 AND override_reason=$6
    AND client_time IS NOT DISTINCT FROM $7::timestamptz AND ST_X(location) IS NOT DISTINCT FROM $8::float8
-   AND ST_Y(location) IS NOT DISTINCT FROM $9::float8,jsonb_build_object('id',id::text,'step',to_step,'at',occurred_at)
-   FROM step_log WHERE alert_id=$1 AND client_id=$2`, id, in.ClientID, user, in.Step, in.Note, in.Reason, in.ClientTime, lon, lat).Scan(&same, result)
+   AND ST_Y(location) IS NOT DISTINCT FROM $9::float8
+   AND (actual_at_supplied = ($10::timestamptz IS NOT NULL) AND ($10 IS NULL OR actual_at=$10))
+   AND estimated_at IS NOT DISTINCT FROM $11::timestamptz AND response_note IS NOT DISTINCT FROM $12::jsonb,
+   jsonb_build_object('id',id::text,'step',to_step,'at',occurred_at,'actualAt',actual_at,'estimatedAt',estimated_at,'syncedAt',recorded_at)
+   FROM step_log WHERE alert_id=$1 AND client_id=$2`, id, in.ClientID, user, in.Step, in.Note, in.Reason, in.ClientTime, lon, lat, in.ActualAt, in.EstimatedAt, in.Response).Scan(&same, result)
 		if err == nil {
 			if !same {
 				return &stepError{409, "This client ID already belongs to another step request."}
@@ -151,11 +248,8 @@ func recordStep(ctx context.Context, tx pgx.Tx, subject, slug string, id int64, 
 	if !allowed {
 		return &stepError{403, "Your role cannot record this step."}
 	}
-	if in.Reason != "" && (!override || !required) {
-		return &stepError{403, "Only a supervising officer may give a location exception for a field step."}
-	}
-	if required && !near && in.Reason == "" {
-		return &stepError{422, "Record a location near the detection."}
+	if err := validateResponseStep(in, required, override, near); err != nil {
+		return err
 	}
 	// A step with an assigned form is complete only once the form is in.
 	var missing []string
@@ -165,18 +259,15 @@ func recordStep(ctx context.Context, tx pgx.Tx, subject, slug string, id int64, 
 	if len(missing) > 0 {
 		return &stepError{422, "Submit the " + strings.Join(missing, ", ") + " form before leaving this step."}
 	}
-	at := now
-	if in.ClientTime != nil {
-		at = *in.ClientTime
-		if at.Before(entered) || at.After(now) {
-			return &stepError{422, "The client time must fall between the current step and now."}
-		}
-	}
-	err = tx.QueryRow(ctx, `INSERT INTO step_log(alert_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,client_id,client_time,report_pending)
- SELECT $1,$2,$3,$4,$5,$6,ST_SetSRID(ST_Point($7,$8),4326),$9,$10,NULLIF($11,''),$12,report_pending
- FROM workflow_steps WHERE template_id=$2 AND slug=$4
- RETURNING jsonb_build_object('id',id::text,'step',to_step,'at',occurred_at)`, id, template, current, in.Step, user, at, lon, lat, in.Note, in.Reason, in.ClientID, in.ClientTime).Scan(result)
+	at, actual, err := stepTimes(in, extended, entered, now)
 	if err != nil {
+		return err
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO step_log(alert_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,client_id,client_time,report_pending,actual_at,estimated_at,response_note,actual_at_supplied)
+ SELECT $1,$2,$3,$4,$5,$6,ST_SetSRID(ST_Point($7,$8),4326),$9,$10,NULLIF($11,''),$12,report_pending,$13,$14,$15,$16
+ FROM workflow_steps WHERE template_id=$2 AND slug=$4
+ RETURNING jsonb_build_object('id',id::text,'step',to_step,'at',occurred_at,'actualAt',actual_at,'estimatedAt',estimated_at,'syncedAt',recorded_at)`, id, template, current, in.Step, user, at, lon, lat, in.Note, in.Reason, in.ClientID, in.ClientTime, actual, in.EstimatedAt, in.Response, in.ActualAt != nil).Scan(result)
+	if err != nil || in.Step == "response_update" {
 		return err
 	}
 	_, err = tx.Exec(ctx, `UPDATE workflow_instances SET current_step=$2,entered_at=$3 WHERE alert_id=$1`, id, in.Step, at)

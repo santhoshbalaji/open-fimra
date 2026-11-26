@@ -16,6 +16,8 @@ import { SidePanel } from './ui/side-panel';
 import { StateRegion, type DataState } from './ui/state-region';
 import { StatusBadge } from './ui/status-badge';
 import { Timeline } from './ui/timeline';
+import { IncidentIntake } from './incident-intake';
+import { IncidentMembership } from './incident-membership';
 import { Workflow } from './workflow';
 import { workspaceFormat } from './workspace-format';
 
@@ -41,7 +43,7 @@ export interface IncidentFocus { id: string; points: [number, number][]; bounds:
 
 @Component({
   selector: 'fimra-incidents',
-  imports: [DataTable, HlmButton, RouterLink, ShellListScroll, SidePanel, StateRegion, StatusBadge, Timeline, Workflow],
+  imports: [DataTable, HlmButton, RouterLink, ShellListScroll, SidePanel, StateRegion, StatusBadge, Timeline, IncidentIntake, IncidentMembership, Workflow],
   templateUrl: './incidents.html',
   styleUrl: './incidents.css',
   host: { class: 'block h-full min-w-0' }
@@ -53,6 +55,7 @@ export class Incidents {
 
   protected readonly navigation = inject(ShellNavigation);
   protected readonly alertLink = (id: string) => this.navigation.href('/monitor/alerts', { alert: id });
+  protected readonly incidentLink = (id: string) => this.navigation.href('/monitor/incidents', { incident: id });
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly location = inject(Location);
@@ -248,7 +251,13 @@ export class Incidents {
   protected retryDetail(): void { this.detailRetry.update(n => n + 1); }
   protected retryMembers(): void { this.memberRetry.update(n => n + 1); }
 
+  protected intakeSaved(id: string): void {
+    this.changed();
+    if (id !== this.selectedId()) this.open(id);
+  }
+
   protected changed(): void {
+    this.memberRetry.update(n => n + 1);
     this.listRetry.update(n => n + 1);
     this.detailRetry.update(n => n + 1);
   }

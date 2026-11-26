@@ -1,0 +1,50 @@
+@if (enabled()) {
+  <div class="flex flex-wrap gap-2">
+    <button hlmBtn variant="outline" type="button" [disabled]="busy()" (click)="choose('merge')">{{ msg('Merge incident') }}</button>
+    @if (members().length > 1) {
+      <button hlmBtn variant="outline" type="button" [disabled]="busy()" (click)="choose('split')">{{ msg('Split incident') }}</button>
+    }
+  </div>
+}
+@if (operation(); as action) {
+  <form class="grid gap-3 my-3 p-3 rounded-control border border-border"
+    (submit)="$event.preventDefault(); submit(target.value, reason.value)">
+    <fieldset class="grid gap-2" [disabled]="busy()">
+      <legend class="font-semibold">{{ action === 'merge' ? msg('Merge incident') : msg('Split incident') }}</legend>
+      <label [hidden]="action !== 'merge'" class="grid gap-1">{{ msg('Destination incident ID') }}
+        <input hlmInput #target inputmode="numeric" pattern="[1-9][0-9]{0,18}" [required]="action === 'merge'" (input)="impact.set(null)" />
+      </label>
+      @if (action === 'split') {
+        <fieldset class="grid gap-1">
+          <legend>{{ msg('Alerts to move to the new incident') }}</legend>
+          @for (alert of members(); track alert.id) {
+            <label><input type="checkbox" (change)="select(alert.id, $any($event.target).checked)" /> {{ msg('Alert #{0}', [alert.id]) }}</label>
+          }
+        </fieldset>
+      }
+      <label class="grid gap-1">{{ msg('Reason') }}<textarea hlmTextarea #reason required maxlength="2000" rows="2"></textarea></label>
+    </fieldset>
+    @if (impact(); as preview) {
+      <div class="grid gap-1">
+        <p>{{ msg('Source incident #{0} is at {1}.', [preview.source.id, msg(preview.source.step)]) }}</p>
+        @if (preview.target; as destination) {
+          <p>{{ msg('Destination incident #{0} will stay at {1}.', [destination.id, msg(destination.step)]) }}</p>
+        } @else {
+          <p>{{ msg('The split alerts will start a new incident.') }}</p>
+        }
+        <p>{{ msg('Alert IDs to move') }} · {{ preview.moving.join(', ') }}</p>
+      </div>
+    }
+    <div class="flex gap-2">
+      <button hlmBtn type="submit" [busy]="busy()" [disabled]="action === 'split' && !moving().length">
+        {{ impact() ? msg('Save membership change') : msg('Preview impact') }}
+      </button>
+      <button hlmBtn variant="ghost" type="button" [disabled]="busy()" (click)="choose(null)">{{ msg('Cancel') }}</button>
+    </div>
+  </form>
+}
+<fimra-live-status [message]="message()" />
+@if (receipt(); as saved) {
+  <p>{{ msg('Alert IDs moved') }} · {{ saved.moving.join(', ') }}</p>
+  <a hlmBtn variant="link" [routerLink]="incidentLink()(saved.targetId)">{{ msg('Open incident #{0}', [saved.targetId]) }}</a>
+}

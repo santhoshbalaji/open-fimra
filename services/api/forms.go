@@ -613,8 +613,8 @@ func publishFormVersion(ctx context.Context, tx pgx.Tx, id int64, source, userID
 
 // workspaceTemplate is the workflow template new alerts in a workspace use:
 // the workspace's own, or else the shared default.
-const workspaceTemplate = `SELECT t.id FROM workflow_templates t WHERE t.workspace_id IS NULL OR t.workspace_id = $1
-ORDER BY t.workspace_id NULLS LAST LIMIT 1`
+const workspaceTemplate = `SELECT workspace_workflow_template($1)`
+const workflowFormsLock = `SELECT pg_advisory_xact_lock(hashtextextended('open-fimra:starter-pack:' || $1, 0))`
 
 // formStep is one form version placed on a workflow step.
 type formStep struct {
@@ -687,6 +687,9 @@ func (a api) formAssignment(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, workflowFormsLock, access.workspaceID); err != nil {
+			return err
+		}
 		key, _, err := formRoute(r)
 		if err != nil {
 			return err
@@ -700,9 +703,7 @@ func (a api) formAssignment(w http.ResponseWriter, r *http.Request) {
 		err = tx.QueryRow(ctx, `
 SELECT f.id, t.id, EXISTS (SELECT FROM workflow_steps s WHERE s.template_id = t.id AND s.slug = $3),
     f.level, COALESCE(f.owner_hierarchy_id::text, ''), COALESCE(f.owner_unit_path::text, '')
-FROM forms f CROSS JOIN LATERAL (
-    SELECT t.id FROM workflow_templates t WHERE t.workspace_id IS NULL OR t.workspace_id = f.workspace_id
-    ORDER BY t.workspace_id NULLS LAST LIMIT 1) t
+FROM forms f CROSS JOIN LATERAL (SELECT workspace_workflow_template(f.workspace_id) AS id) t
 WHERE f.workspace_id = $1 AND f.form_key = $2 FOR UPDATE OF f`, access.workspaceID, key, step).Scan(&formID, &templateID, &stepFound,
 			&level, &ownerHierarchy, &ownerPath)
 		if err != nil {

@@ -111,6 +111,7 @@ export const shellRoutes: Routes = [
   destinationRoute('/settings/setup', () => import('./shell-setup').then(module => module.SetupScreen)),
   destinationRoute('/settings/gis', () => import('./access-keys').then(module => module.AccessKeys)),
   destinationRoute('/settings/duty', () => import('./duty-roster').then(module => module.DutyRoster)),
+  destinationRoute('/settings/incident-response', () => import('./incident-response-settings').then(module => module.IncidentResponseSettings)),
   destinationRoute('/settings/devices', () => import('./devices').then(module => module.Devices)),
   { path: '**', redirectTo: '' }
 ];

@@ -24,6 +24,8 @@
       }
       {{ scope() }}
     </p>
+    <fimra-incident-intake [endpoint]="endpoint()"
+      (saved)="intakeSaved($event)" />
     <fimra-data-table [caption]=" msg('Incidents') " [phoneCards]="true" [columns]="columns()" [page]="page()" [state]="listState()"
       [scrollKey]="tableKey()" [rowKey]="rowKey" [rowLabel]="places" (pageRequest)="changePage($event)" (retry)="retryList()" />
     @if (cursor() && listState().kind === 'empty') {
@@ -52,7 +54,13 @@
                 <button hlmBtn variant="link" class="justify-self-start px-0" (click)="open(target)">{{ msg('Open incident #{0}', [target]) }}</button>
               }
               <fimra-workflow #workflow class="m-0!" subject="incident" [url]="incidentsUrl() + '/' + row.id"
-                [stepTime]="row.step_time" [alertLink]="alertLink" (changed)="changed()" />
+                [stepTime]="row.step_time" [refresh]="detailRetry()" [alertLink]="alertLink" [incidentLink]="incidentLink" (changed)="changed()" />
+              @if (!row.terminal && !row.merged_into && workflow.history()?.canManageMembers) {
+                <fimra-incident-intake [endpoint]="endpoint()" [incidentId]="row.id" (saved)="intakeSaved($event)" />
+              }
+              <fimra-incident-membership [url]="incidentsUrl() + '/' + row.id"
+                [enabled]="workflow.history()?.canManageMembers === true" [members]="members()" [incidentLink]="incidentLink"
+                (saved)="changed()" />
               <a hlmBtn variant="outline" class="justify-self-start"
                 [routerLink]="navigation.href('/monitor/map', { incident: row.id })">{{ msg('Show incident on map') }}</a>
             </section>

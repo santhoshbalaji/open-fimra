@@ -464,6 +464,17 @@ An incident opens at New with the workspace's workflow template, the same one it
 
 Acting on the incident moves its members. Each member alert that you could move the same way, from its own current step, gets its own log entry with your user, time, location, note and reason, and a link to the incident's entry. Other members stay where they are: alerts you cannot see, alerts already at a final step, and alerts that are behind or ahead of the incident. Those can be moved on their own, as before, until they catch up. Moving an alert on its own never moves its incident. A member's alert history shows `incidentId` on the entries its incident recorded. Response times, the dashboard and overdue checks keep using each alert's own log. A client ID identifies one request per incident, as for alerts. A merged incident refuses new steps with 409.
 
+### Incident response
+
+New workspaces use version 2 of the shared default workflow. Existing workspaces can enable it under **Settings → Incident response**. This copies matching form assignments for new alerts. Each existing alert or incident keeps the template version it started with.
+
+- `POST /api/v1/workspaces/{slug}/fire-intake` records a report. Send a UUID `id`, `source` (`phone`, `radio`, `staff` or `public`), `observedAt`, `latitude`, `longitude` and optional `note`. The API saves a source record and returns `alertId` and `incidentId`. Officers can give an open `incidentId` to link the report directly. With no ID, the grouping rule applies.
+- `POST /api/v1/workspaces/{slug}/incidents/{id}/membership?preview=true` previews a merge (`operation: merge` and `targetId`) or split (`operation: split` and `alertIds`). Save using the same request with the preview key and a reason. The response gives the original and destination IDs and the moved alert IDs. The alerts retain their individual workflows.
+- Extended step requests accept `actualAt` and `estimatedAt`. For `team_sent`, the estimated time is the required arrival estimate. Flash updates and repeated updates take a `response` with `status` and optional `estimatedExtent`, `threats`, `helpNeeded` and `nextContact`. Repeated updates keep the current milestone. Reopening requires an officer and a reason. History and receipts include the original reported times and server sync time.
+- `GET` and `PUT` on `/api/v1/workspaces/{slug}/settings/incident-response` read and replace season targets. A target has inclusive UTC dates (`from` and `through`), the preceding workflow `step`, `targetMinutes` and an optional later `escalationMinutes`. Outside those dates, the workflow default applies. Notification rules can route `incident_overdue` and `incident_escalated` separately. Each level is recorded once per milestone.
+
+Run `make demo-incident-response` on a seeded development database to replay intake, a later satellite alert, a merge, a split and a reopening with fictional records.
+
 ## Forms and field reports
 
 Forms use the [form format](../../packages/form-schema/SPEC.md). The API checks every form file with the Go validator in `packages/form-schema`, so it accepts exactly what the web designer and the phone accept.

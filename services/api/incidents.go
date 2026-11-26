@@ -19,6 +19,9 @@ import (
 //go:embed incidents.sql
 var incidentsSQL string
 
+//go:embed incident_history.sql
+var incidentHistorySQL string
+
 //go:embed incidents_step_outcomes.sql
 var incidentMemberOutcomesSQL string
 
@@ -120,19 +123,7 @@ func (a api) incidentWorkflow(w http.ResponseWriter, r *http.Request) {
 			err = a.previewIncidentStep(ctx, subject, slug, id, r.URL.Query().Get("preview"), &result)
 		} else {
 			// The moved count includes only member alerts that the caller can see.
-			err = a.reader.QueryRow(ctx, `WITH visible AS (SELECT DISTINCT alert_id FROM incident_alert_roles($1,$2,$3))
-SELECT jsonb_build_object('moves',COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY terminal,label)
- FROM incident_moves($1,$2,$3) m),'[]'),
- 'mergedInto',(SELECT merged_into::text FROM incidents WHERE id=$3),
- 'entries',(
- SELECT jsonb_agg(jsonb_build_object('from',l.from_step,'step',l.to_step,'label',s.label,
-  'at',l.occurred_at,'actor',u.display_name,'note',l.note,'reason',l.override_reason,
-  'longitude',ST_X(l.location),'latitude',ST_Y(l.location),'reportPending',l.report_pending,
-  'alertsMoved',(SELECT count(*) FROM step_log x WHERE x.incident_step_id=l.id
-      AND x.alert_id IN (SELECT alert_id FROM visible))) ORDER BY l.id)
- FROM step_log l JOIN workflow_steps s ON (s.template_id,s.slug)=(l.template_id,l.to_step)
- LEFT JOIN users u ON u.id=l.user_id WHERE l.incident_id=$3))
-WHERE EXISTS (SELECT FROM visible)`, subject, slug, id).Scan(&result)
+			err = a.reader.QueryRow(ctx, incidentHistorySQL, subject, slug, id).Scan(&result)
 		}
 	} else {
 		var input stepRequest
@@ -207,7 +198,7 @@ func readIncidentReceipt(ctx context.Context, tx pgx.Tx, subject, slug string, i
  JOIN visible v ON v.alert_id=(o.item->>'alertId')::bigint
  WHERE l.id=$4
 )
-SELECT jsonb_build_object('id',l.id::text,'step',l.to_step,'at',l.occurred_at,
+SELECT jsonb_build_object('id',l.id::text,'step',l.to_step,'at',l.occurred_at,'actualAt',l.actual_at,'estimatedAt',l.estimated_at,'syncedAt',l.recorded_at,
  'alertsMoved',(SELECT count(*) FROM step_log x JOIN visible v USING (alert_id) WHERE x.incident_step_id=l.id),
  'alerts',(SELECT COALESCE(jsonb_agg(item ORDER BY (item->>'alertId')::bigint),'[]') FROM outcomes))
 FROM step_log l WHERE l.id=$4`, subject, slug, id, logID).Scan(result)
@@ -223,12 +214,20 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 	var current, user string
 	var entered time.Time
 	var template int64
-	var merged bool
+	var merged, extended bool
+	var workspace string
+	if err := tx.QueryRow(ctx, `SELECT i.workspace_id::text FROM incidents i JOIN workspaces w ON w.id=i.workspace_id
+WHERE i.id=$2 AND w.slug=$1`, slug, id).Scan(&workspace); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, incidentGroupingLock, workspace); err != nil {
+		return err
+	}
 	// Lock the incident first, then its member alerts in ID order. An alert
 	// step never locks its incident, so the two cannot wait on each other.
-	err := tx.QueryRow(ctx, `SELECT wi.current_step,wi.entered_at,wi.template_id,i.merged_into IS NOT NULL,r.user_id::text
+	err := tx.QueryRow(ctx, `SELECT wi.current_step,wi.entered_at,wi.template_id,i.merged_into IS NOT NULL,r.user_id::text,workflow_template_extended(wi.template_id)
  FROM incidents i JOIN workflow_instances wi ON wi.incident_id=i.id CROSS JOIN incident_alert_roles($1,$2,$3) r
- WHERE i.id=$3 LIMIT 1 FOR UPDATE OF wi`, subject, slug, id).Scan(&current, &entered, &template, &merged, &user)
+ WHERE i.id=$3 LIMIT 1 FOR UPDATE OF wi`, subject, slug, id).Scan(&current, &entered, &template, &merged, &user, &extended)
 	if err != nil {
 		return err
 	}
@@ -242,8 +241,10 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 		var same bool
 		err = tx.QueryRow(ctx, `SELECT user_id=$3 AND to_step=$4 AND note=$5 AND override_reason=$6
    AND client_time IS NOT DISTINCT FROM $7::timestamptz AND ST_X(location) IS NOT DISTINCT FROM $8::float8
-   AND ST_Y(location) IS NOT DISTINCT FROM $9::float8,id
-   FROM step_log WHERE incident_id=$1 AND client_id=$2`, id, in.ClientID, user, in.Step, in.Note, in.Reason, in.ClientTime, lon, lat).Scan(&same, &logID)
+   AND ST_Y(location) IS NOT DISTINCT FROM $9::float8
+   AND (actual_at_supplied = ($10::timestamptz IS NOT NULL) AND ($10 IS NULL OR actual_at=$10))
+   AND estimated_at IS NOT DISTINCT FROM $11::timestamptz AND response_note IS NOT DISTINCT FROM $12::jsonb,id
+   FROM step_log WHERE incident_id=$1 AND client_id=$2`, id, in.ClientID, user, in.Step, in.Note, in.Reason, in.ClientTime, lon, lat, in.ActualAt, in.EstimatedAt, in.Response).Scan(&same, &logID)
 		if err == nil {
 			if !same {
 				return &stepError{409, "This client ID already belongs to another step request."}
@@ -270,18 +271,15 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 	if err = checkIncidentMove(merged, available, allowed); err != nil {
 		return err
 	}
-	if in.Reason != "" && (!override || !required) {
-		return &stepError{403, "Only a supervising officer may give a location exception for a field step."}
-	}
 	if required && !near && in.Reason == "" {
 		return &stepError{422, "Record a location near one of the incident's detections."}
 	}
-	at := now
-	if in.ClientTime != nil {
-		at = *in.ClientTime
-		if at.Before(entered) || at.After(now) {
-			return &stepError{422, "The client time must fall between the current step and now."}
-		}
+	if err := validateResponseStep(in, required, override, near); err != nil {
+		return err
+	}
+	at, actual, err := stepTimes(in, extended, entered, now)
+	if err != nil {
+		return err
 	}
 	if _, err = tx.Exec(ctx, `SELECT 1 FROM incident_members m JOIN workflow_instances wi ON wi.alert_id=m.alert_id
  WHERE m.incident_id=$1 ORDER BY wi.alert_id FOR UPDATE OF wi`, id); err != nil {
@@ -292,21 +290,26 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
 		subject, slug, id, in.Step).Scan(&outcomes); err != nil {
 		return err
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO step_log(incident_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,client_id,client_time,report_pending,incident_outcomes)
- SELECT $1,$2,$3,$4,$5,$6,ST_SetSRID(ST_Point($7,$8),4326),$9,$10,NULLIF($11,''),$12,report_pending,$13
- FROM workflow_steps WHERE template_id=$2 AND slug=$4 RETURNING id`, id, template, current, in.Step, user, at, lon, lat, in.Note, in.Reason, in.ClientID, in.ClientTime, outcomes).Scan(&logID)
+	err = tx.QueryRow(ctx, `INSERT INTO step_log(incident_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,client_id,client_time,report_pending,incident_outcomes,actual_at,estimated_at,response_note,actual_at_supplied)
+ SELECT $1,$2,$3,$4,$5,$6,ST_SetSRID(ST_Point($7,$8),4326),$9,$10,NULLIF($11,''),$12,report_pending,$13,$14,$15,$16,$17
+ FROM workflow_steps WHERE template_id=$2 AND slug=$4 RETURNING id`, id, template, current, in.Step, user, at, lon, lat, in.Note, in.Reason, in.ClientID, in.ClientTime, outcomes, actual, in.EstimatedAt, in.Response, in.ActualAt != nil).Scan(&logID)
 	if err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE workflow_instances SET current_step=$2,entered_at=$3 WHERE incident_id=$1`, id, in.Step, at); err != nil {
-		return err
+	if in.Step != "response_update" {
+		if _, err = tx.Exec(ctx, `UPDATE workflow_instances SET current_step=$2,entered_at=$3 WHERE incident_id=$1`, id, in.Step, at); err != nil {
+			return err
+		}
 	}
 	// Use the saved decisions for the write. The incident's location check
 	// stands for the members it moves.
 	if _, err = tx.Exec(ctx, `WITH logged AS (
-    INSERT INTO step_log(alert_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,report_pending,incident_step_id)
+    INSERT INTO step_log(alert_id,template_id,from_step,to_step,user_id,occurred_at,location,note,override_reason,report_pending,incident_step_id,actual_at,estimated_at,response_note)
     SELECT wi.alert_id,wi.template_id,wi.current_step,$2,$3,GREATEST($4::timestamptz,wi.entered_at),
-           ST_SetSRID(ST_Point($5,$6),4326),$7,$8,s.report_pending,$9
+           ST_SetSRID(ST_Point($5,$6),4326),$7,$8,s.report_pending,$9,
+           CASE WHEN workflow_template_extended(wi.template_id) THEN $10::timestamptz END,
+           CASE WHEN workflow_template_extended(wi.template_id) THEN $11::timestamptz END,
+           CASE WHEN workflow_template_extended(wi.template_id) THEN $12::jsonb END
     FROM jsonb_to_recordset($1::jsonb) AS o("alertId" bigint,reason text)
     JOIN workflow_instances wi ON wi.alert_id=o."alertId"
     JOIN workflow_steps s ON (s.template_id,s.slug)=(wi.template_id,$2)
@@ -314,8 +317,8 @@ func recordIncidentStep(ctx context.Context, tx pgx.Tx, subject, slug string, id
     ORDER BY wi.alert_id
     RETURNING alert_id,occurred_at
 )
-UPDATE workflow_instances wi SET current_step=$2,entered_at=l.occurred_at FROM logged l WHERE wi.alert_id=l.alert_id`,
-		outcomes, in.Step, user, at, lon, lat, in.Note, in.Reason, logID); err != nil {
+UPDATE workflow_instances wi SET current_step=$2,entered_at=l.occurred_at FROM logged l WHERE wi.alert_id=l.alert_id AND $2<>'response_update'`,
+		outcomes, in.Step, user, at, lon, lat, in.Note, in.Reason, logID, actual, in.EstimatedAt, in.Response); err != nil {
 		return err
 	}
 	return readIncidentReceipt(ctx, tx, subject, slug, id, logID, result)
