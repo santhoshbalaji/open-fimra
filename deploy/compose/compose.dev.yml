@@ -33,6 +33,9 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${FIMRA_KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${FIMRA_KEYCLOAK_ADMIN_PASSWORD:-admin-dev}
       KC_HEALTH_ENABLED: "true"
+      # Trust X-Forwarded-* from a local reverse proxy, so sign-in pages and
+      # tokens use the proxy's public address when the stack is reached through one.
+      KC_PROXY_HEADERS: xforwarded
     ports:
       - "127.0.0.1:${FIMRA_KEYCLOAK_PORT:-18180}:8080"
     volumes:

@@ -18,28 +18,35 @@ import (
 type config struct {
 	databaseURL string
 	issuer      string
-	audience    string
-	httpAddr    string
-	firmsMapKey string
-	corsOrigins string
-	uploadDir   string
-	exportDir   string
-	exportTTL   time.Duration
-	setupCode   string
+	// discoveryURL is where the API reads the provider's keys. It defaults to
+	// the issuer and can be a local address when the issuer is a public one.
+	discoveryURL string
+	extraIssuers []string
+	audience     string
+	httpAddr     string
+	firmsMapKey  string
+	corsOrigins  string
+	uploadDir    string
+	exportDir    string
+	exportTTL    time.Duration
+	setupCode    string
 }
 
 func loadConfig() config {
+	issuer := envOr("FIMRA_OIDC_ISSUER", "http://127.0.0.1:18180/realms/open-fimra")
 	return config{
-		databaseURL: envOr("FIMRA_DATABASE_URL", "postgres://fimra:fimra-dev@127.0.0.1:15432/fimra?sslmode=disable"),
-		issuer:      envOr("FIMRA_OIDC_ISSUER", "http://127.0.0.1:18180/realms/open-fimra"),
-		audience:    envOr("FIMRA_OIDC_AUDIENCE", "open-fimra-api"),
-		httpAddr:    envOr("FIMRA_HTTP_ADDR", "127.0.0.1:18090"),
-		firmsMapKey: strings.TrimSpace(os.Getenv("FIMRA_FIRMS_MAP_KEY")),
-		corsOrigins: envOr("FIMRA_CORS_ORIGINS", devOrigins),
-		uploadDir:   envOr("FIMRA_UPLOAD_DIR", ".geo-uploads"),
-		exportDir:   envOr("FIMRA_EXPORT_DIR", ".geo-exports"),
-		exportTTL:   defaultExportTTL,
-		setupCode:   strings.TrimSpace(os.Getenv("FIMRA_SETUP_CODE")),
+		databaseURL:  envOr("FIMRA_DATABASE_URL", "postgres://fimra:fimra-dev@127.0.0.1:15432/fimra?sslmode=disable"),
+		issuer:       issuer,
+		discoveryURL: envOr("FIMRA_OIDC_DISCOVERY_URL", issuer),
+		extraIssuers: strings.Split(os.Getenv("FIMRA_OIDC_EXTRA_ISSUERS"), ","),
+		audience:     envOr("FIMRA_OIDC_AUDIENCE", "open-fimra-api"),
+		httpAddr:     envOr("FIMRA_HTTP_ADDR", "127.0.0.1:18090"),
+		firmsMapKey:  strings.TrimSpace(os.Getenv("FIMRA_FIRMS_MAP_KEY")),
+		corsOrigins:  envOr("FIMRA_CORS_ORIGINS", devOrigins),
+		uploadDir:    envOr("FIMRA_UPLOAD_DIR", ".geo-uploads"),
+		exportDir:    envOr("FIMRA_EXPORT_DIR", ".geo-exports"),
+		exportTTL:    defaultExportTTL,
+		setupCode:    strings.TrimSpace(os.Getenv("FIMRA_SETUP_CODE")),
 	}
 }
 
@@ -115,9 +122,9 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		return fmt.Errorf("could not connect to the database: %w", err)
 	}
 
-	provider, err := discoverProvider(startup, cfg.issuer)
+	provider, err := discoverProvider(startup, cfg.discoveryURL)
 	if err != nil {
-		return fmt.Errorf("could not discover the OpenID Connect provider at %s: %w", cfg.issuer, err)
+		return fmt.Errorf("could not discover the OpenID Connect provider at %s: %w", cfg.discoveryURL, err)
 	}
 
 	listener, err := new(net.ListenConfig).Listen(startup, "tcp", cfg.httpAddr)
@@ -153,7 +160,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		return err
 	}
 	keys := newFIRMSKeys(pool, secrets, cfg.firmsMapKey, nil)
-	auth := newAuthenticator(provider, cfg.issuer, cfg.audience)
+	auth := newAuthenticator(provider, cfg.issuer, cfg.audience, cfg.extraIssuers...)
 	auth.emailEnabled = email != nil
 	jobs, err := newJobClient(pool, logger, keys, email, push)
 	if err != nil {
