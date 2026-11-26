@@ -13,7 +13,7 @@ import { classes } from '@spartan-ng/helm/utils';
 export class HlmFieldDescription implements OnDestroy {
 	private static _id = 0;
 
-	private readonly _a11y = inject(BrnFieldA11yService, { optional: true, host: true });
+	private readonly _a11y = inject(BrnFieldA11yService, { optional: true });
 
 	public readonly id = input<string>(`hlm-field-description-${HlmFieldDescription._id++}`);
 

@@ -18,8 +18,8 @@ import { classes } from '@spartan-ng/helm/utils';
 	exportAs: 'hlmFieldError',
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	host: {
-		role: 'alert',
 		'data-slot': 'field-error',
+		'[attr.role]': 'announce() ? "alert" : null',
 		'[attr.id]': 'id()',
 		'[hidden]': '!_display()',
 	},
@@ -33,7 +33,7 @@ export class HlmFieldError implements OnDestroy {
 	private static _id = 0;
 
 	private readonly _field = inject(BrnField, { optional: true });
-	private readonly _a11y = inject(BrnFieldA11yService, { optional: true, host: true });
+	private readonly _a11y = inject(BrnFieldA11yService, { optional: true });
 
 	private _registeredId?: string | undefined;
 
@@ -50,6 +50,9 @@ export class HlmFieldError implements OnDestroy {
 
 	/** Forces the error message to be visible regardless of the control's validation state. */
 	public readonly forceShow = input<boolean, BooleanInput>(false, { transform: booleanAttribute });
+
+	/** Disable the inline announcement when moving focus to an error summary. */
+	public readonly announce = input(true, { transform: booleanAttribute });
 
 	protected readonly _display = computed(() => !this._hasParentField || this.forceShow() || this._hasError());
 
@@ -71,14 +74,14 @@ export class HlmFieldError implements OnDestroy {
 				if (!a11y) return;
 
 				const id = this.id();
-				const hasError = this._hasError();
+				const visible = this._display();
 
-				if (this._registeredId && (this._registeredId !== id || !hasError)) {
+				if (this._registeredId && (this._registeredId !== id || !visible)) {
 					a11y.unregisterError(this._registeredId);
 					this._registeredId = undefined;
 				}
 
-				if (hasError && this._registeredId !== id) {
+				if (visible && this._registeredId !== id) {
 					a11y.registerError(id);
 					this._registeredId = id;
 				}

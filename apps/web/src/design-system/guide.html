@@ -48,8 +48,13 @@
       </div>
     }
     <div class="group-row"><h3>Icon</h3>@for (size of iconSizes; track size) {
-      <button hlmBtn variant="outline" [size]="size" [attr.aria-label]="'Add ' + size"><svg fimraIcon="plus"></svg></button>
+      <button hlmBtn variant="outline" [size]="size" [attr.aria-label]="'Add ' + size"><svg fimraIcon="plus" aria-hidden="true"></svg></button>
     }</div>
+    <div class="group-row">
+      <button type="button" hlmBtn [busy]="saving()" (click)="saveNote()">Save field note</button>
+      <fimra-live-status [message]="saveMessage()" />
+    </div>
+    <p>Keep the action label while it saves. Use a status message for progress and the result.</p>
   </section>
   <section><h2>Fields</h2>
     <div class="group-row" role="group" aria-label="Field state"><h3>Preview state</h3>
@@ -61,10 +66,6 @@
     <div class="fields">
       <hlm-field><label hlmFieldLabel for="unit">Unit name</label>
         <input hlmInput [disabled]="disabled()" [forceInvalid]="invalid()" id="unit" placeholder="Demo range"><p hlmFieldDescription>Use the name shown on the map.</p>
-      </hlm-field>
-      <hlm-field forceInvalid><label hlmFieldLabel for="code">Unit code</label>
-        <input hlmInput id="code" required forceInvalid aria-invalid="true">
-        <hlm-field-error forceShow>Enter a unit code.</hlm-field-error>
       </hlm-field>
       <hlm-field><label hlmFieldLabel for="locked">Assigned unit</label><input hlmInput id="locked" disabled value="Demo range"></hlm-field>
       <hlm-field><label hlmFieldLabel for="note">Field note</label><textarea [disabled]="disabled()" [forceInvalid]="invalid()" hlmTextarea id="note" rows="2"></textarea></hlm-field>
@@ -100,11 +101,33 @@
     <div class="group-row">@for (state of ['Off','On','Disabled']; track state) {
       <label hlmLabel><hlm-switch [size]="state === 'Off' ? 'sm' : 'default'" [checked]="state === 'On'" [forceInvalid]="invalid()" [disabled]="disabled() || state === 'Disabled'" [aria-label]="state" />{{ state }}</label>
     }</div>
+    <form class="mt-4 grid gap-3" novalidate (submit)="validate($event, summary)">
+      <h3 class="font-semibold">Field messages and error summary</h3>
+      <fimra-field-error-summary #summary [errors]="fieldErrors()" />
+      <hlm-field [forceInvalid]="fieldErrors().length > 0">
+        <label hlmFieldLabel for="code">Unit code</label>
+        <input hlmInput id="code" required [forceInvalid]="fieldErrors().length > 0"
+          [attr.aria-invalid]="fieldErrors().length ? 'true' : null" (input)="code.set($any($event.target).value)">
+        <p hlmFieldDescription id="code-hint">Use the code from the unit register.</p>
+        @if (fieldErrors()[0]; as error) {
+          <hlm-field-error id="code-error" forceShow [announce]="false">{{ error.message }}</hlm-field-error>
+        }
+      </hlm-field>
+      <button hlmBtn type="submit" variant="outline" class="justify-self-start">Check fields</button>
+    </form>
   </section>
   <section><h2>Badges and workflow</h2>
     <div class="group-row">@for (variant of badges; track variant) { <span hlmBadge [variant]="variant">{{ variant }}</span> }</div>
     <div class="group-row"><fimra-status-badge icon="step" label="Team sent"/><fimra-status-badge icon="complete" label="Closed"/>
       <span><time>14:05 UTC</time><fimra-status-badge icon="overdue" label="Overdue"/></span></div>
+    <div class="group-row">
+      <fimra-status-badge icon="draft" label="Draft" />
+      <fimra-status-badge icon="published" label="Published" />
+      <fimra-status-badge icon="validation-success" label="Validation passed" />
+      <fimra-status-badge icon="pending" label="Pending" />
+      <fimra-status-badge icon="failed" label="Failed" />
+      <fimra-status-badge icon="queued" label="Queued" />
+    </div>
   </section>
   <section><h2>Dialogs and actions</h2>
     <div class="group-row" role="group" aria-label="Sheet and tooltip placement"><h3>Placement</h3>
@@ -114,17 +137,19 @@
       }
     </div>
     <div class="group-row">
-      <hlm-dialog><button hlmBtn variant="outline" hlmDialogTrigger>Open dialog</button>
-        <hlm-dialog-content *hlmDialogPortal><h3 hlmDialogTitle>Close this alert?</h3>
+      <hlm-dialog autoFocus="first-heading"><button hlmBtn variant="outline" hlmDialogTrigger>Open dialog</button>
+        <hlm-dialog-content *hlmDialogPortal><h3 hlmDialogTitle tabindex="-1" class="me-12">Close this alert?</h3>
           <p hlmDialogDescription>The officer can review the timeline before closing the alert.</p>
           <button hlmBtn hlmDialogClose>Done</button>
         </hlm-dialog-content>
       </hlm-dialog>
-      <hlm-sheet><button hlmBtn variant="outline" hlmSheetTrigger [side]="side()">Open sheet</button>
-        <hlm-sheet-content *hlmSheetPortal><hlm-sheet-header><h3 hlmSheetTitle>Alert details</h3>
+      <hlm-sheet autoFocus="first-heading"><button hlmBtn variant="outline" hlmSheetTrigger [side]="side()">Open sheet</button>
+        <hlm-sheet-content *hlmSheetPortal><hlm-sheet-header><h3 hlmSheetTitle tabindex="-1">Alert details</h3>
           <p hlmSheetDescription>Last observed in Demo range.</p></hlm-sheet-header>
         </hlm-sheet-content>
       </hlm-sheet>
+      <button #confirmTrigger type="button" hlmBtn variant="outline" (click)="closeAlert(confirmTrigger, status)">Open confirmation</button>
+      <p #status tabindex="-1" class="rounded-sm focus-visible:outline-2 focus-visible:outline-ring">{{ decision() }}</p>
       <button hlmBtn variant="outline" [hlmDropdownMenuTrigger]="actions">Open menu</button>
       <ng-template #actions><hlm-dropdown-menu><button hlmDropdownMenuItem (click)="notify.info('Details requested')">View details</button>
         <button hlmDropdownMenuCheckbox [checked]="marked()" (triggered)="marked.set(!marked())">Mark for review
@@ -132,6 +157,17 @@
         <button hlmDropdownMenuItem variant="destructive" (click)="notify.info('Removed from this preview')">Remove</button>
         <button hlmDropdownMenuItem disabled>Reassign</button></hlm-dropdown-menu></ng-template>
       <button hlmBtn variant="outline" [position]="side()" hlmTooltip="Return to the whole state">Map tip</button>
+    </div>
+    <div class="panel-example">
+      <div>
+        <p>Dock details beside the page on larger screens. On a phone, open them in a bottom sheet.</p>
+        <button #panelTrigger type="button" hlmBtn variant="outline" class="mt-2"
+          [attr.aria-expanded]="panel.open()" (click)="panel.show(panelTrigger)">Open side panel</button>
+      </div>
+      <fimra-side-panel #panel="fimraSidePanel" heading="Detection details">
+        <p>Last observed in Demo beat.</p>
+        <button type="button" hlmBtn variant="outline" class="justify-self-start" (click)="panel.close()">Back to example</button>
+      </fimra-side-panel>
     </div>
     <div class="group-row"><label hlmLabel for="toast-kind">Toast</label>
       <hlm-select [value]="toastType()" (valueChange)="toastType.set($event ?? 'info')">
@@ -142,6 +178,7 @@
       </hlm-select>
       <button hlmBtn variant="outline" (click)="showToast()">Show toast</button>
     </div>
+    <p>Use a toast for brief feedback or an inline status for updates that belong with the action.</p>
   </section>
   <section><h2>Tabs and table</h2>
     @for (style of tabStyles; track style) {
@@ -172,8 +209,19 @@
       <div hlmAlert [variant]="variant"><h3 hlmAlertTitle class="flex items-center gap-2"><svg fimraIcon="triangle-alert" class="size-4"></svg>{{ variant === 'default' ? 'Import paused' : 'Import failed' }}</h3>
         <p hlmAlertDescription>Review the file before trying again.</p></div>
     }
-    <h3 class="my-3">Loading rows</h3><div aria-label="Loading" role="status" class="grid gap-2">
-      <hlm-skeleton class="h-4 w-48"/><hlm-skeleton class="h-4 w-32"/></div>
+  </section>
+  <section><h2>Data states</h2>
+    <p>Keep the last available data visible while it refreshes. Use Retry when a request fails.</p>
+    <div class="fields">
+      @for (state of examples; track state.kind) {
+        <fimra-state-region [state]="state">
+          <p class="p-4">Demo beat · 2 detections</p>
+        </fimra-state-region>
+      }
+      <fimra-state-region [state]="retryState()" (retry)="retryState.set({ kind: 'ready', announcement: 'Alert list loaded' })">
+        <p class="p-4">Alert list loaded. Demo range · 1 alert</p>
+      </fimra-state-region>
+    </div>
   </section>
   <hlm-toaster [theme]="appearance.theme()" />
 </main>

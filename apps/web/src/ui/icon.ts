@@ -2,7 +2,7 @@ import { Directive, ElementRef, effect, inject, input } from '@angular/core';
 import {
   lucideArrowDown, lucideArrowUp, lucideGripVertical, lucideTrash2, lucideUndo2, lucideBell, lucideBellOff, lucideCheck, lucideChevronDown, lucideChevronRight, lucideCircleAlert, lucideCircleCheck,
   lucideCircleX, lucideClock, lucideDownload, lucideEye, lucideEyeOff, lucideInfo, lucideKeyRound, lucideLayers,
-  lucideLoaderCircle, lucideLock, lucideLogOut, lucideMailCheck, lucideMailX, lucideMaximize, lucideMinus, lucideMoon,
+  lucideFilePenLine, lucideListOrdered, lucideLoaderCircle, lucideLock, lucideLogOut, lucideMailCheck, lucideMailX, lucideMaximize, lucideMinus, lucideMoon,
   lucidePlus, lucideSettings, lucideSun, lucideTriangleAlert
 } from '@ng-icons/lucide';
 
@@ -13,7 +13,7 @@ const icons = {
   'chevron-right': lucideChevronRight, 'circle-alert': lucideCircleAlert, 'circle-check': lucideCircleCheck,
   'circle-x': lucideCircleX, 'clock': lucideClock, 'download': lucideDownload, 'eye': lucideEye, 'eye-off': lucideEyeOff,
   'info': lucideInfo, 'key-round': lucideKeyRound, 'layers': lucideLayers, 'loader-circle': lucideLoaderCircle,
-  'lock': lucideLock, 'log-out': lucideLogOut, 'mail-check': lucideMailCheck, 'mail-x': lucideMailX,
+  'file-pen-line': lucideFilePenLine, 'list-ordered': lucideListOrdered, 'lock': lucideLock, 'log-out': lucideLogOut, 'mail-check': lucideMailCheck, 'mail-x': lucideMailX,
   'maximize': lucideMaximize, 'minus': lucideMinus, 'moon': lucideMoon, 'plus': lucidePlus, 'settings': lucideSettings,
   'sun': lucideSun, 'triangle-alert': lucideTriangleAlert
 } as const;

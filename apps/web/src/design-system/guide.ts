@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, Injector, afterNextRender, computed, inject, signal } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { toast } from '@spartan-ng/brain/sonner';
 import { provideSpartanHlm } from '@spartan-ng/helm/utils';
@@ -7,6 +7,12 @@ import { classes } from '../detections';
 import { ThemeService } from '../theme';
 import { EmptyState } from '../ui/empty-state';
 import { StatusBadge } from '../ui/status-badge';
+import { ConfirmDialog } from '../ui/confirm-dialog';
+import { FieldErrorSummary } from '../ui/field-error-summary';
+import { LiveStatus } from '../ui/live-status';
+import { restoreOverlayFocus } from '../ui/overlay-focus';
+import { SidePanel } from '../ui/side-panel';
+import { DataState, StateRegion } from '../ui/state-region';
 import { HlmAlertImports } from '@spartan-ng/helm/alert';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -21,7 +27,6 @@ import { HlmRadioGroupImports } from '@spartan-ng/helm/radio-group';
 import { HlmSelectImports } from '@spartan-ng/helm/select';
 import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 import { HlmSheetImports } from '@spartan-ng/helm/sheet';
-import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmToasterImports } from '@spartan-ng/helm/sonner';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 import { HlmTableImports } from '@spartan-ng/helm/table';
@@ -43,9 +48,12 @@ function luminance(hex: string): number {
   selector: 'fimra-root',
   templateUrl: './guide.html',
   styleUrl: './guide.css',
-  imports: [EmptyState, StatusBadge, HlmAlertImports, HlmBadgeImports, HlmButtonImports, HlmCardImports, HlmCheckboxImports, HlmDialogImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports, HlmSeparatorImports, HlmSheetImports, HlmSkeletonImports, HlmToasterImports, HlmSwitchImports, HlmTableImports, HlmTabsImports, HlmTextareaImports, HlmTooltipImports, Icon]
+  imports: [EmptyState, StatusBadge, FieldErrorSummary, LiveStatus, SidePanel, StateRegion, HlmAlertImports, HlmBadgeImports, HlmButtonImports, HlmCardImports, HlmCheckboxImports, HlmDialogImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports, HlmSeparatorImports, HlmSheetImports, HlmToasterImports, HlmSwitchImports, HlmTableImports, HlmTabsImports, HlmTextareaImports, HlmTooltipImports, Icon]
 })
 export class DesignGuide {
+  private readonly confirm = inject(ConfirmDialog);
+  private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   readonly appearance = inject(ThemeService);
   readonly palette = computed(() => {
     const mode = this.appearance.theme();
@@ -81,6 +89,51 @@ export class DesignGuide {
   readonly invalid = computed(() => this.fieldState() === 'Invalid');
   readonly marked = signal(false);
   readonly notify = toast;
+  readonly saving = signal(false);
+  readonly saveMessage = signal('');
+  readonly decision = signal('Alert open');
+  readonly code = signal('');
+  readonly checked = signal(false);
+  readonly fieldErrors = computed(() => this.checked() && !this.code().trim()
+    ? [{ fieldId: 'code', message: 'Enter a unit code.' }]
+    : []);
+  readonly examples: readonly DataState[] = [
+    { kind: 'loading', heading: 'Loading detections' },
+    { kind: 'empty', heading: 'No detections', detail: 'Choose a longer time window.' },
+    { kind: 'forbidden', detail: 'Ask your administrator for a workspace role.' },
+    { kind: 'stale', observedAt: { dateTime: '14:05:00Z', label: '14:05 UTC' } }
+  ];
+  readonly retryState = signal<DataState>({ kind: 'error', heading: 'Could not load the alert list' });
+
+  saveNote() {
+    this.saving.set(true);
+    this.saveMessage.set('Saving the field note…');
+    const timer = setTimeout(() => {
+      unregister();
+      this.saving.set(false);
+      this.saveMessage.set('Field note saved.');
+    }, 1000);
+    const unregister = this.destroyRef.onDestroy(() => clearTimeout(timer));
+  }
+
+  validate(event: Event, summary: FieldErrorSummary) {
+    event.preventDefault();
+    this.checked.set(true);
+    afterNextRender(() => summary.focus(), { injector: this.injector });
+  }
+
+  async closeAlert(trigger: HTMLElement, status: HTMLElement) {
+    const approved = await this.confirm.open({
+      heading: 'Close the demo alert?',
+      detail: 'Closing the alert ends its workflow.',
+      confirmLabel: 'Close alert',
+      destructive: true,
+      trigger
+    });
+    if (!approved) return;
+    this.decision.set('Alert closed');
+    afterNextRender(() => restoreOverlayFocus(status, trigger), { injector: this.injector });
+  }
 
   showToast() {
     const messages = { success: 'Field note saved', info: 'New field note', warning: 'Field note is overdue',

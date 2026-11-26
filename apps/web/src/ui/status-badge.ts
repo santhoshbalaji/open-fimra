@@ -1,6 +1,12 @@
 import { Component, input } from '@angular/core';
 import { HlmBadge } from '@spartan-ng/helm/badge';
-import { Icon } from './icon';
+import { Icon, IconName } from './icon';
+
+const icons = {
+  overdue: 'triangle-alert', complete: 'check', healthy: 'circle-check', delayed: 'clock',
+  quiet: 'bell-off', failing: 'circle-x', step: 'clock', draft: 'file-pen-line', published: 'circle-check',
+  'validation-success': 'check', pending: 'clock', failed: 'circle-x', queued: 'list-ordered'
+} satisfies Record<string, IconName>;
 
 function visibleLabel(value: string) {
   const text = value.trim();
@@ -14,20 +20,14 @@ function visibleLabel(value: string) {
   host: { class: 'inline-flex align-middle mx-1' },
   template: `
     <span hlmBadge variant="outline" class="gap-1.5 text-text">
-      @switch (icon()) {
-        @case ('overdue') { <svg fimraIcon="triangle-alert" aria-hidden="true" class="size-4 fill-warning"></svg> }
-        @case ('complete') { <svg fimraIcon="check" aria-hidden="true" class="size-4"></svg> }
-        @case ('healthy') { <svg fimraIcon="circle-check" aria-hidden="true" class="size-4"></svg> }
-        @case ('delayed') { <svg fimraIcon="clock" aria-hidden="true" class="size-4"></svg> }
-        @case ('quiet') { <svg fimraIcon="bell-off" aria-hidden="true" class="size-4"></svg> }
-        @case ('failing') { <svg fimraIcon="circle-x" aria-hidden="true" class="size-4"></svg> }
-        @case ('step') { <svg fimraIcon="clock" aria-hidden="true" class="size-4"></svg> }
-      }
+      <svg [fimraIcon]="icons[icon()]" aria-hidden="true" class="size-4"
+        [class.fill-warning]="icon() === 'overdue'"></svg>
       {{ label() }}
     </span>
   `
 })
 export class StatusBadge {
-  readonly icon = input.required<'step' | 'complete' | 'overdue' | 'healthy' | 'delayed' | 'quiet' | 'failing'>();
+  protected readonly icons = icons;
+  readonly icon = input.required<keyof typeof icons>();
   readonly label = input.required<string, string>({ transform: visibleLabel });
 }
