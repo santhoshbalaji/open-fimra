@@ -1,25 +1,37 @@
-<div class="mx-auto max-w-[560px] px-4 py-6 sm:py-10">
-  <section hlmCard aria-labelledby="bootstrap-heading">
+<div class="mx-auto max-w-[560px] px-4 py-4 sm:py-10">
+  <section hlmCard class="overflow-visible!" aria-labelledby="bootstrap-heading">
+    <p class="px-6 text-sm font-semibold text-muted-foreground max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:border-b max-sm:border-border max-sm:bg-card max-sm:py-2">
+      Step 1 of 7: Workspace
+    </p>
     <hlm-card-header>
-      <h2 hlmCardTitle id="bootstrap-heading" class="text-display!">Set up Open FIMRA</h2>
-      <p hlmCardDescription class="leading-normal">This installation has no workspace yet. The first person to finish this step
-        becomes its administrator. The setup code is printed in the core API's log when it starts, or set by the system
-        operator in <code class="rounded-sm bg-background px-1 text-xs">FIMRA_SETUP_CODE</code>.</p>
+      <h1 hlmCardTitle id="bootstrap-heading" class="text-display!">Set up Open FIMRA</h1>
+      <p hlmCardDescription class="leading-normal">Create your workspace and become its first administrator. Find the setup code
+        in the server log or ask the system operator for it.</p>
     </hlm-card-header>
-    <form hlmCardContent #form novalidate (submit)="$event.preventDefault(); submit(form)">
-      <fieldset class="grid min-w-0 gap-6" [disabled]="busy()">
+    <form hlmCardContent #form class="grid gap-4" novalidate (submit)="$event.preventDefault(); submit(form)">
+      @if (error()) {
+        <div role="alert">
+          @if (codeError()) {
+            <fimra-field-error-summary heading="Check the setup code" [errors]="[{ fieldId: 'setup-code', message: codeError() }]" />
+          } @else {
+            <div hlmAlert variant="destructive"><p hlmAlertDescription>{{ error() }}</p></div>
+          }
+        </div>
+      }
+      <fieldset class="grid min-w-0 gap-4" [disabled]="busy() || saved()">
         <hlm-field>
           <label hlmFieldLabel for="setup-code">Setup code</label>
           <div class="flex gap-2">
             <input hlmInput id="setup-code" name="setupCode" required autocomplete="one-time-code" spellcheck="false" maxlength="64"
-              autocapitalize="characters" [type]="showCode() ? 'text' : 'password'" class="font-mono tracking-wide">
+              autocapitalize="characters" [type]="showCode() ? 'text' : 'password'" class="min-w-0 font-mono tracking-wide"
+              aria-describedby="setup-code-help" [attr.aria-invalid]="codeError() ? 'true' : null">
             <button hlmBtn type="button" variant="outline" class="shrink-0" aria-controls="setup-code"
               [attr.aria-pressed]="showCode()" (click)="showCode.set(!showCode())">
               @if (showCode()) { <svg fimraIcon="eye-off" aria-hidden="true"></svg> } @else { <svg fimraIcon="eye" aria-hidden="true"></svg> }
               Show<span class="sr-only"> setup code</span>
             </button>
           </div>
-          <p hlmFieldDescription>Four groups of letters and digits, such as ABCD-EFGH-JKMN-PQRS.</p>
+          <p hlmFieldDescription id="setup-code-help">Four groups of letters and digits, such as ABCD-EFGH-JKMN-PQRS.</p>
         </hlm-field>
 
         <fieldset hlmFieldSet class="min-w-0 gap-3">
@@ -57,14 +69,11 @@
           <p hlmFieldDescription>The code of the state in your boundary file, in its code column. The state boundary you
             upload later must use the same code.</p>
         </hlm-field>
-        @if (error()) {
-          <div hlmAlert variant="destructive" class="grid-cols-[auto_1fr] gap-x-2.5">
-            <svg fimraIcon="circle-alert" aria-hidden="true" class="row-span-2 mt-0.5 size-4"></svg>
-            <p hlmAlertDescription>{{ error() }}</p>
-          </div>
-        }
-        <button hlmBtn type="submit" size="lg" class="justify-self-start">Start setup</button>
       </fieldset>
+      <div class="flex flex-wrap items-center gap-3 max-sm:sticky max-sm:bottom-0 max-sm:-mx-6 max-sm:border-t max-sm:border-border max-sm:bg-card max-sm:px-6 max-sm:py-2">
+        <button hlmBtn type="submit" [disabled]="busy() || saved()">Start setup</button>
+        <fimra-live-status [message]="busy() ? 'Saving…' : saved() ? 'Workspace saved.' : ''" />
+      </div>
     </form>
   </section>
 </div>

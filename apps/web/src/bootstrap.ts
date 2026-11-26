@@ -12,6 +12,8 @@ import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
+import { FieldErrorSummary } from './ui/field-error-summary';
+import { LiveStatus } from './ui/live-status';
 
 /** Turns a workspace name into a web address part, such as "demo-state". */
 export function slugFrom(name: string): string {
@@ -25,9 +27,9 @@ export function slugFrom(name: string): string {
  */
 @Component({
   selector: 'fimra-bootstrap',
-  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, Icon],
+  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmFieldImports, HlmInput, HlmLabel, HlmRadioGroupImports, FieldErrorSummary, Icon, LiveStatus],
   templateUrl: './bootstrap.html',
-  host: { class: 'block h-full overflow-auto' }
+  host: { class: 'block h-full overflow-auto max-sm:scroll-pt-16 max-sm:scroll-pb-16' }
 })
 export class Bootstrap {
   private readonly http = inject(HttpClient);
@@ -39,13 +41,15 @@ export class Bootstrap {
   readonly showCode = signal(false);
   readonly busy = signal(false);
   readonly error = signal('');
+  readonly codeError = signal('');
+  readonly saved = signal(false);
 
   nameChanged(name: string): void {
     if (!this.slugEdited()) this.slug.set(slugFrom(name));
   }
 
   submit(form: HTMLFormElement): void {
-    if (!form.reportValidity()) return;
+    if (this.busy() || this.saved() || !form.reportValidity()) return;
     const data = new FormData(form);
     const body = {
       setupCode: String(data.get('setupCode') ?? '').trim(),
@@ -56,12 +60,15 @@ export class Bootstrap {
     };
     this.busy.set(true);
     this.error.set('');
+    this.codeError.set('');
     this.http.post(this.url, body).subscribe({
-      next: () => { this.busy.set(false); this.workspace.reload(); },
+      next: () => { this.saved.set(true); this.busy.set(false); this.workspace.reload(); },
       error: (error: HttpErrorResponse) => {
         this.busy.set(false);
         if (error.status === 401) this.auth.sessionEnded();
-        this.error.set(typeof error.error?.error === 'string' ? error.error.error : 'Setup could not start. Try again.');
+        const message = typeof error.error?.error === 'string' ? error.error.error : 'Setup could not start. Try again.';
+        this.error.set(message);
+        if (error.status === 403) this.codeError.set(message);
       }
     });
   }

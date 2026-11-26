@@ -78,18 +78,26 @@ describe('SetupWizard', () => {
   it('opens at the first unfinished step and lists every step with its status', () => {
     open(setupState());
     expect(heading()).toBe('Hierarchy');
-    const items = [...fixture.nativeElement.querySelectorAll('.setup-steps button')].map(item => (item as HTMLElement).getAttribute('aria-label'));
-    expect(items).toEqual(['1. Mode, Done', '2. Workspace, Done', '3. Hierarchy, To do', '4. Layers, To do',
-      '5. NASA FIRMS, To do', '6. Starter forms, To do', '7. Invite officers, To do', '8. Finish, To do']);
+    const items = [...fixture.nativeElement.querySelectorAll('.setup-steps button')].map(item =>
+      [...(item as HTMLElement).querySelectorAll(':scope > :not([aria-hidden])')].map(label => label.textContent.trim()).join(', '));
+    expect(items).toEqual(['Workspace, Done', 'Hierarchy, To do · Current', 'Layers, To do',
+      'NASA FIRMS, To do', 'Starter forms, To do', 'Invite officers, To do', 'Finish, To do']);
     const current = fixture.nativeElement.querySelector('[aria-current=step]') as HTMLElement;
     expect(current.textContent).toContain('Hierarchy');
     expect(current.textContent).toContain('To do · Current');
     const done = fixture.nativeElement.querySelector('.setup-steps button') as HTMLElement;
     expect(done.querySelector('svg')).not.toBeNull();
     expect(done.textContent).toContain('Done');
-    (fixture.nativeElement.querySelector('.setup-steps button') as HTMLButtonElement).click();
+    const disclosure = fixture.nativeElement.querySelector('.setup-progress') as HTMLDetailsElement;
+    expect(disclosure.open).toBe(false);
+    expect(disclosure.querySelector('summary')?.textContent?.trim()).toBe('Step 2 of 7: Hierarchy');
+    expect(disclosure.querySelectorAll('li')).toHaveLength(7);
+    disclosure.open = true;
+    disclosure.querySelector('button')?.click();
     fixture.detectChanges();
-    expect(text()).toContain('Phase 1 fully supports state mode only');
+    expect(disclosure.open).toBe(false);
+    expect(heading()).toBe('Workspace');
+    expect(text()).toContain('The state boundary file must use the state code');
   });
 
   it('saves a preset with edited Hindi labels', () => {
@@ -116,13 +124,16 @@ describe('SetupWizard', () => {
     request.flush(setupState({ steps: { ...setupState().steps, hierarchy: { status: 'done', updatedAt: '' } } }));
     fixture.detectChanges();
     expect(heading()).toBe('Layers');
+    expect(document.activeElement?.id).toBe('step-heading');
+    expect(text()).toContain('Hierarchy saved.');
   });
 
   it('uploads a level with the shared field names, then publishes it after a preview', () => {
     open(setupState({ steps: { ...setupState().steps, hierarchy: { status: 'done', updatedAt: '' } } }));
     expect(heading()).toBe('Layers');
     expect(text()).toContain('Publish the levels above first.');
-    expect(button('Continue')?.disabled).toBe(true);
+    expect(button('Continue')).toBeUndefined();
+    expect(text()).toContain('Go to State');
     const input = fixture.nativeElement.querySelector('#file-level\\:0') as HTMLInputElement;
     const file = new File(['{}'], 'state.geojson', { type: 'application/geo+json' });
     Object.defineProperty(input, 'files', { value: [file] });
@@ -158,8 +169,38 @@ describe('SetupWizard', () => {
     http.expectOne(base + '/layer-imports/v2').flush({ versionId: 'v2', status: 'ready', unitCount: 1, featureCount: 0,
       problems: [{ kind: 'missing_code', featureRef: 'feature:1', message: 'This unit has no code.', blocksPublish: true }] });
     fixture.detectChanges();
-    expect(text()).toContain('This unit has no code.');
+    const link = fixture.nativeElement.querySelector('fimra-field-error-summary a') as HTMLAnchorElement;
+    expect(link.textContent).toContain('State · feature:1: This unit has no code.');
+    link.click();
+    expect(document.activeElement?.id).toBe('review-level:0');
+    expect(button('Upload replacement')).toBeDefined();
     expect(button('Publish')).toBeUndefined();
+  });
+
+  it('offers Retry when import checks could not be loaded', () => {
+    open(setupState({ steps: { hierarchy: { status: 'done', updatedAt: '' } },
+      layers: [{ ...layer('level:0', 'State', 'hierarchy', false, 0), latest: { versionId: 'v2', version: 2, status: 'pending' } }] }));
+    vi.advanceTimersByTime(0);
+    http.expectOne(base + '/layer-imports/v2').flush({ error: 'The worker is unavailable.' }, { status: 503, statusText: 'Unavailable' });
+    fixture.detectChanges();
+    expect(text()).toContain('The worker is unavailable.');
+    button('Retry')?.click();
+    vi.advanceTimersByTime(0);
+    http.expectOne(base + '/layer-imports/v2').flush({ versionId: 'v2', status: 'ready', unitCount: 1, featureCount: 0, problems: [] });
+    fixture.detectChanges();
+    expect(button('Publish')).toBeDefined();
+    expect(text()).not.toContain('The worker is unavailable.');
+  });
+
+  it('resumes at the first unfinished step and keeps safe skips visible', () => {
+    const done = { status: 'done' as const, updatedAt: '' };
+    open(setupState({ steps: { hierarchy: done, layers: done, firms: { status: 'skipped', updatedAt: '' }, invitations: done } }));
+    http.expectOne(base + '/starter-pack').flush({ enabled: false, forms: [] });
+    fixture.detectChanges();
+    expect(heading()).toBe('Starter forms');
+    const items = fixture.nativeElement.querySelectorAll('.setup-progress button') as NodeListOf<HTMLButtonElement>;
+    expect(items[3].querySelector('small')?.textContent).toBe('Skipped');
+    expect(items[5].querySelector('small')?.textContent).toBe('Done');
   });
 
   it('saves the FIRMS key, clears the field and tests the connection', () => {
@@ -218,9 +259,9 @@ describe('SetupWizard', () => {
       'Manual fire report Not added Records a fire reported by another source and makes an alert',
       'Patrol log Not added Kept on its own, not on a workflow step']);
     expect(button('Continue')?.disabled).toBe(true);
-    const toggle = fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement;
-    expect(toggle.disabled).toBe(false);
-    toggle.click();
+    const enableButton = button('Switch on the starter forms');
+    expect(enableButton?.disabled).toBe(false);
+    enableButton?.click();
     fixture.detectChanges();
     const enable = http.expectOne(base + '/starter-pack');
     expect(enable.request.method).toBe('POST');
@@ -228,7 +269,7 @@ describe('SetupWizard', () => {
     fixture.detectChanges();
     expect(text()).toContain('The starter forms are on. Forms this workspace already had are left as they are.');
     expect(text()).toContain('Added');
-    expect((fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement).disabled).toBe(true);
+    expect(button('Switch on the starter forms')).toBeUndefined();
     button('Continue')?.click();
     expect(http.expectOne(base + '/setup/steps/forms').request.body).toEqual({ status: 'done' });
   });
@@ -248,7 +289,7 @@ describe('SetupWizard', () => {
     http.expectOne(base + '/starter-pack').flush(pack('present'));
     fixture.detectChanges();
     expect(text()).toContain('In this workspace');
-    expect((fixture.nativeElement.querySelector('.setup-step [role=switch]') as HTMLButtonElement).getAttribute('aria-checked')).toBe('true');
+    expect(text()).toContain('Starter forms are on');
     expect(button('Skip for now')).toBeUndefined();
     expect(button('Continue')?.disabled).toBe(false);
   });
