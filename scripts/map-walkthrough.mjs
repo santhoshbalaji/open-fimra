@@ -58,7 +58,8 @@ async function checkLargeLabels(page) {
 
 try {
   for (const [size, viewport] of [
-    ['desktop', { width: 1440, height: 900 }],
+    ['wall', { width: 1920, height: 1080 }],
+    ['desktop', { width: 1366, height: 768 }],
     ['phone', { width: 390, height: 844 }]
   ]) {
     step = `${size} — sign in`;
@@ -105,6 +106,13 @@ try {
       step = `${scenario} — toggle layers and check the legend`;
       await layersButton.press('Enter');
       const options = page.locator('.layer-options');
+      await expect(key).toHaveCount(0);
+      if (size !== 'phone') {
+        const panel = await page.locator('.layers-panel').boundingBox();
+        const trigger = await layersButton.boundingBox();
+        assert.ok(Math.abs(panel.x - trigger.x) <= 2 && Math.abs(panel.y + panel.height - trigger.y) <= 20,
+          'Layers should open just above their trigger');
+      }
       const legend = options.getByRole('list', { name: 'Visible layers' });
       await expect(legend).toContainText('Forest areas');
       await options.getByRole('checkbox', { name: 'Forest areas' }).press('Space');
@@ -136,19 +144,14 @@ try {
       await expect(picker).toHaveText('Detection #' + detection);
 
       step = `${scenario} — leave the detection detail and clear the selection`;
-      // On a phone the modal sheet gives way to the selected map point.
+      await expect(detail.getByRole('link', { name: 'Show on map', exact: true })).toHaveCount(0);
       if (size === 'phone') {
-        await detail.getByRole('link', { name: 'Show on map', exact: true }).click();
-        await expect(detail).toBeHidden();
-        await expect(canvas).toBeFocused();
-        await expect(picker).toHaveText('Detection #' + detection);
-        await picker.press('Space');
-        await page.getByRole('option', { name: 'Clear selection', exact: true }).click();
+        await detail.getByRole('button', { name: 'Close map details' }).click();
       } else {
         await detail.getByRole('button', { name: 'Close map details' }).press('Escape');
-        await expect(detail).toBeHidden();
-        await expect(picker).toBeFocused();
       }
+      await expect(detail).toBeHidden();
+      await expect(picker).toBeFocused();
       await expect(picker).toHaveText('Select a detection');
       await expect(page).toHaveURL(url => !url.searchParams.has('alert') && !url.searchParams.has('detection'));
 
@@ -161,7 +164,7 @@ try {
       await expect(detail.getByRole('link', { name: /^Open incident #/ })).toBeVisible();
       const currentRow = alertRows.and(page.locator('[aria-current=true]'));
       await expect(currentRow).toHaveAttribute('data-alert-id', selectedAlert);
-      if (size === 'desktop') await expect(currentRow).toBeVisible();
+      if (size !== 'phone') await expect(currentRow).toBeVisible();
       await check(page, `selected-${scenario}`);
 
       step = `${scenario} — open an alert from the list and check its timeline`;
@@ -177,7 +180,7 @@ try {
       await expect(detail.locator('fimra-timeline li').first()).toBeVisible();
       const location = await detail.getByText('Location', { exact: true }).locator('xpath=following-sibling::dd[1]').textContent();
       await expect(detail.locator('fimra-timeline')).not.toContainText(location);
-      if (size === 'desktop') {
+      if (size !== 'phone') {
         assert.ok((await detail.boundingBox()).x > (await row.boundingBox()).x, 'Alert detail docks beside the list');
       }
       await check(page, `alert-detail-${scenario}`);
@@ -210,7 +213,7 @@ try {
       await expect(status).toContainText('Reference tiles');
       await expect(status).toContainText('Fire detection tiles');
       await expect(page.getByText('No detections in view', { exact: true })).toHaveCount(0);
-      if (size === 'desktop') {
+      if (size !== 'phone') {
         await expect(alertRows.first()).toBeVisible();
         await alertRows.first().click();
         await expect(detail.getByRole('heading', { name: /^Alert #/ })).toBeVisible();

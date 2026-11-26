@@ -11,6 +11,7 @@ interface Level {
 export interface WorkspaceMap {
   version: string;
   boundary: [number, number, number, number] | null;
+  jurisdiction?: WorkspaceMap['boundary'];
   levels: Level[];
 }
 
@@ -70,8 +71,8 @@ export function referenceGroups(info: WorkspaceMap, theme: Theme): ReferenceGrou
       const labelId = 'label-' + hierarchy + '-' + depth;
       const labelZoom = Math.max(11, minZoom);
       groups.push({ id: labelId, label: name + ' names', optional: true, minZoom: labelZoom, swatch: { kind: 'label' }, layers: [
-        { id: labelId, type: 'symbol', ...units, filter, minzoom: labelZoom,
-          layout: { 'text-field': ['get', 'name'], 'text-font': ['sans-serif'], 'text-size': 12 },
+        { id: labelId, type: 'symbol', ...units, 'source-layer': 'unit_labels', filter, minzoom: labelZoom,
+          layout: { 'text-field': ['get', 'name'], 'text-font': ['sans-serif'], 'text-size': 14 },
           paint: { 'text-color': color.text, 'text-halo-color': color.surface, 'text-halo-width': 1 } }
       ] });
     }

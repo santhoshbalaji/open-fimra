@@ -86,7 +86,7 @@ describe('Alert queue', () => {
   });
   it('restores URL page history, keeps scope and selection during refresh and retries the same sorted page', () => {
     let params: Record<string, string | null> = {
-      queue: 'all', group: 'overdue', alert: '3',
+      queue: 'all', group: 'overdue', alert: '3', hours: '72',
       alertSort: 'oldest', cursor: 'third', alertTrail: '-|second'
     };
     const query = signal(convertToParamMap(params));
@@ -125,7 +125,7 @@ describe('Alert queue', () => {
     queue.changePage({ cursor: null, previousCursors: [], sort: { columnId: 'observed', direction: 'descending' } });
     TestBed.tick();
     http.expectOne(req => !req.params.has('sort') && !req.params.has('cursor')).flush(result);
-    expect(params).toMatchObject({ queue: 'all', group: 'overdue', alert: '3', cursor: null, alertTrail: null });
+    expect(params).toMatchObject({ queue: 'all', group: 'overdue', alert: '3', hours: '72', cursor: null, alertTrail: null });
     expect(queue.selected()?.id).toBe('17');
     http.verify();
   });

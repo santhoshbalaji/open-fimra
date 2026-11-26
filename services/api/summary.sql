@@ -24,5 +24,11 @@ SELECT EXISTS (SELECT FROM grants), (SELECT workspace_id::text FROM grants WHERE
     (SELECT coalesce(jsonb_object_agg(queue,n),'{}') FROM (SELECT queue,count(*) n FROM visible GROUP BY queue) q),
     (SELECT coalesce(jsonb_object_agg(current_step,n),'{}') FROM (SELECT current_step,count(*) n FROM visible GROUP BY current_step) q),
     count(*) FILTER (WHERE NOT terminal),count(*) FILTER (WHERE overdue),count(*) FILTER (WHERE report_pending),
-    (SELECT coalesce(jsonb_object_agg(milestone,jsonb_build_object('median',seconds[1],'p90',seconds[2],'count',reached)),'{}') FROM times)
+    (SELECT coalesce(jsonb_object_agg(milestone,jsonb_build_object('median',seconds[1],'p90',seconds[2],'count',reached)),'{}') FROM times),
+    CASE WHEN $8::boolean THEN (
+        SELECT count(*) FROM alerts a JOIN workflow_instances i ON i.alert_id = a.id
+        WHERE a.observed_at <= now() AND alert_due_at(i.template_id, i.current_step, i.entered_at) < now()
+          AND EXISTS (SELECT FROM grants g WHERE g.workspace_id = a.workspace_id
+              AND alert_path_visible(a.queue, a.hierarchy_unit_paths, g.can_review, g.hierarchy_id, g.unit_path, g.depth))
+    ) END
 FROM visible

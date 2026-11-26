@@ -21,9 +21,11 @@ import { defaultWorkspaceFormat, WorkspaceFormat } from '../workspace-format';
       </dt>
       <dd class="text-figure tabular-nums" [attr.id]="valueId()">{{ displayValue() }}</dd>
       <dd class="text-body text-text-secondary">{{ scope() }}</dd>
-      <dd class="text-label text-text-secondary">
-        {{ freshnessLabel() }} <time [attr.datetime]="freshAt().toISOString()">{{ format().dateTime(freshAt()) }}</time>
-      </dd>
+      @if (freshAt(); as updated) {
+        <dd class="text-label text-text-secondary">
+          {{ freshnessLabel() }} <time [attr.datetime]="updated.toISOString()">{{ format().dateTime(updated) }}</time>
+        </dd>
+      }
     </dl>
   `
 })
@@ -31,7 +33,7 @@ export class StatTile {
   readonly value = input.required<number | string>();
   readonly label = input.required<string>();
   readonly scope = input.required<string>();
-  readonly freshAt = input.required<Date>();
+  readonly freshAt = input<Date>();
   readonly freshnessLabel = input('Updated');
   readonly href = input<string>();
   readonly route = input<UrlTree>();

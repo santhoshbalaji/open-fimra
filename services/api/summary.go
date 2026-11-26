@@ -41,18 +41,20 @@ type summaryFeed struct {
 
 // summaryCounts are the counts the dashboard and situation reports share.
 type summaryCounts struct {
-	Detections      map[string]int                 `json:"detections"`
-	Today           map[string]int                 `json:"today"`
-	Queues          map[string]int                 `json:"queues"`
-	Steps           map[string]int                 `json:"steps"`
-	Active          int                            `json:"active"`
-	Overdue         int                            `json:"overdue"`
+	Detections      map[string]int `json:"detections"`
+	Today           map[string]int `json:"today"`
+	Queues          map[string]int `json:"queues"`
+	Steps           map[string]int `json:"steps"`
+	Active          int            `json:"active"`
+	Overdue         int            `json:"overdue"`
+	backlogOverdue  *int
 	PendingReports  int                            `json:"pendingReports"`
 	ResponseSeconds map[string]responsePercentiles `json:"responseSeconds"`
 }
 
 type workspaceSummary struct {
 	summaryCounts
+	BacklogOverdue        *int          `json:"backlogOverdue,omitempty"`
 	FeedHealth            []summaryFeed `json:"feedHealth"`
 	FeedHealthUnavailable bool          `json:"feedHealthUnavailable,omitempty"`
 }
@@ -60,18 +62,19 @@ type workspaceSummary struct {
 // countWindow is the time window of the shared counts. A nil start means
 // hours before now, and a nil end means now.
 type countWindow struct {
-	start *time.Time
-	hours int
-	end   *time.Time
-	class string
-	path  *string
+	start   *time.Time
+	hours   int
+	end     *time.Time
+	class   string
+	path    *string
+	backlog bool
 }
 
 // loadCounts runs the dashboard's counts query. It reports whether the caller
 // has a grant in the workspace, and the workspace ID for a root grant.
 func loadCounts(ctx context.Context, db rowQuerier, subject, slug string, w countWindow) (c summaryCounts, allowed bool, root *string, err error) {
-	err = db.QueryRow(ctx, summarySQL, subject, slug, w.start, w.hours, w.end, w.class, w.path).Scan(&allowed, &root,
-		&c.Detections, &c.Today, &c.Queues, &c.Steps, &c.Active, &c.Overdue, &c.PendingReports, &c.ResponseSeconds)
+	err = db.QueryRow(ctx, summarySQL, subject, slug, w.start, w.hours, w.end, w.class, w.path, w.backlog).Scan(&allowed, &root,
+		&c.Detections, &c.Today, &c.Queues, &c.Steps, &c.Active, &c.Overdue, &c.PendingReports, &c.ResponseSeconds, &c.backlogOverdue)
 	if err != nil {
 		return c, false, nil, err
 	}
@@ -95,8 +98,9 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 	var s workspaceSummary
 	caller := r.Context().Value(identityKey{}).(identity)
 	counts, allowed, root, err := loadCounts(ctx, a.reader, caller.Subject, chi.URLParam(r, "slug"),
-		countWindow{hours: f.hours, class: f.class, path: f.path})
+		countWindow{hours: f.hours, class: f.class, path: f.path, backlog: true})
 	s.summaryCounts = counts
+	s.BacklogOverdue = counts.backlogOverdue
 	if err != nil {
 		a.logger.Error("Could not read dashboard counts", "error", err)
 		writeError(w, 500, "Could not load dashboard.")

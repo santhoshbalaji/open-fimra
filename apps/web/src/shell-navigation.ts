@@ -57,7 +57,7 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
     if (typeof cursor === 'string' && validCursor.test(cursor)) params['cursor'] = cursor;
   }
   if (path === '/monitor/map' || path === '/monitor/alerts') {
-    if (input['alertSort'] === 'oldest') params['alertSort'] = 'oldest';
+    if (input['alertSort'] === 'oldest' || input['alertSort'] === 'overdue') params['alertSort'] = input['alertSort'];
     const trail = input['alertTrail'];
     if (params['cursor'] && typeof trail === 'string') {
       const [first, ...earlier] = trail.split('|');
@@ -68,8 +68,6 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
     if (queue === 'unit' || queue === 'triage' || queue === 'edge_review') {
       params['queue'] = queue;
     }
-  }
-  if (path === '/monitor/alerts') {
     if (queue === 'all') params['queue'] = queue;
     if (['active', 'overdue', 'pending_reports'].includes(input['group'])) params['group'] = input['group'];
     if (typeof input['status'] === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(input['status'])) {

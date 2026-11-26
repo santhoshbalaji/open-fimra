@@ -5,17 +5,18 @@ import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { mapColours } from './token-values';
 import { RouterLink, UrlTree } from '@angular/router';
-import { afterNextRender, AfterViewInit, Component, ViewEncapsulation, ElementRef, Injector, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { afterNextRender, AfterViewInit, Component, DestroyRef, ViewEncapsulation, ElementRef, Injector, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { catchError, EMPTY, exhaustMap, expand, forkJoin, reduce, timer } from 'rxjs';
 import { StatusBadge } from './ui/status-badge';
 import { SidePanel } from './ui/side-panel';
 import { StateRegion, type DataState } from './ui/state-region';
 import { GeoJSONSource, Map as LibreMap, setWorkerUrl, type VectorTileSource } from 'maplibre-gl';
 import type { FeatureCollection, Point } from 'geojson';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
-import { AlertQueue, AlertRow, alertRowLabel, queueLabels } from './alert-queue';
+import { AlertQueue, AlertRow, alertRowLabel, alertSortLabels, queueLabels, type AlertAssignment } from './alert-queue';
 import { AuthService } from './auth';
 import { WEB_CONFIG } from './config';
 import { ageLabels, classes, confidenceLabel, sourceLabel, Detection, detectionAge, detectionLayer, ForestClass, iconName, incidentOffset, mapRequest, placesOf, readDetection, shortClasses, symbolImage, tileErrorStatus, tileUrl, triageReasons } from './detections';
@@ -35,6 +36,8 @@ const detectionGroup: MapLayerGroup = { id: 'detections', label: 'Fire detection
 const incidentGroup: MapLayerGroup = {
   id: 'reported-incidents', label: 'Reported incidents', minZoom: 0, swatch: { kind: 'incident' }
 };
+interface AssignmentUnit { id: string; name: string; level: string; parent: string | null; suggested: boolean }
+
 type TileSource = 'reference' | 'detections';
 
 function pointCollection(points: [number, number][]): FeatureCollection<Point> {
@@ -78,6 +81,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }));
   });
   readonly reasons = triageReasons;
+  readonly edgeReason = 'The detection is near the forest edge.';
   readonly confidenceLabel = confidenceLabel;
   readonly sourceLabel = sourceLabel;
   private readonly placeLevels = computed(() => this.geography()?.info.levels ?? []);
@@ -96,7 +100,10 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly incidentRetries = signal(0);
   private readonly detectionsDrawn = signal(false);
   private readonly incidentPoints = signal<[number, number][]>([]);
-  readonly boundary = computed(() => this.geography()?.info.boundary);
+  readonly boundary = computed(() => {
+    const info = this.geography()?.info;
+    return info?.jurisdiction ?? info?.boundary;
+  });
   readonly ready = signal(false);
   readonly zoomLevel = signal(0);
   private readonly layerChoices = signal<Record<string, boolean>>({});
@@ -130,6 +137,23 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   });
   readonly queue = inject(AlertQueue);
   readonly queueLabels = queueLabels;
+  readonly sortOptions = Object.entries(alertSortLabels);
+  readonly assignmentOpen = signal(false);
+  readonly assignmentChoices = signal<AssignmentUnit[] | null>(null);
+  readonly assignmentUnit = signal('');
+  readonly assignmentReason = signal('');
+  readonly assignmentSaving = signal(false);
+  readonly assignmentError = signal('');
+  private readonly assignmentForm = viewChild<ElementRef<HTMLFormElement>>('assignmentForm');
+  private readonly assignmentSelect = viewChild<ElementRef<HTMLSelectElement>>('assignmentSelect');
+  private readonly assignmentTrigger = viewChild<ElementRef<HTMLButtonElement>>('assignmentTrigger');
+  private readonly assignmentReceipt = viewChild<ElementRef<HTMLElement>>('assignmentReceipt');
+  private readonly lifetime = inject(DestroyRef);
+  private readonly assignmentURL = computed(() => {
+    const alert = this.queue.pinned();
+    const endpoint = this.queue.endpoint();
+    return alert && endpoint ? endpoint + '/' + alert.id + '/assignment' : '';
+  });
   readonly hours = this.queue.hours;
   readonly alertsView = computed(() => this.navigation.path() === '/monitor/alerts');
   readonly incidentFocus = signal<IncidentFocus | null>(null);
@@ -166,7 +190,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     return now - observed < 60_000 ? 'Just now' : defaultWorkspaceFormat.age(new Date(observed), new Date(now));
   };
   readonly rowKey = (row: AlertRow) => row.id;
-  readonly rowLabel = (row: AlertRow) => alertRowLabel(row, this.places(row).firstName);
+  readonly rowLabel = (row: AlertRow) => alertRowLabel(row, row.assignment?.unitName ?? this.places(row).firstName);
   private readonly rowHeading = viewChild<TemplateRef<{ $implicit: AlertRow }>>('rowHeading');
   private readonly rowStatus = viewChild<TemplateRef<{ $implicit: AlertRow }>>('rowStatus');
   readonly queueCaption = computed(() =>
@@ -221,6 +245,30 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private timer?: ReturnType<typeof setInterval>;
 
   constructor() {
+    effect(() => {
+      this.assignmentURL();
+      this.assignmentOpen.set(false);
+    });
+    effect(onCleanup => {
+      const url = this.assignmentURL();
+      if (!this.assignmentOpen() || !url) return;
+      this.assignmentChoices.set(null);
+      this.assignmentUnit.set('');
+      this.assignmentReason.set('');
+      this.assignmentError.set('');
+      const request = this.http.get<AssignmentUnit[]>(url).subscribe({
+        next: choices => {
+          this.assignmentChoices.set(choices);
+          const suggested = choices.filter(choice => choice.suggested);
+          this.assignmentUnit.set(suggested.length === 1 ? suggested[0].id : '');
+          afterNextRender(() => {
+            if (document.activeElement === this.assignmentForm()?.nativeElement) this.assignmentSelect()?.nativeElement.focus();
+          }, { injector: this.injector });
+        },
+        error: (err: HttpErrorResponse) => this.showAssignmentError(err)
+      });
+      onCleanup(() => request.unsubscribe());
+    });
     effect(onCleanup => {
       const endpoint = this.exportEndpoint();
       this.geographyRetries();
@@ -239,7 +287,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         const current = this.geography();
         if (!current || current.info.version !== info.version ||
             JSON.stringify(current.info.levels) !== JSON.stringify(info.levels) ||
-            JSON.stringify(current.info.boundary) !== JSON.stringify(info.boundary)) {
+            JSON.stringify(current.info.boundary) !== JSON.stringify(info.boundary) ||
+            JSON.stringify(current.info.jurisdiction) !== JSON.stringify(info.jurisdiction)) {
           this.geography.set({ endpoint, info });
         }
       });
@@ -249,7 +298,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       const geography = this.geography();
       const detection = this.detectionId();
       if (!geography) this.fittedWorkspace = undefined;
-      if (!this.ready() || !geography?.info.boundary) return;
+      if (!this.ready() || !geography || !untracked(this.boundary)) return;
       const mapView = history.state?.mapView as { detection: string; workspace: string; center: [number, number]; zoom: number } | undefined;
       const restore = detection !== this.restoredDetection && detection && mapView?.detection === detection &&
         mapView.workspace === this.workspace.current()?.slug;
@@ -344,6 +393,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         next: row => this.queue.selectLinked(row),
         error: err => {
           if (err.status === 401) this.auth.sessionEnded();
+          if (err.status === 404) this.queue.select(null);
           this.linkedMessage.set('This alert could not be opened.');
         }
       });
@@ -644,6 +694,49 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   openRow(row: AlertRow, button: HTMLButtonElement): void {
     this.selectionTrigger = button;
     this.navigation.update({ alert: row.id, detection: null, queue: this.queue.allQueues() ? 'all' : this.queue.active() });
+  }
+
+  openAssignment(): void {
+    this.assignmentOpen.set(true);
+    afterNextRender(() => (this.assignmentSelect() ?? this.assignmentForm())?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  cancelAssignment(): void {
+    this.assignmentOpen.set(false);
+    afterNextRender(() => this.assignmentTrigger()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  assign(event: SubmitEvent): void {
+    event.preventDefault();
+    const url = this.assignmentURL();
+    const alert = this.queue.pinned();
+    const reason = this.assignmentReason().trim();
+    const unitId = this.assignmentUnit();
+    if (!url || !alert || !reason || !unitId || this.assignmentSaving()) return;
+    this.assignmentError.set('');
+    this.assignmentSaving.set(true);
+    this.http.post<AlertAssignment>(url, { unitId, reason }).pipe(takeUntilDestroyed(this.lifetime)).subscribe({
+      next: assignment => {
+        this.assignmentSaving.set(false);
+        if (this.assignmentURL() === url) {
+          const row: AlertRow = { ...alert, queue: 'unit', can_assign: false, assignment };
+          if (this.queue.linked()) this.queue.selectLinked(row);
+          else this.queue.pinned.set(row);
+          this.assignmentOpen.set(false);
+          afterNextRender(() => this.assignmentReceipt()?.nativeElement.focus(), { injector: this.injector });
+        }
+        this.queue.refresh();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.assignmentSaving.set(false);
+        if (this.assignmentURL() === url) this.showAssignmentError(err);
+      }
+    });
+  }
+
+  private showAssignmentError(error: HttpErrorResponse): void {
+    if (error.status === 401) this.auth.sessionEnded();
+    this.assignmentError.set(error.error?.error || 'Could not load or save this assignment. Try again.');
   }
 
   openReport(key: string): void {

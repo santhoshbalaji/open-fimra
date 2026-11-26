@@ -39,6 +39,7 @@ interface Summary {
   steps: Record<string, number>;
   active: number;
   overdue: number;
+  backlogOverdue?: number;
   pendingReports: number;
   responseSeconds: Record<string, { median: number | null; p90: number | null }>;
   feedHealth: Feed[] | null;
@@ -76,6 +77,7 @@ export class Dashboard {
   private readonly snapshot = signal<{ data: Summary; awaitingReview: number | null; updated: Date } | null>(null);
 
   readonly filters = inject(DashboardFilters);
+  readonly canManageFeeds = this.workspace.canManageLayers;
   readonly workspaceName = computed(() => this.workspace.current()?.name);
   readonly summary = computed(() => this.snapshot()?.data);
   readonly awaitingReviewCount = computed(() => this.snapshot()?.awaitingReview ?? null);
@@ -135,9 +137,10 @@ export class Dashboard {
   readonly coverage = computed(() => {
     const data = this.summary();
     if (!data) return '';
+    if (!this.canManageFeeds()) return '';
     if (data.feedHealthUnavailable) return 'Feed health could not load. This window may have missing observations.';
     const feeds = data.feedHealth;
-    if (!feeds) return 'Ask a workspace administrator to check feed health.';
+    if (!feeds) return '';
     if (!feeds.length) return 'No live feeds have polled yet. This window may have missing observations.';
     if (feeds.some(feed => feed.status !== 'healthy' || !feed.latestObservationAt || !feed.lastSuccessAt)) {
       return 'Some feeds are late, quiet, or missing data. This window may have missing observations.';
@@ -199,7 +202,8 @@ export class Dashboard {
 
   alertRoute(extra: { queue?: string; group?: string; status?: string }) {
     return this.router.createUrlTree(['/monitor/alerts'], {
-      queryParams: { workspace: this.workspace.current()?.slug, ...this.filters.params(), queue: 'all', ...extra }
+      queryParams: { workspace: this.workspace.current()?.slug, queue: 'all',
+        ...(extra.group === 'overdue' ? { alertSort: 'overdue' } : this.filters.params()), ...extra }
     });
   }
 

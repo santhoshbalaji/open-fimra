@@ -28,6 +28,9 @@ export class ExportDialog {
   readonly unitLabel = input('');
   readonly queue = input.required<string>();
   readonly queueLabel = input.required<string>();
+  readonly group = input('');
+  readonly step = input('');
+  readonly allObservationDates = input(false);
   readonly initialKind = input<ExportKind>('alerts');
   readonly form = input('');
   readonly formLabel = input('');
@@ -58,7 +61,9 @@ export class ExportDialog {
     const kind = this.kind();
     const forestClass = this.forestClass();
     return {
-      kind, format: this.format(), hours: this.hours(),
+      kind, format: this.format(), hours: kind === 'alerts' && this.allObservationDates() ? undefined : this.hours(),
+      group: kind === 'alerts' ? this.group() || undefined : undefined,
+      step: kind === 'alerts' ? this.step() || undefined : undefined,
       forestClasses: forestClass ? [forestClass] : allClasses,
       unitPath: this.unitPath() || undefined,
       queue: kind === 'alerts' && this.onlyQueue() ? this.queue() || undefined : undefined,
@@ -69,8 +74,11 @@ export class ExportDialog {
   protected readonly summary = computed(() => exportReview(this.request(), this.queueLabel(), this.formLabel(), this.unitLabel()));
 
   private readonly countUrl = computed(() => {
-    const { kind, hours, unitPath, form } = this.request();
-    const params = new URLSearchParams({ hours: String(hours) });
+    const { kind, hours, unitPath, form, group, step } = this.request();
+    const params = new URLSearchParams();
+    if (hours != null) params.set('hours', String(hours));
+    if (group) params.set('group', group);
+    if (step) params.set('status', step);
     const forestClass = this.forestClass();
     if (forestClass) params.set('class', forestClass);
     if (unitPath) params.set('unitPath', unitPath);

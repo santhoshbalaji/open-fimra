@@ -29,11 +29,22 @@ WITH bounds AS (
 ), unit_tile AS (
     SELECT depth, hierarchy, level_slug, level_label, code, name, geom FROM features
     WHERE kind = 'units' AND geom IS NOT NULL
+), label_points AS MATERIALIZED (
+    SELECT depth, hierarchy, code, name, ST_PointOnSurface(geom) AS anchor
+    FROM projected WHERE $2 >= 11 AND NOT $5 AND kind = 'units'
+), label_tile AS (
+    SELECT depth, hierarchy, code, name, ST_AsMVTGeom(anchor, b.tile, 4096, 0, false) AS geom
+    FROM label_points CROSS JOIN bounds b
+    -- Use the full unit shape and give its anchor to exactly one tile,
+    -- including when the anchor is on a shared tile edge.
+    WHERE ST_X(anchor) >= ST_XMin(b.tile) AND ST_X(anchor) < ST_XMax(b.tile)
+      AND ST_Y(anchor) > ST_YMin(b.tile) AND ST_Y(anchor) <= ST_YMax(b.tile)
 ), forest_tile AS (
     SELECT code, name, legal_status, geom FROM features WHERE kind = 'forest' AND geom IS NOT NULL
 ), exclusion_tile AS (
     SELECT code, name, geom FROM features WHERE kind = 'exclusions' AND geom IS NOT NULL
 )
 SELECT (SELECT ST_AsMVT(unit_tile, 'units') FROM unit_tile) ||
+       (SELECT ST_AsMVT(label_tile, 'unit_labels') FROM label_tile) ||
        (SELECT ST_AsMVT(forest_tile, 'forest') FROM forest_tile) ||
        (SELECT ST_AsMVT(exclusion_tile, 'exclusions') FROM exclusion_tile)

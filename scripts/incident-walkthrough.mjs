@@ -163,14 +163,23 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.locator('#username').fill(user);
     await page.locator('#password').fill('demo');
+    let firstListBody;
+    await page.route(listRequest, async route => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch();
+      if (response.ok()) firstListBody ??= await response.json();
+      await route.fulfill({ response });
+    });
     const [firstList] = await Promise.all([
       page.waitForResponse(response => response.request().method() === 'GET' && listRequest(new URL(response.url()))),
       page.locator('#kc-login').click()
     ]);
     assert.equal(firstList.status(), 200, 'The incident list must load after sign in');
-    results[user] = (await firstList.json()).items;
     await expect(incidentLink(page).first()).toBeVisible();
     await page.waitForLoadState('networkidle');
+    await page.unroute(listRequest);
+    assert.ok(firstListBody, 'The initial incident response must have a body');
+    results[user] = firstListBody.items;
 
     for (const [size, dimensions] of Object.entries(viewport)) {
       await page.setViewportSize(dimensions);
