@@ -59,6 +59,14 @@
       <span class="inline-flex items-center gap-2"><i class="age-swatch" [style.background]="'var(--color-fire-age-' + (i+1) + ')'"></i>{{ age }}</span>
     }</div>
   </section>
+  <section id="workspace-components">
+    <h2>Workspace components</h2>
+    <p class="mb-4">Use the page header and breadcrumbs to show where you are. Keep scope and update time beside each count.</p>
+    <div class="grid gap-4">
+      <fimra-workspace-example density="comfortable" />
+      <fimra-workspace-example density="compact" />
+    </div>
+  </section>
   <section><h2>Buttons</h2>
     @for (variant of variants; track variant) {
       <div class="group-row"><h3>{{ variant }}</h3>

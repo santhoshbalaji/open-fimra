@@ -1,0 +1,16 @@
+.chip {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  min-height: max(var(--filter-chip-height), var(--target-web));
+  max-width: 100%;
+  padding: var(--spacing) calc(var(--spacing) * 3);
+  background: var(--filter-chip-background);
+  border: 1px solid var(--filter-chip-border);
+  border-radius: var(--filter-chip-radius);
+}
+.chip:hover { background: var(--filter-chip-selected); }
+.chip:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus);
+  outline-offset: var(--focus-offset);
+}

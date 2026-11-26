@@ -1,0 +1,56 @@
+<article class="grid min-w-0 gap-4 rounded-panel border border-divider bg-canvas p-3 sm:p-5"
+  [attr.aria-labelledby]="'density-' + density()">
+  <h3 [id]="'density-' + density()" class="text-subhead">{{ density() === 'comfortable' ? 'Comfortable' : 'Compact' }}</h3>
+  <div class="workspace-surface">
+    <fimra-breadcrumbs [ancestors]="ancestors" current="Alert queue" />
+    <fimra-page-header title="Alert queue" scope="Demo division · All ranges" [headingLevel]="4">
+      <p pageFreshness class="mt-1 text-label text-text-secondary">
+        Updated <time [attr.datetime]="now.toISOString()">{{ format.dateTime(now) }}</time>
+      </p>
+      <a pageSecondary hlmBtn variant="outline" [href]="'#activity-' + density()">View activity</a>
+      <button pagePrimary hlmBtn type="button" (click)="fetchPage(page().position)">Refresh alerts</button>
+    </fimra-page-header>
+    <div class="tile-grid">
+      <fimra-stat-tile label="Closed alerts" [value]="1" scope="Demo division · Past day"
+        [freshAt]="now" [href]="'?preview&status=closed#alerts-' + density()" />
+      <fimra-stat-tile label="Archived detections" [value]="12345678" scope="Demo division · All time" [freshAt]="now" />
+    </div>
+  </div>
+  <div class="workspace-surface" [id]="'alerts-' + density()">
+    <h4 class="text-subhead">Alerts</h4>
+    <fimra-filter-bar [filters]="filters()" (remove)="changeFilter($event, '')" (clearAll)="clearFilters()">
+      <ng-template fimraFilterControls>
+        <label class="filter-control">Status
+          <select [value]="status()" (change)="changeFilter('status', $any($event.target).value)">
+            <option value="">All statuses</option>
+            <option value="Open">Open</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </label>
+        <label class="filter-control">Find a place
+          <input type="search" [value]="search()" (input)="changeFilter('place', $any($event.target).value)">
+        </label>
+      </ng-template>
+    </fimra-filter-bar>
+    <ng-template #rowAction let-row>
+      <button type="button" hlmBtn variant="outline" (click)="inspected.set(row)"
+        [attr.aria-label]="'View ' + row.id">View {{ row.id }}</button>
+    </ng-template>
+    <fimra-data-table caption="Demo alerts" [page]="page()" [state]="tableState()" [rowKey]="rowKey" [rowLabel]="rowLabel"
+      [columns]="columns" [rowLanguage]="rowLanguage" [selected]="selected()" (selectionChange)="selected.set($event)"
+      [rowActions]="rowAction" [phoneCards]="true" (pageRequest)="fetchPage($event)" />
+    <fimra-live-status [message]="inspected() ? 'Viewing ' + inspected()?.id : ''" />
+    @if (inspected(); as alert) {
+      <p [attr.lang]="alert.lang ?? null">{{ rowLabel(alert) }}</p>
+      <fimra-status-badge [icon]="alert.state === 'Open' ? 'step' : 'complete'" [label]="alert.state" />
+    }
+  </div>
+  <div class="workspace-surface" [id]="'activity-' + density()">
+    <h4 class="text-subhead">Alert activity</h4>
+    <fimra-timeline [events]="events" [now]="now" />
+    <p lang="hi-IN" class="text-body text-text-secondary">
+      <time [attr.datetime]="now.toISOString()">{{ hindi.dateTime(now) }}</time>
+      <span aria-hidden="true"> · </span>{{ hindi.age(events[0].at, now) }}
+    </p>
+  </div>
+</article>

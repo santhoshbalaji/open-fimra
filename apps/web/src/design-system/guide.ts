@@ -34,6 +34,7 @@ import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { HlmTextareaImports } from '@spartan-ng/helm/textarea';
 import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { Icon } from '../ui/icon';
+import { WorkspaceExample } from './workspace-example';
 
 // WCAG relative luminance for an opaque sRGB swatch.
 function luminance(hex: string): number {
@@ -48,7 +49,7 @@ function luminance(hex: string): number {
   selector: 'fimra-root',
   templateUrl: './guide.html',
   styleUrl: './guide.css',
-  imports: [EmptyState, StatusBadge, FieldErrorSummary, LiveStatus, SidePanel, StateRegion, HlmAlertImports, HlmBadgeImports, HlmButtonImports, HlmCardImports, HlmCheckboxImports, HlmDialogImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports, HlmSeparatorImports, HlmSheetImports, HlmToasterImports, HlmSwitchImports, HlmTableImports, HlmTabsImports, HlmTextareaImports, HlmTooltipImports, Icon]
+  imports: [WorkspaceExample, EmptyState, StatusBadge, FieldErrorSummary, LiveStatus, SidePanel, StateRegion, HlmAlertImports, HlmBadgeImports, HlmButtonImports, HlmCardImports, HlmCheckboxImports, HlmDialogImports, HlmDropdownMenuImports, HlmFieldImports, HlmInputImports, HlmLabelImports, HlmRadioGroupImports, HlmSelectImports, HlmSeparatorImports, HlmSheetImports, HlmToasterImports, HlmSwitchImports, HlmTableImports, HlmTabsImports, HlmTextareaImports, HlmTooltipImports, Icon]
 })
 export class DesignGuide {
   private readonly confirm = inject(ConfirmDialog);

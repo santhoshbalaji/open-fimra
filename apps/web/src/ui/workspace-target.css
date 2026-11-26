@@ -1,0 +1,5 @@
+@media (any-pointer: coarse) {
+  :host, .filter-sheet-controls {
+    --target-web: var(--spacing-target-web, var(--target-mobile));
+  }
+}

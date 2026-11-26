@@ -1,0 +1,33 @@
+.workspace-surface {
+  display: grid;
+  min-width: 0;
+  gap: calc(var(--spacing) * 3);
+  border: 1px solid var(--role-divider);
+  border-radius: var(--role-radius-card);
+  background: var(--role-surface);
+  padding: clamp(.75rem, 2vw, 1rem);
+}
+.tile-grid {
+  display: grid;
+  gap: calc(var(--spacing) * 2);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.filter-control {
+  display: grid;
+  gap: var(--spacing);
+  min-inline-size: 0;
+  font-weight: 500;
+}
+.filter-control :is(select, input) {
+  box-sizing: border-box;
+  min-inline-size: 0;
+  min-block-size: var(--target-web);
+  padding: var(--spacing) calc(var(--spacing) * 2);
+  border: 1px solid var(--role-control-boundary);
+  border-radius: var(--role-radius-control);
+  background: var(--role-surface);
+}
+.filter-control :is(select, input):focus-visible {
+  outline: var(--focus-width) solid var(--role-focus);
+  outline-offset: var(--focus-offset);
+}
