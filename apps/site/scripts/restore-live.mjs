@@ -7,8 +7,12 @@ try {
   const saved = JSON.parse(readFileSync(current, "utf8"));
   const updated = Date.parse(candidate.updatedAt);
   const start = Date.parse(candidate.start);
+  const inWindow = value => value === null || typeof value === "string" &&
+    Date.parse(value) >= start && Date.parse(value) <= updated;
   if (candidate.version !== 1 || !Number.isFinite(updated) || updated > Date.now() ||
       updated - start !== 7 * 86_400_000 ||
+      !inWindow(candidate.latestPass) || !inWindow(candidate.latestTreePass) ||
+      !Number.isSafeInteger(candidate.count) || candidate.count < 0 ||
       !Array.isArray(candidate.cells) ||
       !candidate.cells.every(cell => Number.isSafeInteger(cell.count) && cell.count > 0 &&
         Array.isArray(cell.vertices) && cell.vertices.length >= 5 &&

@@ -141,17 +141,17 @@ const upcoming = [
             <div class="scale-ledger">
               <div class="ledger-feature">
                 <p class="mono ledger-label">INDIA · NOV 2025 — JUN 2026</p>
-                <p class="big-number" data-count={data.season}>{fmt.format(data.season)}</p>
+                <p class="big-number">{fmt.format(data.season)}</p>
                 <p class="ledger-title">Detections over tree cover</p>
                 <p class="ledger-note"><strong>{share}%</strong> of the country’s {fmt.format(data.vegetation)} presumed vegetation-fire detections in the NOAA-20 archive for the season. <a href={asset("methods/")}>Method</a></p>
               </div>
               <dl class="national-stats">
                 <div>
-                  <dt class="big-number" data-count="25.17" data-decimals="2" data-suffix="%">25.17%</dt>
+                  <dt class="big-number">25.17%</dt>
                   <dd>of India was under forest and tree cover in 2023. <a href={isfr}>ISFR 2023, Table 2.3</a></dd>
                 </div>
                 <div>
-                  <dt class="big-number" data-count="11.34" data-decimals="2" data-suffix="%">11.34%</dt>
+                  <dt class="big-number">11.34%</dt>
                   <dd>of forest cover and scrub was classed as extremely or very highly fire prone. <a href={isfr}>ISFR 2023, Table 4.14</a></dd>
                 </div>
               </dl>
@@ -160,10 +160,14 @@ const upcoming = [
             <figure class="season-map" aria-labelledby="map-caption">
               <div class="map-stage">
                 <div class="map-label mono"><span>NOAA-20 · VIIRS</span><span id="map-period">FULL SEASON</span></div>
-                <div class="map-image">
-                  <img class="map-terrain" loading="lazy" alt="" width="640" height="640" src={asset("media/terrain.webp")} />
-                  <img class="tree-layer" loading="lazy" alt="" width="936" height="936" src={asset("data/tree-cover.webp")} />
-                  <img class="hex-poster" loading="lazy" alt="Map of tree-cover detections across India, grouped into hexagons." width="780" height="780" src={asset("data/season-map.svg")} />
+                <div class="map-image" data-poster={asset("data/season-map.svg")}>
+                  <img class="map-terrain" data-map-src={asset("media/terrain.webp")} alt="" width="640" height="640" hidden />
+                  <img class="tree-layer" data-map-src={asset("data/tree-cover.webp")} alt="" width="936" height="936" hidden />
+                  <noscript>
+                    <img class="map-terrain" loading="lazy" alt="" width="640" height="640" src={asset("media/terrain.webp")} />
+                    <img class="tree-layer" loading="lazy" alt="" width="936" height="936" src={asset("data/tree-cover.webp")} />
+                    <img class="hex-poster" loading="lazy" alt="Map of tree-cover detections across India, grouped into hexagons." width="780" height="780" src={asset("data/season-map.svg")} />
+                  </noscript>
                   <svg id="hex-map" viewBox="0 0 780 780" role="group" aria-label="Detection hexagons. Use the left and right arrow keys to inspect cells." aria-describedby="cell-info"></svg>
                 </div>
                 <div class="map-key mono">
@@ -249,7 +253,6 @@ const upcoming = [
     <SiteFooter />
     <script>
       import "../lib/story";
-      import "../lib/tour";
     </script>
   </body>
 </html>

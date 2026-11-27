@@ -7,7 +7,6 @@ const sum = (counts: number[]) => counts.reduce((a, b) => a + b, 0);
 
 export async function initSeasonMap() {
   const map = document.querySelector<SVGSVGElement>("#hex-map")!;
-  const poster = document.querySelector<HTMLElement>(".hex-poster")!;
   const controls = document.querySelector<HTMLElement>("#map-controls")!;
   const picker = document.querySelector<HTMLSelectElement>("#month")!;
   const play = document.querySelector<HTMLButtonElement>("#play-months")!;
@@ -116,5 +115,4 @@ export async function initSeasonMap() {
   render(-1);
   map.setAttribute("tabindex", "0");
   controls.hidden = strip.hidden = false;
-  poster.hidden = true;
 }

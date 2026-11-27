@@ -110,6 +110,7 @@ try {
 
   const playback = await browser.newPage({ viewport: sizes.phone });
   await load(playback);
+  await playback.locator("#product").scrollIntoViewIfNeeded();
   const clip = playback.getByRole("button", { name: "Play clip (monitor and route)" });
   await clip.click();
   await playback.getByRole("button", { name: "Pause clip (monitor and route)" }).click();
@@ -132,6 +133,14 @@ try {
   assert.equal(await staticPage.locator(".journey-list li:visible").count(), 7);
   assert.equal(await staticPage.locator(".globe-toggle").isVisible(), false);
   await staticPage.close();
+
+  const missingArchive = await browser.newPage({ viewport: sizes.phone });
+  await missingArchive.route("**/data/hexagons.json", route => route.abort());
+  await load(missingArchive, url + "#scale");
+  await missingArchive.locator("#scale .season-map").scrollIntoViewIfNeeded();
+  await missingArchive.locator(".hex-poster").waitFor();
+  assert.match(await missingArchive.locator("#cell-info").innerText(), /unavailable/);
+  await missingArchive.close();
 
   const noGl = await browser.newPage({ viewport: sizes.desktop });
   await noGl.addInitScript(() => {
