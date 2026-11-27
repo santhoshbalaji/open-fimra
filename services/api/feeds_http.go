@@ -32,6 +32,12 @@ type processingJSON struct {
 	WithinTwentyMinutes *float64 `json:"withinTwentyMinutes"`
 }
 
+type firstSeenJSON struct {
+	Records    int      `json:"records"`
+	P50Seconds *float64 `json:"p50Seconds"`
+	P95Seconds *float64 `json:"p95Seconds"`
+}
+
 type feedJSON struct {
 	Source              string         `json:"source"`
 	Product             string         `json:"product"`
@@ -44,6 +50,7 @@ type feedJSON struct {
 	DelaySeconds        *int64         `json:"delaySeconds"`
 	FailuresLast24h     int            `json:"failuresLast24h"`
 	Processing          processingJSON `json:"processing"`
+	FirstSeen           firstSeenJSON  `json:"firstSeen"`
 }
 
 type feedAlertJSON struct {
@@ -135,6 +142,7 @@ func (a api) feeds(w http.ResponseWriter, r *http.Request) {
 			LastRunAt: f.LastRunAt, LastRunStatus: f.LastRunStatus, LastError: f.LastError,
 			LastSuccessAt: f.LastSuccessAt, LatestObservationAt: f.LatestObservedAt,
 			FailuresLast24h: f.FailuresLast24h,
+			FirstSeen:       firstSeenJSON{Records: f.FirstSeenRecords, P50Seconds: f.FirstSeenP50Seconds, P95Seconds: f.FirstSeenP95Seconds},
 			Processing: processingJSON{
 				Records: f.ProcessedRecords, P95Seconds: f.ProcessingP95Seconds, WithinTwentyMinutes: f.WithinGate,
 			},

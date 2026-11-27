@@ -14,7 +14,8 @@ SELECT f.workspace_id::text, w.slug, w.settings, f.source, f.product, f.first_ru
        (SELECT count(*) FROM ingest_runs r
         WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
           AND r.status = 'failed' AND r.started_at > $2 - interval '24 hours' AND r.started_at <= $2)::integer,
-       processing.records, processing.p95_seconds, processing.within_gate
+       processing.records, processing.p95_seconds, processing.within_gate,
+       first_seen.records, first_seen.p50_seconds, first_seen.p95_seconds
 FROM feeds f
 JOIN workspaces w ON w.id = f.workspace_id
 LEFT JOIN LATERAL (
@@ -61,4 +62,16 @@ LEFT JOIN LATERAL (
            avg((seconds <= 1200)::integer)::float8 AS within_gate
     FROM delays
 ) processing ON true
+-- Acquisition to the response that first stored the record. This includes
+-- aliases and is distinct from the release gate above.
+LEFT JOIN LATERAL (
+    SELECT count(*)::integer AS records,
+           percentile_cont(0.50) WITHIN GROUP (ORDER BY lag.seconds) AS p50_seconds,
+           percentile_cont(0.95) WITHIN GROUP (ORDER BY lag.seconds) AS p95_seconds
+    FROM ingest_runs r
+    JOIN detections d ON d.ingest_run_id = r.id
+    CROSS JOIN LATERAL (SELECT extract(epoch FROM r.fetched_at - d.observed_at)::float8 AS seconds) lag
+    WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+      AND r.fetched_at > $2 - interval '7 days' AND r.fetched_at <= $2 AND lag.seconds >= 0
+) first_seen ON true
 ORDER BY w.slug, f.source, f.product;

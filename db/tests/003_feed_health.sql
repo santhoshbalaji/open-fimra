@@ -47,7 +47,8 @@ BEGIN
 EXCEPTION WHEN check_violation THEN NULL;
 END $$;
 
--- A record links to one earlier record, and an earlier record takes one link.
+-- A record links to one earlier record. An earlier record can take links from
+-- several later arrivals, such as a FIRMS NRT record and a NOAA record.
 SELECT ensure_detection_partition('2000-01-01');
 INSERT INTO detections (source, product, observed_at, geom, source_key) VALUES
     ('test', 'P_NRT', '2000-01-01 10:00+00', ST_SetSRID(ST_Point(86.3, 16.4), 4326), 'a'),
@@ -58,12 +59,16 @@ INSERT INTO detection_links (detection_id, observed_at, primary_id, primary_obse
 SELECT b.id, b.observed_at, a.id, a.observed_at, 'same_observation', 0
 FROM detections a, detections b WHERE a.source_key = 'a' AND b.source_key = 'b' AND a.source = 'test' AND b.source = 'test';
 
+INSERT INTO detection_links (detection_id, observed_at, primary_id, primary_observed_at, reason, distance_m)
+SELECT c.id, c.observed_at, a.id, a.observed_at, 'same_observation', 0
+FROM detections a, detections c WHERE a.source_key = 'a' AND c.source_key = 'c' AND a.source = 'test' AND c.source = 'test';
+
 DO $$
 BEGIN
     INSERT INTO detection_links (detection_id, observed_at, primary_id, primary_observed_at, reason, distance_m)
-    SELECT c.id, c.observed_at, a.id, a.observed_at, 'same_observation', 0
-    FROM detections a, detections c WHERE a.source_key = 'a' AND c.source_key = 'c' AND a.source = 'test' AND c.source = 'test';
-    RAISE EXCEPTION 'a second link to the same earlier record should be rejected';
+    SELECT c.id, c.observed_at, b.id, b.observed_at, 'same_observation', 0
+    FROM detections b, detections c WHERE b.source_key = 'b' AND c.source_key = 'c' AND b.source = 'test' AND c.source = 'test';
+    RAISE EXCEPTION 'a record linked to a second earlier record should be rejected';
 EXCEPTION WHEN unique_violation THEN NULL;
 END $$;
 

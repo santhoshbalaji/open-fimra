@@ -166,6 +166,7 @@ Tokens are in [docs/design-system/tokens.json](docs/design-system/tokens.json), 
 | Source | How it connects |
 |---|---|
 | **NASA FIRMS** (default) | Area API polled every 15 minutes with a two-day rolling window. VIIRS on Suomi-NPP, NOAA-20 and NOAA-21 is primary; MODIS is kept for continuity with history. Standard-processing data is used for multi-year backfill. |
+| **NOAA VIIRS Enterprise Fire** | Optional anonymous NODD feed for the NOAA-20 and NOAA-21 375 m I-band products. Link matching FIRMS records to the first arrival and measure observation-to-first-seen latency by source. |
 | **FSI** | No open self-service API. Three modes: a feed under an agreement with FSI, a parser for FSI's alert emails (KML/CSV), and manual file upload. Large-fire references are kept where supplied. |
 | **Bhuvan / NRSC** | Enabled once the agency has confirmed access and usage terms with NRSC. File import and map overlays until then. |
 | **Files and field reports** | CSV, KML, GeoJSON and GeoPackage upload with saved column mappings. Field staff can also report a fire they see before any satellite does; later detections are linked to it. |

@@ -309,9 +309,19 @@ make backfill-demo                                                 # synthetic f
 
 ### Same observation, two products
 
-A satellite observation reaches FIRMS twice: in a near-real-time product, then in the standard-processing product. Both records are kept. When the second arrives, it is linked in `detection_links` to the first and gets no workspace match of its own, so it is not counted or alerted twice. This works in either order.
+A satellite observation can arrive through FIRMS near-real-time and standard-processing products, and through NOAA JPSS Enterprise Fire. Every source record is kept. Later arrivals in matching products link directly to the first in `detection_links` and share its classification and alert. Each observation takes at most one record from each source/product combination.
 
-Two records are the same observation when they come from the same source, the paired product (for example `VIIRS_SNPP_NRT` and `VIIRS_SNPP_SP`), the same satellite and the same minute, and lie within half a pixel of each other: half the larger of the scan and track sizes, and at least 187.5 metres. Each record links to the nearest such record, and each earlier record takes at most one link.
+FIRMS near-real-time and standard-processing records match within half a pixel from the same satellite and UTC minute. The NOAA and FIRMS products for each JPSS satellite match within two minutes and half a pixel. The radius uses half the larger FIRMS pixel dimension when available, with a 187.5 m minimum. If FIRMS has no dimensions, the NOAA equivalent square width supplies the radius. Each arriving record prefers an exact FIRMS counterpart when available and otherwise takes the nearest eligible NOAA or FIRMS counterpart.
+
+## NOAA VIIRS Enterprise Fire ingestion
+
+Set `FIMRA_NOAA_NODD_ENABLED=true` to start the River poller alongside FIRMS. It is off by default. `FIMRA_NOAA_NODD_POLL_INTERVAL` defaults to `5m` and accepts durations from `1m` to `30m`. `FIMRA_NOAA_NODD_SATELLITES` defaults to `n20,n21` and can be set to either satellite alone. The API reads anonymously from the public NOAA buckets. No access key or geo worker is needed.
+
+Each poll lists the last six hours of observations, across UTC days as needed, so late or retried files in that window can be picked up. The poller shares granule downloads across workspaces. It checks the swath bounds when available, then filters fire pixels by workspace bounding boxes and uses the normal workspace classification and alert rules. A valid empty swath is a successful fetch. A download or decode error fails that product's poll and preserves records from successfully decoded granules. The next poll retries the failed granule until it leaves the window. Feed-health history remains visible when polling is turned off.
+
+NOAA records use `noaa_nodd` with product `VIIRS_NOAA20_EFIRE` or `VIIRS_NOAA21_EFIRE`. The source key combines the satellite, granule start and native line/sample indices. The observation timestamp is the granule start because the sparse pixel table supplies no per-pixel acquisition time. Scan and track store the equivalent square width calculated from NOAA's pixel area. The raw record keeps the native pixel fields, including confidence and fire mask, plus the exact object key, ETag, coverage times and S3 `LastModified`. See the [connector notes](../../packages/connectors/README.md) for the product layout, measured latency and attribution.
+
+Run `make noaa-nodd-test-integration` on a migrated database. The test uses a fake public bucket and synthetic NetCDF4 granules.
 
 ## Feed health
 
@@ -327,12 +337,13 @@ It lists each live feed: a source and product that the workspace has polled. Bac
 | `latestObservationAt`, `delaySeconds` | The newest observation the feed has returned in the last 90 days, and its age |
 | `failuresLast24h` | Failed polls in the last 24 hours |
 | `processing` | Records new in a poll in the last 7 days, the 95th percentile of their processing time in seconds, and the share processed within 20 minutes |
+| `firstSeen` | Record count, median and 95th percentile in seconds from acquisition to the fetch that first stored the record in the last 7 days. Linked source records are included and attributed to their inserting poll. |
 
 The response also has `thresholds`, the `fireSeason` with `inSeason`, and `openAlerts`.
 
 | Status | When |
 |---|---|
-| `failing` | No successful poll for 60 minutes, which is four missed polls |
+| `failing` | No successful poll for 60 minutes |
 | `quiet` | Polls work, but the newest observation is over 36 hours old: two missed daytime passes |
 | `delayed` | The newest observation is over 18 hours old: one missed daytime pass, plus the few hours FIRMS takes to publish |
 | `healthy` | Otherwise |

@@ -18,27 +18,45 @@ inserted AS (
     ON CONFLICT DO NOTHING
     RETURNING id, observed_at, geom, satellite, scan_m, track_m
 ),
--- The same satellite observation can arrive in two products of one source,
--- such as VIIRS_SNPP_NRT and later VIIRS_SNPP_SP ($4). Look for an earlier
--- record from the same satellite at the same minute, within half a pixel
--- (at least 187.5 metres). Each record links to its nearest such record, and
--- each earlier record takes at most one link, the nearest.
+-- FIRMS NRT/SP keep their exact-minute rule. Across NOAA and FIRMS the
+-- timestamps can differ because NOAA provides the start of an ~85 s swath.
+-- A candidate can itself be an alias. Link directly to its primary and
+-- reserve one record per arriving source/product in each observation.
 nearest AS (
-    SELECT i.id, i.observed_at, e.id AS primary_id, e.observed_at AS primary_observed_at, e.distance_m
+    SELECT i.id, i.observed_at, e.primary_id, e.primary_observed_at, e.distance_m
     FROM inserted i
     CROSS JOIN LATERAL (
-        SELECT e.id, e.observed_at, ST_Distance(e.geom::geography, i.geom::geography) AS distance_m
+        SELECT p.id AS primary_id, p.observed_at AS primary_observed_at,
+               ST_Distance(e.geom::geography, i.geom::geography) AS distance_m
         FROM detections e
-        WHERE NULLIF($4::text, '') IS NOT NULL AND e.source = $2 AND e.product = $4::text
-          AND e.workspace_id IS NOT DISTINCT FROM $6::uuid
-          AND e.observed_at = i.observed_at AND e.satellite IS NOT DISTINCT FROM i.satellite
-          AND ST_DWithin(e.geom::geography, i.geom::geography,
-                         GREATEST(COALESCE(i.scan_m, 0), COALESCE(i.track_m, 0), 375) / 2)
+        LEFT JOIN detection_links alias ON (alias.detection_id, alias.observed_at) = (e.id, e.observed_at)
+        JOIN detections p ON (p.id, p.observed_at) =
+            (COALESCE(alias.primary_id, e.id), COALESCE(alias.primary_observed_at, e.observed_at))
+        WHERE e.workspace_id IS NOT DISTINCT FROM $6::uuid
+          AND e.observed_at BETWEEN i.observed_at - interval '2 minutes' AND i.observed_at + interval '2 minutes'
+          AND (
+              (e.source = $2 AND e.product = NULLIF($4::text, '')
+               AND e.observed_at = i.observed_at AND e.satellite IS NOT DISTINCT FROM i.satellite
+               AND ST_DWithin(e.geom::geography, i.geom::geography,
+                              GREATEST(i.scan_m, i.track_m, 375) / 2))
+              OR
+              (e.source = $8 AND e.product = ANY($7::text[])
+               AND CASE upper(i.satellite) WHEN '1' THEN 'N20' WHEN '2' THEN 'N21' ELSE upper(i.satellite) END
+                   = CASE upper(e.satellite) WHEN '1' THEN 'N20' WHEN '2' THEN 'N21' ELSE upper(e.satellite) END
+               AND ST_DWithin(e.geom::geography, i.geom::geography,
+                   GREATEST(CASE WHEN $2 = 'firms' THEN i.scan_m ELSE e.scan_m END,
+                            CASE WHEN $2 = 'firms' THEN i.track_m ELSE e.track_m END,
+                            CASE WHEN $2 = 'firms' AND i.scan_m IS NULL AND i.track_m IS NULL THEN e.scan_m
+                                 WHEN $2 <> 'firms' AND e.scan_m IS NULL AND e.track_m IS NULL THEN i.scan_m END,
+                            375) / 2))
+          )
+          AND (p.source, p.product) <> ($2, $3)
           AND NOT EXISTS (
               SELECT 1 FROM detection_links l
-              WHERE (l.detection_id, l.observed_at) = (e.id, e.observed_at)
-                 OR (l.primary_id, l.primary_observed_at) = (e.id, e.observed_at))
-        ORDER BY distance_m, e.id
+              JOIN detections d ON (d.id, d.observed_at) = (l.detection_id, l.observed_at)
+              WHERE (l.primary_id, l.primary_observed_at) = (p.id, p.observed_at)
+                AND (d.source, d.product) = ($2, $3))
+        ORDER BY (e.source = $2) DESC, distance_m, p.id
         LIMIT 1
     ) e
 ),
