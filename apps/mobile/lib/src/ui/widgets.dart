@@ -173,6 +173,7 @@ String confidenceLabel(String value, [BuildContext? context]) {
 
 String sourceLabel(BuildContext context, String source) => switch (source) {
   'firms' => 'NASA FIRMS',
+  'cdse' => fieldText(context).copernicusSentinel,
   'manual' => fieldText(context).manualFireReport,
   'demo' || 'demo_fsi' => fieldText(context).demoData,
   'fsi' => fieldText(context).forestSurveyOfIndia,

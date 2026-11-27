@@ -88,6 +88,10 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   readonly edgeReason = 'The detection is near the forest edge.';
   readonly confidenceLabel = confidenceLabel;
   readonly sourceLabel = sourceLabel;
+
+  observationYear(seconds: number): number {
+    return new Date(seconds * 1000).getUTCFullYear();
+  }
   private readonly placeLevels = computed(() => this.geography()?.info.levels ?? []);
   /** The smallest place first, then the rest from smaller to larger. */
   places(detection: Detection) {

@@ -472,6 +472,13 @@
   "locationExceptionReason": "Location exception: {reason}",
   "locationIsSwitchedOffSwitch": "Location is switched off. Switch it on and try again.",
   "low": "Low",
+  "copernicusSentinel": "Copernicus Sentinel-3",
+  "copernicusAttribution": "Contains modified Copernicus Sentinel data {year}",
+  "@copernicusAttribution": {
+    "placeholders": {
+      "year": {"type": "int"}
+    }
+  },
   "manualFireReport": "Manual fire report",
   "map": "Map",
   "mapKey": "Map key",

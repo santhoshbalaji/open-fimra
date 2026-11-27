@@ -667,6 +667,8 @@ class _Facts extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (alert.source == 'cdse')
+                  Text(fieldText(context).copernicusAttribution(alert.observedAt.toUtc().year), style: text.bodySmall),
                 for (final (label, value) in rows)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),

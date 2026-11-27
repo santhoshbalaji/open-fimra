@@ -216,6 +216,7 @@ def note_items(meta, fields, rows, generated_at):
     filters = meta["filters"]
     reports = meta["kind"] == "submissions"
     sources = sorted({f"{r['source']} ({r['product']})" for r in rows})
+    sentinel_years = sorted({r["observed_at"].astimezone(timezone.utc).year for r in rows if r["source"] == "cdse"})
     roles = "; ".join(f"{r['role']} at {r['level']} {r['unitCode']} ({r['unitName']})"
                       for r in sorted(meta["requester_roles"] or [], key=lambda r: (r["role"], r["unitCode"])))
     observed = "Received" if reports else "Observed"
@@ -231,6 +232,9 @@ def note_items(meta, fields, rows, generated_at):
         ("time_window", window),
         ("forest_classes", ", ".join(filters["forestClasses"])),
     ]
+    if sentinel_years:
+        items.append(("attribution", "; ".join(f"Contains modified Copernicus Sentinel data {year}"
+                                               for year in sentinel_years)))
     if meta["kind"] in ("alerts", "submissions"):
         items += [("queue", filters.get("queue") or "all queues the role may see"),
                   ("workflow_step", filters.get("step") or "any")]
