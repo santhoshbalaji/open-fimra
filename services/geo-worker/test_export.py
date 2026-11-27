@@ -254,6 +254,12 @@ class ExportFormatTests(unittest.TestCase):
         self.assertEqual(len(shorts), len(set(shorts)))
         self.assertTrue(all(len(name) <= 10 for name in shorts), shorts)
 
+    def test_note_credits_sentinel_data_by_observation_year(self):
+        detections = rows("detections")
+        detections[0]["source"] = "cdse"
+        items = dict(note_items(meta("detections", "gpkg"), [], detections, SEEN))
+        self.assertEqual(items["attribution"], "Contains modified Copernicus Sentinel data 2026")
+
     def test_note_reports_rows_removed_after_the_request(self):
         items = dict(note_items(meta("detections", "gpkg"), [], rows("detections")[:1], SEEN))
         self.assertEqual(items["row_count"], "1")

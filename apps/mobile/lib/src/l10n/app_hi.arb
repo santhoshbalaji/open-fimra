@@ -140,6 +140,8 @@
   "locationExceptionReason": "स्थान दर्ज न करने का कारण: {reason}",
   "locationIsSwitchedOffSwitch": "स्थान सेवा बंद है। इसे चालू करें और फिर कोशिश करें।",
   "low": "कम",
+  "copernicusSentinel": "कोपरनिकस सेंटिनल-3",
+  "copernicusAttribution": "इसमें संशोधित कोपरनिकस सेंटिनल डेटा {year} शामिल है",
   "manualFireReport": "आग की सूचना दर्ज करें",
   "map": "नक्शा",
   "mapKey": "नक्शे के संकेत",

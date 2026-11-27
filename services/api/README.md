@@ -332,6 +332,22 @@ NOAA records use `noaa_nodd` with product `VIIRS_NOAA20_EFIRE` or `VIIRS_NOAA21_
 
 Run `make noaa-nodd-test-integration` on a migrated database. The test uses a fake public bucket and synthetic NetCDF4 granules.
 
+## Copernicus Sentinel-3 ingestion
+
+Set `FIMRA_CDSE_ENABLED=true` to poll Sentinel-3A and Sentinel-3B alongside FIRMS. The connector is off by default. `FIMRA_CDSE_POLL_INTERVAL` defaults to `10m` and accepts durations from `1m` to `30m`.
+
+Give the API CDSE S3 credentials as `FIMRA_CDSE_S3_ACCESS_KEY` and `FIMRA_CDSE_S3_SECRET_KEY`. Either key can instead be read from a mounted secret file using the corresponding `_FILE` variable. Use absolute paths with `make api-run`. CDSE keys have expiration dates. The public OData catalogue needs no credentials, and requests for the CSV go to the CDSE S3 endpoint. [CDSE S3 setup](https://documentation.dataspace.copernicus.eu/APIs/S3.html).
+
+The first poll looks back 24 hours by catalogue publication time. Later polls continue from the last successful window for that workspace and product, with a 30-minute overlap for late catalogue entries. Catch-up is bounded to 30 days and depends on the near-real-time archive retaining the files. Downloads are shared across workspaces after checking the granule footprint against their boundaries. Empty responses and empty CSVs count as successful polls. A failure keeps that workspace and product's cursor in place, and valid granules can still be ingested from a partial poll.
+
+Records use source `cdse` and products `SLSTR_S3A_FRP` and `SLSTR_S3B_FRP`. Only near-real-time editions are polled. The native key uses satellite, sensing granule start, pixel acquisition time and exported coordinates. This makes replay and unchanged pixels in rebuilt NR granules idempotent. The raw record stores the CSV fields, native ID, catalogue ID, object key and ETag, processing baseline, sensing interval and CDSE publication time. [Product choice and measured delay](../../packages/connectors/README.md#copernicus-sentinel-3-slstr).
+
+Sentinel-3 pixels corroborate detections from other satellites as separate observations. Alerts from those detections join an eligible open incident under the workspace's existing spatial and temporal rules (defaults of 1.5 km and 24 hours). Each eligible recipient gets one new-alert notification per channel for that incident. A newly eligible recipient can receive a notification under the normal routing rules.
+
+Both Sentinel-3 products appear in feed health. The existing `firstSeen` metric measures time from pixel acquisition to fetch. For CDSE, `processing` measures time from catalogue publication to the workspace match.
+
+Contains modified Copernicus Sentinel data [year of observation].
+
 ## Feed health
 
 `GET /api/v1/workspaces/{slug}/feeds` takes a bearer token. Only a role at the root of one of the workspace's hierarchies, such as the state administrator, may see it. Anyone else, and any unknown workspace, gets 403.
@@ -341,7 +357,7 @@ It lists each live feed the workspace has polled, identified by source and produ
 | Field | Meaning |
 |---|---|
 | `status` | `healthy`, `delayed`, `quiet` or `failing`, from the thresholds below |
-| `lastRunAt`, `lastRunStatus`, `lastError` | The latest poll and how it ended. The FIRMS key is never in the error. |
+| `lastRunAt`, `lastRunStatus`, `lastError` | The latest poll and how it ended. Connector credentials are redacted from fetch errors. |
 | `lastSuccessAt` | When the latest successful poll's response arrived |
 | `latestObservationAt`, `delaySeconds` | The newest observation the feed has returned in the last 90 days, and its age |
 | `failuresLast24h` | Failed polls in the last 24 hours |

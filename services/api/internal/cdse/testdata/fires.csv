@@ -1,0 +1,6 @@
+#description = synthetic Standard MWIR 1km detections
+#processing_baseline = FRP_NRT.003.02.00
+#number_of_detected_fires = 1
+
+lat(deg),lon(deg),day,time,D/N,FRP(MW),FRPerr(MW),used_channel,confidence(%),confidence_class(lower=0;nominal=1;higher=2),MWIR_BT(K),IFOV_area(m2),SZA(deg),VZA(deg),actrack(km),altrack(km),satellite
+16.418669,86.297650,2000-01-02,14:01:11,N,18.5,2.25,S7,92.5,2,335.0,1680000,125.0,31.5,1.2,1.4,S3A

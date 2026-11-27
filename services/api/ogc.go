@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/santhoshbalaji/open-fimra/services/api/internal/cdse"
 )
 
 // The GIS link is a read-only OGC API - Features service (Part 1, Core, with
@@ -517,6 +518,9 @@ func (a api) ogcFeatures(ctx context.Context, subject string, ws ogcWorkspace, c
 			p := props{{"detection_id", id}, {"observed_at", utc(observed)}, {"source", source}, {"product", product},
 				{"satellite", satellite}, {"forest_class", class}, {"triage", triage}, {"forest_feature_code", forestCode},
 				{"frp_mw", frp}, {"confidence", confidence}, {"place_hierarchy", hierarchy}}
+			if source == cdse.Source {
+				p = append(p, prop{"attribution", cdse.Attribution(observed)})
+			}
 			p = append(append(p, levelProps(ws.mainLevels, main)...), prop{"places", places})
 			return ogcFeature{Type: "Feature", ID: id, Geometry: geometry(geom), Properties: p,
 				cursor: utc(observed) + "," + strconv.FormatInt(id, 10)}, err
@@ -542,6 +546,9 @@ func (a api) ogcFeatures(ctx context.Context, subject string, ws ogcWorkspace, c
 				{"observed_at", utc(observed)}, {"source", source}, {"product", product}, {"satellite", satellite},
 				{"forest_class", class}, {"triage", triage}, {"frp_mw", frp}, {"confidence", confidence},
 				{"place_hierarchy", hierarchy}}
+			if source == cdse.Source {
+				p = append(p, prop{"attribution", cdse.Attribution(observed)})
+			}
 			p = append(append(p, levelProps(ws.mainLevels, main)...), prop{"places", places})
 			return ogcFeature{Type: "Feature", ID: id, Geometry: geometry(geom), Properties: p,
 				cursor: utc(observed) + "," + strconv.FormatInt(id, 10)}, err

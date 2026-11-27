@@ -51,9 +51,21 @@ LEFT JOIN LATERAL (
         JOIN detection_matches m
           ON (m.workspace_id, m.detection_id, m.observed_at) = (f.workspace_id, d.id, d.observed_at)
         WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+          AND f.source <> 'cdse'
           AND r.previous_fetched_at IS NOT NULL AND r.fetched_at > $2 - interval '7 days' AND r.fetched_at <= $2
           AND d.observed_at >= r.window_start AND d.observed_at <= r.fetched_at
           AND m.matched_at >= r.fetched_at AND m.matched_at <= $2
+        UNION ALL
+        -- CDSE provides publication timestamps and shares the inserting run
+        -- across every workspace that classified the observation.
+        SELECT extract(epoch FROM m.matched_at - (d.raw->>'published_at')::timestamptz)::float8
+        FROM ingest_runs r
+        JOIN detections d ON d.ingest_run_id = r.id
+        JOIN detection_matches m
+          ON (m.workspace_id, m.detection_id, m.observed_at) = (f.workspace_id, d.id, d.observed_at)
+        WHERE f.source = 'cdse' AND (r.kind, r.source, r.product) = ('poll', f.source, f.product)
+          AND r.fetched_at > $2 - interval '7 days' AND r.fetched_at <= $2
+          AND (d.raw->>'published_at')::timestamptz <= m.matched_at AND m.matched_at <= $2
     )
     SELECT count(*)::integer AS records,
            percentile_cont(0.95) WITHIN GROUP (ORDER BY seconds) AS p95_seconds,
@@ -69,7 +81,10 @@ LEFT JOIN LATERAL (
     FROM ingest_runs r
     JOIN detections d ON d.ingest_run_id = r.id
     CROSS JOIN LATERAL (SELECT extract(epoch FROM r.fetched_at - d.observed_at)::float8 AS seconds) lag
-    WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+    WHERE (r.kind, r.source, r.product) = ('poll', f.source, f.product)
+      AND (r.workspace_id = f.workspace_id OR (f.source = 'cdse' AND EXISTS (
+          SELECT FROM detection_matches m
+          WHERE (m.workspace_id, m.detection_id, m.observed_at) = (f.workspace_id, d.id, d.observed_at))))
       AND r.fetched_at > $2 - interval '7 days' AND r.fetched_at <= $2 AND lag.seconds >= 0
 ) first_seen ON true
 ORDER BY w.slug, f.source, f.product;

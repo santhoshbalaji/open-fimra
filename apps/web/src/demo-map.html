@@ -341,6 +341,9 @@
         <dt>{{ msg('Fire strength') }}</dt><dd>{{ point.frp_mw !== undefined && point.frp_mw !== null ? point.frp_mw + msg(' megawatts') : msg('Unknown') }}</dd>
         <dt>{{ msg('Confidence') }}</dt><dd>{{ confidenceLabel(point.confidence) }}</dd>
       </dl>
+      @if (point.source === 'cdse') {
+        <p>{{ msg('Contains modified Copernicus Sentinel data {0}', [observationYear(point.observed_at)]) }}</p>
+      }
     </section>
     <section class="map-detail-block" aria-labelledby="incident-detail-heading">
       <h3 id="incident-detail-heading">{{ msg('Linked incident') }}</h3>
