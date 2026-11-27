@@ -1784,5 +1784,13 @@
   "Whole degree": "Whole degree",
   "Withdraw public release": "Withdraw public release",
   "Work completed": "Work completed",
-  "{0} expected · {1} reported · {2} missing": "{0} expected · {1} reported · {2} missing"
+  "{0} expected · {1} reported · {2} missing": "{0} expected · {1} reported · {2} missing",
+  "Satellite latency could not load": "Satellite latency could not load",
+  "First seen {0}": "First seen {0}",
+  "Matched to this workspace {0}": "Matched to this workspace {0}",
+  "No timed workspace matches": "No timed workspace matches",
+  "No latency samples from comparable polls in the last 7 days": "No latency samples from comparable polls in the last 7 days",
+  "{0} detection": "{0} detection",
+  "{0} detections": "{0} detections",
+  "typically {0} after observation, 95% within {1}, longest {2} ({3}).": "typically {0} after observation, 95% within {1}, longest {2} ({3})."
 }
