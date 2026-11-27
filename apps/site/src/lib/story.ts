@@ -30,7 +30,11 @@ upcoming.querySelectorAll("a").forEach(link => link.addEventListener("click", ()
 }));
 
 const header = document.querySelector<HTMLElement>(".site-header")!;
-new ResizeObserver(() => root.style.setProperty("--header-height", `${header.offsetHeight}px`)).observe(header);
+let headerHeight = 0;
+new ResizeObserver(([entry]) => {
+  headerHeight = entry.borderBoxSize[0].blockSize;
+  root.style.setProperty("--header-height", `${headerHeight}px`);
+}).observe(header);
 
 const space = document.querySelector<HTMLElement>("#space")!;
 const story = space.querySelector<HTMLElement>(".space-story")!;
@@ -43,19 +47,21 @@ const spaceFrames = [...story.querySelectorAll<HTMLElement>("[data-frame]")];
 const steps = [...story.querySelectorAll<HTMLElement>("[data-step]")];
 const spaceCount = document.querySelector<HTMLElement>("#space-count")!;
 let renderFrame = 0;
-let current = -1;
+let current = 0;
 
 function update() {
   renderFrame = 0;
   const length = root.scrollHeight - window.innerHeight;
   root.style.setProperty("--progress", String(length > 0 ? window.scrollY / length : 0));
-  const edge = header.offsetHeight + 36;
+  const edge = headerHeight + 36;
   const activeChapter = chapters.findLast(({section}) => section.getBoundingClientRect().top <= edge);
   links.forEach(link => {
     if (link === activeChapter?.link) link.setAttribute("aria-current", "location");
     else link.removeAttribute("aria-current");
   });
 
+  const bounds = space.getBoundingClientRect();
+  if (bounds.bottom < 0 || bounds.top > window.innerHeight) return;
   const threshold = window.innerHeight * .56;
   const index = Math.max(0, steps.findLastIndex(step => step.getBoundingClientRect().top <= threshold));
   if (current !== index) {
@@ -70,7 +76,7 @@ function schedule() {
   if (!renderFrame) renderFrame = requestAnimationFrame(update);
 }
 story.setAttribute("data-enhanced", "");
-update();
+if (location.hash) schedule();
 window.addEventListener("scroll", schedule, { passive: true });
 window.addEventListener("resize", schedule);
 

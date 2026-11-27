@@ -96,7 +96,8 @@ const upcoming = [
               <div class="earth-disc">
                 <img src={asset("media/earth-night.webp")} width="768" height="768" alt="" fetchpriority="high" />
                 <svg class="poster-marks" viewBox="0 0 200 200" fill="none">
-                  {posterMarks.map(({x, y, volume}) => <circle cx={x} cy={y} r={volume > 150 ? ".58" : ".35"} />)}
+                  {[false, true].map(bright => <path stroke-width={bright ? "1.16" : ".7"}
+                    d={posterMarks.filter(mark => (mark.volume > 150) === bright).map(({x, y}) => `M${x} ${y}h.01`).join("")} />)}
                 </svg>
               </div>
               <svg class="hero-trace" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet" fill="none">
@@ -218,7 +219,7 @@ const upcoming = [
           </div>
           <div class="space-story">
             <div class="space-stage" aria-hidden="true">
-              {steps.map((_, i) => <div class="space-frame" data-frame={i}><Frame step={i} /></div>)}
+              {steps.map((_, i) => <div class="space-frame" data-frame={i} data-active={i === 0 ? "" : undefined}><Frame step={i} /></div>)}
               <div class="space-progress mono"><span id="space-count">01 / 04</span><span>NOAA-20 · VIIRS</span></div>
             </div>
             <ol class="space-steps">

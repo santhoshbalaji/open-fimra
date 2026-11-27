@@ -1,6 +1,7 @@
 ---
 import tokens from "../../../../docs/design-system/tokens.json";
 import { asset } from "../lib/paths";
+import headlineFont from "../fonts/instrument-sans-latin.woff2?url";
 import "../site.css";
 
 interface Props { title: string; description: string; }
@@ -15,6 +16,7 @@ const theme = `:root{${palette("light")};--heat:#934231;color-scheme:light;--pag
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content={description} />
 <title>{title}</title>
+<link rel="preload" as="font" type="font/woff2" href={headlineFont} crossorigin="anonymous" />
 <link rel="icon" href={asset("media/icon.svg")} type="image/svg+xml" />
 <noscript><style is:inline>.map-controls[hidden],.month-strip[hidden],.theme-selector{display:none!important}</style></noscript>
 <style is:inline set:html={theme}></style>
