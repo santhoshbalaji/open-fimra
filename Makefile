@@ -65,7 +65,7 @@ recreate-db ?= $(DB_COMPOSE) exec -T db sh -ec 'dropdb -U "$$POSTGRES_USER" --if
 
 .PHONY: help dev dev-down dev-reset dev-logs dev-ps db-up db-shell db-migrate db-rollback db-status db-test seed seed-test check
 .PHONY: api-run api-test api-test-integration api-lint ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records demo-response-forms
-.PHONY: backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key wizard-test-integration
+.PHONY: backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key wizard-test-integration noaa-nodd-test-integration
 
 api-run api-test-integration ingest-fixture demo-detections demo-dispatch demo-incident-response demo-operations-records demo-response-forms backfill-firms backfill-demo backfill-queue feed-health rotate-settings-key: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 api-run api-test-integration: export FIMRA_OIDC_ISSUER := $(FIMRA_OIDC_ISSUER)
@@ -75,6 +75,9 @@ api-run: export FIMRA_OIDC_EXTRA_ISSUERS := $(FIMRA_OIDC_EXTRA_ISSUERS)
 api-run: export FIMRA_HTTP_ADDR := $(FIMRA_HTTP_ADDR)
 api-run: export FIMRA_EXPORT_TTL := $(FIMRA_EXPORT_TTL)
 api-run backfill-firms: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
+api-run: export FIMRA_NOAA_NODD_ENABLED := $(FIMRA_NOAA_NODD_ENABLED)
+api-run: export FIMRA_NOAA_NODD_POLL_INTERVAL := $(FIMRA_NOAA_NODD_POLL_INTERVAL)
+api-run: export FIMRA_NOAA_NODD_SATELLITES := $(FIMRA_NOAA_NODD_SATELLITES)
 api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
 api-run: export FIMRA_SMTP_ADDR := $(FIMRA_SMTP_ADDR)
 api-run: export FIMRA_SMTP_FROM := $(FIMRA_SMTP_FROM)
@@ -222,6 +225,10 @@ api-test: ## Run the core API unit tests
 
 api-test-integration: mail-up push-up ## Test the core API against the migrated development stack
 	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration|TestResponseFormsIntegration|TestDemoReplayIntegration)$$' -count=1 -v .
+
+noaa-nodd-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+noaa-nodd-test-integration: ## Test NOAA VIIRS ingestion and FIRMS links against a fake public bucket
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestNODDIntegration$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }

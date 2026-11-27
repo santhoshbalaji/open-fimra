@@ -47,6 +47,7 @@ func Counterpart(product string) string {
 }
 
 type Observation struct {
+	NativeID    string            `json:"-"`
 	Latitude    float64           `json:"latitude"`
 	Longitude   float64           `json:"longitude"`
 	ObservedAt  time.Time         `json:"observed_at"`
@@ -190,6 +191,9 @@ func number(s string, bits int) (float64, error) {
 }
 
 func (o Observation) SourceKey(source, product string) string {
+	if o.NativeID != "" {
+		return fmt.Sprintf("%s:%s:%s", source, product, o.NativeID)
+	}
 	return fmt.Sprintf("%s:%s:%s:%s:%s:%s", source, product,
 		strconv.FormatFloat(o.Latitude, 'f', -1, 64), strconv.FormatFloat(o.Longitude, 'f', -1, 64),
 		o.ObservedAt.UTC().Format("2006-01-02:1504"), o.Satellite)

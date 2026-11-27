@@ -39,6 +39,8 @@ type ingestRun struct {
 	WindowEnd   time.Time
 	// Synthetic observations belong only to the workspace that replays them.
 	WorkspaceOnly bool
+	// Successful objects from a multipart poll can be ingested despite a fetch error.
+	AllowPartial bool
 }
 
 type ingestCounts struct {
@@ -69,7 +71,8 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 		return counts, fmt.Errorf("start ingest run: %w", err)
 	}
 
-	observations, err := read(ctx)
+	observations, readErr := read(ctx)
+	err = readErr
 	counts.Fetched = len(observations)
 	var latest *time.Time
 	for i := range observations {
@@ -88,7 +91,14 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 			}
 		}
 	}
-	if err == nil {
+	if err == nil || (run.AllowPartial && len(observations) > 0 && ctx.Err() == nil) {
+		status := "succeeded"
+		var message *string
+		if readErr != nil {
+			status = "failed"
+			detail := readErr.Error()
+			message = &detail
+		}
 		err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 			// The response has been read: processing time starts here.
 			var fetchedAt time.Time
@@ -99,11 +109,11 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 				return err
 			}
 			_, err := tx.Exec(ctx, `
-				UPDATE ingest_runs SET status = 'succeeded', finished_at = clock_timestamp(),
+				UPDATE ingest_runs SET status = $10, error_message = $11, finished_at = clock_timestamp(),
 				    fetched = $2, inserted = $3, duplicates = $4, window_start = $5, window_end = $6,
 				    fetched_at = $7, latest_observed_at = $8, linked = $9
 				WHERE id = $1`, id, counts.Fetched, counts.Inserted, counts.Duplicates, run.WindowStart, run.WindowEnd,
-				fetchedAt, latest, counts.Linked)
+				fetchedAt, latest, counts.Linked, status, message)
 			if err != nil {
 				return fmt.Errorf("finish ingest run: %w", err)
 			}
@@ -111,6 +121,9 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 		})
 	}
 	if err == nil {
+		if readErr != nil {
+			return counts, fmt.Errorf("partial ingest run %d: %w", id, readErr)
+		}
 		return counts, nil
 	}
 
@@ -167,7 +180,13 @@ func insertAndMatch(ctx context.Context, tx pgx.Tx, runID int64, run ingestRun, 
 			return fmt.Errorf("ensure detection partition for %s: %w", month.Format("2006-01"), err)
 		}
 	}
-	err = tx.QueryRow(ctx, ingestSQL, batch, run.Source, run.Product, firms.Counterpart(run.Product), runID, scope).
+	// Keep small spatial batches from spending more time compiling than
+	// matching, including on callers' connections outside openPool.
+	if _, err := tx.Exec(ctx, "SET LOCAL jit = off"); err != nil {
+		return fmt.Errorf("disable JIT for detection ingest: %w", err)
+	}
+	crossSource, crossProducts := noddCounterparts(run.Source, run.Product)
+	err = tx.QueryRow(ctx, ingestSQL, batch, run.Source, run.Product, firms.Counterpart(run.Product), runID, scope, crossProducts, crossSource).
 		Scan(&counts.Inserted, &counts.Matched, &counts.Linked)
 	if err != nil {
 		return fmt.Errorf("insert and match detections: %w", err)

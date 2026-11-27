@@ -157,6 +157,8 @@ type feedFacts struct {
 	FailuresLast24h                             int
 	ProcessedRecords                            int
 	ProcessingP95Seconds, WithinGate            *float64
+	FirstSeenRecords                            int
+	FirstSeenP50Seconds, FirstSeenP95Seconds    *float64
 }
 
 // feedStatus applies the thresholds at now. Until a feed has had a success or
@@ -219,7 +221,8 @@ func loadFeedFacts(ctx context.Context, db feedDB, workspaceID *string, now time
 		var f feedFacts
 		err := row.Scan(&f.WorkspaceID, &f.WorkspaceSlug, &f.Settings, &f.Source, &f.Product, &f.FirstRunAt,
 			&f.LastRunAt, &f.LastRunStatus, &f.LastError, &f.LastSuccessAt, &f.LatestObservedAt,
-			&f.FailuresLast24h, &f.ProcessedRecords, &f.ProcessingP95Seconds, &f.WithinGate)
+			&f.FailuresLast24h, &f.ProcessedRecords, &f.ProcessingP95Seconds, &f.WithinGate,
+			&f.FirstSeenRecords, &f.FirstSeenP50Seconds, &f.FirstSeenP95Seconds)
 		return f, err
 	})
 	if err != nil {

@@ -108,6 +108,10 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, emai
 			&river.PeriodicJobOpts{RunOnStart: true},
 		))
 	}
+	periodic, err := addNODDJobs(pool, workers, queues, periodic)
+	if err != nil {
+		return nil, err
+	}
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger:       logger,
 		Queues:       queues,
