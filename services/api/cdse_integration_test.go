@@ -141,7 +141,7 @@ func TestCDSEIntegration(t *testing.T) {
 		t.Fatalf("detections=%d members=%d incidents=%d first notifications=%d later=%d links=%d, %v",
 			detections, members, incidents, before, after, links, err)
 	}
-	facts, err := loadFeedFacts(ctx, tx, &workspace, now.Add(2*time.Minute))
+	facts, err := loadFeedFacts(ctx, tx, &workspace, now.Add(2*time.Minute), defaultFIRMSProducts())
 	if err != nil {
 		t.Fatal(err)
 	}
