@@ -62,8 +62,9 @@ func TestWizardWalkthroughServer(t *testing.T) {
 	}
 	defer func() { _ = jobs.Stop(context.Background()) }()
 	go func() {
+		poller := firmsPollWorker{keys: keys}
 		for ctx.Err() == nil {
-			if err := pollFIRMS(ctx, pool, keys.workspaceFetch, time.Now()); err != nil && ctx.Err() == nil {
+			if err := poller.poll(ctx, pool, time.Now()); err != nil && ctx.Err() == nil {
 				logger.Warn("Walkthrough poll failed", "error", err)
 			}
 			select {

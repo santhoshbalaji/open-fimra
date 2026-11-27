@@ -26,12 +26,27 @@ import { StatusBadge } from './ui/status-badge';
 
 const feedLabels = { healthy: 'Healthy', delayed: 'Delayed', quiet: 'Quiet', failing: 'Failing' };
 
+interface LatencyStats {
+  count: number;
+  p50Seconds: number | null;
+  p95Seconds: number | null;
+  maxSeconds: number | null;
+}
+
+interface FeedLatency {
+  satellite: string;
+  windowHours: number;
+  firstSeen: LatencyStats;
+  matched: LatencyStats;
+}
+
 interface Feed {
   source: string;
   product: string;
   status: keyof typeof feedLabels;
   lastSuccessAt: string | null;
   latestObservationAt: string | null;
+  latency?: FeedLatency[];
 }
 
 interface Summary {
@@ -46,6 +61,7 @@ interface Summary {
   responseSeconds: Record<string, { median: number | null; p90: number | null }>;
   feedHealth: Feed[] | null;
   feedHealthUnavailable?: boolean;
+  feedLatencyUnavailable?: boolean;
 }
 
 const alertTiles = [
@@ -214,6 +230,18 @@ export class Dashboard {
     return this.router.createUrlTree(['/reports/field'], {
       queryParams: { workspace: this.workspace.current()?.slug, ...this.filters.params(), decision: awaitingReview }
     });
+  }
+
+  latencyWindow(hours: number): string {
+    return hours === 168 ? translate('Last 7 days') : translate('Last {0} hours', [this.format.number(hours)]);
+  }
+
+  latencySummary(stats: LatencyStats): string {
+    const count = this.format.plural(stats.count) === 'one' ? translate('{0} detection', [this.format.number(stats.count)])
+      : translate('{0} detections', [this.format.number(stats.count)]);
+    return translate('typically {0} after observation, 95% within {1}, longest {2} ({3}).', [
+      this.duration(stats.p50Seconds), this.duration(stats.p95Seconds), this.duration(stats.maxSeconds), count
+    ]);
   }
 
   feedDate(timestamp: string): string {

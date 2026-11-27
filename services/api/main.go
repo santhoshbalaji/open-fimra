@@ -110,6 +110,10 @@ func main() {
 }
 
 func run(ctx context.Context, cfg config, logger *slog.Logger) error {
+	pollSettings, err := readFIRMSPollSettings()
+	if err != nil {
+		return err
+	}
 	choices, err := loadFeedbackChoices(os.Getenv("FIMRA_SOURCE_FEEDBACK_CHOICES"))
 	if err != nil {
 		return err
@@ -164,6 +168,7 @@ func run(ctx context.Context, cfg config, logger *slog.Logger) error {
 		return err
 	}
 	keys := newFIRMSKeys(pool, secrets, cfg.firmsMapKey, nil)
+	keys.pollSettings = pollSettings
 	auth := newAuthenticator(provider, cfg.issuer, cfg.audience, cfg.extraIssuers...)
 	auth.emailEnabled = email != nil
 	jobs, err := newJobClient(pool, logger, keys, email, push)

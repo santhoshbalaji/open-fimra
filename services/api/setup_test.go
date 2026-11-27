@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -165,9 +166,18 @@ func TestFIRMSConnectionTest(t *testing.T) {
 	keys := newFIRMSKeys(nil, nil, testMapKey, fake.transport())
 
 	result := testFIRMSConnection(t.Context(), keys.client(testMapKey))
-	if !result.OK || !strings.Contains(result.Message, "VIIRS_SNPP_NRT has data from 2012-01-20") {
+	if !result.OK || !strings.Contains(result.Message, "VIIRS_NOAA20_NRT has data from 2020-01-01") {
 		t.Fatalf("unexpected result with the right key: %+v", result)
 	}
+	stale := firms.NewArea(testMapKey, roundTripper(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(
+			"data_id,min_date,max_date\nVIIRS_NOAA20_NRT,2020-01-01,2020-01-31\n"))}, nil
+	}))
+	result = testFIRMSConnection(t.Context(), stale)
+	if result.OK || !strings.Contains(result.Message, "availability is stale") {
+		t.Fatalf("unexpected stale availability result: %+v", result)
+	}
+
 	const wrong = "fedcba9876543210fedcba9876543210"
 	result = testFIRMSConnection(t.Context(), keys.client(wrong))
 	logger.Warn("FIRMS connection test failed", "reason", result.Message)

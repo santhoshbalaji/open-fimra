@@ -21,7 +21,7 @@ import (
 // future key format still fits, but nothing that could break a URL path.
 var firmsKeyPattern = regexp.MustCompile(`^[A-Za-z0-9]{16,64}$`)
 
-const firmsTestProduct = "VIIRS_SNPP_NRT"
+const firmsTestProduct = "VIIRS_NOAA20_NRT"
 
 // firmsKeys finds the map key for a workspace: the encrypted key saved in its
 // settings first, then FIMRA_FIRMS_MAP_KEY for installations set up before
@@ -33,12 +33,18 @@ type firmsKeys struct {
 	fallback  string
 	transport http.RoundTripper
 
+	pollSettings firmsPollSettings
+
 	mu       sync.Mutex
 	limiters map[[32]byte]*firms.Limiter
 }
 
 func newFIRMSKeys(db rowQuerier, c *settingsCipher, fallback string, transport http.RoundTripper) *firmsKeys {
-	return &firmsKeys{db: db, cipher: c, fallback: fallback, transport: transport, limiters: map[[32]byte]*firms.Limiter{}}
+	return &firmsKeys{
+		db: db, cipher: c, fallback: fallback, transport: transport,
+		limiters:     map[[32]byte]*firms.Limiter{},
+		pollSettings: firmsPollSettings{interval: defaultFIRMSPollInterval, products: defaultFIRMSProducts()},
+	}
 }
 
 // Sources of a workspace's FIRMS key.
@@ -49,7 +55,11 @@ const (
 )
 
 func (k *firmsKeys) key(ctx context.Context, workspaceID string) (string, string, error) {
-	value, found, err := loadSecret(ctx, k.db, k.cipher, workspaceID, firmsSecret)
+	return k.keyFrom(ctx, k.db, workspaceID)
+}
+
+func (k *firmsKeys) keyFrom(ctx context.Context, db rowQuerier, workspaceID string) (string, string, error) {
+	value, found, err := loadSecret(ctx, db, k.cipher, workspaceID, firmsSecret)
 	if found || err != nil {
 		return value, keyFromSettings, err
 	}
@@ -214,17 +224,19 @@ func testFIRMSConnection(ctx context.Context, area firms.Area) firmsTestResult {
 		// The area client removes the key from every error it returns.
 		return firmsTestResult{Message: "FIRMS did not accept the request: " + err.Error()}
 	}
+	if last.Before(firms.Day(time.Now()).AddDate(0, 0, -1)) {
+		return firmsTestResult{Message: fmt.Sprintf("FIRMS answered, but %s availability is stale. The latest date is %s.",
+			firmsTestProduct, last.Format(time.DateOnly))}
+	}
 	return firmsTestResult{OK: true, Message: fmt.Sprintf("FIRMS answered. %s has data from %s to %s.",
 		firmsTestProduct, first.Format(time.DateOnly), last.Format(time.DateOnly))}
 }
 
-// workspaceFetch returns the poll fetcher for a workspace, or nil without a key.
-func (k *firmsKeys) workspaceFetch(ctx context.Context, workspaceID string) (fetchArea, error) {
-	area, ok, err := k.area(ctx, workspaceID)
-	if err != nil || !ok {
-		return nil, err
+func (k *firmsKeys) liveProducts() []string {
+	if k == nil {
+		return defaultFIRMSProducts()
 	}
-	return area.Fetch, nil
+	return k.pollSettings.products
 }
 
 // backfillClient returns the backfill fetchers for a workspace.

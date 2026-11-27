@@ -27,7 +27,7 @@ const (
 // feedThresholds decide a feed's status. They are workspace settings under
 // "feedHealth", with these defaults:
 //
-//   - failing: no successful fetch for 60 minutes, which is four missed polls.
+//   - failing: no successful fetch for 60 minutes.
 //   - quiet: fetches work but the newest observation is over 36 hours old. In
 //     fire season every polar-orbiting satellite passes over India twice a
 //     day, so this is two missed daytime passes.
@@ -212,8 +212,8 @@ type feedDB interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-func loadFeedFacts(ctx context.Context, db feedDB, workspaceID *string, now time.Time) ([]feedFacts, error) {
-	rows, err := db.Query(ctx, feedsSQL, workspaceID, now)
+func loadFeedFacts(ctx context.Context, db feedDB, workspaceID *string, now time.Time, liveProducts []string) ([]feedFacts, error) {
+	rows, err := db.Query(ctx, feedsSQL, workspaceID, now, liveProducts)
 	if err != nil {
 		return nil, fmt.Errorf("read feed health: %w", err)
 	}
@@ -243,14 +243,22 @@ type feedCheckDB interface {
 // checkFeedHealth works out every feed's status at now, opens an alert for a
 // feed that is quiet or failing in fire season, and resolves the open alert
 // of a feed that has recovered.
-func checkFeedHealth(ctx context.Context, db feedCheckDB, logger *slog.Logger, now time.Time) (feedCheckResult, error) {
+func checkFeedHealth(ctx context.Context, db feedCheckDB, logger *slog.Logger, now time.Time, liveProducts []string) (feedCheckResult, error) {
 	var result feedCheckResult
 	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		// Overlapping checks would decide from the same open alerts.
 		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('open-fimra:feed-health'))"); err != nil {
 			return fmt.Errorf("lock the feed health check: %w", err)
 		}
-		facts, err := loadFeedFacts(ctx, tx, nil, now)
+		retired, err := tx.Exec(ctx, `
+			UPDATE feed_health_alerts
+			SET resolved_at = GREATEST(opened_at, $1), last_checked_at = GREATEST(last_checked_at, $1)
+			WHERE source = 'firms' AND NOT (product = ANY($2::text[])) AND resolved_at IS NULL`, now, liveProducts)
+		if err != nil {
+			return fmt.Errorf("resolve alerts for disabled FIRMS feeds: %w", err)
+		}
+		result.Resolved = int(retired.RowsAffected())
+		facts, err := loadFeedFacts(ctx, tx, nil, now, liveProducts)
 		if err != nil {
 			return err
 		}
@@ -325,11 +333,52 @@ func (feedHealthArgs) Kind() string { return "feed_health_check" }
 
 type feedHealthWorker struct {
 	river.WorkerDefaults[feedHealthArgs]
-	db     feedCheckDB
-	logger *slog.Logger
+	db           feedCheckDB
+	logger       *slog.Logger
+	liveProducts []string
 }
 
 func (w *feedHealthWorker) Work(ctx context.Context, _ *river.Job[feedHealthArgs]) error {
-	_, err := checkFeedHealth(ctx, w.db, w.logger, time.Now())
+	_, err := checkFeedHealth(ctx, w.db, w.logger, time.Now(), w.liveProducts)
 	return err
+}
+
+//go:embed feed_latency.sql
+var feedLatencySQL string
+
+type latencyStats struct {
+	Count      int      `json:"count"`
+	P50Seconds *float64 `json:"p50Seconds"`
+	P95Seconds *float64 `json:"p95Seconds"`
+	MaxSeconds *float64 `json:"maxSeconds"`
+}
+
+type feedLatency struct {
+	Satellite   string       `json:"satellite"`
+	WindowHours int          `json:"windowHours"`
+	FirstSeen   latencyStats `json:"firstSeen"`
+	Matched     latencyStats `json:"matched"`
+}
+
+type feedKey struct{ source, product string }
+
+func loadFeedLatency(ctx context.Context, db feedDB, workspaceID string, now time.Time) (map[feedKey][]feedLatency, error) {
+	rows, err := db.Query(ctx, feedLatencySQL, workspaceID, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[feedKey][]feedLatency)
+	for rows.Next() {
+		var key feedKey
+		var sample feedLatency
+		seen, matched := &sample.FirstSeen, &sample.Matched
+		if err := rows.Scan(&key.source, &key.product, &sample.Satellite, &sample.WindowHours,
+			&seen.Count, &seen.P50Seconds, &seen.P95Seconds, &seen.MaxSeconds,
+			&matched.Count, &matched.P50Seconds, &matched.P95Seconds, &matched.MaxSeconds); err != nil {
+			return nil, err
+		}
+		result[key] = append(result[key], sample)
+	}
+	return result, rows.Err()
 }

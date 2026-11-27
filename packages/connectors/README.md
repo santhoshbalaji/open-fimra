@@ -4,7 +4,9 @@ This folder holds connector specifications and synthetic test fixtures. Never co
 
 ## NASA FIRMS
 
-The [Go connector](../../services/api/internal/firms/) uses the [area API](https://firms.modaps.eosdis.nasa.gov/api/area/) for `VIIRS_SNPP_NRT`, `VIIRS_NOAA20_NRT`, `VIIRS_NOAA21_NRT` and `MODIS_NRT`. Backfill uses the standard-processing products `VIIRS_SNPP_SP`, `VIIRS_NOAA20_SP`, `VIIRS_NOAA21_SP` and `MODIS_SP`, with the area API's date form and at most 5 days per request. Set your own `FIMRA_FIRMS_MAP_KEY` to enable live polling. The key is part of the request URL and is redacted from reported errors.
+The [Go connector](../../services/api/internal/firms/) uses the [area API](https://firms.modaps.eosdis.nasa.gov/api/area/) for `VIIRS_NOAA20_NRT`, `VIIRS_NOAA21_NRT` and the combined `MODIS_NRT` product, which continues for Aqua and still accepts Terra rows. Suomi NPP and Terra are retained for historical ingest and linking. Set `FIMRA_FIRMS_POLL_PRODUCTS` to override the live products and `FIMRA_FIRMS_POLL_INTERVAL` to change the five-minute cadence (minimum one minute). Live polls share identical requests for the same key, product, bounds and day range.
+
+Backfill defaults to `VIIRS_NOAA20_SP,VIIRS_NOAA21_SP,MODIS_SP`. Override the list with `FIMRA_FIRMS_BACKFILL_PRODUCTS` or select products on the command line, including `VIIRS_SNPP_SP` for historical Suomi NPP data. Backfill uses the date form of the area API and requests at most five days per call. Save a workspace key or set `FIMRA_FIRMS_MAP_KEY` as a fallback. Requests include the key in the URL and the connector redacts it in reported errors.
 
 [The fixtures](firms/fixtures/) use the FIRMS column layout with made-up observations in Demo State. The VIIRS replay file spans two months. The MODIS file covers numeric confidence and a time without leading zeroes. Tests serve these files from memory.
 

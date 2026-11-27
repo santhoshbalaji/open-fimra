@@ -185,9 +185,16 @@ func TestAvailability(t *testing.T) {
 }
 
 func TestProducts(t *testing.T) {
-	for i, p := range Products {
-		if IsStandard(p) || !IsStandard(StandardProducts[i]) || Counterpart(p) != StandardProducts[i] || Counterpart(StandardProducts[i]) != p {
-			t.Fatalf("products %s and %s are not paired", p, StandardProducts[i])
+	for _, pair := range [][2]string{
+		{"VIIRS_SNPP_NRT", "VIIRS_SNPP_SP"},
+		{"VIIRS_NOAA20_NRT", "VIIRS_NOAA20_SP"},
+		{"VIIRS_NOAA21_NRT", "VIIRS_NOAA21_SP"},
+		{"MODIS_NRT", "MODIS_SP"},
+	} {
+		nrt, standard := pair[0], pair[1]
+		if IsStandard(nrt) || !IsStandard(standard) ||
+			Counterpart(nrt) != standard || Counterpart(standard) != nrt {
+			t.Fatalf("products %s and %s are not paired", nrt, standard)
 		}
 	}
 	if Counterpart("LANDSAT_NRT") != "" {

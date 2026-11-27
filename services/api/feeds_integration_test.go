@@ -4,18 +4,22 @@ import (
 	"context"
 	"crypto"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
 )
 
@@ -25,7 +29,7 @@ func TestFeedHealthIntegration(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, loadConfig().databaseURL)
+	pool, err := openPool(ctx, loadConfig().databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,45 +43,163 @@ func TestFeedHealthIntegration(t *testing.T) {
 	workspaceID := prefix + "01"
 
 	t.Run("processing time", func(t *testing.T) {
-		checkProcessingTime(t, ctx, tx, workspaceID, "live_"+suffix)
+		checkProcessingTime(t, ctx, tx, workspaceID)
+	})
+	t.Run("shared FIRMS fetch and recovery", func(t *testing.T) {
+		_, pollSlug, pollPrefix := loadSeedCopy(t, ctx, tx)
+		checkSharedFIRMSFetch(t, ctx, tx, pollPrefix+"01", pollSlug)
+	})
+	t.Run("stale and overlapping polls", func(t *testing.T) {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext('open-fimra:firms-poll'))"); err != nil {
+			t.Fatal(err)
+		}
+		poller := firmsPollWorker{
+			pool: pool, keys: newFIRMSKeys(pool, nil, "", nil),
+			previous: make(map[pollFeed]time.Time),
+		}
+		job := &river.Job[firmsPollArgs]{JobRow: &rivertype.JobRow{ScheduledAt: time.Now().Add(-time.Hour)}}
+		if err := poller.Work(ctx, job); err != nil || poller.previous == nil {
+			t.Fatalf("a stale tick should skip before attempting to take the database lock: %v", err)
+		}
+		job.ScheduledAt = time.Now()
+		if err := poller.Work(ctx, job); err != nil || poller.previous != nil {
+			t.Fatalf("another worker holds the database lock, so this tick should skip and discard its baseline: %v", err)
+		}
 	})
 	t.Run("silent source", func(t *testing.T) {
 		checkSilentSource(t, ctx, tx, slug, prefix, "silent_"+suffix)
 	})
 }
 
-// checkProcessingTime polls twice for real, and checks that the new records
-// of the second poll get a processing time.
-func checkProcessingTime(t *testing.T, ctx context.Context, tx pgx.Tx, workspaceID, source string) {
-	now := time.Now()
-	run := ingestRun{WorkspaceID: &workspaceID, Source: source, Product: demoProduct, WindowStart: now.Add(-48 * time.Hour), WindowEnd: now}
-	for i, file := range []string{"", "demo.csv"} {
-		counts, err := runIngest(ctx, tx, run, func(context.Context) ([]firms.Observation, error) {
-			if file == "" {
-				return nil, nil
-			}
-			return readFixture(filepath.Join(fixtureDir, file), demoProduct, true, now)
+func checkProcessingTime(t *testing.T, ctx context.Context, tx pgx.Tx, workspaceID string) {
+	t.Helper()
+	now := time.Now().UTC().Truncate(time.Minute)
+	run := ingestRun{WorkspaceID: &workspaceID, Source: firms.Source, Product: "MODIS_NRT",
+		WindowStart: now.Add(-48 * time.Hour), WindowEnd: now}
+	rows, err := readFixture(filepath.Join(fixtureDir, "modis.csv"), run.Product, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terra, aquaEarly, aquaLate, backlog := rows[0], rows[0], rows[0], rows[0]
+	terra.ObservedAt, aquaEarly.ObservedAt, aquaLate.ObservedAt = now.Add(-time.Hour), now.Add(-time.Hour), now.Add(-3*time.Hour)
+	aquaEarly.Satellite, aquaLate.Satellite = "A", "Aqua"
+	backlog.ObservedAt = now.Add(-24 * time.Hour)
+	oldFetch := now.Add(-time.Second)
+	ingest := func(rows []firms.Observation, timing fetchTiming) {
+		t.Helper()
+		counts, err := runIngestTimed(ctx, tx, run, func(context.Context) ([]firms.Observation, fetchTiming, error) {
+			return rows, timing, nil
 		})
-		if err != nil || (i == 1 && counts.Inserted != 11) {
-			t.Fatalf("poll %d: %+v, %v", i+1, counts, err)
+		if err != nil || counts.Inserted != len(rows) {
+			t.Fatalf("ingest: %+v, %v", counts, err)
 		}
 	}
-	facts, err := loadFeedFacts(ctx, tx, &workspaceID, time.Now())
+	ingest([]firms.Observation{backlog}, fetchTiming{fetchedAt: oldFetch})
+	ingest([]firms.Observation{terra, aquaEarly, aquaLate}, fetchTiming{fetchedAt: now, previousFetchedAt: &oldFetch})
+
+	checked := time.Now()
+	facts, err := loadFeedFacts(ctx, tx, &workspaceID, checked, defaultFIRMSProducts())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range facts {
-		if f.Source != source {
+		if f.Source != run.Source || f.Product != run.Product {
 			continue
 		}
-		if f.ProcessedRecords != 11 || f.ProcessingP95Seconds == nil || *f.ProcessingP95Seconds < 0 ||
-			*f.ProcessingP95Seconds > 60 || f.WithinGate == nil || *f.WithinGate != 1 || f.LatestObservedAt == nil {
+		// Synthetic rows use independently controlled first-seen times.
+		if f.ProcessedRecords != 3 || f.ProcessingP95Seconds == nil || *f.ProcessingP95Seconds < 1 || f.WithinGate == nil || *f.WithinGate != 1 {
 			t.Fatalf("processing facts: %+v", f)
 		}
-		t.Logf("11 new records, 95th percentile %.2f seconds from the previous fetch to the match", *f.ProcessingP95Seconds)
-		return
 	}
-	t.Fatal("the live feed is missing from feed health")
+	latencies, err := loadFeedLatency(ctx, tx, workspaceID, checked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	latency := latencies[feedKey{run.Source, run.Product}]
+	if len(latency) != 4 {
+		t.Fatalf("expected Aqua and Terra in both windows, got %+v", latency)
+	}
+	for _, sample := range latency {
+		count, p50, p95, maxSeconds := 1, 3600.0, 3600.0, 3600.0
+		if sample.Satellite == "Aqua" {
+			count, p50, p95, maxSeconds = 2, 7200, 10440, 10800
+		} else if sample.Satellite != "Terra" {
+			t.Fatalf("unexpected satellite: %s", sample.Satellite)
+		}
+		if sample.FirstSeen.Count != count || sample.FirstSeen.P50Seconds == nil || *sample.FirstSeen.P50Seconds != p50 ||
+			sample.FirstSeen.P95Seconds == nil || math.Abs(*sample.FirstSeen.P95Seconds-p95) > 0.001 ||
+			sample.FirstSeen.MaxSeconds == nil || *sample.FirstSeen.MaxSeconds != maxSeconds ||
+			sample.Matched.Count != count || sample.Matched.P50Seconds == nil || *sample.Matched.P50Seconds < p50 {
+			t.Fatalf("unexpected latency sample: %+v", sample)
+		}
+	}
+}
+
+func checkSharedFIRMSFetch(t *testing.T, ctx context.Context, tx pgx.Tx, workspaceID, slug string) {
+	t.Helper()
+	var twin string
+	err := tx.QueryRow(ctx, `
+		INSERT INTO workspaces (slug, name, boundary)
+		SELECT $2, 'Synthetic second workspace', boundary FROM workspaces WHERE id = $1
+		RETURNING id::text`, workspaceID, slug+"-twin").Scan(&twin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := newSettingsCipher(randomSettingsKey(t), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, workspace := range []string{workspaceID, twin} {
+		if err := saveSecret(ctx, tx, cipher, workspace, firmsSecret, testMapKey, "test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fake := newFakeFIRMS(t, testMapKey)
+	offline := false
+	transport := roundTripper(func(r *http.Request) (*http.Response, error) {
+		if offline {
+			return nil, errors.New("synthetic outage")
+		}
+		return fake.transport().RoundTrip(r)
+	})
+	poller := firmsPollWorker{keys: newFIRMSKeys(tx, cipher, "", transport)}
+	for i := range 4 {
+		offline = i == 2
+		if err := poller.poll(ctx, tx, time.Now()); (err != nil) != offline {
+			t.Fatalf("poll %d, offline=%t: %v", i+1, offline, err)
+		}
+	}
+	if got := len(fake.seen()); got != 9 {
+		t.Fatalf("three successful polls of three products used %d requests, want 9", got)
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT product, count(DISTINCT fetched_at), array_agg(previous_fetched_at IS NOT NULL ORDER BY id)
+		FROM ingest_runs WHERE workspace_id IN ($1, $2) AND source = 'firms'
+		GROUP BY product ORDER BY product`, workspaceID, twin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type counts struct {
+		product         string
+		distinctFetches int
+		comparable      []bool
+	}
+	got, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (counts, error) {
+		var c counts
+		err := row.Scan(&c.product, &c.distinctFetches, &c.comparable)
+		return c, err
+	})
+	products := []string{"MODIS_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"}
+	if err != nil || len(got) != len(products) {
+		t.Fatalf("polls = %+v: %v", got, err)
+	}
+	wantComparable := []bool{false, false, true, true, false, false, false, false}
+	for i, c := range got {
+		if c.product != products[i] || c.distinctFetches != 3 || !slices.Equal(c.comparable, wantComparable) {
+			t.Fatalf("unexpected product runs: %+v", c)
+		}
+	}
 }
 
 // checkSilentSource builds a feed's history on a fake clock: normal polls,
@@ -110,10 +232,10 @@ func checkSilentSource(t *testing.T, ctx context.Context, tx pgx.Tx, slug, prefi
 	}
 	check := func(d time.Duration, wantStatus string, want alertRow) {
 		t.Helper()
-		if _, err := checkFeedHealth(ctx, tx, slog.Default(), at(d)); err != nil {
+		if _, err := checkFeedHealth(ctx, tx, slog.Default(), at(d), defaultFIRMSProducts()); err != nil {
 			t.Fatal(err)
 		}
-		facts, err := loadFeedFacts(ctx, tx, &workspaceID, at(d))
+		facts, err := loadFeedFacts(ctx, tx, &workspaceID, at(d), defaultFIRMSProducts())
 		if err != nil {
 			t.Fatal(err)
 		}

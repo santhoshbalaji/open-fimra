@@ -24,7 +24,7 @@ type fireSeasonJSON struct {
 }
 
 type processingJSON struct {
-	// Records new in a poll over the last 7 days, after the feed's first poll.
+	// Records new in a poll over the last 7 days, with a comparable previous fetch.
 	Records int `json:"records"`
 	// Upper estimate of the time from publication to match, at the 95th
 	// percentile, and the share of records within 20 minutes.
@@ -51,6 +51,7 @@ type feedJSON struct {
 	FailuresLast24h     int            `json:"failuresLast24h"`
 	Processing          processingJSON `json:"processing"`
 	FirstSeen           firstSeenJSON  `json:"firstSeen"`
+	Latency             []feedLatency  `json:"latency"`
 }
 
 type feedAlertJSON struct {
@@ -105,13 +106,19 @@ func (a api) feeds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	facts, err := loadFeedFacts(ctx, a.feedDB, &workspaceID, now)
+	facts, err := loadFeedFacts(ctx, a.feedDB, &workspaceID, now, a.firms.liveProducts())
 	if err != nil {
 		a.logger.Error("Could not read feed health", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load feed health.")
 		return
 	}
-	alerts, err := openFeedAlerts(ctx, a.feedDB, workspaceID)
+	latencies, err := loadFeedLatency(ctx, a.feedDB, workspaceID, now)
+	if err != nil {
+		a.logger.Error("Could not read feed latency", "error", err)
+		writeError(w, http.StatusInternalServerError, "Could not load feed health.")
+		return
+	}
+	alerts, err := openFeedAlerts(ctx, a.feedDB, workspaceID, a.firms.liveProducts())
 	if err != nil {
 		a.logger.Error("Could not read feed health alerts", "error", err)
 		writeError(w, http.StatusInternalServerError, "Could not load feed health.")
@@ -143,6 +150,7 @@ func (a api) feeds(w http.ResponseWriter, r *http.Request) {
 			LastSuccessAt: f.LastSuccessAt, LatestObservationAt: f.LatestObservedAt,
 			FailuresLast24h: f.FailuresLast24h,
 			FirstSeen:       firstSeenJSON{Records: f.FirstSeenRecords, P50Seconds: f.FirstSeenP50Seconds, P95Seconds: f.FirstSeenP95Seconds},
+			Latency:         append([]feedLatency{}, latencies[feedKey{f.Source, f.Product}]...),
 			Processing: processingJSON{
 				Records: f.ProcessedRecords, P95Seconds: f.ProcessingP95Seconds, WithinTwentyMinutes: f.WithinGate,
 			},
@@ -156,11 +164,12 @@ func (a api) feeds(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-func openFeedAlerts(ctx context.Context, db feedDB, workspaceID string) ([]feedAlertJSON, error) {
+func openFeedAlerts(ctx context.Context, db feedDB, workspaceID string, liveProducts []string) ([]feedAlertJSON, error) {
 	rows, err := db.Query(ctx, `
 		SELECT id, source, product, opened_status, status, opened_at, last_checked_at
 		FROM feed_health_alerts WHERE workspace_id = $1 AND resolved_at IS NULL
-		ORDER BY opened_at, id`, workspaceID)
+		  AND (source <> 'firms' OR product = ANY($2::text[]))
+		ORDER BY opened_at, id`, workspaceID, liveProducts)
 	if err != nil {
 		return nil, err
 	}

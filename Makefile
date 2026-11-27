@@ -78,6 +78,9 @@ api-run backfill-firms: export FIMRA_FIRMS_MAP_KEY := $(FIMRA_FIRMS_MAP_KEY)
 api-run: export FIMRA_NOAA_NODD_ENABLED := $(FIMRA_NOAA_NODD_ENABLED)
 api-run: export FIMRA_NOAA_NODD_POLL_INTERVAL := $(FIMRA_NOAA_NODD_POLL_INTERVAL)
 api-run: export FIMRA_NOAA_NODD_SATELLITES := $(FIMRA_NOAA_NODD_SATELLITES)
+api-run feed-health: export FIMRA_FIRMS_POLL_PRODUCTS := $(FIMRA_FIRMS_POLL_PRODUCTS)
+api-run: export FIMRA_FIRMS_POLL_INTERVAL := $(FIMRA_FIRMS_POLL_INTERVAL)
+backfill-firms backfill-queue: export FIMRA_FIRMS_BACKFILL_PRODUCTS := $(FIMRA_FIRMS_BACKFILL_PRODUCTS)
 api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
 api-run: export FIMRA_SMTP_ADDR := $(FIMRA_SMTP_ADDR)
 api-run: export FIMRA_SMTP_FROM := $(FIMRA_SMTP_FROM)
@@ -110,8 +113,7 @@ ingest-fixture: export FIMRA_FIXTURE_PRODUCT := $(or $(PRODUCT),VIIRS_SNPP_NRT)
 
 # Backfill settings. FROM and TO are UTC days in YYYY-MM-DD form, both included.
 WORKSPACE ?= demo
-PRODUCTS ?= VIIRS_SNPP_SP,MODIS_SP
-BACKFILL_FLAGS = -workspace "$(WORKSPACE)" -from "$(FROM)" -to "$(TO)" -products "$(PRODUCTS)"
+BACKFILL_FLAGS = -workspace "$(WORKSPACE)" -from "$(FROM)" -to "$(TO)" $(if $(PRODUCTS),-products "$(PRODUCTS)")
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-22s %s\n", $$1, $$2}'

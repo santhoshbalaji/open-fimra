@@ -22,7 +22,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
 )
 
 // TestWizardIntegration takes a fresh install to a working alert map using
@@ -550,17 +549,18 @@ func TestWizardIntegration(t *testing.T) {
 	})
 
 	section("alert map", func(t *testing.T) {
+		poller := firmsPollWorker{keys: keys}
 		// The poller reads the key saved in settings. The fake server accepts
 		// only that key, so a successful run proves which key was used.
-		if err := pollFIRMS(ctx, pool, keys.workspaceFetch, time.Now()); err != nil {
+		if err := poller.poll(ctx, pool, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		var runs, inserted int
 		if err := pool.QueryRow(ctx, `
 			SELECT count(*), COALESCE(sum(inserted), 0) FROM ingest_runs r JOIN workspaces w ON w.id = r.workspace_id
 			WHERE w.slug = $1 AND r.status = 'succeeded' AND r.kind = 'poll'
-		`, slug).Scan(&runs, &inserted); err != nil || runs != len(firms.Products) || inserted != 11 {
-			t.Fatalf("expected %d successful polls inserting 11 detections, got %d and %d (%v)", len(firms.Products), runs, inserted, err)
+		`, slug).Scan(&runs, &inserted); err != nil || runs != len(keys.liveProducts()) || inserted != 11 {
+			t.Fatalf("expected %d successful polls inserting 11 detections, got %d and %d (%v)", len(keys.liveProducts()), runs, inserted, err)
 		}
 		for _, tc := range []struct {
 			user               string

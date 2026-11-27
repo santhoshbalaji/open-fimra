@@ -112,7 +112,7 @@ func TestNODDIntegration(t *testing.T) {
 	}
 	// The default demo workspace sorts first and owns the inserting polls.
 	insertingWorkspace := seedPrefix + "01"
-	facts, err := loadFeedFacts(ctx, tx, &insertingWorkspace, time.Now().UTC())
+	facts, err := loadFeedFacts(ctx, tx, &insertingWorkspace, time.Now().UTC(), defaultFIRMSProducts())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -52,9 +52,13 @@ func newFakeFIRMS(t *testing.T, key string) *fakeFIRMS {
 		}
 		switch parts[1] {
 		case "data_availability":
-			fmt.Fprintf(w, "data_id,min_date,max_date\n%s,2012-01-20,%s\n", parts[4], time.Now().UTC().Format(time.DateOnly))
+			if parts[4] != firmsTestProduct {
+				http.NotFound(w, r)
+				return
+			}
+			fmt.Fprintf(w, "data_id,min_date,max_date\n%s,2020-01-01,%s\n", parts[4], time.Now().UTC().Format(time.DateOnly))
 		case "area":
-			if parts[4] != "VIIRS_SNPP_NRT" {
+			if parts[4] != "VIIRS_NOAA20_NRT" {
 				// Other products answer with their column names and no records.
 				header, _, _ := bytes.Cut(fixture, []byte("\n"))
 				if strings.HasPrefix(parts[4], "MODIS") {
@@ -90,6 +94,7 @@ func shiftFixture(t *testing.T, fixture []byte, now time.Time) []byte {
 		}
 		shifted := base.Add(observed.Sub(anchor))
 		row[5], row[6] = shifted.Format(time.DateOnly), shifted.Format("1504")
+		row[7] = "N20"
 	}
 	var out bytes.Buffer
 	writer := csv.NewWriter(&out)
