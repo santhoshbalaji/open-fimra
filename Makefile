@@ -3,6 +3,19 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+# Corepack uses the pnpm version pinned in each app's package.json.
+PNPM ?= corepack pnpm
+
+.PHONY: site-dev site-build
+site-dev: ## Serve the public scroll story locally
+	cd apps/site && $(PNPM) install --frozen-lockfile && $(PNPM) dev
+
+site-build: ## Build the static public site into apps/site/dist
+	cd apps/site && $(PNPM) install --frozen-lockfile && $(PNPM) build
+
+# Site-only commands are independent of developer stack configuration.
+ifneq ($(filter-out site-dev site-build,$(or $(MAKECMDGOALS),help)),)
+
 override COMPOSE_FILE := deploy/compose/compose.dev.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE) $(if $(wildcard .env),--env-file .env)
 
@@ -347,8 +360,6 @@ token-check: ## Check the generated themes, contrast pairs and colour usage
 			--entrypoint dart $(FLUTTER_IMAGE) tool/generate_tokens.dart --check; \
 	fi
 
-# Corepack uses the pnpm version pinned in apps/web/package.json.
-PNPM ?= corepack pnpm
 .PHONY: web-install web-dev web-build web-test web-lint
 
 web-install: ## Install the web app's locked dependencies
@@ -593,3 +604,4 @@ demo-national-portal: ## Load and verify the fictional national portal exchange
 
 national-test-integration: ## Test the national portal with signed fictional returns
 	cd services/api && FIMRA_NATIONAL_INTEGRATION=1 go test -run '^TestNationalIntegration$$' -count=1 -v .
+endif
