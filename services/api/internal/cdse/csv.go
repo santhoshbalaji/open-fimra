@@ -14,6 +14,11 @@ import (
 	"github.com/santhoshbalaji/open-fimra/services/api/internal/firms"
 )
 
+// sensingSlack allows pixel times just outside a granule's catalogue sensing
+// interval. Near-real-time granules have been seen with pixels about four
+// seconds after the catalogue end; anything far outside is still rejected.
+const sensingSlack = 2 * time.Minute
+
 func Attribution(observed time.Time) string {
 	return fmt.Sprintf("Contains modified Copernicus Sentinel data %d", observed.UTC().Year())
 }
@@ -80,8 +85,11 @@ func Parse(input io.Reader, granule Granule, etag string) ([]firms.Observation, 
 		if err != nil {
 			return nil, fmt.Errorf("CDSE fire CSV record %d: %w", row, err)
 		}
-		// Whole-second CSV times may be truncated from fractional-second times.
-		if o.ObservedAt.Before(granule.ContentDate.Start.Truncate(time.Second)) || o.ObservedAt.After(granule.ContentDate.End) {
+		// Whole-second CSV times may be truncated from fractional-second times,
+		// and pixel times can fall a few seconds outside the catalogue's sensing
+		// interval at granule edges.
+		if o.ObservedAt.Before(granule.ContentDate.Start.Truncate(time.Second).Add(-sensingSlack)) ||
+			o.ObservedAt.After(granule.ContentDate.End.Add(sensingSlack)) {
 			return nil, fmt.Errorf("CDSE fire CSV record %d is outside the sensing interval", row)
 		}
 		raw["native_id"] = o.NativeID
