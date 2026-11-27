@@ -1,0 +1,3 @@
+# Keep the public site's lockfile separate from the operational web app.
+packages:
+  - .

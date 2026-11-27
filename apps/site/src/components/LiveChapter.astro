@@ -1,0 +1,47 @@
+---
+import { asset } from "../lib/paths";
+import { weeklyHeat } from "../lib/heat";
+import { live, snapshotLabel } from "../lib/live";
+const refreshFailed = import.meta.env.SITE_LIVE_FALLBACK === "1";
+const fmt = new Intl.NumberFormat("en-IN");
+---
+<section class="chapter live-chapter" id="live" aria-labelledby="live-title">
+  <div class="wrap live-grid">
+    <div class="chapter-intro">
+      <span class="eyebrow mono"><span class="chapter-index">03</span> Live this week</span>
+      <h2 id="live-title">The last seven days.</h2>
+      <p>Recent satellite detections over tree cover in India. The map counts observations from NOAA‑20 and NOAA‑21.</p>
+      <div class="live-ledger">
+        {live.updatedAt && live.start && live.count !== null ? <>
+          <p class="big-number">{fmt.format(live.count)}</p>
+          <p class="ledger-title">Detections over tree cover</p>
+          <p class="live-window">Seven-day window from <time datetime={live.start}>{snapshotLabel(live.start)}</time> to <time datetime={live.updatedAt}>{snapshotLabel(live.updatedAt)}</time>.</p>
+          <dl>
+            <div><dt>Latest pass with a detection over India</dt><dd>{live.latestPass ? <time datetime={live.latestPass}>{snapshotLabel(live.latestPass)}</time> : "None in the window"}</dd></div>
+            <div><dt>Latest detection over tree cover</dt><dd>{live.latestTreePass ? <time datetime={live.latestTreePass}>{snapshotLabel(live.latestTreePass)}</time> : "None in the window"}</dd></div>
+          </dl>
+          {live.count === 0 && <p>No detections passed the tree-cover filter in this window. Cloud and the timing of satellite passes can hide fires.</p>}
+        </> : <p class="ledger-title">A weekly snapshot is currently unavailable.</p>}
+      </div>
+    </div>
+    <figure class="season-map live-map">
+      <div class="map-stage">
+        <div class="map-label mono"><span>VIIRS · NOAA‑20 / 21</span><span>ROLLING 7 DAYS</span></div>
+        <div class="map-image">
+          <img class="map-terrain" loading="lazy" alt="" width="640" height="640" src={asset("media/terrain.webp")} />
+          <img class="tree-layer" loading="lazy" alt="" width="936" height="936" src={asset("data/tree-cover.webp")} />
+          {live.count !== null && live.count > 0 && <img loading="lazy" alt="Satellite detections over tree cover, grouped into hexagons across India." width="780" height="780" src={asset("data/live-map.svg")} />}
+        </div>
+        <div class="map-key mono"><span><b class="forest-key"></b>Tree cover</span><span><b class="heat-key"></b>1 → {weeklyHeat.ceiling}+ / cell · log scale</span></div>
+      </div>
+      <figcaption class="map-meta">
+        <div class="map-readout">
+          <strong>NASA FIRMS · Near real time</strong>
+          {live.updatedAt ? <span>Snapshot <time data-snapshot datetime={live.updatedAt}>{snapshotLabel(live.updatedAt)}</time></span> : <span>Waiting for the first successful data refresh.</span>}
+          {live.updatedAt && <span class="snapshot-stale" data-stale data-refresh-failed={refreshFailed ? "" : undefined} hidden={!refreshFailed}>Showing the last available snapshot.</span>}
+        </div>
+      </figcaption>
+    </figure>
+    <p class="small-copy live-caveat">In quieter months, many heat signals come from agricultural burning. The filter excludes points whose centres fall outside the tree-cover layer. <a href={asset("methods/")}>How the filter works</a></p>
+  </div>
+</section>

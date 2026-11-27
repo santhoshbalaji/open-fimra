@@ -1,0 +1,58 @@
+---
+import data from "../../data/season.json";
+import { asset } from "../lib/paths";
+import { firms, source, wc } from "../lib/credits";
+import SiteHead from "../components/SiteHead.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import Brand from "../components/Brand.astro";
+const number = new Intl.NumberFormat("en-IN");
+const years = ["2021–22", "2022–23", "2023–24", "2024–25", "2025–26"];
+---
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <SiteHead title="Data and methods — Open FIMRA" description="How Open FIMRA processes and displays public satellite detections over tree cover in India." />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner methods-header"><Brand href={asset("")} /><a class="source-link" href={asset("")}>Back to the story</a></div>
+    </header>
+    <main id="main" class="wrap method-page" tabindex="-1">
+      <div class="chapter-intro">
+        <span class="eyebrow mono">Open FIMRA · Sources</span>
+        <h1>Data and methods.</h1>
+        <p>A detection is a satellite pixel with a possible heat anomaly. Several observations can come from one fire. Clouds and overpass timing affect what the sensor can see.</p>
+      </div>
+      <div class="method-body">
+        <section aria-labelledby="archive-heading">
+          <h2 id="archive-heading">Season archive</h2>
+          <p>The globe and season map use NOAA‑20 standard-processing <a href={firms}>NASA FIRMS</a> VIIRS data from November 2025 to June 2026. The five-season comparison uses only Suomi NPP standard-processing data for November through June each year. Within each sensor, we deduplicate by coordinates and acquisition time and keep presumed vegetation fires (type 0).</p>
+          <table class="method-table">
+            <caption>Suomi NPP observations, November to June</caption>
+            <thead><tr><th scope="col">Season</th><th scope="col">Over tree cover</th><th scope="col">All vegetation</th></tr></thead>
+            <tbody>{years.map((year, i) => <tr><th scope="row">{year}</th><td>{number.format(data.trend[i])}</td><td>{number.format(data.trendVegetation[i])}</td></tr>)}</tbody>
+          </table>
+          <p>India’s forest and tree cover and its share of fire-prone forest cover and scrub use the definitions in <a href="https://fsi.nic.in/uploads/isfr2023/isfr_book_eng-vol-1_2023.pdf">India State of Forest Report 2023</a>, Volume 1, Tables 2.3 and 4.14.</p>
+        </section>
+        <section aria-labelledby="weekly-heading">
+          <h2 id="weekly-heading">Live this week</h2>
+          <p>The public NOAA‑20 and NOAA‑21 <a href={firms}>FIRMS near-real-time CSVs</a> provide the observations. We take nominal- and high-confidence points from the seven days leading up to the refresh and deduplicate within each sensor. The live files omit the archive’s type field. Heat from other sources can still pass the filter.</p>
+          <p>The scheduled build attempts a refresh every three hours. It retains the last available data and its original time when an upstream source fails. The latest detection time is an acquisition timestamp for a qualifying point over India. An overpass with no reported point will be absent from that timestamp.</p>
+        </section>
+        <section aria-labelledby="tree-heading">
+          <h2 id="tree-heading">Tree cover and hexagons</h2>
+          <p>Both series use the Natural Earth India point-of-view country geometry to filter records in processing. The map uses physical terrain and coastlines. A point counts toward the tree-cover total when its centre falls on class 10 in <a href={wc}>ESA WorldCover 2021 v200</a>, sampled at the native 10 m resolution. This includes some managed trees. It cannot establish legal forest extent, fire counts or burned area.</p>
+          <p>We group qualifying points into H3 resolution 4 cells. The map assigns colour and opacity using the logarithm of the count, capped at 500 for the season and 30 for the week. A faint cell can contain as few as one detection. The tree-cover backdrop is a separate, downsampled display layer.</p>
+        </section>
+        <section aria-labelledby="imagery-heading">
+          <h2 id="imagery-heading">Orbit and ground imagery</h2>
+          <p>The orbit is simulated from CelesTrak elements. The static globe shows the 260 highest-count cells. In the replay, detections accumulate month by month independently of the simulated orbit. The ground frame uses Sentinel‑2 imagery with an illustrative 375 m square and centre point.</p>
+          <p>Product examples come from Open FIMRA’s synthetic demo, separate from the observed satellite data used in the story.</p>
+          <a class="text-link" href={source + "/blob/main/apps/site/data/README.md"}>Data processing and reproduction guide <span aria-hidden="true">↗</span></a>
+        </section>
+      </div>
+    </main>
+    <SiteFooter />
+  </body>
+</html>

@@ -1,0 +1,108 @@
+---
+type Kind = "orbit" | "receive" | "filter" | "notify" | "route" | "guard" | "return" |
+  "policy" | "fsi" | "disaster" | "community" | "standalone" | "shared" | "federated";
+interface Props { kind: Kind; }
+const { kind } = Astro.props;
+---
+<svg class="field-art" viewBox="0 0 240 144" fill="none" aria-hidden="true">
+  <g class="art-underlay">
+    <path d="m30 105 89-51 91 51-91 35Z"/>
+    <path d="m51 116 89-50m-64 62 90-49m-63 58 88-46M54 91l87 40M79 76l89 44m-65-58 91 49"/>
+  </g>
+  {kind === "orbit" && <>
+    <path class="art-fill" d="M47 116a76 76 0 0 1 146 0l-73 21Z"/>
+    <path class="art-ink" d="M50 114a76 76 0 0 1 142 0M83 103c17-14 50-17 74 0m-85 12c22-14 63-14 94 0"/>
+    <path class="art-dash" d="M27 96c29-27 100-78 173-75"/>
+    <g transform="translate(126 33) rotate(-20)">
+      <path class="art-fill" d="M-53-10h34v20h-34zm72 0h34v20H19z"/>
+      <path class="art-ink" d="M-42-10v20m12-20v20m60-20v20m12-20v20M-53 0h34m38 0h34"/>
+      <path class="art-paper" d="M-17-14h34v26l-17 8-17-8Z"/>
+      <path class="art-ink" d="M-17 0h34M0 12v8"/>
+    </g>
+    <circle class="art-hot" cx="122" cy="94" r="4"/>
+  </>}
+  {kind === "receive" && <>
+    <path class="art-fill" d="m40 112 80-31 80 31-80 24Z"/>
+    <path class="art-paper" d="M104 101V73l10-10 11 9v28l-9 5Z"/>
+    <path class="art-fill" d="M60 40c8 42 50 67 94 50Z"/>
+    <path class="art-ink" d="m106 68 25-28m-4-3 10 6m-33 13 10-13"/>
+    <path class="art-dash" d="M151 27a39 39 0 0 1 24 25m-19-37a51 51 0 0 1 31 32"/>
+    <circle class="art-hot" cx="147" cy="35" r="4"/>
+    <path class="art-ink" d="M68 111l51 14 52-14"/>
+  </>}
+  {(kind === "filter" || kind === "fsi") && <>
+    <path class="art-paper" d="m53 83 68-37 67 37-67 35Z"/>
+    <path class="art-fill" d="m53 70 68-37 67 37-67 35Z"/>
+    <path class="art-paper" d="m53 57 68-37 67 37-67 35Z"/>
+    <path class="art-ink" d="m73 56 25-13 25 13-25 13Zm48 0 25-13 24 13-24 13Zm-24 13 24-13 25 13-25 13Z"/>
+    <path class="art-dash" d="M121 42v76"/>
+    <circle class="art-hot" cx="121" cy="57" r="5"/>
+    {kind === "fsi" && <path class="art-ink" d="m151 97 14-7m-93 1 12 6m70 12 19-9"/>}
+  </>}
+  {kind === "notify" && <>
+    <rect class="art-fill" x="72" y="25" width="53" height="90" rx="8"/>
+    <path class="art-ink" d="M73 40h51M73 101h51m-30 7h10"/>
+    <rect class="art-paper" x="101" y="51" width="72" height="44" rx="4"/>
+    <path class="art-ink" d="m102 54 35 25 35-25"/>
+    <circle class="art-hot" cx="172" cy="50" r="6"/>
+    <path class="art-dash" d="M182 65h17m-13 13h21"/>
+  </>}
+  {kind === "route" && <>
+    <path class="art-dash" d="M120 40v15H69v14m51-14h51v14M69 87v18H49m20 0h22m80-18v18h-20m20 0h22"/>
+    <rect class="art-paper" x="102" y="23" width="36" height="19" rx="3"/>
+    <rect class="art-fill" x="52" y="69" width="34" height="19" rx="3"/>
+    <rect class="art-fill" x="154" y="69" width="34" height="19" rx="3"/>
+    <circle class="art-paper" cx="49" cy="106" r="6"/><circle class="art-hot" cx="91" cy="106" r="6"/>
+    <circle class="art-paper" cx="151" cy="106" r="6"/><circle class="art-paper" cx="193" cy="106" r="6"/>
+  </>}
+  {kind === "guard" && <>
+    <path class="art-fill" d="M46 110 67 65l22 45Zm111-19 19-40 21 40Z"/>
+    <path class="art-ink" d="M68 98v26m108-47v29m-15 6 16 6"/>
+    <path class="art-paper" d="M105 54h21l7 13 10 8-4 7-16-6v20l5 25h-11l-8-22-8 22h-11l8-33-3-19Z"/>
+    <path class="art-ink" d="m108 63-4 16-13 9m18-35v-5m13 6v-7m16 28 7-14"/>
+    <circle class="art-fill" cx="115" cy="41" r="12"/>
+    <path class="art-ink" d="M99 38h34m-26-6 4-7h12l5 9"/>
+    <rect class="art-hot" x="140" y="58" width="8" height="14" rx="2"/>
+    <path class="art-dash" d="M143 48l5-7m2 11 7-3"/>
+  </>}
+  {kind === "return" && <>
+    <path class="art-dash" d="M72 102C34 82 52 42 88 44m-7-8 9 8-10 7m70 39c27 5 43-12 42-32m-7 8 7-10 8 9"/>
+    <path class="art-fill" d="M93 36h55v77H93z"/>
+    <path class="art-paper" d="M88 30h55v77H88z"/>
+    <path class="art-ink" d="M99 68h30m-30 12h30m-30 12h20m-19-45 6 6 14-14"/>
+    <circle class="art-hot" cx="143" cy="101" r="5"/>
+  </>}
+  {kind === "policy" && <>
+    <path class="art-fill" d="m54 105 65-24 67 24-67 24Z"/>
+    <path class="art-paper" d="m76 59 43 14v43l-43-15Zm43 14 45-14v42l-45 15Z"/>
+    <path class="art-fill" d="M76 59v-12l43 14 45-14v12l-45 14Z"/>
+    <path class="art-ink" d="m86 72 22 7m-22 5 22 7m22-11 23-7m-23 19 23-7"/>
+    <circle class="art-hot" cx="119" cy="38" r="5"/>
+    <path class="art-dash" d="M119 47v10"/>
+  </>}
+  {kind === "disaster" && <>
+    <path class="art-dash" d="m120 47-47 28m47-28 47 28m-94 0 47 27 47-27M120 47v55"/>
+    <circle class="art-paper" cx="120" cy="47" r="17"/><circle class="art-paper" cx="73" cy="75" r="13"/>
+    <circle class="art-paper" cx="167" cy="75" r="13"/><circle class="art-fill" cx="120" cy="102" r="15"/>
+    <circle class="art-hot" cx="120" cy="47" r="5"/>
+    <path class="art-ink" d="M68 75h10m84 0h10m-57 27h10"/>
+  </>}
+  {kind === "community" && <>
+    <path class="art-fill" d="m80 83 40-36 43 36v29H80Z"/>
+    <path class="art-paper" d="m71 82 49-43 52 43-7 8-45-37-42 37Z"/>
+    <path class="art-ink" d="M110 112V89h20v23m-30-30h6m31 0h8"/>
+    <path class="art-fill" d="m40 91 16-33 16 33Zm133-1 15-33 15 33Z"/>
+    <path class="art-ink" d="M56 83v27m132-27v27"/>
+    <circle class="art-hot" cx="120" cy="75" r="4"/>
+  </>}
+  {(kind === "standalone" || kind === "shared" || kind === "federated") && <>
+    <path class="art-dash" d={kind === "standalone" ? "M120 73v20" : "M120 73v10H61v14m59-14h60v14m-60-14v14"}/>
+    <path class="art-fill" d="m89 38 31-17 31 17-31 17Zm0 0v26l31 17V55Zm62 0v26l-31 17V55Z"/>
+    <path class="art-ink" d="m95 54 18 10m14 0 18-10"/>
+    <circle class="art-hot" cx="120" cy="37" r="4"/>
+    {(kind === "standalone" ? [120] : [61, 120, 180]).map(x => <g transform={`translate(${x} 0)`}>
+      <path class="art-paper" d={kind === "federated" ? "m-17 107 17-10 17 10v11L0 128l-17-10Z" : "m-20 106 20-10 20 10-20 10Z"}/>
+      {kind === "federated" && <path class="art-ink" d="m-17 107 17 10 17-10M0 117v11"/>}
+    </g>)}
+  </>}
+</svg>

@@ -1,0 +1,10 @@
+---
+import { asset } from "../lib/paths";
+
+interface Props { href: string; lazy?: boolean; }
+const { href, lazy = false } = Astro.props;
+---
+<a href={href} class="brand" aria-label="Open FIMRA home">
+  <img class="logo-light" loading={lazy ? "lazy" : "eager"} src={asset("media/lockup-light.svg")} width="156" height="28" alt="" />
+  <img class="logo-dark" loading={lazy ? "lazy" : "eager"} src={asset("media/lockup-dark.svg")} width="156" height="28" alt="" />
+</a>

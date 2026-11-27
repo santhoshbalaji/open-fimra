@@ -1,0 +1,254 @@
+---
+import { asset } from "../lib/paths";
+import { firms, source } from "../lib/credits";
+import { seasonHeat } from "../lib/heat";
+import { live, snapshotLabel } from "../lib/live";
+import SiteHead from "../components/SiteHead.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import Brand from "../components/Brand.astro";
+import LiveChapter from "../components/LiveChapter.astro";
+import Operations from "../components/Operations.astro";
+import Project from "../components/Project.astro";
+import Product from "../components/Product.astro";
+import data from "../../data/season.json";
+import detections from "../../public/data/hexagons.json";
+import orbit from "../generated/orbit.json";
+import Satellite from "../components/Satellite.astro";
+import Frame from "../components/Frame.astro";
+
+const isfr = "https://fsi.nic.in/uploads/isfr2023/isfr_book_eng-vol-1_2023.pdf";
+const viirs = "https://ncc.nesdis.noaa.gov/VIIRS/aboutVIIRS.php";
+const fmt = new Intl.NumberFormat("en-IN");
+const seasonNames = ["2021–22", "2022–23", "2023–24", "2024–25", "2025–26"];
+const monthNames = ["Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+const fullMonths = ["November 2025", "December 2025", "January 2026", "February 2026", "March 2026", "April 2026", "May 2026", "June 2026"];
+const peak = Math.max(...data.trend);
+const share = (data.season / data.vegetation * 100).toFixed(1);
+const passDate = new Intl.DateTimeFormat("en-IN", {day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata", hourCycle: "h23"}).format(new Date(orbit.time));
+const buildDate = new Intl.DateTimeFormat("en-IN", {day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata"}).format(new Date(orbit.computedAt));
+const steps = [
+  {title: "A satellite crosses India.", body: "NOAA-20 circles Earth in a near-polar orbit. It carries VIIRS, an instrument that measures visible and infrared radiation reflected or emitted by the surface."},
+  {title: "VIIRS scans a wide strip.", body: "As the satellite moves forward, VIIRS scans across its path. The footprint of a single sweep is about 3,040 km wide. The track shows an estimated daylight pass over central India."},
+  {title: "One pixel contains a heat signal.", body: "The active-fire algorithm looks for a thermal anomaly within a pixel and compares it with nearby pixels. A VIIRS imaging pixel is about 375 m across directly beneath the satellite. It grows towards the edge of the scan."},
+  {title: "The pixel becomes a point.", body: "FIRMS publishes the centre of the detected pixel. The heat can come from anywhere inside that footprint. A fire can trigger several detections, and cloud or gaps between passes can hide others."},
+];
+const posterMarks = detections.features.map(feature => {
+  const vertices = feature.geometry.coordinates[0].slice(0, -1);
+  const mean = (i: number) => vertices.reduce((sum, v) => sum + v[i], 0) / vertices.length;
+  const rad = Math.PI / 180;
+  const lat = mean(1) * rad;
+  const lon = (mean(0) - 81) * rad;
+  const tilt = 18 * rad;
+  const x = Math.cos(lat) * Math.sin(lon);
+  const y = Math.sin(lat) * Math.cos(tilt) - Math.cos(lat) * Math.cos(lon) * Math.sin(tilt);
+  const volume = feature.properties.counts.reduce((sum, count) => sum + count, 0);
+  return { x: (100 + 100 * x).toFixed(2), y: (100 - 100 * y).toFixed(2), volume };
+}).sort((a, b) => b.volume - a.volume).slice(0, 260);
+const upcoming = [
+  ["live", "Live this week"], ["journey", "Alert journey"], ["roles", "Who does what"],
+  ["handoffs", "Workflow challenges"], ["product", "Product tour"], ["deploy", "Deployment"],
+  ["open-source", "Open source"], ["involved", "Get involved"],
+];
+---
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <SiteHead title="Open FIMRA — Forest fires from above" description="Explore forest-fire detections across India, follow an alert from orbit to the field, and meet the open-source platform." />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <Brand href="#opening" />
+        <nav class="chapter-nav" aria-label="Story chapters">
+          <a href="#scale">The scale</a><a href="#space">Seen from space</a>
+          <details class="upcoming">
+            <summary>More <span aria-hidden="true">⌄</span></summary>
+            <ul>{upcoming.map(([id, label]) => <li><a href={`#${id}`}>{label}</a></li>)}</ul>
+          </details>
+        </nav>
+        <div class="header-actions">
+          <label class="theme-selector">
+            <span class="sr-only">Colour theme</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 1 1 0 16z" fill="currentColor"/></svg>
+            <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+          </label>
+          <a class="source-link" href={source}>Source <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+      <div class="reading-progress" aria-hidden="true"></div>
+    </header>
+    <main id="main" tabindex="-1">
+      <section class="wrap opening" id="opening" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <div class="eyebrow mono"><span class="status-dot"></span> Open-source · Early development</div>
+          <h1 id="hero-title">Forest fires<br /> from above<span class="period">.</span></h1>
+          <p>Open FIMRA is a platform for forest fire monitoring, field reporting and geospatial analysis in India.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#scale">Explore the season <span aria-hidden="true">↓</span></a>
+            <a class="button secondary" href="#space">See how it works <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+        <figure class="hero-figure" aria-labelledby="globe-caption">
+          <div class="hero-visual">
+            <div class="stars" aria-hidden="true"></div>
+            <div class="hero-poster" aria-hidden="true">
+              <div class="earth-disc">
+                <img src={asset("media/earth-night.webp")} width="768" height="768" alt="" fetchpriority="high" />
+                <svg class="poster-marks" viewBox="0 0 200 200" fill="none">
+                  {[false, true].map(bright => <path stroke-width={bright ? "1.16" : ".7"}
+                    d={posterMarks.filter(mark => (mark.volume > 150) === bright).map(({x, y}) => `M${x} ${y}h.01`).join("")} />)}
+                </svg>
+              </div>
+              <svg class="hero-trace" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet" fill="none">
+                <ellipse cx="333" cy="271" rx="254" ry="93" transform="rotate(-32 333 271)" stroke="#9ebecf" stroke-opacity=".55" stroke-dasharray="4 6"/>
+                <path d="M318 266h46l31 28h79" stroke="#faaf95" stroke-opacity=".85"/>
+                <circle cx="318" cy="266" r="5" fill="#ffb99e" stroke="#351c18"/>
+                <circle cx="318" cy="266" r="13" stroke="#ffb99e" stroke-opacity=".72"/>
+              </svg>
+              <div class="poster-satellite"><Satellite /></div>
+            </div>
+            <div class="globe" aria-hidden="true"></div>
+            <div class="globe-vignette" aria-hidden="true"></div>
+            <div class="visual-header mono"><span><i></i> ORBITAL VIEW</span><span>NOAA-20</span></div>
+            <span class="visual-side mono" aria-hidden="true"><span class="poster-period">20° N &nbsp; / &nbsp; 81° E</span><span class="orbit-period"></span></span>
+            <div class="visual-footer">
+              <span class="mono"><i></i> 2025–26 FOREST DETECTIONS</span>
+              <button type="button" class="globe-toggle" hidden>Play orbit</button>
+              <span class="sr-only" role="status" id="globe-status"></span>
+            </div>
+          </div>
+          <figcaption id="globe-caption" class="caption mono">
+            <span>Earth at night · NASA Black Marble</span><span>Orbit simulation · CelesTrak</span>
+          </figcaption>
+        </figure>
+        <div class="season-ticker">
+          <span class="mono"><i></i> <a href="#live">Live this week</a></span>
+          <strong>{live.count === null ? "Weekly snapshot unavailable" : `${fmt.format(live.count)} detections over tree cover`}</strong>
+          <span data-ticker-age>{live.updatedAt ? <>Snapshot <time datetime={live.updatedAt}>{snapshotLabel(live.updatedAt)}</time></> : "NOAA‑20 and NOAA‑21"}</span>
+          <a href={asset("methods/")}>Data and methods <span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+
+      <section id="scale" class="chapter scale" aria-labelledby="scale-title">
+        <div class="wrap">
+          <div class="chapter-intro">
+            <span class="eyebrow mono"><span class="chapter-index">01</span> The scale</span>
+            <h2 id="scale-title">A season of heat.</h2>
+            <p>Across India, satellites pick up heat signatures through the fire season. This map shows where NOAA-20 detected possible vegetation fires over tree cover.</p>
+          </div>
+          <div class="scale-grid">
+            <div class="scale-ledger">
+              <div class="ledger-feature">
+                <p class="mono ledger-label">INDIA · NOV 2025 — JUN 2026</p>
+                <p class="big-number">{fmt.format(data.season)}</p>
+                <p class="ledger-title">Detections over tree cover</p>
+                <p class="ledger-note"><strong>{share}%</strong> of the country’s {fmt.format(data.vegetation)} presumed vegetation-fire detections in the NOAA-20 archive for the season. <a href={asset("methods/")}>Method</a></p>
+              </div>
+              <dl class="national-stats">
+                <div>
+                  <dt class="big-number">25.17%</dt>
+                  <dd>of India was under forest and tree cover in 2023. <a href={isfr}>ISFR 2023, Table 2.3</a></dd>
+                </div>
+                <div>
+                  <dt class="big-number">11.34%</dt>
+                  <dd>of forest cover and scrub was classed as extremely or very highly fire prone. <a href={isfr}>ISFR 2023, Table 4.14</a></dd>
+                </div>
+              </dl>
+            </div>
+
+            <figure class="season-map" aria-labelledby="map-caption">
+              <div class="map-stage">
+                <div class="map-label mono"><span>NOAA-20 · VIIRS</span><span id="map-period">FULL SEASON</span></div>
+                <div class="map-image">
+                  <img class="map-terrain" loading="lazy" alt="" width="640" height="640" src={asset("media/terrain.webp")} />
+                  <img class="tree-layer" loading="lazy" alt="" width="936" height="936" src={asset("data/tree-cover.webp")} />
+                  <img class="hex-poster" loading="lazy" alt="Map of tree-cover detections across India, grouped into hexagons." width="780" height="780" src={asset("data/season-map.svg")} />
+                  <svg id="hex-map" viewBox="0 0 780 780" role="group" aria-label="Detection hexagons. Use the left and right arrow keys to inspect cells." aria-describedby="cell-info"></svg>
+                </div>
+                <div class="map-key mono">
+                  <span><b class="forest-key"></b>Tree cover</span>
+                  <span><b class="heat-key"></b>1 → {seasonHeat.ceiling}+ / cell · log scale</span>
+                </div>
+              </div>
+              <div class="map-meta" id="map-caption">
+                <div class="map-readout">
+                  <strong id="month-count">{fmt.format(data.season)} detections</strong>
+                  <span id="cell-info">Full-season detections by H3 cell.</span>
+                  <span id="cell-status" class="sr-only" role="status"></span>
+                </div>
+                <div class="map-controls" id="map-controls" hidden>
+                  <button type="button" id="play-months" class="play-months" aria-label="Play monthly time-lapse">▶</button>
+                  <label>
+                    <span class="sr-only">Detection month</span>
+                    <select id="month"><option value="-1">Full season</option>{fullMonths.map((month, i) => <option value={i}>{month}</option>)}</select>
+                  </label>
+                </div>
+              </div>
+              <div class="month-strip" hidden>{monthNames.map((month, i) => <button type="button" data-month={i}>{month}<span class="sr-only"> {i < 2 ? "2025" : "2026"}</span></button>)}</div>
+            </figure>
+          </div>
+
+          <figure class="trend" aria-labelledby="trend-title">
+            <figcaption class="trend-copy">
+              <div class="eyebrow mono">SUOMI NPP · VIIRS</div>
+              <h3 id="trend-title">Five seasons, one sensor.</h3>
+              <p>November to June, measured the same way each year. The trend series uses Suomi NPP throughout.</p>
+              <a href={asset("methods/")} class="text-link">Series and filtering <span aria-hidden="true">↗</span></a>
+            </figcaption>
+            <table class="trend-chart">
+              <caption class="sr-only">Suomi NPP detections over tree cover by fire season. Bars start at zero.</caption>
+              <thead class="sr-only"><tr><th scope="col">Season</th><th scope="col">Detections over tree cover</th></tr></thead>
+              <tbody>{data.trend.map((count, i) => (
+                <tr class:list={[i === 4 && "last"]}>
+                  <th scope="row">{seasonNames[i]}</th>
+                  <td><span class="bar-track" aria-hidden="true"><span style={`width:${count / peak * 100}%`}></span></span><span class="bar-count">{fmt.format(count)}</span></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </figure>
+        </div>
+      </section>
+
+      <section id="space" class="chapter space" aria-labelledby="space-title">
+        <div class="wrap">
+          <div class="chapter-intro">
+            <span class="eyebrow mono"><span class="chapter-index">02</span> Seen from space</span>
+            <h2 id="space-title">From orbit to a point.</h2>
+            <p>Follow a satellite observation from a sweep across central India to a single mark on the map.</p>
+          </div>
+          <div class="space-story">
+            <div class="space-stage" aria-hidden="true">
+              {steps.map((_, i) => <div class="space-frame" data-frame={i} data-active={i === 0 ? "" : undefined}><Frame step={i} /></div>)}
+              <div class="space-progress mono"><span id="space-count">01 / 04</span><span>NOAA-20 · VIIRS</span></div>
+            </div>
+            <ol class="space-steps">
+              {steps.map((step, i) => (
+                <li data-step={i}>
+                  <div class="step-copy">
+                    <span class="mono step-number">0{i + 1} / 04</span>
+                    <h3>{step.title}</h3>
+                    <p>{step.body}</p>
+                    {i === 1 && <p class="pass-time"><strong>{orbit.archived ? "Archived simulation" : "Next pass at build time"}</strong><br /><time datetime={orbit.time}>{passDate} IST</time><br /><small>Estimate calculated {buildDate} · {orbit.origin}</small></p>}
+                    {i === 2 && <p class="step-credit"><a href={viirs}>NOAA VIIRS instrument specifications ↗</a></p>}
+                    {i === 3 && <p class="step-credit"><a href={firms}>NASA FIRMS documentation ↗</a></p>}
+                  </div>
+                  <div class="static-frame"><Frame step={i} /></div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <LiveChapter />
+      <Operations />
+      <Product />
+      <Project />
+    </main>
+    <SiteFooter />
+    <script>
+      import "../lib/story";
+    </script>
+  </body>
+</html>

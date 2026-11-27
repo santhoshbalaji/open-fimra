@@ -1,0 +1,92 @@
+---
+import FieldArt from "./FieldArt.astro";
+
+const actionPlan = "https://moef.gov.in/uploads/pdf-uploads/pdf_68a4157b8b3d38.38401489.pdf";
+const nrt = "https://fsiforestfire.gov.in/Home/NRTDetails";
+const fast = "https://fsiforestfire.gov.in/libraries/assets/documents/technical-information-series-v1-n2.pdf";
+const dashboard = "https://fsiforestfire.gov.in/";
+const ndmp = "https://ndmindia.mha.gov.in/ndmi/images/ndmp-2019.pdf";
+const nrsc = "https://www.nrsc.gov.in/nrscnew/Apps_DMS.php";
+const isfr = "https://fsi.nic.in/uploads/isfr2023/isfr_book_eng-vol-1_2023.pdf";
+const study = "https://documents1.worldbank.org/curated/en/333281529301442991/pdf/127284-Forest-Fire-Prevention-Management-8Oct2018.pdf";
+const report = "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2296295&lang=2&reg=48";
+const audit = "https://cag.gov.in/uploads/download_audit_report/2022/6-Chapter-2-06421358cb46ce2.23633080.pdf";
+
+const journey = [
+  ["orbit", "Satellite pass", "An infrared sensor picks up a possible hotspot as the satellite passes over the area."],
+  ["receive", "NRSC processes the observation", "The National Remote Sensing Centre processes the satellite data and shares hotspot coordinates with the Forest Survey of India."],
+  ["filter", "FSI matches the hotspot", "FSI checks the point against forest maps and assigns it to the relevant administrative units."],
+  ["notify", "SMS and email go out", "FSI sends alerts to state nodal officers and registered users. Nodal officers can coordinate follow-up."],
+  ["route", "Division to range to beat", "The division and range identify the beat responsible for following up."],
+  ["guard", "The beat guard checks the site", "A forest guard or local team checks when conditions allow. The forest department coordinates the response if a fire is confirmed."],
+  ["return", "The field report goes back", "Staff record what they found, the estimated area affected and the response status. They can send feedback to FSI through its FAST system."],
+] as const;
+
+const roles = [
+  ["policy", "Policy and coordination", "Ministry of Environment, Forest and Climate Change", "Leads national forest-fire policy. Its action plan covers prevention, preparedness, response and recovery.", "National Action Plan · §§1–2, 6–10", actionPlan],
+  ["fsi", "National monitoring", "Forest Survey of India", "Filters and distributes forest-fire alerts, tracks large fires, maintains records and maps fire proneness and burned areas.", "India State of Forest Report · Ch. 4", isfr],
+  ["receive", "Satellite processing", "NRSC / ISRO", "Receives and processes satellite observations, supplies hotspot locations to FSI and provides maps and archives through Bhuvan.", "Disaster Management Support", nrsc],
+  ["disaster", "Disaster risk", "National Disaster Management Authority", "Sets disaster-risk guidance and coordinates responsibilities for warning, risk assessment and training.", "National Disaster Management Plan · §7.17", ndmp],
+  ["community", "Local prevention and response", "State forest departments and community committees", "Departments manage prevention, verification and suppression. Local forest committees help report fires, plan and practise response, and support suppression where trained and equipped.", "National Action Plan · §§4–10", actionPlan],
+] as const;
+
+const gaps = [
+  ["Delivery", "Connectivity and staffing", "A hotspot can be picked up from orbit while the guard is out of mobile range. Staff rotations and uneven alert subscriptions can delay the first check.", [["MoEFCC and World Bank · pp. 80–82", study], ["Parliamentary report · §§5.20, 6.12–6.24", report]]],
+  ["Verification", "Ground checks and feedback", "Field reporting practices vary. An audit found some records left doubt about whether the ground check took place. The share of alerts verified nationwide today is unknown.", [["MoEFCC and World Bank · Table 2.6", study], ["CAG audit · §2.2.8", audit]]],
+  ["Jurisdiction", "Fragmented records and layers", "Alert assignment relies on current boundary layers. Missing digitised records and inconsistent damage reporting make it hard to compare the accounts that come back from the field.", [["MoEFCC and World Bank · Ch. 3", study], ["FSI dashboard disclaimer", dashboard]]],
+  ["Triage", "Gaps between observations", "Polar-orbiting satellites leave gaps between usable observations. Near the forest edge, field staff must distinguish possible forest fires from heat signals such as agricultural and controlled burns.", [["Parliamentary report · §§5.18–5.21", report]]],
+] as const;
+---
+<section id="journey" class="chapter journey-chapter" aria-labelledby="journey-title">
+  <div class="wrap">
+    <div class="chapter-intro">
+      <span class="eyebrow mono"><span class="chapter-index">04</span> How alerts flow today</span>
+      <h2 id="journey-title">From satellite to forest guard.</h2>
+      <p>A hotspot becomes an alert when it is routed for follow-up. A field check can tell the department what actually happened on the ground.</p>
+    </div>
+    <ol class="journey-list">
+      {journey.map(([kind, name, copy], index) => <li data-journey-step>
+        <div class="journey-node"><span class="mono">{String(index + 1).padStart(2, "0")}</span></div>
+        <div class="journey-copy"><h3>{name}</h3><p>{copy}</p></div>
+        <div class="art-board"><FieldArt kind={kind} /></div>
+      </li>)}
+    </ol>
+    <aside class="timing-note" aria-label="One example of dispatch timing">
+      <p class="big-number">30 min 26 s</p>
+      <div><h3>One observed dispatch</h3><p>On 26 November 2026, the FSI dashboard recorded a MODIS pass at 15:50:44 and SMS dispatch at 16:21:10. Those timestamps measure one pass to dispatch. Receipt and ground confirmation were unmeasured.</p>
+        <p class="reference-links"><a href={dashboard}>FSI dispatch status</a><a href={nrt}>Near-real-time monitoring</a><a href={fast}>FAST 3.0</a></p>
+      </div>
+    </aside>
+  </div>
+</section>
+<section id="roles" class="chapter roles-chapter" aria-labelledby="roles-title">
+  <div class="wrap">
+    <div class="chapter-intro">
+      <span class="eyebrow mono"><span class="chapter-index">05</span> Institutions</span>
+      <h2 id="roles-title">Who does what.</h2>
+      <p>National organisations set policy, process observations and distribute alerts. Forest departments and local committees work where fires happen.</p>
+    </div>
+    <ul class="roles-grid">
+      {roles.map(([kind, label, name, copy, citation, url]) => <li>
+        <div class="art-board"><FieldArt kind={kind} /></div>
+        <div class="role-copy"><p class="mono">{label}</p><h3>{name}</h3><p>{copy}</p><a class="text-link" href={url}>{citation} <span aria-hidden="true">↗</span></a></div>
+      </li>)}
+    </ul>
+  </div>
+</section>
+<section id="handoffs" class="chapter handoffs-chapter" aria-labelledby="handoffs-title">
+  <div class="wrap">
+    <div class="chapter-intro">
+      <span class="eyebrow mono"><span class="chapter-index">06</span> Workflow challenges</span>
+      <h2 id="handoffs-title">Where handoffs break.</h2>
+      <p>Studies and audits document four points where a satellite alert, a field check or the record that comes back can lose its connection to the next step.</p>
+    </div>
+    <ol class="handoffs-grid">
+      {gaps.map(([label, name, copy, citations]) => <li>
+        <div class="handoff-signal" aria-hidden="true"><i></i><i></i><i></i></div>
+        <p class="mono">{label}</p><h3>{name}</h3><p>{copy}</p>
+        <p class="reference-links">{citations.map(([title, url]) => <a href={url}>{title}</a>)}</p>
+      </li>)}
+    </ol>
+  </div>
+</section>
