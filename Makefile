@@ -249,6 +249,11 @@ cdse-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 cdse-test-integration: ## Test Sentinel-3 ingestion against fake CDSE endpoints
 	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestCDSEIntegration$$' -count=1 -v .
 
+.PHONY: lsasaf-test-integration
+lsasaf-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+lsasaf-test-integration: ## Test Meteosat footprint watches with a fake LSA SAF server
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestLSASAFIntegration$$' -count=1 -v .
+
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }
 	cd services/api && go run . ingest-firms -file "$$FIMRA_FIXTURE_FILE" -product "$$FIMRA_FIXTURE_PRODUCT"
