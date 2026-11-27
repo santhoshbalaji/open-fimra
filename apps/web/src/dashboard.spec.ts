@@ -209,6 +209,27 @@ describe('Control-room dashboard', () => {
     expect(page.querySelector('tfoot td')?.textContent?.trim()).toBe('0');
   });
 
+  it('shows satellite latency, windows and match sample counts in feed health', () => {
+    const firstSeen = { count: 214, p50Seconds: 6720, p95Seconds: 9600, maxSeconds: 10800 };
+    const matched = { count: 200, p50Seconds: 7200, p95Seconds: 9900, maxSeconds: 10920 };
+    const aqua = { count: 1, p50Seconds: 3000, p95Seconds: 3000, maxSeconds: 3000 };
+    const { page } = open({ ...data, feedHealth: [
+      { ...data.feedHealth[0], product: 'VIIRS_NOAA21_NRT', latency: [
+        { satellite: 'NOAA-21', windowHours: 168, firstSeen, matched }
+      ] },
+      { ...data.feedHealth[0], product: 'MODIS_NRT', latency: [
+        { satellite: 'Aqua', windowHours: 24, firstSeen: aqua,
+          matched: { count: 0, p50Seconds: null, p95Seconds: null, maxSeconds: null } }
+      ] }
+    ] });
+    const health = page.querySelector('[aria-labelledby=feeds-title]')?.textContent;
+    expect(health).toContain('NOAA-21 · Last 7 days');
+    expect(health).toContain('First seen typically 1 hour, 52 minutes after observation, 95% within 2 hours, 40 minutes, longest 3 hours (214 detections).');
+    expect(health).toContain('Matched to this workspace typically 2 hours after observation, 95% within 2 hours, 45 minutes');
+    expect(health).toContain('Aqua · Last 24 hours');
+    expect(health).toContain('No timed workspace matches');
+  });
+
   it('shows a neutral coverage note for users who cannot manage feeds', () => {
     Object.assign(TestBed.inject(WorkspaceService), { canManageLayers: signal(false) });
     const { page } = open();

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
 )
 
 // feedCheckInterval is how often feed health is checked.
@@ -50,7 +51,7 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, emai
 	// because its key was removed is a silent failure too.
 	const feedHealth = "feed_health"
 	queues[feedHealth] = river.QueueConfig{MaxWorkers: 1}
-	river.AddWorker(workers, &feedHealthWorker{db: pool, logger: logger})
+	river.AddWorker(workers, &feedHealthWorker{db: pool, logger: logger, liveProducts: keys.liveProducts()})
 	periodic = append(periodic, river.NewPeriodicJob(
 		river.PeriodicInterval(feedCheckInterval),
 		func() (river.JobArgs, *river.InsertOpts) {
@@ -91,9 +92,11 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, emai
 
 	if keys != nil {
 		const queue = "firms"
-		interval := 15 * time.Minute
+		interval := keys.pollSettings.interval
+		states := append(rivertype.UniqueOptsByStateDefault(), rivertype.JobStateDiscarded, rivertype.JobStateCancelled)
 		// The poller and backfill share one client, and so one rate limiter, per key.
-		queues[queue] = river.QueueConfig{MaxWorkers: 1}
+		// The second worker can discard a tick while a slow poll is running.
+		queues[queue] = river.QueueConfig{MaxWorkers: 2}
 		river.AddWorker(workers, &firmsPollWorker{pool: pool, keys: keys})
 		// Backfill has its own queue so that a long backfill never delays a poll.
 		queues[backfillQueue] = river.QueueConfig{MaxWorkers: 1}
@@ -102,7 +105,7 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, emai
 			river.PeriodicInterval(interval),
 			func() (river.JobArgs, *river.InsertOpts) {
 				return firmsPollArgs{}, &river.InsertOpts{
-					Queue: queue, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByPeriod: interval},
+					Queue: queue, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByPeriod: interval, ByState: states},
 				}
 			},
 			&river.PeriodicJobOpts{RunOnStart: true},

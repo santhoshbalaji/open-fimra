@@ -145,7 +145,7 @@ func backfillCommand(ctx context.Context, cfg config, args []string) error {
 	slug := flags.String("workspace", "demo", "slug of the workspace to backfill")
 	first := flags.String("from", "", "first UTC day, as YYYY-MM-DD")
 	last := flags.String("to", "", "last UTC day, as YYYY-MM-DD, included")
-	products := flags.String("products", "VIIRS_SNPP_SP,MODIS_SP", "comma-separated FIRMS standard-processing products")
+	products := flags.String("products", envOr("FIMRA_FIRMS_BACKFILL_PRODUCTS", firms.DefaultBackfillProducts), "comma-separated FIRMS standard-processing products")
 	fixtures := flags.String("fixtures", "", "read FIRMS files from this folder instead of calling FIRMS")
 	demo := flags.Bool("demo", false, "load the demo seed first")
 	enqueue := flags.Bool("enqueue", false, "queue a backfill job for the running service instead of running it here")
@@ -244,17 +244,21 @@ func feedHealthCommand(ctx context.Context, cfg config, args []string) error {
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return errors.Join(errors.New("feed-health takes no arguments"), err)
 	}
+	products, err := firmsPollProducts(os.Getenv("FIMRA_FIRMS_POLL_PRODUCTS"))
+	if err != nil {
+		return err
+	}
 	pool, err := openPool(ctx, cfg.databaseURL)
 	if err != nil {
 		return fmt.Errorf("configure feed health database: %w", err)
 	}
 	defer pool.Close()
 	now := time.Now()
-	result, err := checkFeedHealth(ctx, pool, slog.New(slog.NewTextHandler(os.Stderr, nil)), now)
+	result, err := checkFeedHealth(ctx, pool, slog.New(slog.NewTextHandler(os.Stderr, nil)), now, products)
 	if err != nil {
 		return err
 	}
-	facts, err := loadFeedFacts(ctx, pool, nil, now)
+	facts, err := loadFeedFacts(ctx, pool, nil, now, products)
 	if err != nil {
 		return err
 	}

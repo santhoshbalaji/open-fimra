@@ -13,37 +13,39 @@ import (
 
 const Source = "firms"
 
-// Products are the near-real-time products polled every 15 minutes.
-var Products = [...]string{"VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"}
+const (
+	DefaultPollProducts     = "VIIRS_NOAA20_NRT,VIIRS_NOAA21_NRT,MODIS_NRT"
+	DefaultBackfillProducts = "VIIRS_NOAA20_SP,VIIRS_NOAA21_SP,MODIS_SP"
+)
 
-// StandardProducts are the standard-processing products used for backfill.
-// FIRMS publishes them some weeks after the near-real-time products, with
-// better calibration and geolocation.
-var StandardProducts = [...]string{"VIIRS_SNPP_SP", "VIIRS_NOAA20_SP", "VIIRS_NOAA21_SP", "MODIS_SP"}
-
-// IsStandard reports whether product is a standard-processing product.
+// IsStandard reports whether product is a known standard-processing product.
 func IsStandard(product string) bool {
-	for _, p := range StandardProducts {
-		if p == product {
-			return true
-		}
-	}
-	return false
+	return Counterpart(product) != "" && strings.HasSuffix(product, "_SP")
 }
 
-// Counterpart returns the product that reports the same satellite
-// observations: the near-real-time product for a standard-processing one, and
-// the other way round. It returns "" for an unknown product.
+// Counterpart returns the other processing level for the same observations.
+// The pairs include historical products regardless of what is polled live.
 func Counterpart(product string) string {
-	for i, p := range Products {
-		if p == product {
-			return StandardProducts[i]
-		}
-		if StandardProducts[i] == product {
-			return p
-		}
+	switch product {
+	case "VIIRS_SNPP_NRT":
+		return "VIIRS_SNPP_SP"
+	case "VIIRS_SNPP_SP":
+		return "VIIRS_SNPP_NRT"
+	case "VIIRS_NOAA20_NRT":
+		return "VIIRS_NOAA20_SP"
+	case "VIIRS_NOAA20_SP":
+		return "VIIRS_NOAA20_NRT"
+	case "VIIRS_NOAA21_NRT":
+		return "VIIRS_NOAA21_SP"
+	case "VIIRS_NOAA21_SP":
+		return "VIIRS_NOAA21_NRT"
+	case "MODIS_NRT":
+		return "MODIS_SP"
+	case "MODIS_SP":
+		return "MODIS_NRT"
+	default:
+		return ""
 	}
-	return ""
 }
 
 type Observation struct {

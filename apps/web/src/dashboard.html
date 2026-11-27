@@ -100,6 +100,9 @@
                 <p hlmCardDescription>{{ msg('Live satellite feeds for {0} · Current status', [workspaceName()]) }}</p>
               </hlm-card-header>
               <div hlmCardContent>
+                @if (data.feedLatencyUnavailable) {
+                  <p class="text-body text-text-secondary">{{ msg('Satellite latency could not load') }}</p>
+                }
                 <fimra-state-region [state]="feedState()" (retry)="retry()">
                   <ul class="grid gap-2">
                     @for (feed of data.feedHealth; track feed.source + '/' + feed.product) {
@@ -115,6 +118,23 @@
                               {{ msg('Last successful poll') }} <time [attr.datetime]="success">{{ feedDate(success) }}</time>
                             } @else { {{ msg('No successful poll yet') }} }
                           </p>
+                          @if (feed.latency?.length) {
+                            <ul class="mt-2 grid gap-2">
+                              @for (latency of feed.latency; track latency.satellite + '/' + latency.windowHours) {
+                                <li class="text-body text-text-secondary">
+                                  <p class="font-medium">{{ latency.satellite }} · {{ latencyWindow(latency.windowHours) }}</p>
+                                  <p>{{ msg('First seen {0}', [latencySummary(latency.firstSeen)]) }}</p>
+                                  @if (latency.matched.count) {
+                                    <p>{{ msg('Matched to this workspace {0}', [latencySummary(latency.matched)]) }}</p>
+                                  } @else {
+                                    <p>{{ msg('No timed workspace matches') }}</p>
+                                  }
+                                </li>
+                              }
+                            </ul>
+                          } @else if (!data.feedLatencyUnavailable) {
+                            <p class="mt-2 text-body text-text-secondary">{{ msg('No latency samples from comparable polls in the last 7 days') }}</p>
+                          }
                         </div>
                         <fimra-status-badge class="mx-0!" [icon]="feed.status" [label]="feedLabels[feed.status]" />
                       </li>

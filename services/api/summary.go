@@ -32,11 +32,12 @@ type responsePercentiles struct {
 	Count int `json:"count"`
 }
 type summaryFeed struct {
-	Source              string     `json:"source"`
-	Product             string     `json:"product"`
-	Status              string     `json:"status"`
-	LastSuccessAt       *time.Time `json:"lastSuccessAt"`
-	LatestObservationAt *time.Time `json:"latestObservationAt"`
+	Source              string        `json:"source"`
+	Product             string        `json:"product"`
+	Status              string        `json:"status"`
+	LastSuccessAt       *time.Time    `json:"lastSuccessAt"`
+	LatestObservationAt *time.Time    `json:"latestObservationAt"`
+	Latency             []feedLatency `json:"latency,omitempty"`
 }
 
 // summaryCounts are the counts the dashboard and situation reports share.
@@ -54,9 +55,10 @@ type summaryCounts struct {
 
 type workspaceSummary struct {
 	summaryCounts
-	BacklogOverdue        *int          `json:"backlogOverdue,omitempty"`
-	FeedHealth            []summaryFeed `json:"feedHealth"`
-	FeedHealthUnavailable bool          `json:"feedHealthUnavailable,omitempty"`
+	BacklogOverdue         *int          `json:"backlogOverdue,omitempty"`
+	FeedHealth             []summaryFeed `json:"feedHealth"`
+	FeedHealthUnavailable  bool          `json:"feedHealthUnavailable,omitempty"`
+	FeedLatencyUnavailable bool          `json:"feedLatencyUnavailable,omitempty"`
 }
 
 // countWindow is the time window of the shared counts. A nil start means
@@ -115,12 +117,20 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 		if a.now != nil {
 			now = a.now()
 		}
-		facts, err := loadFeedFacts(ctx, a.feedDB, root, now)
+		facts, err := loadFeedFacts(ctx, a.feedDB, root, now, a.firms.liveProducts())
 		if err != nil {
 			a.logger.Error("Could not read dashboard feed health", "error", err)
 			s.FeedHealthUnavailable = true
 			writeJSON(w, 200, s)
 			return
+		}
+		var latencies map[feedKey][]feedLatency
+		if len(facts) > 0 {
+			latencies, err = loadFeedLatency(ctx, a.feedDB, *root, now)
+			if err != nil {
+				a.logger.Error("Could not read dashboard feed latency", "error", err)
+				s.FeedLatencyUnavailable = true
+			}
 		}
 		s.FeedHealth = make([]summaryFeed, 0, len(facts))
 		for _, f := range facts {
@@ -131,6 +141,7 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 			s.FeedHealth = append(s.FeedHealth, summaryFeed{
 				Source: f.Source, Product: f.Product, Status: feedStatus(f, set.Thresholds, now),
 				LastSuccessAt: f.LastSuccessAt, LatestObservationAt: f.LatestObservedAt,
+				Latency: latencies[feedKey{f.Source, f.Product}],
 			})
 		}
 	}

@@ -6,6 +6,7 @@ WITH feeds AS (
     FROM ingest_runs r
     WHERE r.kind = 'poll' AND r.workspace_id IS NOT NULL
       AND ($1::uuid IS NULL OR r.workspace_id = $1::uuid) AND r.started_at <= $2
+      AND (r.source <> 'firms' OR r.product = ANY($3::text[]))
     GROUP BY r.workspace_id, r.source, r.product
 )
 SELECT f.workspace_id::text, w.slug, w.settings, f.source, f.product, f.first_run_at,
@@ -39,23 +40,20 @@ LEFT JOIN LATERAL (
       AND r.status = 'succeeded' AND r.started_at > $2 - interval '90 days' AND r.started_at <= $2
 ) observed ON true
 -- Processing time for the 20-minute release gate, over the last 7 days. A
--- record new in a poll was published after the previous successful poll of
--- the feed, so the time from that poll's fetch to the match is an upper
+-- record new in a comparable response could have been published as early as
+-- the previous fetch, so the time from that fetch to the match is an upper
 -- estimate of the time from publication to processing.
 LEFT JOIN LATERAL (
-    WITH runs AS (
-        SELECT r.id, r.fetched_at, lag(r.fetched_at) OVER (ORDER BY r.started_at, r.id) AS previous_fetched_at
+    WITH delays AS (
+        SELECT extract(epoch FROM m.matched_at - r.previous_fetched_at)::float8 AS seconds
         FROM ingest_runs r
-        WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
-          AND r.status = 'succeeded' AND r.started_at > $2 - interval '7 days' AND r.started_at <= $2
-    ),
-    delays AS (
-        SELECT extract(epoch FROM m.matched_at - runs.previous_fetched_at)::float8 AS seconds
-        FROM runs
-        JOIN detections d ON d.ingest_run_id = runs.id
+        JOIN detections d ON d.ingest_run_id = r.id
         JOIN detection_matches m
           ON (m.workspace_id, m.detection_id, m.observed_at) = (f.workspace_id, d.id, d.observed_at)
-        WHERE runs.previous_fetched_at IS NOT NULL
+        WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
+          AND r.previous_fetched_at IS NOT NULL AND r.fetched_at > $2 - interval '7 days' AND r.fetched_at <= $2
+          AND d.observed_at >= r.window_start AND d.observed_at <= r.fetched_at
+          AND m.matched_at >= r.fetched_at AND m.matched_at <= $2
     )
     SELECT count(*)::integer AS records,
            percentile_cont(0.95) WITHIN GROUP (ORDER BY seconds) AS p95_seconds,

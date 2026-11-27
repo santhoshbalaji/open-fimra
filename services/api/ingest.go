@@ -49,7 +49,21 @@ type ingestCounts struct {
 
 type readObservations func(context.Context) ([]firms.Observation, error)
 
+// fetchTiming preserves the original response time when several runs reuse a
+// fetch. A comparable previous response is optional for live polls.
+type fetchTiming struct {
+	fetchedAt         time.Time
+	previousFetchedAt *time.Time
+}
+
 func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObservations) (ingestCounts, error) {
+	return runIngestTimed(ctx, db, run, func(ctx context.Context) ([]firms.Observation, fetchTiming, error) {
+		observations, err := read(ctx)
+		return observations, fetchTiming{}, err
+	})
+}
+
+func runIngestTimed(ctx context.Context, db ingestDB, run ingestRun, read func(context.Context) ([]firms.Observation, fetchTiming, error)) (ingestCounts, error) {
 	var id int64
 	var counts ingestCounts
 	inferWindow := run.WindowEnd.IsZero()
@@ -71,7 +85,7 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 		return counts, fmt.Errorf("start ingest run: %w", err)
 	}
 
-	observations, readErr := read(ctx)
+	observations, timing, readErr := read(ctx)
 	err = readErr
 	counts.Fetched = len(observations)
 	var latest *time.Time
@@ -101,9 +115,10 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 		}
 		err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 			// The response has been read: processing time starts here.
-			var fetchedAt time.Time
-			if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&fetchedAt); err != nil {
-				return fmt.Errorf("read the fetch time: %w", err)
+			if timing.fetchedAt.IsZero() {
+				if err := tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&timing.fetchedAt); err != nil {
+					return fmt.Errorf("read the fetch time: %w", err)
+				}
 			}
 			if err := insertAndMatch(ctx, tx, id, run, observations, &counts); err != nil {
 				return err
@@ -111,9 +126,9 @@ func runIngest(ctx context.Context, db ingestDB, run ingestRun, read readObserva
 			_, err := tx.Exec(ctx, `
 				UPDATE ingest_runs SET status = $10, error_message = $11, finished_at = clock_timestamp(),
 				    fetched = $2, inserted = $3, duplicates = $4, window_start = $5, window_end = $6,
-				    fetched_at = $7, latest_observed_at = $8, linked = $9
+				    fetched_at = $7, latest_observed_at = $8, linked = $9, previous_fetched_at = $12
 				WHERE id = $1`, id, counts.Fetched, counts.Inserted, counts.Duplicates, run.WindowStart, run.WindowEnd,
-				fetchedAt, latest, counts.Linked, status, message)
+				timing.fetchedAt, latest, counts.Linked, status, message, timing.previousFetchedAt)
 			if err != nil {
 				return fmt.Errorf("finish ingest run: %w", err)
 			}

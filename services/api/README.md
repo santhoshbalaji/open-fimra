@@ -24,7 +24,10 @@ The integration tests check sign-in with all four demo users. They also exercise
 | `FIMRA_OIDC_DISCOVERY_URL` | The issuer. Where the API reads the identity provider's settings and keys. Set it to the provider's local address when the issuer is a public address the API cannot reach itself, for example behind an access gateway. |
 | `FIMRA_OIDC_EXTRA_ISSUERS` | Empty. Other addresses of the same identity provider whose tokens are also accepted, separated by commas, for example the local address while people also sign in through a public one. |
 | `FIMRA_HTTP_ADDR` | `127.0.0.1:18090` |
-| `FIMRA_FIRMS_MAP_KEY` | Empty, which disables live polling |
+| `FIMRA_FIRMS_MAP_KEY` | Empty. Workspaces can still poll with their own saved key. |
+| `FIMRA_FIRMS_POLL_INTERVAL` | `5m`. A Go duration of at least `1m`. |
+| `FIMRA_FIRMS_POLL_PRODUCTS` | `VIIRS_NOAA20_NRT,VIIRS_NOAA21_NRT,MODIS_NRT` |
+| `FIMRA_FIRMS_BACKFILL_PRODUCTS` | `VIIRS_NOAA20_SP,VIIRS_NOAA21_SP,MODIS_SP` |
 | `FIMRA_UPLOAD_DIR` | `.geo-uploads` (at the repository root when using Make) |
 | `FIMRA_EXPORT_DIR` | `.geo-exports` (at the repository root when using Make). The geo worker writes export files here. |
 | `FIMRA_EXPORT_TTL` | `24h`. How long a finished export can be downloaded, as a Go duration of at least one minute. |
@@ -59,11 +62,11 @@ The service finds the signing keys through OpenID Connect discovery and caches t
 | `active`, `pendingReports` | Counts of alerts at a nonterminal step and alerts whose current step has the report-pending flag, respectively. |
 | `overdue` | An alert counts once if the time since it entered its current step is strictly greater than the shortest non-null limit on an outgoing transition. At the deadline it is still on time. A step with no limit cannot be overdue. |
 | `responseSeconds` | Median, 90th percentile and `count` of alerts for each milestone. `alerted` runs from the satellite observation to the alert being raised. `acknowledged`, `team_sent`, `reached_site`, `controlled` and `extinguished` run from the alert being raised to the first step-log entry for that step. Each milestone includes only alerts that reached it. An empty sample gives null for both values. |
-| `feedHealth` | Current source, product and status from the same feed facts and thresholds as the feeds endpoint. Root grants get the workspace-wide list (empty before the first poll). Other grants get null. |
+| `feedHealth` | Current status and satellite latency by source and product, using the same thresholds and samples as the feeds endpoint. Root grants get the workspace-wide list (empty before the first poll). Other grants get null. |
 
 The counts come from [scope.sql](scope.sql), which chooses the detections and alerts a caller may see in a time window, followed by [summary.sql](summary.sql). Situation reports start with the same text, so the two always agree.
 
-The demo budget is 500 ms at the 95th percentile. The integration suite times 20 signed summary requests per granted demo account against the local database. This includes token verification and response encoding. The handler runs one counts query and one additional feed query for a root grant. With 11 demo detections and seven routed alerts, a local run measured 5.73 ms at the 95th percentile for the state administrator, 2.35 ms for the division officer and 2.79 ms for the beat guard. CI reports fresh measurements for each run.
+The demo budget is 500 ms at the 95th percentile. The integration suite times 20 signed summary requests per granted demo account against the local database. This includes token verification and response encoding. The handler runs a counts query, then reads feed facts for a root grant and latency samples when the workspace has polled feeds. With 11 demo detections and seven routed alerts, a local run measured 5.73 ms at the 95th percentile for the state administrator, 2.35 ms for the division officer and 2.79 ms for the beat guard. CI reports fresh measurements for each run.
 
 ## Situation reports
 
@@ -189,7 +192,13 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## FIRMS ingestion
 
-A River job starts polling on service startup and runs every 15 minutes. It requests two UTC calendar days for each of the four products and each workspace with a boundary and a map key. Each poll reads the workspace's key from its encrypted settings, so a key saved in the wizard is used at the next poll without a restart. A workspace without a saved key uses `FIMRA_FIRMS_MAP_KEY`, so installations from before the wizard keep working. A workspace with neither is skipped. A saved key that cannot be decrypted fails each feed's run with the reason, which feed health then shows. The database keeps one detection per feed observation and matches each new detection to every workspace in range. Each poll, backfill chunk or import records its kind, time window, counts and outcome in `ingest_runs`.
+A River job polls on startup and every five minutes by default. Each request covers today and yesterday in UTC. Change the cadence with `FIMRA_FIRMS_POLL_INTERVAL` or set `FIMRA_FIRMS_POLL_PRODUCTS` to a comma-separated list of distinct products from the live defaults. River deduplicates each interval, and a database lock allows only one FIRMS poll across API replicas. A tick that is already an interval late, or runs while a previous poll is still working, is skipped. A poll has up to 14 minutes to finish processing its workspaces.
+
+Each poll reads the workspace's saved key, falling back to `FIMRA_FIRMS_MAP_KEY`. Workspaces need a boundary and a key. An unreadable saved key fails each of that workspace's runs. Identical requests within one poll (key, product, bounds and days) share a response and its fetch timestamp. Each workspace still gets its own run. The database keeps one detection per feed observation and matches it to every workspace in range.
+
+The live defaults are NOAA-20 and NOAA-21 VIIRS and the combined MODIS product. NASA ended Suomi NPP delivery on 2 November 2026 and announced the end of new Terra observations on 1 December 2026. The MODIS query continues for Aqua and accepts Terra rows from the overlap and historical files. [NASA FIRMS transition notices](https://firms.modaps.eosdis.nasa.gov/content/notifications/firms/news.html)
+
+The process-local limiter allows 5,000 transactions per 10 minutes per key across polls, key tests and queued backfill. It budgets one transaction per requested day and one per availability check. With three products, two days and a five-minute cadence, budget 12 transactions per 10 minutes per distinct bounding box for each key. At a one-minute cadence that is 60. Allow headroom for backfill, tests and other processes using the same key. Each poll, backfill chunk or import records its kind, time window, counts and outcome in `ingest_runs`.
 
 The poller, backfill and connection test share one rate limiter for each key. NASA allows 5,000 transactions in each 10 minutes per key, and says a larger request may count as more than one. The limiter counts one transaction for each day a request asks for, which overestimates on purpose. It counts only the requests of its own process, so a backfill run from the command line has its own share.
 
@@ -292,7 +301,7 @@ ineligible. The queue and workflow permissions use those saved alert paths.
 
 ## FIRMS backfill
 
-Backfill fetches FIRMS standard-processing products, such as `VIIRS_SNPP_SP` and `MODIS_SP`, for one workspace and a range of UTC days. FIRMS publishes these weeks after the near-real-time products, with better calibration and geolocation, and keeps them for many years.
+Backfill fetches FIRMS standard-processing products, such as `VIIRS_NOAA20_SP` and `MODIS_SP`, for one workspace and a range of UTC days. FIRMS publishes these weeks after the near-real-time products, with better calibration and geolocation, and keeps them for many years.
 
 - It uses the area API's date form, `/api/area/csv/{key}/{product}/{box}/{days}/{date}`, which returns the days from `date` to `date + days - 1`. The [FIRMS area API page](https://firms.modaps.eosdis.nasa.gov/api/area/) allows 1 to 5 days, so the range is split into chunks of at most 5 days.
 - It first asks the [data availability API](https://firms.modaps.eosdis.nasa.gov/api/data_availability/) which days the product has. FIRMS answers a day it has not processed yet with an empty file, so days after the last available day are left out and never recorded as done.
@@ -305,7 +314,7 @@ make backfill-queue FROM=2024-01-01 TO=2024-06-30 WORKSPACE=demo  # queue a job 
 make backfill-demo                                                 # synthetic fixtures, no network
 ```
 
-`PRODUCTS` defaults to `VIIRS_SNPP_SP,MODIS_SP`. The queued job runs on its own queue, so a long backfill never delays a poll. A job that times out or fails is retried and starts from the first unfinished day. `make backfill-demo` loads the demo workspace and reads the synthetic files in [the fixtures folder](../../packages/connectors/firms/fixtures/). Run it twice: the second run fetches nothing. Records read from fixtures are stored under the source `demo`, like `make demo-detections`, so they never count as done for a real FIRMS backfill. A product with no fixture file fails instead of counting as an empty day.
+Backfill defaults to `VIIRS_NOAA20_SP,VIIRS_NOAA21_SP,MODIS_SP`. Set `FIMRA_FIRMS_BACKFILL_PRODUCTS` to change the default. `PRODUCTS` in Make and `-products` on the command line override it. Select `VIIRS_SNPP_SP` explicitly for historical Suomi NPP observations, including dates before NOAA-20 coverage. The queued job runs on its own queue, so a long backfill never delays a poll. A job that times out or fails is retried and starts from the first unfinished day. `make backfill-demo` loads the demo workspace and reads the synthetic files in [the fixtures folder](../../packages/connectors/firms/fixtures/). Run it twice: the second run fetches nothing. Records read from fixtures are stored under the source `demo`, like `make demo-detections`, so they never count as done for a real FIRMS backfill. A product with no fixture file fails instead of counting as an empty day.
 
 ### Same observation, two products
 
@@ -327,7 +336,7 @@ Run `make noaa-nodd-test-integration` on a migrated database. The test uses a fa
 
 `GET /api/v1/workspaces/{slug}/feeds` takes a bearer token. Only a role at the root of one of the workspace's hierarchies, such as the state administrator, may see it. Anyone else, and any unknown workspace, gets 403.
 
-It lists each live feed: a source and product that the workspace has polled. Backfill and file imports are not live feeds.
+It lists each live feed the workspace has polled, identified by source and product. Disabling a FIRMS product removes it from monitoring and the next check resolves its open health alerts. Backfill and file imports do not affect live feed health.
 
 | Field | Meaning |
 |---|---|
@@ -336,7 +345,8 @@ It lists each live feed: a source and product that the workspace has polled. Bac
 | `lastSuccessAt` | When the latest successful poll's response arrived |
 | `latestObservationAt`, `delaySeconds` | The newest observation the feed has returned in the last 90 days, and its age |
 | `failuresLast24h` | Failed polls in the last 24 hours |
-| `processing` | Records new in a poll in the last 7 days, the 95th percentile of their processing time in seconds, and the share processed within 20 minutes |
+| `processing` | Comparable detections first seen by this workspace's polls in the last 7 days, the 95th percentile of their estimated publication-to-match time in seconds, and the share within 20 minutes |
+| `latency` | Per satellite and `windowHours` (24 or 168), `firstSeen` and `matched` each give `count`, `p50Seconds`, `p95Seconds` and `maxSeconds`. A metric with zero samples has null percentiles and max. |
 | `firstSeen` | Record count, median and 95th percentile in seconds from acquisition to the fetch that first stored the record in the last 7 days. Linked source records are included and attributed to their inserting poll. |
 
 The response also has `thresholds`, the `fireSeason` with `inSeason`, and `openAlerts`.
@@ -363,7 +373,11 @@ A River job checks every workspace's feeds every five minutes. When a feed is `q
 
 ### Processing time
 
-The release gate asks that 95% of newly published FIRMS records are processed within 20 minutes. FIRMS does not say when it published a record. A record that is new in a poll was published after the feed's previous successful poll, so the time from that poll's fetch to the record's match is an upper estimate. Each run records `fetched_at` when its response arrived, each detection records the run that first stored it, and each match records `matched_at` when it was written.
+The release gate asks that 95% of newly published FIRMS records are processed within 20 minutes. FIRMS supplies the observation time. The run that first inserts a detection records `fetched_at` after reading the response. The detection refers to that run, and the workspace match records `matched_at` when it was written. The gate uses the time from the previous comparable fetch to the match as an upper estimate of publication-to-match time.
+
+The source latency windows use first-seen time to select observations. They measure time from observation to the first fetch that contained the detection, and from observation to the first match written for this workspace when one exists. They count individual detections, so one satellite pass can contribute multiple samples. Aqua and Terra are reported separately even though they share a product. First-seen delay includes polling and is an upper bound on time to publication. Polls that return no hotspots still establish a comparison for the next poll, but they cannot prove that FIRMS processed an overpass.
+
+The first successful poll for a request after startup, a failed fetch, a missed workspace run, a key or bounds change, or a gap longer than two configured intervals establishes a baseline. Its detections still ingest, but their unknown time of publication makes them backlog for these metrics. Older runs recorded before comparable fetches were tracked are also excluded. A subsequent successful poll with the same request and a recent baseline contributes samples.
 
 ## Database queries
 
@@ -1351,7 +1365,7 @@ code when its branch skips an optional level.
 Workspace secrets are stored in `workspace_settings_secrets`, sealed with AES-256-GCM. The key comes from `FIMRA_SETTINGS_KEY` and never reaches the database. Each value has its own random nonce. The workspace and setting name are bound to the ciphertext, so a value copied to another row does not open. Each row records the ID of the key that sealed it, a short hash that does not reveal the key.
 
 - `GET`, `PUT` and `DELETE /api/v1/workspaces/{slug}/settings/firms` read, save and remove the FIRMS map key. `PUT` takes `{"mapKey": "..."}`. Every answer gives only `set`, `setAt`, the last four characters as `hint`, the `source` (`settings`, `environment` or `none`) and whether encryption is on. The key itself is never returned.
-- `POST .../settings/firms/test` asks FIRMS for the data availability of `VIIRS_SNPP_NRT` with the key the poller would use. The answer says whether it worked and why not, with the key removed.
+- `POST .../settings/firms/test` asks FIRMS for the data availability of `VIIRS_NOAA20_NRT` with the key the poller would use. The test distinguishes a rejected request from a successful response whose latest date is older than yesterday in UTC. It redacts the key.
 - Saving, removing and testing are audited without the value. The key is never logged: FIRMS errors pass through the client that removes it from URLs.
 
 To rotate the settings key, set the new key in `FIMRA_SETTINGS_KEY` and list the old one in `FIMRA_SETTINGS_OLD_KEYS`. Restart the API, which can then open both. Run `make rotate-settings-key` to seal every saved secret with the new key, then remove the old key.

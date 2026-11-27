@@ -16,7 +16,7 @@ import (
 const (
 	areaURL         = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/"
 	availabilityURL = "https://firms.modaps.eosdis.nasa.gov/api/data_availability/csv/"
-	// Days is the rolling window that each 15-minute poll requests.
+	// Days is the rolling window that each live poll requests.
 	Days = 2
 	// MaxDayRange is the most days one area request may ask for. The FIRMS
 	// area API documentation gives DAY_RANGE as "1 .. 5".

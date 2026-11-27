@@ -64,7 +64,7 @@ func TestAreaRedactsMapKey(t *testing.T) {
 	area := NewArea(key, transportFunc(func(r *http.Request) (*http.Response, error) {
 		return nil, &urlEchoError{message: r.URL.String() + " " + key, cause: context.DeadlineExceeded}
 	}))
-	_, err := area.Fetch(t.Context(), Products[0], Bounds{})
+	_, err := area.Fetch(t.Context(), "VIIRS_NOAA20_NRT", Bounds{})
 	if !errors.Is(err, context.DeadlineExceeded) ||
 		strings.Contains(err.Error(), key) || strings.Contains(err.Error(), "test%2Fprivate-key") {
 		t.Fatalf("expected a redacted error with its original cause, got %v", err)
