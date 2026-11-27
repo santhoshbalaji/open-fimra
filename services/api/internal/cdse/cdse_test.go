@@ -92,6 +92,10 @@ func TestCatalogueAndCSV(t *testing.T) {
 		t.Fatalf("new NR edition should keep native ID: %+v, %v", read, err)
 	}
 	body := string(data)
+	// A pixel a few seconds past the catalogue's sensing end is accepted.
+	if read, err := Parse(strings.NewReader(strings.Replace(body, "14:01:11", "14:04:05", 1)), g, ""); err != nil || len(read) != 1 {
+		t.Fatalf("pixel just after sensing end: %+v, %v", read, err)
+	}
 	empty := strings.Replace(body[:strings.LastIndex(strings.TrimSpace(body), "\n")+1], "fires = 1", "fires = 0", 1)
 	if read, err := Parse(strings.NewReader(empty), g, ""); err != nil || len(read) != 0 {
 		t.Fatalf("valid empty granule: %+v, %v", read, err)
@@ -100,6 +104,7 @@ func TestCatalogueAndCSV(t *testing.T) {
 		strings.Replace(body, "fires = 1", "fires = 2", 1),
 		strings.Replace(body, "18.5", "NaN", 1),
 		strings.Replace(body, "14:01:11", "13:01:11", 1),
+		strings.Replace(body, "14:01:11", "14:07:11", 1),
 	} {
 		if _, err := Parse(strings.NewReader(bad), g, ""); err == nil {
 			t.Error("malformed CSV accepted")
