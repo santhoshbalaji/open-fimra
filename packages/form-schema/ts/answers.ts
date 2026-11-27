@@ -17,8 +17,8 @@ export interface AlertFacts {
   /** Times in ISO 8601 form, such as 2026-03-15T06:00:00Z. */
   observedAt: string;
   raisedAt: string;
-  longitude: number;
-  latitude: number;
+  longitude: number | null;
+  latitude: number | null;
   unit?: string | null;
   forestClass?: string | null;
   source?: string | null;
@@ -597,7 +597,9 @@ export class AnswerSession {
       case 'raised-at':
         return { value: utc(a.raisedAt), ok: true };
       case 'location':
-        return { value: { type: 'Point', coordinates: [a.longitude, a.latitude] }, ok: true };
+        return a.longitude === null || a.latitude === null
+          ? { value: undefined, ok: false }
+          : { value: { type: 'Point', coordinates: [a.longitude, a.latitude] }, ok: true };
       case 'unit':
         return text(a.unit);
       case 'forest-class':

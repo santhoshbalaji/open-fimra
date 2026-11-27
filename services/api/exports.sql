@@ -25,7 +25,7 @@ detection_rows AS (
     FROM detection_matches m
     JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
     LEFT JOIN alerts routed ON (routed.workspace_id, routed.detection_id) = (m.workspace_id, m.detection_id)
-    WHERE $3 = 'detections'
+    WHERE $3 = 'detections' AND d.source <> 'lsasaf'
       AND d.observed_at BETWEEN now() - make_interval(hours => $5) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $5) AND now()
       AND m.forest_class = ANY($6::text[])
@@ -52,6 +52,8 @@ alert_rows AS (
            NULL::uuid AS submission_id, a.observed_at AS sort_time, a.export_boundary, a.export_dispatch
     FROM alert_snapshots a JOIN workflow_instances i ON i.alert_id = a.id
     WHERE $3 = 'alerts'
+      AND NOT EXISTS (SELECT FROM lsasaf_pixels p WHERE
+          (p.workspace_id,p.detection_id,p.slot) = (a.workspace_id,a.detection_id,a.observed_at))
       AND EXISTS (
           SELECT 1 FROM grants g WHERE g.workspace_id = a.workspace_id
             AND (a.queue = 'unit' OR g.can_review)

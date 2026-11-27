@@ -215,7 +215,7 @@ export class SubmissionView {
       const id = this.alertId();
       this.place.set(translate('Unknown place'));
       if (!id) return;
-      const request = this.http.get<AlertRow>(this.workspaceUrl() + '/alerts/' + id).subscribe({
+      const request = this.http.get<AlertRow>(this.workspaceUrl() + '/alerts/' + id, { params: { includePossibleFires: true } }).subscribe({
         next: alert => {
           const names = placesOf(alert, []).map(place => place.name || place.code).filter(Boolean);
           this.place.set(names.join(' · ') ||

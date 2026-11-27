@@ -1794,5 +1794,17 @@
   "No latency samples from comparable polls in the last 7 days": "पिछले 7 दिनों में तुलनीय पोल से विलंब का कोई नमूना नहीं",
   "{0} detection": "{0} पहचान",
   "{0} detections": "{0} पहचानें",
-  "typically {0} after observation, 95% within {1}, longest {2} ({3}).": "आम तौर पर अवलोकन के {0} बाद, 95% {1} के भीतर, सबसे लंबा {2} ({3})।"
+  "typically {0} after observation, 95% within {1}, longest {2} ({3}).": "आम तौर पर अवलोकन के {0} बाद, 95% {1} के भीतर, सबसे लंबा {2} ({3})।",
+  "Candidate beats": "संभावित बीट",
+  "Corroborated Meteosat evidence": "पुष्ट मेटियोसैट साक्ष्य",
+  "Could not refresh the Meteosat watch list.": "मेटियोसैट निगरानी सूची ताज़ा नहीं हो सकी।",
+  "EUMETSAT LSA SAF": "EUMETSAT LSA SAF",
+  "EUMETSAT LSA SAF · MSG-IODC FRP-PIXEL (Demonstration)": "EUMETSAT LSA SAF · MSG-IODC FRP-PIXEL (प्रदर्शन उत्पाद)",
+  "Latest valid scan": "सबसे हाल का मान्य स्कैन",
+  "Missing scans in the last 24 hours · {0}": "पिछले 24 घंटों में अनुपलब्ध स्कैन · {0}",
+  "Open duty alert #{0}": "ड्यूटी अलर्ट #{0} खोलें",
+  "Possible fire · Meteosat · ~4 km": "संभावित आग · मेटियोसैट · लगभग 4 किमी",
+  "Show search footprint": "खोज क्षेत्र दिखाएँ",
+  "Show search footprint from {0}": "{0} का खोज क्षेत्र दिखाएँ",
+  "Median scan-to-listing time · {0}": "स्कैन से सूची में आने तक का मध्य समय · {0}"
 }

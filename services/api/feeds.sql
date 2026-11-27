@@ -16,7 +16,9 @@ SELECT f.workspace_id::text, w.slug, w.settings, f.source, f.product, f.first_ru
         WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
           AND r.status = 'failed' AND r.started_at > $2 - interval '24 hours' AND r.started_at <= $2)::integer,
        processing.records, processing.p95_seconds, processing.within_gate,
-       first_seen.records, first_seen.p50_seconds, first_seen.p95_seconds
+       first_seen.records, first_seen.p50_seconds, first_seen.p95_seconds,
+       valid_scan.slot, COALESCE(scans.listed,0), scans.p50_seconds, scans.p95_seconds,
+       COALESCE(missing.slots,0)
 FROM feeds f
 JOIN workspaces w ON w.id = f.workspace_id
 LEFT JOIN LATERAL (
@@ -37,7 +39,8 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
     SELECT max(r.latest_observed_at) AS latest_observed_at FROM ingest_runs r
     WHERE (r.workspace_id, r.kind, r.source, r.product) = (f.workspace_id, 'poll', f.source, f.product)
-      AND r.status = 'succeeded' AND r.started_at > $2 - interval '90 days' AND r.started_at <= $2
+      AND (r.status = 'succeeded' OR (f.source = 'lsasaf' AND r.fetched_at IS NOT NULL))
+      AND r.started_at > $2 - interval '90 days' AND r.started_at <= $2
 ) observed ON true
 -- Processing time for the 20-minute release gate, over the last 7 days. A
 -- record new in a comparable response could have been published as early as
@@ -87,4 +90,26 @@ LEFT JOIN LATERAL (
           WHERE (m.workspace_id, m.detection_id, m.observed_at) = (f.workspace_id, d.id, d.observed_at))))
       AND r.fetched_at > $2 - interval '7 days' AND r.fetched_at <= $2 AND lag.seconds >= 0
 ) first_seen ON true
+LEFT JOIN LATERAL (
+    SELECT count(*)::int AS listed,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM s.first_listed_at - s.slot)) AS p50_seconds,
+           percentile_cont(0.95) WITHIN GROUP (ORDER BY extract(epoch FROM s.first_listed_at - s.slot)) AS p95_seconds
+    FROM lsasaf_scans s WHERE f.source = 'lsasaf' AND s.workspace_id = f.workspace_id
+      AND s.first_listed_at BETWEEN $2 - interval '7 days' AND $2 AND s.first_listed_at >= s.slot
+) scans ON f.source = 'lsasaf'
+LEFT JOIN LATERAL (
+    SELECT slot FROM lsasaf_scans s WHERE f.source = 'lsasaf' AND s.workspace_id = f.workspace_id
+        AND s.validated_at <= $2 AND s.slot <= $2 ORDER BY slot DESC LIMIT 1
+) valid_scan ON f.source = 'lsasaf'
+-- Allow 45 minutes for publication. A successful HTTP poll can still leave a
+-- gap when a listed file was missing or its scan quality failed validation.
+LEFT JOIN LATERAL (
+    SELECT count(*)::int AS slots
+    FROM generate_series(date_bin(interval '15 minutes', GREATEST(f.first_run_at, $2 - interval '24 hours'),
+                                    '2000-01-01'::timestamptz) + interval '15 minutes',
+                         $2 - interval '45 minutes', interval '15 minutes') expected(slot)
+    WHERE f.source = 'lsasaf' AND NOT EXISTS (
+        SELECT FROM lsasaf_scans s WHERE s.workspace_id=f.workspace_id AND s.slot=expected.slot AND s.validated_at <= $2
+    )
+) missing ON f.source = 'lsasaf'
 ORDER BY w.slug, f.source, f.product;

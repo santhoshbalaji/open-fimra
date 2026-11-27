@@ -195,3 +195,8 @@ fimra-workflow .workflow-moves button,
   }
   [data-wall-display] .queue-freshness { margin-inline-end: auto; }
 }
+
+.map-swatch.possible-fire { width: 14px; height: 14px; border: 2px dashed var(--map-selection); }
+.meteosat-watch { padding: .75rem; border-bottom: 1px solid var(--color-divider); }
+.meteosat-watch summary { cursor: pointer; font-weight: 600; }
+.meteosat-watch ul { display: grid; gap: .75rem; margin: .5rem 0; }

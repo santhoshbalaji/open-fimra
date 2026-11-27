@@ -52,22 +52,29 @@ matched AS (
     FROM inserted d CROSS JOIN LATERAL classify_detection($1, d.id, d.observed_at, d.geom) m
     RETURNING detection_matches AS match
 ),
+routes AS MATERIALIZED (
+    SELECT match, route.*,
+           lsasaf_confirm(match, d.geom, route.queue, route.hierarchy_id, route.unit_path, $9) AS existing_alert
+    FROM matched
+    JOIN inserted d ON (d.id,d.observed_at) = ((match).detection_id,(match).observed_at)
+    CROSS JOIN LATERAL (
+        SELECT * FROM alert_route(match)
+        UNION ALL SELECT 'triage', NULL::uuid, NULL::ltree
+        WHERE $8 AND (match).forest_class IN ('outside','fixed_heat_source')
+    ) route
+),
 routed AS (
     -- The alert insert trigger opens its workflow, joins it to an incident
     -- and notifies the responsible officers in this transaction.
     INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path,
                         hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids, boundary_snapshot, intake_incident_id)
-    SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*,
+    SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, queue, hierarchy_id, unit_path,
            (match).hierarchy_unit_paths, (match).unit_paths, (match).forest_class, (match).triage_reason,
            (match).layer_version_ids, (match).boundary_snapshot, $9
-    FROM matched CROSS JOIN LATERAL (
-        SELECT * FROM alert_route(match)
-        UNION ALL SELECT 'triage', NULL::uuid, NULL::ltree
-        WHERE $8 AND (match).forest_class IN ('outside','fixed_heat_source')
-    ) route
+    FROM routes WHERE existing_alert IS NULL
     RETURNING id
 )
-SELECT EXISTS (SELECT FROM matched), (SELECT (match).forest_class FROM matched), (SELECT id FROM routed)`
+SELECT EXISTS (SELECT FROM matched), (SELECT (match).forest_class FROM matched), (SELECT id FROM routed UNION ALL SELECT existing_alert FROM routes WHERE existing_alert IS NOT NULL)`
 
 // manualFireReport records a manual fire report and makes its alert.
 func (a api) manualFireReport(w http.ResponseWriter, r *http.Request) {

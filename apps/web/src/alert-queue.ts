@@ -42,14 +42,13 @@ export interface AlertRow extends Detection {
   overlay_matches?: OverlayMatch[];
   next_action?: string;
   queue: Queue;
-  longitude: number;
-  latitude: number;
+  meteosat_evidence?: boolean;
 }
 interface Page { items: AlertRow[]; counts: Partial<Record<Queue, number>>; canReview: boolean; nextCursor?: string }
 
 /** Name the place first and distinguish alerts from different observations there. */
 export function alertRowLabel(row: AlertRow, place: string): string {
-  return translate('{0} · Alert #{1}', [place, row.id]);
+  return translate('{0} · Alert #{1}', [row.source === 'lsasaf' ? translate('Possible fire · Meteosat · ~4 km') : place, row.id]);
 }
 
 const firstPage: TablePosition = {
@@ -108,6 +107,7 @@ export class AlertQueue {
   readonly page = computed(() => this.saved()?.page);
   readonly lastUpdated = computed(() => this.saved()?.at);
   private readonly canReview = signal(false);
+  readonly reviewAllowed = this.canReview.asReadonly();
   readonly pinned = signal<AlertRow | null>(null);
   readonly linked = signal<AlertRow | null>(null);
   readonly tabs = computed<Queue[]>(() => this.canReview() ? ['unit', 'edge_review', 'triage'] : ['unit']);
@@ -169,7 +169,7 @@ export class AlertQueue {
       const position = this.position();
       const queue = this.active();
       const allQueues = this.allQueues();
-      const params: Record<string, string | number> = { ...this.filters.params(), limit: 25 };
+      const params: Record<string, string | number | boolean> = { ...this.filters.params(), limit: 25, includePossibleFires: true };
       if (this.sortOrder() !== 'newest') params['sort'] = this.sortOrder();
       if (this.allObservationDates()) delete params['hours'];
       if (!allQueues) params['queue'] = queue;

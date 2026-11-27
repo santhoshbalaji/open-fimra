@@ -1794,5 +1794,17 @@
   "No latency samples from comparable polls in the last 7 days": "No latency samples from comparable polls in the last 7 days",
   "{0} detection": "{0} detection",
   "{0} detections": "{0} detections",
-  "typically {0} after observation, 95% within {1}, longest {2} ({3}).": "typically {0} after observation, 95% within {1}, longest {2} ({3})."
+  "typically {0} after observation, 95% within {1}, longest {2} ({3}).": "typically {0} after observation, 95% within {1}, longest {2} ({3}).",
+  "Candidate beats": "Candidate beats",
+  "Corroborated Meteosat evidence": "Corroborated Meteosat evidence",
+  "Could not refresh the Meteosat watch list.": "Could not refresh the Meteosat watch list.",
+  "EUMETSAT LSA SAF": "EUMETSAT LSA SAF",
+  "EUMETSAT LSA SAF · MSG-IODC FRP-PIXEL (Demonstration)": "EUMETSAT LSA SAF · MSG-IODC FRP-PIXEL (Demonstration)",
+  "Latest valid scan": "Latest valid scan",
+  "Missing scans in the last 24 hours · {0}": "Missing scans in the last 24 hours · {0}",
+  "Open duty alert #{0}": "Open duty alert #{0}",
+  "Possible fire · Meteosat · ~4 km": "Possible fire · Meteosat · ~4 km",
+  "Show search footprint": "Show search footprint",
+  "Show search footprint from {0}": "Show search footprint from {0}",
+  "Median scan-to-listing time · {0}": "Median scan-to-listing time · {0}"
 }

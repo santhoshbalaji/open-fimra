@@ -671,6 +671,9 @@ func (c *answerCheck) alertValue(source string) (any, bool) {
 	case "raised-at":
 		return a.RaisedAt.UTC().Format(time.RFC3339), true
 	case "location":
+		if a.Source == "lsasaf" {
+			return nil, false
+		}
 		data, _ := json.Marshal(map[string]any{"type": "Point", "coordinates": []float64{a.Longitude, a.Latitude}})
 		return json.RawMessage(data), true
 	case "unit":

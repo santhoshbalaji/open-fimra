@@ -11,6 +11,9 @@ visible AS (
         SELECT 1 FROM grants g WHERE g.workspace_id = a.workspace_id
           AND alert_path_visible(a.queue, a.hierarchy_unit_paths, g.can_review, g.hierarchy_id, g.unit_path, g.depth)
     )
+      -- Point-only clients opt in explicitly before receiving footprint alerts.
+      AND ($16::boolean OR NOT EXISTS (SELECT FROM lsasaf_pixels geo
+           WHERE (geo.workspace_id,geo.detection_id,geo.slot) = (a.workspace_id,a.detection_id,a.observed_at)))
       AND ($3::bigint IS NULL OR a.id = $3)
       -- An incident's members are listed whatever their age, like a detail.
       AND ($13::bigint IS NULL OR a.id IN (
@@ -58,7 +61,9 @@ details AS (
            COALESCE(a.boundary_snapshot->'overlays', '[]') AS overlay_matches,
            COALESCE(a.boundary_snapshot->'layerVersionIds', to_jsonb(a.layer_version_ids)) AS boundary_version_ids, p.observed_at AS observed_time,
            floor(extract(epoch FROM p.observed_at))::bigint AS observed_at,
-           ST_X(d.geom) AS longitude, ST_Y(d.geom) AS latitude,
+           CASE WHEN d.source <> 'lsasaf' THEN ST_X(d.geom) END AS longitude,
+           CASE WHEN d.source <> 'lsasaf' THEN ST_Y(d.geom) END AS latitude,
+           EXISTS (SELECT FROM lsasaf_cases c WHERE c.alert_id = a.id) AS meteosat_evidence,
            a.forest_class, CASE WHEN p.queue = 'triage' THEN COALESCE(a.triage_reason, 'no_unit') END AS triage,
            d.source, d.product, d.confidence, d.frp_mw,
            line.levels #>> '{beat,name}' AS beat_name, line.levels #>> '{beat,code}' AS beat_code,

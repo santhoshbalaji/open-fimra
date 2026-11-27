@@ -118,6 +118,18 @@
                               {{ msg('Last successful poll') }} <time [attr.datetime]="success">{{ feedDate(success) }}</time>
                             } @else { {{ msg('No successful poll yet') }} }
                           </p>
+                          @if (feed.scans; as scans) {
+                            <p class="text-body text-text-secondary">
+                              @if (scans.latestValidAt; as latest) {
+                                {{ msg('Latest valid scan') }} <time [attr.datetime]="latest">{{ feedDate(latest) }}</time> ·
+                              }
+                              {{ msg('Missing scans in the last 24 hours · {0}', [format.number(scans.missingLast24h)]) }}
+                            </p>
+                            @if (scans.publication.p50Seconds !== null) {
+                              <p class="text-body text-text-secondary">{{ msg('Median scan-to-listing time · {0}', [duration(scans.publication.p50Seconds)]) }}</p>
+                            }
+                            <fimra-meteosat-attribution />
+                          }
                           @if (feed.latency?.length) {
                             <ul class="mt-2 grid gap-2">
                               @for (latency of feed.latency; track latency.satellite + '/' + latency.windowHours) {
@@ -132,7 +144,7 @@
                                 </li>
                               }
                             </ul>
-                          } @else if (!data.feedLatencyUnavailable) {
+                          } @else if (!data.feedLatencyUnavailable && !feed.scans) {
                             <p class="mt-2 text-body text-text-secondary">{{ msg('No latency samples from comparable polls in the last 7 days') }}</p>
                           }
                         </div>

@@ -133,6 +133,32 @@ describe('Detection map', () => {
     fixture.detectChanges();
   }
 
+  it('shows a possible fire as a search footprint that can be focused from the watch list', () => {
+    render();
+    vi.advanceTimersByTime(0);
+    const watch = {
+      type: 'Feature', id: '6',
+      properties: { id: '6', observedAt: new Date().toISOString(), alertId: null,
+        frpMW: 42, confidence: '78', candidateBeats: [{ path: 'demo.beat', code: 'B05', name: 'Beat 05' }] },
+      geometry: { type: 'Polygon', coordinates: [[[81, 20], [81.03, 20], [81.03, 20.03], [81, 20]]] }
+    };
+    const watches = { type: 'FeatureCollection', features: [watch] };
+    http.expectOne(req => req.url === endpoint + '/possible-fires').flush(watches);
+    fixture.detectChanges();
+
+    expect(html.querySelector('.meteosat-watch')?.textContent).toContain('Possible fire · Meteosat · ~4 km');
+    expect(html.querySelector('.meteosat-watch')?.textContent).toContain('Beat 05');
+    expect(mocks.sources.get('possible-fires')?.setData).toHaveBeenLastCalledWith(watches);
+    query.set(convertToParamMap({ possibleFire: '6' }));
+    fixture.detectChanges();
+    expect(mocks.fitBounds).toHaveBeenLastCalledWith([[81, 20], [81.03, 20.03]], expect.anything());
+    mocks.fitBounds.mockClear();
+    const focus = html.querySelector<HTMLButtonElement>('.meteosat-watch button')!;
+    focus.closest('details')!.open = true;
+    focus.click();
+    expect(mocks.fitBounds).toHaveBeenLastCalledWith([[81, 20], [81.03, 20.03]], expect.anything());
+  });
+
   it('fits the granted area on open and when resetting the map', () => {
     const jurisdiction: [number, number, number, number] = [80.4, 19.5, 80.6, 19.9];
     render(true, jurisdiction);
@@ -230,6 +256,7 @@ describe('Detection map', () => {
     fixture.detectChanges();
     vi.advanceTimersByTime(0);
     http.expectOne(endpoint).flush({ version: 'test', levels: [], boundary: null });
+    http.expectOne(req => req.url === endpoint + '/possible-fires').flush({ type: 'FeatureCollection', features: [] });
     fixture.detectChanges();
     expect(status.textContent).not.toContain('Some map data is missing');
     http.verify();

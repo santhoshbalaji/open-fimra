@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/riverqueue/river v0.51.2
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.51.2
+	github.com/scigolib/hdf5 v0.15.0
 )
 
 require (

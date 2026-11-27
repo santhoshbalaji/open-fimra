@@ -27,7 +27,7 @@ LEFT JOIN LATERAL (
     SELECT key AS hierarchy, value AS levels FROM jsonb_each(a.hierarchy)
     ORDER BY (key = h.slug) DESC NULLS LAST, (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
 ) line ON true
-WHERE a.workspace_id = $2
+WHERE a.workspace_id = $2 AND d.source <> 'lsasaf'
   AND ($4::float8 IS NULL OR d.geom && ST_MakeEnvelope($4, $5::float8, $6::float8, $7::float8, 4326))
   AND ($8::timestamptz IS NULL OR (a.observed_at >= $8 AND d.observed_at >= $8))
   AND ($9::timestamptz IS NULL OR (a.observed_at <= $9 AND d.observed_at <= $9))

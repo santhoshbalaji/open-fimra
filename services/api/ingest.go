@@ -41,6 +41,8 @@ type ingestRun struct {
 	WorkspaceOnly bool
 	// Successful objects from a multipart poll can be ingested despite a fetch error.
 	AllowPartial bool
+	// apply lets a scan feed commit its manifest, including valid empty scans, with its matches.
+	apply func(context.Context, pgx.Tx, int64, *ingestCounts) (*time.Time, error)
 }
 
 type ingestCounts struct {
@@ -105,7 +107,7 @@ func runIngestTimed(ctx context.Context, db ingestDB, run ingestRun, read func(c
 			}
 		}
 	}
-	if err == nil || (run.AllowPartial && len(observations) > 0 && ctx.Err() == nil) {
+	if err == nil || (run.AllowPartial && (run.apply != nil || len(observations) > 0) && ctx.Err() == nil) {
 		status := "succeeded"
 		var message *string
 		if readErr != nil {
@@ -120,7 +122,13 @@ func runIngestTimed(ctx context.Context, db ingestDB, run ingestRun, read func(c
 					return fmt.Errorf("read the fetch time: %w", err)
 				}
 			}
-			if err := insertAndMatch(ctx, tx, id, run, observations, &counts); err != nil {
+			if run.apply != nil {
+				observed, err := run.apply(ctx, tx, id, &counts)
+				if err != nil {
+					return err
+				}
+				latest = observed
+			} else if err := insertAndMatch(ctx, tx, id, run, observations, &counts); err != nil {
 				return err
 			}
 			_, err := tx.Exec(ctx, `

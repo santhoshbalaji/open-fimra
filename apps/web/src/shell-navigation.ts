@@ -89,6 +89,9 @@ export function allowedParams(path: string, input: Params, workspace: WorkspaceS
       params['status'] = input['status'];
     }
   }
+  if (path === '/monitor/map' && typeof input['possibleFire'] === 'string' && recordId(input['possibleFire'])) {
+    params['possibleFire'] = input['possibleFire'];
+  }
   if ((path === '/monitor/incidents' || path === '/monitor/map') && typeof incident === 'string' && recordId(incident)) params['incident'] = incident;
   if (path === '/monitor/incidents') {
     if (params['incident'] && typeof input['member'] === 'string' && recordId(input['member'])) params['member'] = input['member'];
