@@ -50,7 +50,7 @@ def night_assets(source, output):
             for y in range(count):
                 save(raster[y*256:(y+1)*256, x*256:(x+1)*256], folder / f"{y}.webp", 79)
 
-    size = 850
+    size = 768
     coord = (np.arange(size) + 0.5) / size * 2 - 1
     x, y = np.meshgrid(coord, -coord)
     radius = np.hypot(x, y)
@@ -64,7 +64,7 @@ def night_assets(source, output):
     rim = np.exp(-((radius - 0.993) * 91)**2) * (0.32 + 0.68 * (y + 1) / 2)
     globe += rim[..., None] * [27, 61, 102]
     alpha = np.clip((1 - radius) * 400, 0, 1) * 255
-    save(np.dstack((globe.clip(0, 255), alpha)).astype(np.uint8), output / "earth-night.webp", 86)
+    save(np.dstack((globe.clip(0, 255), alpha)).astype(np.uint8), output / "earth-night.webp", 82)
 
 
 def day_assets(cache, output):
@@ -89,8 +89,8 @@ def day_assets(cache, output):
     x = lambda lon: ((lon + 180) / degrees - left) * tile_size
     y = lambda lat: ((90 - lat) / degrees - top) * tile_size
     mosaic.crop((x(WEST), y(NORTH), x(EAST), y(SOUTH))).resize(
-        (720, 720), Image.Resampling.LANCZOS
-    ).save(output / "terrain.webp", quality=66, method=6)
+        (640, 640), Image.Resampling.LANCZOS
+    ).save(output / "terrain.webp", quality=62, method=6)
     with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", GDAL_HTTP_MAX_RETRY="3"):
         with rasterio.open(SENTINEL) as tile:
             xs, ys = transform("EPSG:4326", tile.crs, [PIXEL[0]], [PIXEL[1]])

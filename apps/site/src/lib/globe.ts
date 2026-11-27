@@ -1,3 +1,4 @@
+import { asset } from "./paths";
 import { Map } from "maplibre-gl";
 import type { FeatureCollection, LineString, Point } from "geojson";
 import { detections } from "./detections";
@@ -17,7 +18,7 @@ export async function initGlobe(visual: HTMLElement) {
   const container = visual.querySelector<HTMLElement>(".globe")!;
   const [archive, orbit] = await Promise.all([
     detections(),
-    fetch("/data/orbit.json").then(response => {
+    fetch(asset("data/orbit.json")).then(response => {
       if (!response.ok) throw new Error("Orbit unavailable");
       return response.json() as Promise<Orbit>;
     }),
@@ -54,7 +55,7 @@ export async function initGlobe(visual: HTMLElement) {
       sources: {
         marble: {
           type: "raster",
-          tiles: [new URL("/media/night/{z}/{x}/{y}.webp", window.location.href).href.replaceAll("%7B", "{").replaceAll("%7D", "}")],
+          tiles: [new URL(asset("media/night/{z}/{x}/{y}.webp"), window.location.href).href.replaceAll("%7B", "{").replaceAll("%7D", "}")],
           tileSize: 256,
           maxzoom: 3,
         },

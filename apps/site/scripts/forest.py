@@ -147,16 +147,10 @@ def main():
         cell = h3.latlng_to_cell(item.latitude, item.longitude, 4)
         cells[cell][MONTHS.index(item.acq_date[:7])] += 1
     features = []
-    poster = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 780">']
     for cell, counts in sorted(cells.items()):
         vertices = [[round(lon, 4), round(lat, 4)] for lat, lon in h3.cell_to_boundary(cell)]
         features.append({"type": "Feature", "properties": {"cell": cell, "counts": counts},
                          "geometry": {"type": "Polygon", "coordinates": [vertices + vertices[:1]]}})
-        polygon = " ".join(f"{(lon - WEST)*20:.1f},{(NORTH - lat)*20:.1f}" for lon, lat in vertices)
-        hue = "#ffe0ae" if sum(counts) >= 150 else "#ffb69b" if sum(counts) >= 45 else "#e87f77" if sum(counts) >= 10 else "#b25765"
-        poster.append(f'<polygon points="{polygon}" fill="{hue}" stroke="#ffbda3" stroke-opacity=".38" stroke-width=".65"/>')
-    poster.append("</svg>")
-    (args.output / "season-map.svg").write_text("".join(poster))
     write_json(args.output / "hexagons.json", {"type": "FeatureCollection", "features": features})
     snpp_forest = points[forest & (points.sensor == "Suomi NPP")]
     trend = snpp_forest.season.value_counts().reindex(range(FIRST_YEAR, LAST_YEAR + 1), fill_value=0)

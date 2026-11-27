@@ -105,7 +105,7 @@ that contain detections. At most twelve tiles are read concurrently. The
 downloads. It retained 1,708 detections in 435 resolution-4 H3 cells. Each cell
 publishes its aggregate count and hexagon geometry. Source coordinates and the
 country polygon are discarded. Public map colour and opacity step through a
-logarithmic scale capped at 150 detections per cell for the archive and 30 for
+logarithmic scale capped at 500 detections per cell for the archive and 30 for
 the week.
 
 To refresh locally, run `uv run --python 3.12 apps/site/scripts/live.py` from
@@ -122,3 +122,17 @@ Source → GitHub Actions**, then runs **Public site** from the Actions tab. The
 workflow builds with `SITE_BASE=/open-fimra/` and publishes the static output to
 the `github-pages` environment. It uses GitHub's built-in Pages permissions and
 requires no API keys or configured secrets.
+
+## Product media and browser checks
+
+The tour captures use the project's seeded demo workspace and synthetic replay.
+The phone shows the Flutter browser test build in a device frame. Each silent
+clip records a short sequence of real UI states and plays on request. Original
+screenshots and review captures are kept outside the repository. The site ships
+compressed WebP stills and WebM clips only.
+
+To check the published path locally, install the locked site dependencies,
+build with `SITE_BASE=/open-fimra/`, install Chromium with
+`pnpm exec playwright install chromium`, and run `pnpm test:browser` from
+`apps/site`. Set `SITE_CAPTURES` to an outside directory to save chapter
+captures while running the checks.

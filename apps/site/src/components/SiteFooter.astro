@@ -1,0 +1,24 @@
+---
+import { asset } from "../lib/paths";
+import { blackMarble, firms, source, wc } from "../lib/credits";
+import Brand from "./Brand.astro";
+---
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <Brand href={asset("")} lazy />
+      <p>Fire Information for Monitoring, Reporting and Analysis.</p>
+      <div class="footer-links">
+        <a href={asset("methods/")}>Data and methods</a>
+        <a href={asset("#open-source")}>Independence</a>
+        <a href={source}>Source</a>
+        <a href={source + "/blob/main/LICENSE"}>AGPL‑3.0</a>
+      </div>
+    </div>
+    <div>
+      <h2 class="mono">Data and imagery credits</h2>
+      <p>We acknowledge the use of data and imagery from <a href={firms}>LANCE FIRMS</a> operated by NASA’s Earth Science Data and Information System (ESDIS).</p>
+      <p><a href={wc}>ESA WorldCover 2021 v200</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), <a href={blackMarble}>NASA Black Marble</a>, <a href="https://www.earthdata.nasa.gov/data/projects/gibs">NASA Blue Marble / GIBS</a>, <a href="https://www.naturalearthdata.com/">Natural Earth</a>, and <a href="https://celestrak.org/">CelesTrak</a>. Contains modified <a href="https://sentinels.copernicus.eu/web/sentinel/terms-conditions">Copernicus Sentinel data</a> 2026.</p>
+    </div>
+  </div>
+</footer>

@@ -1,9 +1,9 @@
+import { heat, seasonHeat } from "./heat";
 import { detections } from "./detections";
 
 const fmt = new Intl.NumberFormat("en-IN");
 const svgNS = "http://www.w3.org/2000/svg";
 const sum = (counts: number[]) => counts.reduce((a, b) => a + b, 0);
-const heat = (count: number) => count >= 150 ? "#ffe0ae" : count >= 45 ? "#ffb69b" : count >= 10 ? "#e87f77" : "#b25765";
 
 export async function initSeasonMap() {
   const map = document.querySelector<SVGSVGElement>("#hex-map")!;
@@ -55,7 +55,7 @@ export async function initSeasonMap() {
       cell.count = count;
       if (!count) return false;
       total += count;
-      cell.outline.setAttribute("fill", heat(count));
+      cell.outline.setAttribute("fill", heat(count, seasonHeat));
       nodes.append(cell.outline);
       return true;
     });

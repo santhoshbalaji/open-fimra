@@ -1,0 +1,26 @@
+---
+import tokens from "../../../../docs/design-system/tokens.json";
+import { asset } from "../lib/paths";
+import "../site.css";
+
+interface Props { title: string; description: string; }
+const { title, description } = Astro.props;
+const palette = (mode: "light" | "dark") => Object.entries(tokens.primitives.palette[mode])
+  .map(([key, value]) => `--${key}:${value}`).join(";");
+const theme = `:root{${palette("light")};--heat:#934231;color-scheme:light;--page:${tokens.web.pageMaxPx}px;--focus-width:${tokens.primitives.focusPx.width}px;--focus-offset:${tokens.primitives.focusPx.offset}px;--touch:${tokens.density.touchTargetMinPx.web}px}
+:root[data-theme=dark]{${palette("dark")};--heat:#ffab8f;color-scheme:dark}
+@media(prefers-color-scheme:dark){:root:not([data-theme]){${palette("dark")};--heat:#ffab8f;color-scheme:dark}}`;
+---
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content={description} />
+<title>{title}</title>
+<link rel="icon" href={asset("media/icon.svg")} type="image/svg+xml" />
+<noscript><style is:inline>.map-controls[hidden],.month-strip[hidden],.theme-selector{display:none!important}</style></noscript>
+<style is:inline set:html={theme}></style>
+<script is:inline>
+  try {
+    const theme = localStorage.getItem("fimra-site-theme");
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  } catch {}
+</script>

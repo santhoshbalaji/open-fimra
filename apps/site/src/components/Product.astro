@@ -1,0 +1,69 @@
+---
+import { asset } from "../lib/paths";
+import { source } from "../lib/credits";
+
+const tours = [
+  {
+    id: "monitor",
+    title: "Monitor and route",
+    summary: "Match FIRMS detections against the forest and beat layers a department publishes. Open Alert #11 to see Beat 05’s assignment, the final report step and the alert’s history.",
+    planned: "FSI and Bhuvan feed connectors.",
+    alt: "The synthetic alert queue, with beat assignments and the next action for each alert.",
+    caption: "Alert queue · Synthetic demo",
+    width: 1120, height: 704,
+  },
+  {
+    id: "review",
+    title: "Verify and review",
+    summary: "Alert #11 keeps the same reference on the field phone. Officers with the required role can save a report offline. The device syncs when it reconnects, and a reviewer can approve the report or return it for correction.",
+    alt: "The field app shows the synthetic Alert #11, its final report step and the timeline.",
+    caption: "Field app · Browser build in an Android frame · Synthetic demo",
+    width: 390, height: 740,
+  },
+  {
+    id: "analyse",
+    title: "Analyse and export",
+    summary: "Use the dashboard to track detections and response in the units you can see. Export permitted records for GIS or spreadsheets in formats including GeoPackage, GeoJSON, CSV and Excel.",
+    planned: "Analysis across thematic layers and reusable configuration packs.",
+    alt: "The dashboard shows synthetic totals for detections, active alerts and reports, followed by a breakdown by forest class.",
+    caption: "Dashboard · Synthetic demo",
+    width: 1120, height: 704,
+  },
+];
+---
+<section id="product" class="chapter product-chapter" aria-labelledby="product-title">
+  <div class="wrap">
+    <div class="chapter-intro">
+      <span class="eyebrow mono"><span class="chapter-index">07</span> Product tour</span>
+      <h2 id="product-title">What Open FIMRA does.</h2>
+      <p>Follow an alert from the operations desk to the field and back. These examples run on the project’s synthetic demo.</p>
+    </div>
+    <ol class="product-tour">
+      {tours.map(tour => <li class:list={["tour", tour.id === "review" && "tour-phone"]}>
+        <div class="tour-copy">
+          <p class="mono">Built · Early development</p>
+          <h3>{tour.title}</h3>
+          <p>{tour.summary}</p>
+          {tour.planned && <p class="tour-planned"><strong>Planned</strong> {tour.planned}</p>}
+        </div>
+        <figure class="tour-figure">
+          <div class="device-mat">
+            <div class="device-frame">
+              <div class="device-bar" aria-hidden="true">{tour.id === "review" ? <i></i> : <><i></i><i></i><i></i></>}</div>
+              <div class="device-content">
+                <img loading="lazy" decoding="async" width={tour.width} height={tour.height} src={asset(`media/tour/${tour.id}.webp`)} alt={tour.alt} />
+                <video hidden muted loop playsinline preload="none" width={tour.width} height={tour.height} data-src={asset(`media/tour/${tour.id}.webm`)} aria-label={tour.alt}></video>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            <span class="mono">{tour.caption}</span>
+            <button class="clip-toggle" type="button" hidden aria-label={`Play clip (${tour.title.toLowerCase()})`}><span data-clip-label>Play clip</span> <span data-clip-icon aria-hidden="true">▶</span></button>
+            <span class="sr-only" role="status"></span>
+          </figcaption>
+        </figure>
+      </li>)}
+    </ol>
+    <a class="text-link" href={source + "/blob/main/PLAN.md#10-roadmap"}>Read the roadmap <span aria-hidden="true">↗</span></a>
+  </div>
+</section>

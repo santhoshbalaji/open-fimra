@@ -22,14 +22,23 @@ upcoming.addEventListener("keydown", event => {
   }
 });
 
+upcoming.querySelectorAll("a").forEach(link => link.addEventListener("click", () => {
+  upcoming.open = false;
+  const target = document.getElementById(link.hash.slice(1));
+  target?.setAttribute("tabindex", "-1");
+  target?.focus({ preventScroll: true });
+}));
+
 const header = document.querySelector<HTMLElement>(".site-header")!;
 new ResizeObserver(() => root.style.setProperty("--header-height", `${header.offsetHeight}px`)).observe(header);
 
-const scale = document.querySelector<HTMLElement>("#scale")!;
 const space = document.querySelector<HTMLElement>("#space")!;
-const methods = document.querySelector<HTMLElement>("#methods")!;
 const story = space.querySelector<HTMLElement>(".space-story")!;
-const links = [...document.querySelectorAll<HTMLAnchorElement>(".chapter-nav > a")];
+const links = [...document.querySelectorAll<HTMLAnchorElement>(".chapter-nav a[href^='#']")];
+const chapters = links.flatMap(link => {
+  const section = document.getElementById(link.hash.slice(1));
+  return section ? [{ link, section }] : [];
+});
 const spaceFrames = [...story.querySelectorAll<HTMLElement>("[data-frame]")];
 const steps = [...story.querySelectorAll<HTMLElement>("[data-step]")];
 const spaceCount = document.querySelector<HTMLElement>("#space-count")!;
@@ -41,12 +50,9 @@ function update() {
   const length = root.scrollHeight - window.innerHeight;
   root.style.setProperty("--progress", String(length > 0 ? window.scrollY / length : 0));
   const edge = header.offsetHeight + 36;
-  const chapter = methods.getBoundingClientRect().top <= edge ? -1 :
-    space.getBoundingClientRect().top <= edge ? 1 :
-    scale.getBoundingClientRect().top <= edge ? 0 : -1;
-
-  links.forEach((link, index) => {
-    if (index === chapter) link.setAttribute("aria-current", "location");
+  const activeChapter = chapters.findLast(({section}) => section.getBoundingClientRect().top <= edge);
+  links.forEach(link => {
+    if (link === activeChapter?.link) link.setAttribute("aria-current", "location");
     else link.removeAttribute("aria-current");
   });
 
@@ -135,6 +141,9 @@ toggle.addEventListener("click", async () => {
   toggle.setAttribute("aria-disabled", "true");
   toggle.textContent = "Loading…";
   try {
+    const context = document.createElement("canvas").getContext("webgl2");
+    if (!context) throw new Error("WebGL 2 unavailable");
+    context.getExtension("WEBGL_lose_context")?.loseContext();
     const { initGlobe } = await import("./globe");
     globe = await initGlobe(visual);
     if (!motion.matches) setPlaying(true);
@@ -147,3 +156,23 @@ toggle.addEventListener("click", async () => {
     toggle.removeAttribute("aria-disabled");
   }
 });
+
+const journeyObserver = new IntersectionObserver(entries => {
+  for (const entry of entries) entry.target.toggleAttribute("data-active", entry.isIntersecting);
+}, { rootMargin: "-22% 0px -25% 0px" });
+document.querySelectorAll("[data-journey-step]").forEach(step => journeyObserver.observe(step));
+
+const timestamp = document.querySelector<HTMLTimeElement>("[data-snapshot]");
+const stale = document.querySelector<HTMLElement>("[data-stale]");
+const ticker = document.querySelector<HTMLElement>("[data-ticker-age]");
+if (timestamp && stale && ticker) {
+  const updateAge = () => {
+    const hours = Math.max(0, Math.floor((Date.now() - Date.parse(timestamp.dateTime)) / 3_600_000));
+    const age = hours < 1 ? "under an hour ago" : hours < 48 ? `${hours} h ago` : `${Math.floor(hours / 24)} d ago`;
+    const isStale = hours >= 7 || stale.hasAttribute("data-refresh-failed");
+    ticker.textContent = `${isStale ? "Last available snapshot" : "Updated"} · ${age}`;
+    stale.hidden = !isStale;
+  };
+  updateAge();
+  window.setInterval(updateAge, 60_000);
+}
