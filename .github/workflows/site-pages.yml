@@ -1,0 +1,90 @@
+name: Public site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/site/**
+      - docs/design-system/tokens.json
+      - .github/workflows/site-pages.yml
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-site-pages
+  cancel-in-progress: false
+
+env:
+  SITE_BASE: /open-fimra/
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1 # v4.2.0
+        with:
+          package_json_file: apps/site/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.3'
+          cache: pnpm
+          cache-dependency-path: apps/site/pnpm-lock.yaml
+      - name: Restore the latest successful weekly snapshot
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: apps/site/public/data/live.json
+          key: site-live-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: site-live-v1-
+      - name: Update the weekly snapshot
+        id: live
+        continue-on-error: true
+        timeout-minutes: 10
+        run: uv run --python 3.12 apps/site/scripts/live.py
+      - name: Retain the previous snapshot when refresh fails
+        if: steps.live.outcome == 'failure'
+        env:
+          PAGES_OWNER: ${{ github.repository_owner }}
+        run: |
+          downloaded="$(mktemp)"
+          if curl --fail --location --silent --show-error --max-time 15 \
+            "https://${PAGES_OWNER,,}.github.io${SITE_BASE}data/live.json" -o "$downloaded"; then
+            node apps/site/scripts/restore-live.mjs "$downloaded"
+          fi
+          rm -f "$downloaded"
+          echo 'SITE_LIVE_FALLBACK=1' >> "$GITHUB_ENV"
+          echo '::warning::The weekly refresh failed. The site will retain its last available snapshot with the original date.'
+      - name: Save the updated snapshot
+        if: steps.live.outcome == 'success'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: apps/site/public/data/live.json
+          key: site-live-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - run: pnpm --dir apps/site install --frozen-lockfile
+      - run: pnpm --dir apps/site build
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: apps/site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: publish
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
