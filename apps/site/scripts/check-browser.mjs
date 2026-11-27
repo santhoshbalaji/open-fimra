@@ -30,9 +30,13 @@ async function selectMarch(page) {
   // The stage is lazy-loaded when it intersects the viewport. Visiting the
   // chapter heading alone can leave the stage and its hidden controls below it.
   await page.locator("#scale .map-stage").scrollIntoViewIfNeeded();
-  await page.getByRole("combobox", { name: "Detection month" }).selectOption("4");
-  assert.equal(await page.locator("#map-period").innerText(), "March 2026");
-  assert.equal(await page.locator("#month-count").innerText(), "71,296 detections");
+  const picker = page.getByRole("combobox", { name: "Detection month" });
+  await picker.waitFor();
+  await picker.scrollIntoViewIfNeeded();
+  await picker.selectOption("4");
+  // These nodes can be outside the rendered part of a content-visibility chapter.
+  assert.equal(await page.locator("#map-period").textContent(), "March 2026");
+  assert.equal(await page.locator("#month-count").textContent(), "71,296 detections");
 }
 
 async function transfers(page) {
@@ -115,7 +119,7 @@ try {
       }
       await page.locator("#hex-map").focus();
       await page.keyboard.press("ArrowRight");
-      assert.match(await page.locator("#cell-status").innerText(), /cell centre/);
+      assert.match(await page.locator("#cell-status").textContent(), /cell centre/);
       await load(page, url + "methods/");
       await axe(page, `methods ${size} ${colorScheme}`);
       assert.deepEqual(issues, []);
