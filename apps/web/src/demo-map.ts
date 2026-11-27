@@ -14,7 +14,7 @@ import { StatusBadge } from './ui/status-badge';
 import { SidePanel } from './ui/side-panel';
 import { StateRegion, type DataState } from './ui/state-region';
 import { GeoJSONSource, Map as LibreMap, setWorkerUrl, type VectorTileSource } from 'maplibre-gl';
-import type { FeatureCollection, Point } from 'geojson';
+import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DashboardFilters } from './dashboard-filters';
 import { Workflow } from './workflow';
@@ -33,11 +33,24 @@ import { WorkspaceService } from './workspace';
 import { Icon } from './ui/icon';
 import { DataTable, type TableColumn } from './ui/data-table';
 import { workspaceFormat } from './workspace-format';
+import { MeteosatAttribution } from './meteosat-attribution';
 
 const detectionGroup: MapLayerGroup = { id: 'detections', label: 'Fire detections', minZoom: 0 };
+const meteosatGroup: MapLayerGroup = { id: 'possible-fires', label: 'Possible fire · Meteosat · ~4 km', minZoom: 0 };
 const incidentGroup: MapLayerGroup = {
   id: 'reported-incidents', label: 'Reported incidents', minZoom: 0, swatch: { kind: 'incident' }
 };
+interface WatchProperties {
+  id: string;
+  observedAt: string;
+  alertId: string | null;
+  frpMW: number | null;
+  confidence: string | null;
+  candidateBeats: { path: string; code: string; name: string }[];
+}
+type Watch = Feature<Polygon, WatchProperties>;
+type Watches = FeatureCollection<Polygon, WatchProperties>;
+
 interface AssignmentUnit { id: string; name: string; level: string; parent: string | null; suggested: boolean }
 
 type TileSource = 'reference' | 'detections';
@@ -54,7 +67,7 @@ function pointCollection(points: [number, number][]): FeatureCollection<Point> {
   styleUrl: './demo-map.css',
   // The map library's class names are global.
   encapsulation: ViewEncapsulation.None,
-  imports: [HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, NgTemplateOutlet, DataTable, Workflow, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, SidePanel, StateRegion, RouterLink],
+  imports: [MeteosatAttribution, HlmButtonImports, HlmDialogImports, HlmFieldImports, HlmSelectImports, NgTemplateOutlet, DataTable, Workflow, StatusBadge, ExportDialog, AlertReports, ShellListScroll, Icon, SidePanel, StateRegion, RouterLink],
   providers: [AlertQueue],
   templateUrl: './demo-map.html'
 })
@@ -107,6 +120,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   private readonly geographyRetries = signal(0);
   private readonly incidentRetries = signal(0);
   private readonly detectionsDrawn = signal(false);
+  private readonly watchInView = signal(false);
   private readonly incidentPoints = signal<[number, number][]>([]);
   readonly boundary = computed(() => {
     const info = this.geography()?.info;
@@ -140,10 +154,18 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     }
     if (!this.showDetections() || this.error()) return { kind: 'ready' };
     if (!this.detectionsDrawn()) return { kind: 'loading', heading: translate('Loading fire detections') };
-    return this.visible().length ? { kind: 'ready' } :
+    return this.visible().length || (this.showWatches() && this.watchInView()) ? { kind: 'ready' } :
       { kind: 'empty', heading: translate('No detections in view'), detail: translate('Pan the map or change the filters.') };
   });
   readonly queue = inject(AlertQueue);
+  protected readonly watches = signal<Watches>({ type: 'FeatureCollection', features: [] });
+  protected readonly watchFailed = signal(false);
+  protected readonly selectedWatch = signal<Watch | null>(null);
+  protected readonly meteosatLayer = meteosatGroup;
+  protected readonly showWatches = computed(() => this.layerEnabled(meteosatGroup));
+  protected readonly watchBeats = (watch: Watch) => watch.properties.candidateBeats.map(beat => beat.name).join(', ');
+  protected readonly watchStrength = (value: number) => workspaceFormat.number(value);
+
   readonly queueLabels = queueLabels;
   readonly sortOptions = Object.entries(alertSortLabels);
   readonly unitName = (unit: { name: string }) => unit.name;
@@ -257,6 +279,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
   });
   private map?: LibreMap;
   private fittedWorkspace?: string;
+  private followedWatch = '';
   private referenceIds: string[] = [];
   private referenceUrl?: string;
   private readonly referenceTileUrl = computed(() => {
@@ -319,6 +342,39 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       });
       onCleanup(() => request.unsubscribe());
     });
+    effect(onCleanup => {
+      const endpoint = this.exportEndpoint();
+      const hours = this.hours();
+      const canReview = this.queue.reviewAllowed();
+      this.watches.set({ type: 'FeatureCollection', features: [] });
+      this.selectedWatch.set(null);
+      this.watchFailed.set(false);
+      if (!endpoint || !canReview) return;
+      const request = timer(0, 60_000).pipe(exhaustMap(() =>
+        this.http.get<Watches>(endpoint + '/possible-fires', { params: { hours } }).pipe(catchError(err => {
+          if (err.status === 401) this.auth.sessionEnded();
+          else this.watchFailed.set(true);
+          return EMPTY;
+        }))
+      )).subscribe(watches => {
+        this.watches.set(watches);
+        this.watchFailed.set(false);
+        const selected = this.selectedWatch();
+        if (selected) this.selectedWatch.set(watches.features.find(watch => watch.id === selected.id) ?? null);
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+    effect(() => {
+      const watches = this.watches();
+      const visible = this.showWatches();
+      const selected = this.selectedWatch();
+      if (!this.ready() || !this.map) return;
+      this.map.getSource<GeoJSONSource>('possible-fires')?.setData(watches);
+      this.setVisibility('possible-fire-fill', visible);
+      this.setVisibility('possible-fire-outline', visible);
+      this.map.setPaintProperty('possible-fire-outline', 'line-width',
+        ['case', ['==', ['get', 'id'], selected?.properties.id ?? ''], 4, 2]);
+    });
     effect(() => {
       const geography = this.geography();
       const detection = this.detectionId();
@@ -331,6 +387,20 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       else if (this.fittedWorkspace !== geography.endpoint) untracked(() => this.fitBoundary());
       this.restoredDetection = detection;
       this.fittedWorkspace = geography.endpoint;
+    });
+    effect(() => {
+      const id = this.navigation.path() === '/monitor/map' ? recordId(this.navigation.query().get('possibleFire')) : '';
+      const key = id && this.workspace.current()?.slug + ':' + id;
+      if (!key) {
+        this.followedWatch = '';
+        return;
+      }
+      if (this.followedWatch === key || !this.ready() || (!this.geography() && !this.geographyError())) return;
+      const watch = this.watches().features.find(item => item.properties.id === id);
+      if (watch) {
+        this.followedWatch = key;
+        untracked(() => this.focusWatch(watch));
+      }
     });
     effect(() => {
       const theme = this.appearance.theme();
@@ -414,7 +484,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       }
       if (untracked(this.queue.linked)?.id !== id) this.queue.select(null);
       this.queue.revision();
-      const request = this.http.get<AlertRow>(endpoint + '/' + id).subscribe({
+      const request = this.http.get<AlertRow>(endpoint + '/' + id, { params: { includePossibleFires: true } }).subscribe({
         next: row => this.queue.selectLinked(row),
         error: err => {
           if (err.status === 401) this.auth.sessionEnded();
@@ -441,10 +511,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       if (!id || !endpoint) return;
       const request = forkJoin({
         incident: this.http.get<IncidentRow>(endpoint + '/incidents/' + id),
-        alerts: this.http.get<{ items: AlertRow[] }>(endpoint + '/alerts', { params: { incident: id, limit: 200 } })
+        alerts: this.http.get<{ items: AlertRow[] }>(endpoint + '/alerts', { params: { incident: id, limit: 200, includePossibleFires: true } })
       }).subscribe({
         next: ({ incident, alerts }) => this.incidentFocus.set({
-          id, bounds: incident.bounds, points: alerts.items.map(alert => [alert.longitude, alert.latitude])
+          id, bounds: incident.bounds, points: alerts.items.flatMap(alert =>
+            alert.longitude == null || alert.latitude == null ? [] : [[alert.longitude, alert.latitude]])
         }),
         error: err => {
           if (err.status === 401) this.auth.sessionEnded();
@@ -456,7 +527,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     effect(() => {
       const focus = this.incidentFocus();
       if (!this.ready() || !this.map) return;
-      if (focus?.points.length) {
+      if (focus?.points.length && focus.bounds) {
         const [west, south, east, north] = focus.bounds;
         const padding = Math.min(80, this.container().nativeElement.clientWidth * 0.1);
         this.map.fitBounds([[west, south], [east, north]], { padding, maxZoom: 13, duration: 0 });
@@ -479,6 +550,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         expand(result => result.nextCursor ? page(result.nextCursor) : EMPTY),
         reduce((points, result) => {
           for (const item of result.items) {
+            if (!item.bounds) continue;
             const [west, south, east, north] = item.bounds;
             points.push([(west + east) / 2, (south + north) / 2]);
           }
@@ -536,7 +608,7 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       for (const layer of group.layers) {
         map.addLayer({
           ...layer, layout: { ...layer.layout, visibility: this.layerEnabled(group) ? 'visible' : 'none' }
-        } as typeof layer, 'selected-detection-edge');
+        } as typeof layer, 'possible-fire-fill');
         this.referenceIds.push(layer.id);
       }
     }
@@ -548,6 +620,8 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       map.setPaintProperty('selected-detection-edge', 'circle-stroke-color', mapColours[theme].ageOutline);
       map.setPaintProperty('selected-detection', 'circle-stroke-color', mapColours[theme].selection);
       map.setPaintProperty('incident-members', 'circle-stroke-color', mapColours[theme].selection);
+      map.setPaintProperty('possible-fire-fill', 'fill-color', mapColours[theme].selection);
+      map.setPaintProperty('possible-fire-outline', 'line-color', mapColours[theme].selection);
       map.setLayoutProperty('reported-incidents', 'icon-image', this.incidentIcon(map, theme));
     }
     this.appliedTheme = theme;
@@ -622,9 +696,14 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         else this.error.set(translate('The map display encountered an error. Reload to try again.'));
       });
       map.on('click', event => {
-        if (!this.showDetections() || !map.getLayer('detections')) return;
-        const [feature] = map.queryRenderedFeatures(event.point, { layers: ['detections'] });
-        if (!feature) return;
+        const [feature] = this.showDetections() && map.getLayer('detections')
+          ? map.queryRenderedFeatures(event.point, { layers: ['detections'] }) : [];
+        if (!feature) {
+          const [shape] = this.showWatches() && map.getLayer('possible-fire-fill')
+            ? map.queryRenderedFeatures(event.point, { layers: ['possible-fire-fill'] }) : [];
+          this.selectedWatch.set(this.watches().features.find(watch => watch.id === shape?.id) ?? null);
+          return;
+        }
         const point = readDetection(feature);
         const id = String(point.id);
         if (!this.visible().some(row => String(row.id) === id)) this.visible.update(rows => [point, ...rows]);
@@ -632,6 +711,11 @@ export class DemoMap implements AfterViewInit, OnDestroy {
         this.openDetection(id);
       });
       map.on('idle', () => {
+        if (this.showWatches() && this.watches().features.length && map.getLayer('possible-fire-fill')) {
+          this.watchInView.set(map.queryRenderedFeatures({ layers: ['possible-fire-fill'] }).length > 0);
+        } else {
+          this.watchInView.set(false);
+        }
         if (!this.showDetections() || !map.getLayer('detections')) return;
         const points = new Map<string, Detection>();
         for (const feature of map.queryRenderedFeatures({ layers: ['detections'] })) {
@@ -643,6 +727,13 @@ export class DemoMap implements AfterViewInit, OnDestroy {
       });
       map.once('load', () => {
         const theme = this.appearance.theme();
+        map.addSource('possible-fires', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ id: 'possible-fire-fill', type: 'fill', source: 'possible-fires',
+          paint: { 'fill-color': mapColours[theme].selection, 'fill-opacity': 0.22 }
+        });
+        map.addLayer({ id: 'possible-fire-outline', type: 'line', source: 'possible-fires',
+          paint: { 'line-color': mapColours[theme].selection, 'line-width': 2, 'line-dasharray': [2, 1] }
+        });
         map.addSource('selection', { type: 'geojson', data: pointCollection([]) });
         map.addSource('incident-members', { type: 'geojson', data: pointCollection([]) });
         map.addSource('reported-incidents', { type: 'geojson', data: pointCollection([]) });
@@ -695,10 +786,24 @@ export class DemoMap implements AfterViewInit, OnDestroy {
     } else map.refreshTiles('detections');
   }
 
+  protected focusWatch(watch: Watch): void {
+    this.selectedWatch.set(watch);
+    if (!this.showWatches()) this.toggleLayer(meteosatGroup, true);
+    const ring = watch.geometry.coordinates[0];
+    const lons = ring.map(coordinate => coordinate[0]);
+    const lats = ring.map(coordinate => coordinate[1]);
+    this.map?.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+      { maxZoom: 13, padding: 45, duration: 0 });
+  }
+
   private centerSelection(): void {
     const point = this.selected();
-    if (this.selectedId && !this.movedInDetails && point?.longitude != null && point.latitude != null) {
+    if (!this.selectedId || this.movedInDetails || !point) return;
+    if (point.longitude != null && point.latitude != null) {
       this.map?.jumpTo({ center: [point.longitude, point.latitude] });
+    } else if (point.source === 'lsasaf') {
+      const watch = this.watches().features.find(watch => watch.properties.alertId === this.queue.pinned()?.id);
+      if (watch) this.focusWatch(watch);
     }
   }
 

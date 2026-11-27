@@ -77,6 +77,7 @@ func (a api) handler(auth authenticator, origins string) http.Handler {
 	authed.Post("/api/v1/notifications/preferences", a.notificationPreferences)
 	authed.Get("/api/v1/workspaces/{slug}/notification-rules", a.notificationRules)
 	authed.Post("/api/v1/workspaces/{slug}/notification-rules", a.notificationRules)
+	authed.Get("/api/v1/workspaces/{slug}/possible-fires", a.lsasafWatches)
 	authed.Get("/api/v1/workspaces/{slug}/alerts", a.alerts)
 	authed.Get("/api/v1/workspaces/{slug}/alerts/{id}", a.alerts)
 	authed.Get("/api/v1/workspaces/{slug}/alerts/{id}/assignment", a.alertAssignment)

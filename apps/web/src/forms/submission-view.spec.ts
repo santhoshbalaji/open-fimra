@@ -41,7 +41,7 @@ describe('Report and approval', () => {
     fixture.detectChanges();
     http.expectOne(workspace + '/submissions/' + submission.id).flush(submission);
     fixture.detectChanges();
-    http.expectOne(workspace + '/alerts/' + submission.alertId).flush({ beat_name: 'Beat 01', range_name: 'Demo Range' });
+    http.expectOne(workspace + '/alerts/' + submission.alertId + '?includePossibleFires=true').flush({ beat_name: 'Beat 01', range_name: 'Demo Range' });
     // The report shows with the version it was filled in on.
     http.expectOne(workspace + '/forms/' + submission.form + '/versions/' + submission.version).flush({
       form: submission.form, version: 1, status: 'published',
@@ -126,7 +126,7 @@ describe('Report and approval', () => {
       ...report, id: 'demo-newer-report', version: 2, values: { cause: 'lightning' }
     });
     fixture.detectChanges();
-    http.expectOne(workspace + '/alerts/' + report.alertId).flush({ beat_name: 'Beat 01' });
+    http.expectOne(workspace + '/alerts/' + report.alertId + '?includePossibleFires=true').flush({ beat_name: 'Beat 01' });
     http.expectOne(workspace + '/forms/first-report/versions/2').flush({ definition: latest });
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -137,7 +137,7 @@ describe('Report and approval', () => {
     fixture.detectChanges();
     http.expectOne(workspace + '/submissions/' + report.id).flush({ ...report, values: { cause: 'lightning', crew: 4 } });
     fixture.detectChanges();
-    http.expectOne(workspace + '/alerts/' + report.alertId).flush({ beat_name: 'Beat 01' });
+    http.expectOne(workspace + '/alerts/' + report.alertId + '?includePossibleFires=true').flush({ beat_name: 'Beat 01' });
     http.expectOne(workspace + '/forms/first-report/versions/1').flush({ definition: original });
     fixture.detectChanges();
     expect(el.textContent).toContain('Original report');

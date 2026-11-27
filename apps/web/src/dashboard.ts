@@ -1,3 +1,4 @@
+import { MeteosatAttribution } from './meteosat-attribution';
 import { translate } from './language';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
@@ -47,6 +48,7 @@ interface Feed {
   lastSuccessAt: string | null;
   latestObservationAt: string | null;
   latency?: FeedLatency[];
+  scans?: { latestValidAt: string | null; missingLast24h: number; publication: { p50Seconds: number | null } };
 }
 
 interface Summary {
@@ -79,7 +81,7 @@ const milestones = [
 
 @Component({
   selector: 'fimra-dashboard',
-  imports: [ClassChart, DailyCoverageLink, FilterBar, FilterControls, FilterFields, HlmCardImports, HlmTableImports, PageHeader, StateRegion, StatTile, StatusBadge],
+  imports: [MeteosatAttribution, ClassChart, DailyCoverageLink, FilterBar, FilterControls, FilterFields, HlmCardImports, HlmTableImports, PageHeader, StateRegion, StatTile, StatusBadge],
   templateUrl: './dashboard.html'
 })
 export class Dashboard {

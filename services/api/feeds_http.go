@@ -38,20 +38,35 @@ type firstSeenJSON struct {
 	P95Seconds *float64 `json:"p95Seconds"`
 }
 
+type scanHealthJSON struct {
+	LatestValidAt  *time.Time    `json:"latestValidAt"`
+	MissingLast24h int           `json:"missingLast24h"`
+	Publication    firstSeenJSON `json:"publication"`
+}
+
+func (f feedFacts) scanHealth() *scanHealthJSON {
+	if f.Source != "lsasaf" {
+		return nil
+	}
+	return &scanHealthJSON{LatestValidAt: f.LatestScanAt, MissingLast24h: f.MissingScans,
+		Publication: firstSeenJSON{Records: f.ListedScans, P50Seconds: f.ScanP50Seconds, P95Seconds: f.ScanP95Seconds}}
+}
+
 type feedJSON struct {
-	Source              string         `json:"source"`
-	Product             string         `json:"product"`
-	Status              string         `json:"status"`
-	LastRunAt           time.Time      `json:"lastRunAt"`
-	LastRunStatus       string         `json:"lastRunStatus"`
-	LastError           *string        `json:"lastError"`
-	LastSuccessAt       *time.Time     `json:"lastSuccessAt"`
-	LatestObservationAt *time.Time     `json:"latestObservationAt"`
-	DelaySeconds        *int64         `json:"delaySeconds"`
-	FailuresLast24h     int            `json:"failuresLast24h"`
-	Processing          processingJSON `json:"processing"`
-	FirstSeen           firstSeenJSON  `json:"firstSeen"`
-	Latency             []feedLatency  `json:"latency"`
+	Source              string          `json:"source"`
+	Product             string          `json:"product"`
+	Status              string          `json:"status"`
+	LastRunAt           time.Time       `json:"lastRunAt"`
+	LastRunStatus       string          `json:"lastRunStatus"`
+	LastError           *string         `json:"lastError"`
+	LastSuccessAt       *time.Time      `json:"lastSuccessAt"`
+	LatestObservationAt *time.Time      `json:"latestObservationAt"`
+	DelaySeconds        *int64          `json:"delaySeconds"`
+	FailuresLast24h     int             `json:"failuresLast24h"`
+	Processing          processingJSON  `json:"processing"`
+	FirstSeen           firstSeenJSON   `json:"firstSeen"`
+	Latency             []feedLatency   `json:"latency"`
+	Scans               *scanHealthJSON `json:"scans,omitempty"`
 }
 
 type feedAlertJSON struct {
@@ -155,6 +170,7 @@ func (a api) feeds(w http.ResponseWriter, r *http.Request) {
 				Records: f.ProcessedRecords, P95Seconds: f.ProcessingP95Seconds, WithinTwentyMinutes: f.WithinGate,
 			},
 		}
+		feed.Scans = f.scanHealth()
 		if f.LatestObservedAt != nil {
 			delay := int64(now.Sub(*f.LatestObservedAt).Seconds())
 			feed.DelaySeconds = &delay

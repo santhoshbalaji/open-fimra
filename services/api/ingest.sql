@@ -86,14 +86,22 @@ matched AS (
     ON CONFLICT DO NOTHING
     RETURNING detection_matches AS match
 ),
+routes AS MATERIALIZED (
+    SELECT match, route.*,
+           CASE WHEN $2::text IN ('firms', 'noaa_nodd') THEN
+               lsasaf_confirm(match, d.geom, route.queue, route.hierarchy_id, route.unit_path)
+           END AS existing_alert
+    FROM matched CROSS JOIN LATERAL alert_route(match) route
+    JOIN inserted d ON (d.id,d.observed_at) = ((match).detection_id,(match).observed_at)
+),
 routed AS (
     -- The alert insert trigger opens its workflow in this transaction.
     INSERT INTO alerts (workspace_id, detection_id, observed_at, hierarchy, queue, hierarchy_id, unit_path,
                         hierarchy_unit_paths, unit_paths, forest_class, triage_reason, layer_version_ids, boundary_snapshot)
-    SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, route.*,
+    SELECT (match).workspace_id, (match).detection_id, (match).observed_at, (match).hierarchy, queue, hierarchy_id, unit_path,
            (match).hierarchy_unit_paths, (match).unit_paths, (match).forest_class, (match).triage_reason,
            (match).layer_version_ids, (match).boundary_snapshot
-    FROM matched CROSS JOIN LATERAL alert_route(match) route
+    FROM routes WHERE existing_alert IS NULL
     ON CONFLICT DO NOTHING
 )
 SELECT (SELECT count(*) FROM inserted)::integer, (SELECT count(*) FROM matched)::integer,

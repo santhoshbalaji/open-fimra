@@ -29,7 +29,7 @@ points AS (
         SELECT key AS hierarchy, value AS levels FROM jsonb_each(m.hierarchy)
         ORDER BY (value ? 'beat') DESC, (value <> '{}'::jsonb) DESC, key LIMIT 1
     ) line ON true
-    WHERE d.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
+    WHERE d.source <> 'lsasaf' AND d.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.observed_at BETWEEN now() - make_interval(hours => $6) AND now()
       AND m.forest_class = ANY($7::text[])
       AND EXISTS (

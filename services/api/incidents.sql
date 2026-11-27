@@ -58,7 +58,8 @@ page AS (
              cursor_time DESC, id DESC LIMIT $11
 ),
 member_places AS (
-    SELECT m.*, ST_X(d.geom) AS longitude, ST_Y(d.geom) AS latitude,
+    SELECT m.*, CASE WHEN d.source <> 'lsasaf' THEN ST_X(d.geom) END AS longitude,
+           CASE WHEN d.source <> 'lsasaf' THEN ST_Y(d.geom) END AS latitude,
            line.levels #>> '{beat,name}' AS beat_name, line.levels #>> '{division,name}' AS division_name
     FROM members m JOIN page p ON p.id = m.incident_id
     JOIN detections d ON (d.id, d.observed_at) = (m.detection_id, m.observed_at)
@@ -89,7 +90,7 @@ details AS (
                 WHERE incident_id = p.id AND beat_name IS NOT NULL) AS beat_names,
            (SELECT COALESCE(jsonb_agg(DISTINCT division_name ORDER BY division_name), '[]') FROM member_places
                 WHERE incident_id = p.id AND division_name IS NOT NULL) AS division_names,
-           (SELECT jsonb_build_array(min(longitude), min(latitude), max(longitude), max(latitude))
+           (SELECT CASE WHEN count(longitude) > 0 THEN jsonb_build_array(min(longitude), min(latitude), max(longitude), max(latitude)) END
                 FROM member_places WHERE incident_id = p.id) AS bounds
     FROM page p JOIN incidents i ON i.id = p.id
     JOIN workflow_instances wi ON wi.incident_id = p.id

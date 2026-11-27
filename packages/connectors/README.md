@@ -46,3 +46,13 @@ The archived sample of 200 India-intersecting granules had a median publication 
 Contains modified Copernicus Sentinel data [year of observation]. Use the UTC year of the pixel for derived outputs. [Copernicus attribution guidance](https://documentation.dataspace.copernicus.eu/notebook-samples/sentinelhub/data_integration/ship_detection_and_ais_identification.html#attribution-licensing).
 
 See the [API guide](../../services/api/README.md#copernicus-sentinel-3-ingestion) for deployment and polling settings. Run `make cdse-test-integration` on a migrated database to exercise the fake catalogue and object store, catch-up, replay, incident grouping and feed health.
+
+## Meteosat-9 SEVIRI fire pixels
+
+The [Go connector](../../services/api/internal/lsasaf/) lists the authenticated LSA SAF UTC day directories and reads the gzip-compressed HDF5 **MSG-IODC FRP-PIXEL ListProduct**. The IODC service operates at 45.5°E and provides a nominal 15-minute scan cadence. The MIT-licensed [scigolib/hdf5 reader](https://github.com/scigolib/hdf5) reads the data without a native HDF5 runtime.
+
+The scan slot is checked against `IMAGE_ACQUISITION_TIME`. The native ID is the UTC slot plus `ABS_LINE` and `ABS_PIXEL`. The file's grid navigation yields four projected pixel corners. The supplied latitude and longitude check that navigation. Dataset scaling and missing-value attributes apply to FRP (MW), effective pixel area (km²), brightness (K) and the fire confidence fraction. The stored raw record retains packed values, the provider's scan quality flag, file name and processing metadata. This connector uses ListProduct detections and its overall scan quality flag. Full-disk cloud and per-pixel quality masks are in the separate QualityProduct. A missing or invalid scan is a gap. A valid empty scan counts toward the sequence but adds no fire observation.
+
+Credit **EUMETSAT LSA SAF**, MSG-IODC FRP-PIXEL (**Demonstration**), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Open FIMRA derives search footprints from the product grid. See the [product catalogue](https://lsa-saf.eumetsat.int/en/data/products/fire-products/) and [Wooster et al. (2015), doi:10.5194/acp-15-13217-2015](https://doi.org/10.5194/acp-15-13217-2015).
+
+Run `make lsasaf-test-integration` on a migrated worktree database to test the authenticated listing, late slots, valid empty scans, multi-beat footprints and promotion using [synthetic HDF5 fixtures](../../services/api/internal/lsasaf/testdata/). No account is needed for the test.

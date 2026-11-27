@@ -159,6 +159,9 @@ type feedFacts struct {
 	ProcessingP95Seconds, WithinGate            *float64
 	FirstSeenRecords                            int
 	FirstSeenP50Seconds, FirstSeenP95Seconds    *float64
+	LatestScanAt                                *time.Time
+	ListedScans, MissingScans                   int
+	ScanP50Seconds, ScanP95Seconds              *float64
 }
 
 // feedStatus applies the thresholds at now. Until a feed has had a success or
@@ -171,6 +174,20 @@ func feedStatus(f feedFacts, t feedThresholds, now time.Time) string {
 	}
 	if now.Sub(since) > t.FailingAfter {
 		return feedFailing
+	}
+	if f.Source == "lsasaf" {
+		latest := f.FirstRunAt
+		if f.LatestScanAt != nil {
+			latest = *f.LatestScanAt
+		}
+		switch age := now.Sub(latest); {
+		case age > 90*time.Minute:
+			return feedQuiet
+		case age > 45*time.Minute:
+			return feedDelayed
+		default:
+			return feedHealthy
+		}
 	}
 	observed := f.FirstRunAt
 	if f.LatestObservedAt != nil {
@@ -222,7 +239,8 @@ func loadFeedFacts(ctx context.Context, db feedDB, workspaceID *string, now time
 		err := row.Scan(&f.WorkspaceID, &f.WorkspaceSlug, &f.Settings, &f.Source, &f.Product, &f.FirstRunAt,
 			&f.LastRunAt, &f.LastRunStatus, &f.LastError, &f.LastSuccessAt, &f.LatestObservedAt,
 			&f.FailuresLast24h, &f.ProcessedRecords, &f.ProcessingP95Seconds, &f.WithinGate,
-			&f.FirstSeenRecords, &f.FirstSeenP50Seconds, &f.FirstSeenP95Seconds)
+			&f.FirstSeenRecords, &f.FirstSeenP50Seconds, &f.FirstSeenP95Seconds,
+			&f.LatestScanAt, &f.ListedScans, &f.ScanP50Seconds, &f.ScanP95Seconds, &f.MissingScans)
 		return f, err
 	})
 	if err != nil {

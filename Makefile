@@ -87,6 +87,13 @@ api-run: export FIMRA_CDSE_S3_ACCESS_KEY := $(FIMRA_CDSE_S3_ACCESS_KEY)
 api-run: export FIMRA_CDSE_S3_ACCESS_KEY_FILE := $(FIMRA_CDSE_S3_ACCESS_KEY_FILE)
 api-run: export FIMRA_CDSE_S3_SECRET_KEY := $(FIMRA_CDSE_S3_SECRET_KEY)
 api-run: export FIMRA_CDSE_S3_SECRET_KEY_FILE := $(FIMRA_CDSE_S3_SECRET_KEY_FILE)
+api-run: export FIMRA_LSASAF_ENABLED := $(FIMRA_LSASAF_ENABLED)
+api-run: export FIMRA_LSASAF_POLL_INTERVAL := $(FIMRA_LSASAF_POLL_INTERVAL)
+api-run: export FIMRA_LSASAF_USERNAME := $(FIMRA_LSASAF_USERNAME)
+api-run: export FIMRA_LSASAF_PASSWORD := $(FIMRA_LSASAF_PASSWORD)
+api-run: export FIMRA_LSASAF_PASSWORD_FILE := $(FIMRA_LSASAF_PASSWORD_FILE)
+api-run: export FIMRA_LSASAF_PERSISTENCE_HITS := $(FIMRA_LSASAF_PERSISTENCE_HITS)
+api-run: export FIMRA_LSASAF_PERSISTENCE_SCANS := $(FIMRA_LSASAF_PERSISTENCE_SCANS)
 api-run: export FIMRA_CORS_ORIGINS := $(FIMRA_CORS_ORIGINS)
 api-run: export FIMRA_SMTP_ADDR := $(FIMRA_SMTP_ADDR)
 api-run: export FIMRA_SMTP_FROM := $(FIMRA_SMTP_FROM)
@@ -232,7 +239,7 @@ api-test: ## Run the core API unit tests
 	cd services/api && go test ./...
 
 api-test-integration: mail-up push-up ## Test the core API against the migrated development stack
-	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestCDSEIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration|TestResponseFormsIntegration|TestDemoReplayIntegration)$$' -count=1 -v .
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^(TestIntegration|TestCoreLoopIntegration|TestBackfillIntegration|TestFeedHealthIntegration|TestCDSEIntegration|TestNotificationsIntegration|TestNotificationEmailIntegration|TestGISLinkIntegration|TestIncidentsIntegration|TestDatabaseIntegration|TestFormsIntegration|TestFormTemplatesIntegration|TestDevicesIntegration|TestDispatchIntegration|TestIncidentResponseIntegration|TestOperationsRecordsIntegration|TestResponseFormsIntegration|TestDemoReplayIntegration|TestLSASAFIntegration)$$' -count=1 -v .
 
 noaa-nodd-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 noaa-nodd-test-integration: ## Test NOAA VIIRS ingestion and FIRMS links against a fake public bucket
@@ -241,6 +248,11 @@ noaa-nodd-test-integration: ## Test NOAA VIIRS ingestion and FIRMS links against
 cdse-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
 cdse-test-integration: ## Test Sentinel-3 ingestion against fake CDSE endpoints
 	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestCDSEIntegration$$' -count=1 -v .
+
+.PHONY: lsasaf-test-integration
+lsasaf-test-integration: export FIMRA_DATABASE_URL := $(FIMRA_DATABASE_URL)
+lsasaf-test-integration: ## Test Meteosat footprint watches with a fake LSA SAF server
+	cd services/api && FIMRA_API_INTEGRATION=1 go test -run '^TestLSASAFIntegration$$' -count=1 -v .
 
 ingest-fixture: ## Import a FIRMS CSV given FILE and optional PRODUCT
 	@test -n "$$FIMRA_FIXTURE_FILE" || { echo "Set FILE to a FIRMS CSV path."; exit 1; }

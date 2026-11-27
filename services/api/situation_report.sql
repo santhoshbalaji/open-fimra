@@ -19,7 +19,7 @@
     WHERE l.depth > c.depth AND NOT l.optional
     ORDER BY l.depth DESC LIMIT 3
 ), period_alerts AS MATERIALIZED (
-    SELECT v.*, a.forest_class, a.observed_at, a.hierarchy, a.hierarchy_unit_paths, d.geom, im.incident_id,
+    SELECT v.*, a.forest_class, a.observed_at, a.hierarchy, a.hierarchy_unit_paths, CASE WHEN d.source <> 'lsasaf' THEN d.geom END AS geom, im.incident_id,
            (SELECT string_agg(a.hierarchy #>> ARRAY[c.slug, l.slug, 'name'], ' › ' ORDER BY l.depth)
               FROM place_levels l CROSS JOIN place_context c) AS place,
            EXISTS (SELECT FROM alert_forms(v.id) f WHERE f.step=v.current_step AND NOT f.submitted) AS form_missing
@@ -92,7 +92,7 @@
                     (SELECT ST_Union(geom) FROM units u WHERE u.valid_to IS NULL
                        AND (u.hierarchy_id,u.path) IN (SELECT hierarchy_id,unit_path FROM grants))) AS geom
 ), map_points AS (
-    SELECT id, geom, forest_class, terminal, observed_at FROM period_alerts ORDER BY observed_at DESC, id DESC LIMIT $10
+    SELECT id, geom, forest_class, terminal, observed_at FROM period_alerts WHERE geom IS NOT NULL ORDER BY observed_at DESC, id DESC LIMIT $10
 ), extent AS (
     SELECT ST_Extent(g) AS box FROM (SELECT geom AS g FROM outline UNION ALL SELECT geom FROM map_points) x
 ), tolerance AS (

@@ -36,10 +36,10 @@ export interface IncidentRow {
   beat_names: string[];
   division_names: string[];
   /** West, south, east and north of the member alerts you can see. */
-  bounds: [number, number, number, number];
+  bounds: [number, number, number, number] | null;
 }
 interface Page<Row> { items: Row[]; total: number; nextCursor?: string }
-export interface IncidentFocus { id: string; points: [number, number][]; bounds: [number, number, number, number] }
+export interface IncidentFocus { id: string; points: [number, number][]; bounds: [number, number, number, number] | null }
 
 @Component({
   selector: 'fimra-incidents',
@@ -188,7 +188,7 @@ export class Incidents {
       this.memberRetry();
       if (!untracked(this.members).length) this.memberState.set({ kind: 'loading', heading: 'Loading member alerts' });
       const page = (cursor: string) => this.http.get<Page<AlertRow>>(endpoint + '/alerts', {
-        params: { incident: incident.id, limit: 200, ...(cursor && { cursor }) }
+        params: { incident: incident.id, limit: 200, includePossibleFires: true, ...(cursor && { cursor }) }
       });
       const request = page('').pipe(
         expand(data => data.nextCursor ? page(data.nextCursor) : EMPTY),

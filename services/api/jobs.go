@@ -119,6 +119,10 @@ func newJobClient(pool *pgxpool.Pool, logger *slog.Logger, keys *firmsKeys, emai
 	if err != nil {
 		return nil, err
 	}
+	periodic, err = addLSASAFJobs(pool, workers, queues, periodic)
+	if err != nil {
+		return nil, err
+	}
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Logger:       logger,
 		Queues:       queues,

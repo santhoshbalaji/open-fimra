@@ -168,6 +168,7 @@ Tokens are in [docs/design-system/tokens.json](docs/design-system/tokens.json), 
 | **NASA FIRMS** (default) | Area API polled with a configurable cadence and product list over a two-day rolling window. NOAA-20 and NOAA-21 VIIRS are primary. The combined MODIS product continues with Aqua. Suomi NPP delivery has ended, and NASA is retiring Terra delivery. Both remain supported for historical imports and linking. Standard-processing data is used for multi-year backfill. Feed health reports the delay from observation to first sighting and workspace match by satellite. |
 | **NOAA VIIRS Enterprise Fire** | Optional anonymous NODD feed for the NOAA-20 and NOAA-21 375 m I-band products. Link matching FIRMS records to the first arrival and measure observation-to-first-seen latency by source. |
 | **Copernicus Sentinel-3 SLSTR** | Optional near-real-time Standard MWIR fire radiative power feed from Sentinel-3A/B via the Copernicus Data Space Ecosystem. Adds morning and night passes, with separate observations grouped into existing incidents and feed latency measured per satellite. |
+| **Meteosat-9 SEVIRI** | Optional EUMETSAT LSA SAF MSG-IODC FRP-PIXEL Demonstration feed. List new 15-minute scans every five minutes. Show coarse forest fire candidates as search footprints, and link corroborating polar or field observations to the same case. |
 | **FSI** | No open self-service API. Three modes: a feed under an agreement with FSI, a parser for FSI's alert emails (KML/CSV), and manual file upload. Large-fire references are kept where supplied. |
 | **Bhuvan / NRSC** | Enabled once the agency has confirmed access and usage terms with NRSC. File import and map overlays until then. |
 | **Files and field reports** | CSV, KML, GeoJSON and GeoPackage upload with saved column mappings. Field staff can also report a fire they see before any satellite does; later detections are linked to it. |
@@ -184,6 +185,8 @@ Before a key is entered, an installation can show recent fires from NASA's publi
 **Safe to repeat.** Every import can be re-run without creating duplicate detections, alerts or notifications. Detections from different sources are all kept. Where two sources report the same satellite observation, they are linked and shown as "also reported by", not as independent confirmation, because FSI, NRSC and NASA often process the same satellite pass.
 
 **Feed health.** The platform shows the latest successful fetch, the latest observation and the delay for each source. If a source goes quiet during fire season, administrators are alerted. Silent failure in peak season is the largest operational risk.
+
+**Geostationary watch.** A first Meteosat hit goes to the control-room watch list with all overlapping beat candidates. Repeated hits in two of three valid consecutive scans can raise a duty alert for review. An independent point within the footprint can confirm the case and supply its location. Track scan availability separately from the latest fire detection.
 
 **Satellite passes.** Predicted overpass times are shown so control rooms know when the next detections are due.
 

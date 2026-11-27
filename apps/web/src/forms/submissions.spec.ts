@@ -128,7 +128,7 @@ describe('Field reports queue', () => {
     fixture.detectChanges();
     http.expectOne(endpoint + '/submissions/' + id).flush(report);
     fixture.detectChanges();
-    http.expectOne(endpoint + '/alerts/7').flush({ beat_name: 'Demo Beat' });
+    http.expectOne(endpoint + '/alerts/7?includePossibleFires=true').flush({ beat_name: 'Demo Beat' });
     http.expectOne(endpoint + '/forms/first-report/versions/1').flush({
       definition: { title: { en: 'First report' }, sections: [] }
     });
@@ -154,7 +154,7 @@ describe('Field reports queue', () => {
     expect(params['report']).toBe(nextId);
     http.expectOne(endpoint + '/submissions/' + nextId).flush({ ...report, id: nextId });
     fixture.detectChanges();
-    http.expectOne(endpoint + '/alerts/7').flush({ beat_name: 'Demo Beat' });
+    http.expectOne(endpoint + '/alerts/7?includePossibleFires=true').flush({ beat_name: 'Demo Beat' });
     http.expectOne(endpoint + '/forms/first-report/versions/1').flush({
       definition: { title: { en: 'First report' }, sections: [] }
     });

@@ -32,7 +32,7 @@
 </div>
 @if (workspace.current()) {
   <div class="map-legend">
-    @if (!layersPanel.open() && (showDetections() || showIncidents() || incidentFocus())) {
+    @if (!layersPanel.open() && (showDetections() || showIncidents() || incidentFocus() || (showWatches() && watches().features.length))) {
       <section class="map-key" [attr.aria-label]=" msg('Map legend') ">
         @if (showDetections()) {
           @let ages = keyAges();
@@ -48,6 +48,16 @@
               <li><i class="map-symbol" [class]="cls" aria-hidden="true"></i><span class="sr-only">{{ msg(classes[cls]) }}</span><span aria-hidden="true">{{ msg(shortClasses[cls]) }}</span></li>
             }
           </ul>
+        }
+        @if (showWatches() && watches().features.length) {
+          <div>
+            <p><i class="map-swatch possible-fire" aria-hidden="true"></i> {{ msg('Possible fire · Meteosat · ~4 km') }}</p>
+            @if (selectedWatch(); as watch) {
+              <p><time [attr.datetime]="watch.properties.observedAt">{{ dateTime(watch.properties.observedAt) }}</time>
+              @if (watchBeats(watch); as beats) { · {{ beats }} }</p>
+            }
+            <fimra-meteosat-attribution />
+          </div>
         }
         @if (showIncidents() || incidentFocus()) {
           <ul [attr.aria-label]=" msg('Incidents') ">
@@ -66,6 +76,11 @@
     <div class="layer-options" [style.--map-exclusion-opacity]="exclusionOpacity">
       <fieldset>
         <legend>{{ msg('Operational layers') }}</legend>
+        @if (watches().features.length) {
+          <label><input type="checkbox" [checked]="showWatches()"
+            (change)="toggleLayer(meteosatLayer, $any($event.target).checked)" /> {{ msg('Possible fire · Meteosat · ~4 km') }}</label>
+          @if (showWatches()) { <fimra-meteosat-attribution /> }
+        }
         @for (layer of operational; track layer.id) {
           <label><input type="checkbox" [checked]="layerEnabled(layer)"
             (change)="toggleLayer(layer, $any($event.target).checked)" /> {{ msg(layer.label) }}</label>
@@ -152,6 +167,41 @@
         </hlm-dialog>
       }
     </div>
+    @if (watches().features.length || watchFailed()) {
+      <details class="meteosat-watch">
+        <summary>{{ msg('Possible fire · Meteosat · ~4 km') }} ({{ watches().features.length }})</summary>
+        <fimra-meteosat-attribution />
+        @if (watchFailed()) { <p role="status">{{ msg('Could not refresh the Meteosat watch list.') }}</p> }
+        <ul>
+          @for (watch of watches().features; track watch.id) {
+            <li>
+              <p>
+                <time [attr.datetime]="watch.properties.observedAt">{{ dateTime(watch.properties.observedAt) }}</time>
+                @if (watch.properties.frpMW !== null) { · {{ watchStrength(watch.properties.frpMW) }}{{ msg(' megawatts') }} }
+                @if (watch.properties.confidence; as confidence) { · {{ msg('Confidence') }} {{ confidenceLabel(confidence) }} }
+              </p>
+              @if (watchBeats(watch); as beats) { <p>{{ msg('Candidate beats') }} · {{ beats }}</p> }
+              @let footprintLabel = msg('Show search footprint from {0}', [dateTime(watch.properties.observedAt)]);
+              @if (alertsView()) {
+                <a hlmBtn variant="outline" [attr.aria-label]="footprintLabel"
+                  [routerLink]="navigation.href('/monitor/map', { possibleFire: watch.properties.id, alert: null, detection: null })">
+                  {{ msg('Show search footprint') }}
+                </a>
+              } @else {
+                <button hlmBtn variant="outline" type="button" (click)="focusWatch(watch)" [attr.aria-label]="footprintLabel">
+                  {{ msg('Show search footprint') }}
+                </button>
+              }
+              @if (watch.properties.alertId; as id) {
+                <a hlmBtn variant="outline" [routerLink]="navigation.href('/monitor/alerts', { alert: id, queue: 'triage' })">
+                  {{ msg('Open duty alert #{0}', [id]) }}
+                </a>
+              }
+            </li>
+          }
+        </ul>
+      </details>
+    }
     @if (alertsView() && linkedMessage()) { <p role="status">{{ linkedMessage() }}</p> }
     <div class="alert-filters">
       <button type="button" hlmBtn variant="outline" [attr.aria-pressed]="queue.group() === 'overdue'"
@@ -326,7 +376,7 @@
       </section>
     }
     <section class="map-detail-block" aria-labelledby="observation-heading">
-      <h3 id="observation-heading">{{ point.source === 'manual' ? msg('Reported observation') : msg('Detected observation') }}</h3>
+      <h3 id="observation-heading">{{ point.source === 'lsasaf' ? msg('Possible fire · Meteosat · ~4 km') : point.source === 'manual' ? msg('Reported observation') : msg('Detected observation') }}</h3>
       <p>{{ msg('Detection #{0} · {1} · {2}', [point.id, dateTime(point.observed_at * 1000), detectionAge(point.observed_at, now())]) }}</p>
       <dl>
         @if (point.latitude !== null && point.latitude !== undefined && point.longitude !== null && point.longitude !== undefined) {
@@ -343,6 +393,10 @@
       </dl>
       @if (point.source === 'cdse') {
         <p>{{ msg('Contains modified Copernicus Sentinel data {0}', [observationYear(point.observed_at)]) }}</p>
+      }
+      @if (alert?.meteosat_evidence) {
+        @if (point.source !== 'lsasaf') { <p>{{ msg('Corroborated Meteosat evidence') }}</p> }
+        <fimra-meteosat-attribution />
       }
     </section>
     <section class="map-detail-block" aria-labelledby="incident-detail-heading">

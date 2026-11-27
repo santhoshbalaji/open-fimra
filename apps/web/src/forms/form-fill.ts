@@ -422,7 +422,7 @@ export class FormFill {
 
   alertPoint(): [number, number] | null {
     const alert = this.alert();
-    return alert ? [alert.longitude, alert.latitude] : null;
+    return alert?.longitude != null && alert.latitude != null ? [alert.longitude, alert.latitude] : null;
   }
 
   /** The problems about one field in one entry, shown beside it after a first try. */

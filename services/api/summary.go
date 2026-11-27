@@ -32,12 +32,13 @@ type responsePercentiles struct {
 	Count int `json:"count"`
 }
 type summaryFeed struct {
-	Source              string        `json:"source"`
-	Product             string        `json:"product"`
-	Status              string        `json:"status"`
-	LastSuccessAt       *time.Time    `json:"lastSuccessAt"`
-	LatestObservationAt *time.Time    `json:"latestObservationAt"`
-	Latency             []feedLatency `json:"latency,omitempty"`
+	Source              string          `json:"source"`
+	Product             string          `json:"product"`
+	Status              string          `json:"status"`
+	LastSuccessAt       *time.Time      `json:"lastSuccessAt"`
+	LatestObservationAt *time.Time      `json:"latestObservationAt"`
+	Latency             []feedLatency   `json:"latency,omitempty"`
+	Scans               *scanHealthJSON `json:"scans,omitempty"`
 }
 
 // summaryCounts are the counts the dashboard and situation reports share.
@@ -141,7 +142,7 @@ func (a api) summary(w http.ResponseWriter, r *http.Request) {
 			s.FeedHealth = append(s.FeedHealth, summaryFeed{
 				Source: f.Source, Product: f.Product, Status: feedStatus(f, set.Thresholds, now),
 				LastSuccessAt: f.LastSuccessAt, LatestObservationAt: f.LatestObservedAt,
-				Latency: latencies[feedKey{f.Source, f.Product}],
+				Latency: latencies[feedKey{f.Source, f.Product}], Scans: f.scanHealth(),
 			})
 		}
 	}

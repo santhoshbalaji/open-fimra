@@ -66,7 +66,7 @@ export function placesOf(detection: Pick<Detection, 'places' | 'place_hierarchy'
 }
 
 const sourceNames: Record<string, string> = {
-  firms: 'NASA FIRMS', cdse: 'Copernicus Sentinel-3', manual: 'Manual fire report', fsi: 'Forest Survey of India', demo_fsi: 'Demo data'
+  firms: 'NASA FIRMS', cdse: 'Copernicus Sentinel-3', lsasaf: 'EUMETSAT LSA SAF', manual: 'Manual fire report', fsi: 'Forest Survey of India', demo_fsi: 'Demo data'
 };
 
 /** A readable name for a detection source code. */

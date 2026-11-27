@@ -348,6 +348,20 @@ Both Sentinel-3 products appear in feed health. The existing `firstSeen` metric 
 
 Contains modified Copernicus Sentinel data [year of observation].
 
+## Meteosat-9 fire watch
+
+Enable the LSA SAF job with `FIMRA_LSASAF_ENABLED=true` and a registered `FIMRA_LSASAF_USERNAME`. Supply either `FIMRA_LSASAF_PASSWORD` or a mounted secret at `FIMRA_LSASAF_PASSWORD_FILE`. Basic Auth stays in the HTTPS request header. Auth and transport errors report the operation or HTTP status without exposing credentials. Polling defaults to five minutes via `FIMRA_LSASAF_POLL_INTERVAL` (1–15 minutes). The worker checks the last 24 hours of UTC slots. It retries missing or unreadable files inside that window and skips validated files, including valid empty scans.
+
+A footprint intersecting the workspace and its forest or near-edge buffer can open a **Possible fire · Meteosat · ~4 km** watch. Footprint size varies with viewing angle. The control-room watch stores every intersected beat, the provider's FRP and confidence, and the source record. Only a known heat-source polygon covering the entire footprint excludes the hit automatically. A hit never means the entire pixel is burning. A valid scan without a hit contributes to the scan sequence without clearing a watch.
+
+By default, two hits in the same grid cell across three consecutive validated 15-minute slots raise one triage alert for duty review. Set `FIMRA_LSASAF_PERSISTENCE_HITS` and `FIMRA_LSASAF_PERSISTENCE_SCANS` to require 2–8 hits in up to eight slots. The latest hit must be within two hours; catch-up files beyond that are retained without issuing new duty alerts. The triage alert bypasses automatic assignment and coarse alerts cannot issue field push notifications. Scoped control-room reviewers can read up to 200 recent unresolved footprints through `GET /api/v1/workspaces/{slug}/possible-fires?hours=24`, also used by the map and watch list. Clients can opt in to coarse duty alerts in the alert API with `includePossibleFires=true`. Their point coordinates are null and their geometry is available from the footprint endpoint. The point tiles, GIS link and location exports continue to carry precise observations.
+
+A routed FIRMS, NOAA NODD or manual observation can confirm a watch when its point is inside the footprint and its observation time is within two hours of a matching scan. Ambiguous candidates stay separate. If the precise alert arrived first, the watch links to it. If persistence already created a duty alert, the point replaces the coarse location on the same alert and the workflow and original evidence remain. Repeated Meteosat scans and independent data are recorded separately from same-observation FIRMS/NOAA aliases.
+
+Feed health reports the latest valid scan (including empty scans), expected-but-missing slots over the last day after a 45-minute publication allowance, and slot-to-first-listing P50/P95 over seven days. Initial catch-up can raise those listing times because they measure when this installation first saw the slot. The shared FIRMS latency metrics also report observation-to-fetch and observation-to-match for fire detections from comparable polls. Startup catch-up, retries of previously listed files, and polls after an outage can establish new baselines. The source is delayed after 45 minutes without a scan and quiet after 90 minutes; transport failures use the workspace's normal failure threshold.
+
+Credit **EUMETSAT LSA SAF**, MSG-IODC FRP-PIXEL (**Demonstration**), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Footprints are derived from the product grid. See the [product catalogue](https://lsa-saf.eumetsat.int/en/data/products/fire-products/) and [Wooster et al. (2015), doi:10.5194/acp-15-13217-2015](https://doi.org/10.5194/acp-15-13217-2015).
+
 ## Feed health
 
 `GET /api/v1/workspaces/{slug}/feeds` takes a bearer token. Only a role at the root of one of the workspace's hierarchies, such as the state administrator, may see it. Anyone else, and any unknown workspace, gets 403.
