@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 import { serveDist } from "./serve-dist.mjs";
 
 const { server, url } = await serveDist({ base: process.env.SITE_BASE ?? "/open-fimra/" });
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const captures = process.env.SITE_CAPTURES;
 const chapters = ["opening", "scale", "space", "live", "journey", "roles", "handoffs",
   "product", "deploy", "open-source", "involved", "footer"];
@@ -24,6 +24,15 @@ async function load(page, destination = url) {
   const response = await page.goto(destination);
   assert.equal(response?.status(), 200);
   await page.evaluate(() => document.fonts.ready);
+}
+
+async function selectMarch(page) {
+  // The stage is lazy-loaded when it intersects the viewport. Visiting the
+  // chapter heading alone can leave the stage and its hidden controls below it.
+  await page.locator("#scale .map-stage").scrollIntoViewIfNeeded();
+  await page.getByRole("combobox", { name: "Detection month" }).selectOption("4");
+  assert.equal(await page.locator("#map-period").innerText(), "March 2026");
+  assert.equal(await page.locator("#month-count").innerText(), "71,296 detections");
 }
 
 async function transfers(page) {
@@ -77,13 +86,17 @@ try {
         if (chapter === "opening") await page.evaluate(() => window.scrollTo(0, 0));
         else await target.evaluate(element => element.scrollIntoView({ block: "start" }));
         await page.waitForLoadState("networkidle");
-        if (captures) await page.screenshot({ path: join(captures, `${size}-${colorScheme}-${chapter}.png`) });
+        if (captures) {
+          if (chapter === "scale") {
+            await page.waitForFunction(() => document.querySelector("#hex-map polygon") ||
+              document.querySelector("#scale .hex-poster").naturalWidth > 0);
+          }
+          await page.screenshot({ path: join(captures, `${size}-${colorScheme}-${chapter}.png`) });
+        }
       }
-      await page.locator("#month").selectOption("4");
-      await page.locator("#hex-map").focus();
-      await page.keyboard.press("ArrowRight");
-      assert.match(await page.locator("#cell-status").innerText(), /cell centre/);
+      await selectMarch(page);
       assert.equal(await page.locator(".globe-toggle").isVisible(), false);
+      assert.equal(await page.locator(".static-frame:visible").count(), 4);
       await axe(page, `${size} ${colorScheme}`);
       const complete = await transfers(page);
       assert.ok(complete <= 2_000_000, `Scroll uses ${complete} bytes`);
@@ -100,6 +113,9 @@ try {
           await page.screenshot({ path: join(captures, `${size}-${colorScheme}-${name}.png`) });
         }
       }
+      await page.locator("#hex-map").focus();
+      await page.keyboard.press("ArrowRight");
+      assert.match(await page.locator("#cell-status").innerText(), /cell centre/);
       await load(page, url + "methods/");
       await axe(page, `methods ${size} ${colorScheme}`);
       assert.deepEqual(issues, []);
@@ -110,11 +126,17 @@ try {
 
   const playback = await browser.newPage({ viewport: sizes.phone });
   await load(playback);
+  await playback.getByRole("button", { name: "Play orbit" }).click();
+  await playback.locator(".hero-visual[data-live]").waitFor();
+  await playback.getByRole("button", { name: "Pause orbit" }).click();
   await playback.locator("#product").scrollIntoViewIfNeeded();
-  const clip = playback.getByRole("button", { name: "Play clip (monitor and route)" });
-  await clip.click();
-  await playback.getByRole("button", { name: "Pause clip (monitor and route)" }).click();
-  assert.equal(await playback.locator(".tour-figure video").first().evaluate(video => video.paused), true);
+  for (const title of ["monitor and route", "acknowledge in the field", "analyse and export"]) {
+    const clip = playback.getByRole("button", { name: `Play clip (${title})` });
+    await clip.click();
+    await playback.getByRole("button", { name: `Pause clip (${title})` }).click();
+    const video = playback.locator(".tour-figure").filter({ has: clip }).locator("video");
+    assert.equal(await video.evaluate(element => element.paused), true);
+  }
   await playback.close();
 
   const zoom = await browser.newPage({ viewport: { width: 320, height: 700 }, reducedMotion: "reduce" });
@@ -129,6 +151,7 @@ try {
   const staticPage = await browser.newPage({ javaScriptEnabled: false, viewport: sizes.phone });
   await load(staticPage);
   assert.equal(await staticPage.locator(".hex-poster").isVisible(), true);
+  assert.equal(await staticPage.locator("#month").isVisible(), false);
   assert.equal(await staticPage.locator(".static-frame:visible").count(), 4);
   assert.equal(await staticPage.locator(".journey-list li:visible").count(), 7);
   assert.equal(await staticPage.locator(".globe-toggle").isVisible(), false);
@@ -138,8 +161,9 @@ try {
   await missingArchive.route("**/data/hexagons.json", route => route.abort());
   await load(missingArchive, url + "#scale");
   await missingArchive.locator("#scale .season-map").scrollIntoViewIfNeeded();
+  await missingArchive.getByText("Interactive map unavailable. The full season is shown.").waitFor();
   await missingArchive.locator(".hex-poster").waitFor();
-  assert.match(await missingArchive.locator("#cell-info").innerText(), /unavailable/);
+  assert.equal(await missingArchive.locator("#month").isVisible(), false);
   await missingArchive.close();
 
   const noGl = await browser.newPage({ viewport: sizes.desktop });
@@ -153,6 +177,7 @@ try {
   await noGl.getByRole("button", { name: "Play orbit" }).click();
   await noGl.waitForFunction(() => document.getElementById("globe-status").textContent.includes("unavailable"));
   assert.equal(await noGl.locator(".hero-visual[data-live]").count(), 0);
+  await selectMarch(noGl);
   await noGl.close();
   console.log("Keyboard, 320px at 200% text, reduced motion, no-JS and WebGL fallback checks passed");
 } finally {

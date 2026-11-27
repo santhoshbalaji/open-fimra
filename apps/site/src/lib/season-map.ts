@@ -114,5 +114,6 @@ export async function initSeasonMap() {
   picker.addEventListener("change", () => pick(Number(picker.value)));
   render(-1);
   map.setAttribute("tabindex", "0");
+  document.querySelector<HTMLImageElement>("#scale .hex-poster")!.hidden = true;
   controls.hidden = strip.hidden = false;
 }

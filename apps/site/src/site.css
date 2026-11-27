@@ -164,14 +164,15 @@ h2 { font-weight: 630; font-size: clamp(2.6rem, 5.3vw, 5.1rem); line-height: 1.0
 .season-map { color: var(--space-fg); background: #0d2029; border: 1px solid #324a54; border-radius: 14px; min-width: 0; overflow: clip; }
 .map-stage { aspect-ratio: 1.59; position: relative; overflow: hidden; background: #0b2029; }
 .map-image { position: absolute; width: 75%; aspect-ratio: 1; left: 50%; top: 48%; transform: translate(-50%, -50%); }
-.map-image > :is(img, svg), .map-image noscript > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.map-image > :is(img, svg) { position: absolute; inset: 0; width: 100%; height: 100%; }
 .map-terrain { filter: grayscale(.75) brightness(.43) contrast(1.24) sepia(.3) hue-rotate(130deg); mask-image: radial-gradient(ellipse, #000 36%, transparent 71%); }
 .tree-layer { opacity: .53; mix-blend-mode: screen; mask-image: radial-gradient(ellipse, #000 29%, transparent 68%); }
 .hex-poster { pointer-events: none; }
 .hex-cell { stroke: transparent; stroke-width: .65; vector-effect: non-scaling-stroke; cursor: pointer; }
 .hex-cell:hover, .hex-cell[data-selected] { stroke: #fff6ea; stroke-width: 1.6; }
 #hex-map:not([tabindex]) { display: none; }
-#hex-map:focus-visible { outline-offset: -3px; }
+#hex-map:focus-visible { outline: none; }
+.map-stage:has(#hex-map:focus-visible)::after { content: ""; position: absolute; inset: 0; z-index: 2; border: var(--focus-width) solid #c4e7f3; pointer-events: none; }
 .map-label, .map-key { position: absolute; z-index: 1; display: flex; align-items: center; justify-content: space-between; inset: 14px 14px auto; gap: 5px 12px; color: #e6eff1; pointer-events: none; }
 .map-label span, .map-key { padding: 6px 9px; border-radius: 4px; background: #0a1b24e8; }
 .map-key { inset: auto auto 14px 14px; flex-wrap: wrap; }
@@ -459,7 +460,6 @@ footer .brand { margin-bottom: 7px; }
 .clip-toggle:hover { text-decoration: underline; }
 @media (max-width: 760px) {
   .tour { grid-template-columns: minmax(0, 1fr); }
-  .tour-phone .device-frame { max-width: min(100%, 240px); }
 }
 
 .live-grid { row-gap: 18px; }

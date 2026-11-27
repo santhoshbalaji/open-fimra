@@ -53,28 +53,19 @@ schedule();
 window.addEventListener("scroll", schedule, { passive: true });
 window.addEventListener("resize", schedule);
 
-const seasonMap = document.querySelector<HTMLElement>(".season-map [data-poster]")!;
+const seasonStage = document.querySelector<HTMLElement>("#scale .map-stage")!;
 const seasonObserver = new IntersectionObserver(async ([entry], observer) => {
   if (!entry.isIntersecting) return;
   observer.disconnect();
-  for (const image of seasonMap.querySelectorAll<HTMLImageElement>("[data-map-src]")) {
-    image.src = image.dataset.mapSrc!;
-    image.hidden = false;
-  }
   try {
     const { initSeasonMap } = await import("./season-map");
     await initSeasonMap();
     schedule();
   } catch {
-    const poster = new Image(780, 780);
-    poster.className = "hex-poster";
-    poster.alt = "Map of tree-cover detections across India, grouped into hexagons.";
-    poster.src = seasonMap.dataset.poster!;
-    seasonMap.append(poster);
     document.querySelector("#cell-info")!.textContent = "Interactive map unavailable. The full season is shown.";
   }
 }, { rootMargin: "160px 0px" });
-seasonObserver.observe(seasonMap.closest(".map-stage")!);
+seasonObserver.observe(seasonStage);
 
 const journeySteps = [...document.querySelectorAll("[data-journey-step]")];
 let journeyObserver: IntersectionObserver | undefined;

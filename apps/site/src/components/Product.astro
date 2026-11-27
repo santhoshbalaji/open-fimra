@@ -6,17 +6,18 @@ const tours = [
   {
     id: "monitor",
     title: "Monitor and route",
-    summary: "Match FIRMS detections against the forest and beat layers a department publishes. Open Alert #11 to see Beat 05’s assignment, the final report step and the alert’s history.",
+    summary: "Match FIRMS detections against the forest and beat layers a department publishes. Open Alert #12 to see its assignment to Beat 05 and the next action for the field officer.",
     planned: "FSI and Bhuvan feed connectors.",
-    alt: "The synthetic alert queue, with beat assignments and the next action for each alert.",
+    alt: "Alert #12 is open beside the queue. Beat 05 is the lead, and the next step is to acknowledge the alert.",
     caption: "Alert queue · Synthetic demo",
     width: 1120, height: 704,
   },
   {
     id: "review",
-    title: "Verify and review",
-    summary: "Alert #11 keeps the same reference on the field phone. Officers with the required role can save a report offline. The device syncs when it reconnects, and a reviewer can approve the report or return it for correction.",
-    alt: "The field app shows the synthetic Alert #11, its final report step and the timeline.",
+    title: "Acknowledge in the field",
+    summary: "On the field phone, a division officer opens the same alert, acknowledges it and adds a note. The timeline records who acknowledged it and when.",
+    alt: "Alert #12 in the field app, with an Acknowledge alert button above its timeline.",
+    clipLabel: "The officer acknowledges Alert #12 with a note. The timeline shows the saved note, officer and time.",
     caption: "Field app · Browser build in an Android frame · Synthetic demo",
     width: 390, height: 740,
   },
@@ -26,6 +27,7 @@ const tours = [
     summary: "Use the dashboard to track detections and response in the units you can see. Export permitted records for GIS or spreadsheets in formats including GeoPackage, GeoJSON, CSV and Excel.",
     planned: "Analysis across thematic layers and reusable configuration packs.",
     alt: "The dashboard shows synthetic totals for detections, active alerts and reports, followed by a breakdown by forest class.",
+    clipLabel: "The dashboard opens the active-alert queue and shows the matching records in the export dialog.",
     caption: "Dashboard · Synthetic demo",
     width: 1120, height: 704,
   },
@@ -52,7 +54,7 @@ const tours = [
               <div class="device-bar" aria-hidden="true">{tour.id === "review" ? <i></i> : <><i></i><i></i><i></i></>}</div>
               <div class="device-content">
                 <img loading="lazy" decoding="async" width={tour.width} height={tour.height} src={asset(`media/tour/${tour.id}.webp`)} alt={tour.alt} />
-                <video hidden muted loop playsinline preload="none" width={tour.width} height={tour.height} data-src={asset(`media/tour/${tour.id}.webm`)} aria-label={tour.alt}></video>
+                <video hidden muted loop playsinline preload="none" width={tour.width} height={tour.height} data-src={asset(`media/tour/${tour.id}.webm`)} aria-label={tour.clipLabel ?? tour.alt}></video>
               </div>
             </div>
           </div>
