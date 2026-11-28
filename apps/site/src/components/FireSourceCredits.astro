@@ -1,0 +1,17 @@
+---
+import { firms } from "../lib/credits";
+---
+<ul class="feed-credits" role="list">
+  <li><a href={firms}>NASA FIRMS</a>, operated by NASA’s Earth Science Data and Information System (ESDIS).</li>
+  <li><a href="https://registry.opendata.aws/noaa-jpss/">NOAA NESDIS</a> · JPSS VIIRS Enterprise Fire, NOAA Open Data Dissemination.</li>
+  <li><a href="https://lsa-saf.eumetsat.int/en/data/products/fire-products/">EUMETSAT LSA SAF</a> · MSG-IODC FRP-PIXEL (Demonstration, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).</li>
+  <li>Contains modified <a href="https://sentinels.copernicus.eu/web/sentinel/terms-conditions">Copernicus Sentinel data</a> 2026.</li>
+  <li><a href="https://fsiforestfire.gov.in/">Forest Survey of India</a> · Official dispatch example.</li>
+</ul>
+
+<style>
+  .feed-credits {
+    list-style: none; padding: 0; margin: .65rem 0 0; color: var(--inkMuted);
+    display: grid; gap: .4rem; font-size: .875rem; line-height: 1.6;
+  }
+</style>

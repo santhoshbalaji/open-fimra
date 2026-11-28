@@ -1,0 +1,251 @@
+---
+import { asset } from "../lib/paths";
+import FireSourceArt from "./FireSourceArt.astro";
+import FireSourceCredits from "./FireSourceCredits.astro";
+
+const feeds = [
+  {
+    name: "Field and phone reports",
+    role: "People on the ground",
+    detail: "Staff and the public can report a fire whenever they see one. The location is as precise as the report.",
+    delay: "Immediate",
+    clock: "when reported",
+  },
+  {
+    name: "NOAA open data",
+    role: "Primary polar source",
+    detail: "NOAA-20 and NOAA-21 pass over India a few times a day. Their VIIRS sensors give 375 m pixels.",
+    delay: "About 30 min",
+    clock: "after the pass",
+  },
+  {
+    name: "Meteosat-9 possible fires",
+    role: "Watch between passes",
+    detail: "Scans India every 15 min. EUMETSAT publishes the scans hourly. A hit opens a watch-list entry with a search footprint roughly 4 km across.",
+    delay: "About 1 h",
+    clock: "after the scan",
+  },
+  {
+    name: "Sentinel-3",
+    role: "Morning and night coverage",
+    detail: "Sentinel-3A and 3B add 1 km observations around 10:00 and 22:00 local time, where the pass covers the area.",
+    delay: "About 2 h",
+    clock: "from pass to catalogue",
+  },
+  {
+    name: "NASA FIRMS",
+    role: "Backup and reference",
+    detail: "Carries the same NOAA-20 and NOAA-21 passes at 375 m, plus Aqua MODIS at 1 km. Each satellite can see a location about twice a day.",
+    delay: "About 2 to 3 h",
+    clock: "after a NOAA pass",
+  },
+  {
+    name: "FSI official alerts",
+    role: "Planned integration",
+    detail: "The Forest Survey of India issues forest-filtered alerts after eligible passes, using 375 m VIIRS or 1 km MODIS detections.",
+    delay: "About 30 min",
+    clock: "pass to SMS, one example",
+  },
+];
+
+const timeline = [
+  {
+    stage: "footprint",
+    title: "Meteosat flags an area",
+    time: "13:45",
+    delay: "About 1 h after a 12:45 scan",
+    copy: "A roughly 4 km footprint appears on the watch list. It gives the control room an area to check.",
+  },
+  {
+    stage: "point",
+    title: "NOAA confirms the fire",
+    time: "14:00",
+    delay: "About 30 min after a 13:30 pass",
+    copy: "A 375 m detection inside the footprint confirms the watch. The finer point becomes the case location and a duty alert is routed.",
+  },
+  {
+    stage: "linked",
+    title: "FIRMS links to the case",
+    time: "16:00",
+    delay: "About 2½ h after the same pass",
+    copy: "FIRMS carries the same NOAA observation. Open FIMRA retains both records on one case, and nobody gets a duplicate alert.",
+  },
+] as const;
+---
+<section id="fire-sources" class="chapter fire-sources" aria-labelledby="fire-sources-title">
+  <div class="wrap">
+    <div class="feed-opening">
+      <div class="chapter-intro">
+        <span class="eyebrow mono"><span class="chapter-index">05</span> Fire data sources</span>
+        <h2 id="fire-sources-title">How Open FIMRA gets fire points</h2>
+        <p>Satellites watch India at different times and at different levels of detail. Open FIMRA brings their observations together with reports from people on the ground.</p>
+      </div>
+      <figure class="feed-figure">
+        <div class="art-board"><FireSourceArt stage="layers" /></div>
+        <figcaption class="caption mono">
+          <span class="feed-key"><i aria-hidden="true"></i>Possible-fire footprint</span>
+          <span class="feed-key"><i aria-hidden="true"></i>Finer fire point</span>
+          <span class="feed-schematic">Schematic over fictional terrain</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="feed-heading">
+      <h3 id="feed-list-title">How quickly each source arrives</h3>
+      <p>Delays come from a few days of measurements on a test installation and will vary. Satellites also have to pass over or scan a fire before they can detect it.</p>
+    </div>
+    <ul class="feed-list" role="list" aria-labelledby="feed-list-title">
+      {feeds.map(feed => (
+        <li class:list={{ "planned-feed": feed.role === "Planned integration" }}>
+          <div class="feed-name">
+            <p class="mono">{feed.role}</p>
+            <h4>{feed.name}</h4>
+          </div>
+          <p class="feed-detail">{feed.detail}</p>
+          <p class="feed-delay"><strong>{feed.delay}</strong><span>{feed.clock}</span></p>
+        </li>
+      ))}
+    </ul>
+
+    <div class="feed-heading">
+      <h3 id="fire-timeline-title">One fire, many sources</h3>
+      <p>Fictional example using the delays above. Arrival times are shown in IST.</p>
+    </div>
+    <ol class="fire-timeline" role="list" aria-labelledby="fire-timeline-title">
+      {timeline.map(step => (
+        <li>
+          <p class="timeline-time mono"><time>{step.time}</time><span>{step.delay}</span></p>
+          <div class="art-board"><FireSourceArt stage={step.stage} /></div>
+          <h4>{step.title}</h4>
+          <p class="feed-detail">{step.copy}</p>
+        </li>
+      ))}
+    </ol>
+
+    <div class="feed-routing" aria-labelledby="fire-routing-title">
+      <h3 id="fire-routing-title">From the watch list to the beat</h3>
+      <ol role="list">
+        <li>
+          <svg viewBox="0 0 48 30" width="48" height="30" fill="none" aria-hidden="true">
+            <path class="art-underlay" d="M1 1h46v28H1Zm15 0v28M32 1v28M1 15h46"/>
+            <rect class="art-dash" x="12" y="5" width="24" height="20"/>
+            <circle class="art-hot" cx="24" cy="15" r="3.5"/>
+          </svg>
+          <h4>Watch list</h4>
+          <p>A single Meteosat hit puts the footprint on the control room’s watch list.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 48 30" width="48" height="30" fill="none" aria-hidden="true">
+            <path class="art-ink" d="M9 15h30"/>
+            <circle class="art-hot" cx="9" cy="15" r="5"/>
+            <circle class="art-paper" cx="24" cy="15" r="4"/>
+            <circle class="art-hot" cx="39" cy="15" r="5"/>
+          </svg>
+          <h4>Confirmation</h4>
+          <p>Hits in the same cell in 2 of 3 consecutive scans raise one alert for duty review. A matching NOAA or FIRMS point or a field report can confirm the watch and provide a finer location.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 48 30" width="48" height="30" fill="none" aria-hidden="true">
+            <path class="art-dash" d="M2 5h14v10h14v10h14"/>
+            <path class="art-ink" d="m38 20 6 5-6 5"/>
+            <circle class="art-hot" cx="2.5" cy="5" r="2.5"/>
+          </svg>
+          <h4>Alert to the beat</h4>
+          <p>Once a precise observation qualifies, the alert follows the normal division, range and beat routing. A coarse alert stays with duty staff for review.</p>
+        </li>
+      </ol>
+    </div>
+
+    <aside class="feed-limits" aria-label="What satellites can miss">
+      <p><strong>Field reports still matter.</strong> Satellites can miss fires that are small, cool, short-lived or hidden by cloud.</p>
+    </aside>
+
+    <div class="feed-attribution">
+      <h3 class="mono">Fire data credits</h3>
+      <FireSourceCredits />
+      <a class="text-link" href={asset("methods/#fire-feed-methods")}>How we measured the delays <span aria-hidden="true">↗</span></a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .feed-opening {
+    display: grid; grid-template-columns: minmax(0, 1.13fr) minmax(0, .87fr);
+    gap: clamp(22px, 4vw, 60px); align-items: center;
+  }
+  .feed-opening h2 { text-wrap: initial; max-width: 14ch; }
+  .feed-figure .art-board { padding: clamp(10px, 2vw, 24px); }
+  .feed-figure figcaption { display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin-top: .65rem; }
+  .feed-key { display: inline-flex; align-items: baseline; gap: .45rem; }
+  .feed-key i {
+    width: .65rem; height: .65rem; flex-shrink: 0; border: 1px solid var(--heat);
+    background: color-mix(in srgb, var(--heat) 16%, transparent);
+  }
+  .feed-key + .feed-key i { border-radius: 50%; background: var(--heat); }
+  .feed-schematic { flex-basis: 100%; }
+  .feed-heading, .feed-routing { margin-top: clamp(34px, 5.4vw, 76px); }
+  h3:not(.mono) { font-size: clamp(1.55rem, 3.3vw, 2.7rem); font-weight: 640; line-height: 1.12; letter-spacing: -.035em; }
+  h4 {
+    font: 640 clamp(1.15rem, 2vw, 1.52rem)/1.17 "Instrument Sans", system-ui, sans-serif;
+    letter-spacing: -.024em; margin: 0;
+  }
+  .feed-heading p, .feed-detail, .feed-routing p, .feed-limits p {
+    font-size: .9375rem; line-height: 1.65; color: var(--inkMuted); max-width: 65ch;
+  }
+  .feed-heading p { margin-top: .5rem; }
+  .feed-list, .fire-timeline, .feed-routing ol { list-style: none; margin: 1.2rem 0 0; padding: 0; }
+  .feed-list { border-block: 1px solid var(--lineStrong); }
+  .feed-list li {
+    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.55fr) minmax(0, .65fr);
+    align-items: baseline; gap: clamp(10px, 2.3vw, 32px); padding: .95rem clamp(0px, 1.5vw, 20px);
+  }
+  .feed-list li + li { border-top: 1px solid var(--lineSubtle); }
+  .feed-name .mono { color: var(--petrol); text-transform: uppercase; margin-bottom: .24rem; }
+  .feed-delay { display: grid; gap: .15rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .feed-delay strong { color: var(--heat); font-weight: 650; }
+  .feed-delay span { color: var(--inkMuted); font-size: .8125rem; line-height: 1.5; }
+  .feed-list .planned-feed { border-top: 1px dashed var(--lineStrong); }
+  .planned-feed .feed-delay strong { color: var(--ink); }
+
+  .fire-timeline, .feed-routing ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(18px, 2.5vw, 32px); }
+  .fire-timeline li { min-width: 0; }
+  .timeline-time {
+    display: grid; gap: .32rem; border-top: 1px solid var(--lineStrong); position: relative;
+    padding: .8rem 0 .75rem; color: var(--inkMuted);
+  }
+  .timeline-time::before {
+    content: ""; position: absolute; top: -4px; left: 2px; width: 7px; height: 7px;
+    background: var(--heat); rotate: 45deg;
+  }
+  .timeline-time time { font-size: 1.2rem; color: var(--heat); }
+  .fire-timeline h4 { margin: .8rem 0 .35rem; }
+  .feed-routing {
+    padding: clamp(16px, 3.4vw, 44px); background: var(--petrolSoft); border-radius: 12px;
+  }
+  .feed-routing li + li { border-left: 1px solid var(--lineStrong); padding-left: clamp(12px, 2vw, 28px); }
+  .feed-routing svg { display: block; margin: 0 0 .6rem; }
+  .feed-routing p { margin-top: .35rem; }
+  .feed-limits { margin-top: 1.4rem; }
+  .feed-limits strong { color: var(--ink); }
+  .feed-attribution { border-top: 1px solid var(--lineSubtle); padding-top: 1.25rem; margin-top: 2.5rem; }
+  .feed-attribution h3 { color: var(--petrol); text-transform: uppercase; }
+  .feed-attribution .text-link { margin-top: .4rem; }
+
+  @media (max-width: 760px) {
+    .feed-opening, .fire-timeline, .feed-routing ol { grid-template-columns: minmax(0, 1fr); }
+    .feed-opening h2 { max-width: none; }
+    .feed-figure { max-width: 500px; }
+    .feed-list li {
+      grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: .45rem .8rem; padding-inline: 0;
+    }
+    .feed-detail { grid-row: 2; grid-column: 1 / -1; }
+    .feed-delay { grid-row: 1; grid-column: 2; align-self: start; }
+    .fire-timeline { gap: 1.55rem; }
+    .feed-routing li + li { border-left: 0; border-top: 1px solid var(--lineStrong); padding: .9rem 0 0; }
+  }
+  @media (max-width: 350px) {
+    .feed-list li { grid-template-columns: minmax(0, 1fr); }
+    .feed-list .feed-delay { grid-area: auto; text-align: left; }
+    .feed-list .feed-detail { grid-row: auto; }
+  }
+</style>

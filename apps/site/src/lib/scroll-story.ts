@@ -3,7 +3,7 @@ import "./tour";
 const root = document.documentElement;
 
 const header = document.querySelector<HTMLElement>(".site-header")!;
-let headerHeight = 0;
+let headerHeight = header.offsetHeight;
 new ResizeObserver(([entry]) => {
   headerHeight = entry.borderBoxSize[0].blockSize;
   if (window.innerWidth > 540) root.style.setProperty("--header-height", `${headerHeight}px`);
@@ -49,7 +49,7 @@ function schedule() {
   if (!renderFrame) renderFrame = requestAnimationFrame(update);
 }
 story.setAttribute("data-enhanced", "");
-schedule();
+update();
 window.addEventListener("scroll", schedule, { passive: true });
 window.addEventListener("resize", schedule);
 
