@@ -9,13 +9,15 @@ import { serveDist } from "./serve-dist.mjs";
 const { server, url } = await serveDist({ base: process.env.SITE_BASE ?? "/open-fimra/" });
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const captures = process.env.SITE_CAPTURES;
-const chapters = ["opening", "scale", "space", "live", "journey", "roles", "handoffs",
+const chapters = ["opening", "scale", "space", "live", "journey", "fire-sources", "roles", "handoffs",
   "product", "deploy", "open-source", "involved", "footer"];
 const sizes = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
 if (captures) await mkdir(captures, { recursive: true });
 
-async function axe(page, label) {
-  const { violations } = await new AxeBuilder({ page }).analyze();
+async function axe(page, label, scope) {
+  const audit = new AxeBuilder({ page });
+  if (scope) audit.include(scope);
+  const { violations } = await audit.analyze();
   assert.deepEqual(violations.map(({ id, nodes }) => ({ id, nodes: nodes.map(n => n.target) })), [], label);
   console.log(`${label}: zero axe violations`);
 }
@@ -84,6 +86,18 @@ try {
       await page.keyboard.press("Enter");
       assert.equal(new URL(page.url()).hash, "#live");
       assert.equal(await page.locator(":focus").getAttribute("id"), "live");
+      await page.locator(".upcoming summary").focus();
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      assert.equal(await page.locator(":focus").innerText(), "Fire data sources");
+      await page.keyboard.press("Enter");
+      assert.equal(new URL(page.url()).hash, "#fire-sources");
+      assert.equal(await page.locator(":focus").getAttribute("id"), "fire-sources");
+      await page.waitForFunction(() => document.querySelector('.chapter-nav a[href="#fire-sources"]')
+        .getAttribute("aria-current") === "location");
+      await axe(page, `fire sources ${size} ${colorScheme}`, "#fire-sources");
       for (const chapter of chapters) {
         const target = page.locator(chapter === "footer" ? "footer" : `#${chapter}`);
         if (!await target.count()) continue;
@@ -149,6 +163,12 @@ try {
     await zoom.addStyleTag({ content: "html { font-size: 200% !important; }" });
     const width = await zoom.evaluate(() => document.documentElement.scrollWidth);
     assert.ok(width <= 320, `${path || "landing"} reflows to ${width}px`);
+    if (!path) {
+      const chapter = zoom.locator("#fire-sources");
+      await chapter.evaluate(element => element.scrollIntoView({ block: "start" }));
+      assert.ok(await chapter.evaluate(element => element.scrollWidth <= element.clientWidth),
+        "Fire sources chapter reflows at 320px with 200% text");
+    }
   }
   await zoom.close();
 
@@ -158,6 +178,8 @@ try {
   assert.equal(await staticPage.locator("#month").isVisible(), false);
   assert.equal(await staticPage.locator(".static-frame:visible").count(), 4);
   assert.equal(await staticPage.locator(".journey-list li:visible").count(), 7);
+  assert.equal(await staticPage.locator("#journey + #fire-sources .feed-list li:visible").count(), 6);
+  assert.equal(await staticPage.locator("#fire-sources .fire-timeline li:visible").count(), 3);
   assert.equal(await staticPage.locator(".globe-toggle").isVisible(), false);
   await staticPage.close();
 

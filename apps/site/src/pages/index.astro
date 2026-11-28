@@ -45,7 +45,8 @@ const posterMarks = detections.features.map(feature => {
   return { x: (100 + 100 * x).toFixed(2), y: (100 - 100 * y).toFixed(2), volume };
 }).sort((a, b) => b.volume - a.volume).slice(0, 260);
 const upcoming = [
-  ["live", "Live this week"], ["journey", "Alert journey"], ["roles", "Who does what"],
+  ["live", "Live this week"], ["journey", "Alert journey"], ["fire-sources", "Fire data sources"],
+  ["roles", "Who does what"],
   ["handoffs", "Workflow challenges"], ["product", "Product tour"], ["deploy", "Deployment"],
   ["open-source", "Open source"], ["involved", "Get involved"],
 ];

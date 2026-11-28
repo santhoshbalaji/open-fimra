@@ -5,6 +5,7 @@ import { firms, source, wc } from "../lib/credits";
 import SiteHead from "../components/SiteHead.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import Brand from "../components/Brand.astro";
+import FireSourceCredits from "../components/FireSourceCredits.astro";
 const number = new Intl.NumberFormat("en-IN");
 const years = ["2021–22", "2022–23", "2023–24", "2024–25", "2025–26"];
 ---
@@ -44,6 +45,12 @@ const years = ["2021–22", "2022–23", "2023–24", "2024–25", "2025–26"];
           <h2 id="tree-heading">Tree cover and hexagons</h2>
           <p>Both series use the Natural Earth India point-of-view country geometry to filter records in processing. The map uses physical terrain and coastlines. A point counts toward the tree-cover total when its centre falls on class 10 in <a href={wc}>ESA WorldCover 2021 v200</a>, sampled at the native 10 m resolution. This includes some managed trees. It cannot establish legal forest extent, fire counts or burned area.</p>
           <p>We group qualifying points into H3 resolution 4 cells. The map assigns colour and opacity using the logarithm of the count, capped at 500 for the season and 30 for the week. A faint cell can contain as few as one detection. The tree-cover backdrop is a separate, downsampled display layer.</p>
+        </section>
+        <section id="fire-feed-methods" aria-labelledby="fire-feed-heading">
+          <h2 id="fire-feed-heading">Fire feed timings and credits</h2>
+          <p>The delays in the <a href={asset("#fire-sources")}>fire sources chapter</a> come from 27–28 November 2026 on an Open FIMRA test installation. For NOAA open data, NOAA observations in FIRMS, and Meteosat-9, the clock runs from observation to the first poll that stored the record. We excluded records caught up after outages. The sample covered only a few polar passes and Meteosat detections from two hours. Delays will vary.</p>
+          <p>The Sentinel-3 figure is rounded from catalogue publication times for 200 granules over India. It ends before the installation polls the catalogue. There were no Sentinel-3 fires in the test area during that period. The FSI figure is a single pass-to-SMS dispatch example from 26 November 2026.</p>
+          <FireSourceCredits />
         </section>
         <section aria-labelledby="imagery-heading">
           <h2 id="imagery-heading">Orbit and ground imagery</h2>

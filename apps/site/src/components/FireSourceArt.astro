@@ -1,0 +1,56 @@
+---
+interface Props {
+  stage: "layers" | "footprint" | "point" | "linked";
+}
+const { stage } = Astro.props;
+---
+{stage === "layers" ? (
+  <svg class="source-layers-art" viewBox="0 0 480 264" fill="none" aria-hidden="true">
+    <path class="art-underlay" d="m39 192 198-116 204 116-201 72Zm44 15L281 95M128 223l198-105M174 241l197-97M87 164l195 85M136 136l198 94M183 107l203 107"/>
+    <path class="art-paper" d="m58 185 178-103 185 103v10L241 254 58 195Z"/>
+    <path class="art-fill" d="m58 185 178-103 185 103-180 59Z"/>
+    <path class="art-underlay" d="m89 184 151 50 149-49M114 166l127 49 120-39M134 150l106 42 96-30M160 136l80 37 70-26"/>
+    <path class="art-ink" d="M79 192c33-1 65 3 94 14 23 9 39 10 59 4 29-9 48-19 79-16 20 2 41-1 59-10"/>
+    <g class="art-ink">
+      <path d="m115 185 8-14 8 14Zm19 7 8-14 8 14Zm14-10 6-11 6 11Zm134 27 8-14 8 14Zm19-4 7-13 7 13Zm15 9 8-14 8 14Z"/>
+    </g>
+    <path class="art-dash" d="M147 99v74m90-126v82m95-30v74m-92-28v65"/>
+    <path class="source-footprint" d="m147 99 90-52 95 52-92 46Z"/>
+    <path class="source-art-detail" d="m192 73 94 49m-94 0 92-48"/>
+    <path class="art-dash" d="M237 27v53m22-41v53m-21-41v54m-22-66v53"/>
+    <path class="source-location" d="m216 39 21-12 22 12-21 12Z"/>
+    <circle class="art-hot" cx="238" cy="39" r="3.6"/>
+    <circle class="art-hot" cx="240" cy="208" r="4"/>
+  </svg>
+) : (
+  <svg class="source-terrain" viewBox="0 0 340 156" fill="none" aria-hidden="true">
+    <path class="terrain-wood" d="M0 0h118c-13 21-43 35-37 51 8 19 44 26 46 45 2 20-25 41-57 60H0ZM340 0v156H220c10-23 6-37 26-52 16-12 49-13 61-32 14-21-4-40-35-50L215 0Z"/>
+    <g class="art-underlay">
+      <path d="M0 65c29-7 71-10 99 12 24 18 1 56-43 79M0 81c35-9 71-9 89 7 18 16-6 45-48 68M0 98c32-8 62-10 79 1 13 9-14 37-55 57M0 117c31-10 58-12 62-5 5 9-24 29-57 44M340 79c-13 21-43 22-68 34-16 8-25 22-26 43M340 96c-18 17-35 17-57 27-14 6-22 20-22 33M340 110c-13 13-30 15-49 24-8 4-12 13-12 22M340 126c-17 9-39 13-44 30"/>
+      <path d="M0 16c31 0 65 2 91-16M0 32c31 1 53-5 76-20m243 24c-12-13-42-22-65-36m86 38c-15-17-34-28-57-38"/>
+    </g>
+    <path class="terrain-water" d="M152-8c-8 26-51 45-32 68 15 20 75 10 96 31 20 20-22 46-27 73"/>
+    <g class="art-ink">
+      <path d="m30 51 5-10 5 10Zm13 7 6-12 6 12Zm16-7 4-8 4 8Zm220 16 6-12 6 12Zm-15-3 5-10 5 10Zm26-9 4-8 4 8Z"/>
+    </g>
+    <rect class:list={["source-footprint", stage !== "footprint" && "earlier-footprint"]} x="136" y="40" width="82" height="82" rx="2"/>
+    {stage !== "footprint" && <>
+      <rect class="source-location" x="174" y="65" width="8" height="8" />
+      <circle class="art-hot" cx="178" cy="69" r="3"/>
+    </>}
+    {stage === "linked" && <circle class="source-alias" cx="178" cy="69" r="12"/>}
+  </svg>
+)}
+
+<style>
+  .source-layers-art, .source-terrain { display: block; width: 100%; height: auto; }
+  .source-footprint, .source-location, .source-alias {
+    stroke: var(--heat); stroke-width: 1.6; vector-effect: non-scaling-stroke;
+  }
+  .source-footprint { fill: color-mix(in srgb, var(--heat) 16%, transparent); }
+  .source-location { fill: var(--surface); }
+  .source-art-detail, .source-alias { stroke: var(--heat); stroke-dasharray: 3 3; }
+  .earlier-footprint { fill: none; stroke-dasharray: 5 4; }
+  .terrain-wood { fill: color-mix(in srgb, var(--petrol) 11%, var(--petrolSoft)); }
+  .terrain-water { stroke: var(--petrol); stroke-opacity: .45; stroke-width: 3; }
+</style>
